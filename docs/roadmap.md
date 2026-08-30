@@ -13,7 +13,8 @@
 - PortAudio device enumeration and capture adapter
 - WAV input and deterministic replay clock
 - Windowing, FFT, spectrum averaging, waterfall row generation
-- Qt Quick application shell and accelerated spectrum/waterfall
+- Qt Quick application shell and custom scene-graph spectrum/waterfall based on
+  the rendering decision in ADR 0001
 - Runtime counters and capture-soak tests
 
 Acceptance: select an audio port on Win64, see a smooth waterfall/spectrum, and

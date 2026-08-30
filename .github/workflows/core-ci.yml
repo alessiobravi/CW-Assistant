@@ -1,20 +1,64 @@
-name: Core CI
+name: Cross-platform Core CI
 
 on:
   push:
+    branches: [main]
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: core-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
+    name: ${{ matrix.name }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        include:
+          - name: Windows x64 / MSVC
+            os: windows-2025
+            configure-arguments: -A x64
+          - name: Linux x64 / GCC
+            os: ubuntu-24.04
+            configure-arguments: ""
+          - name: macOS ARM64 / Apple Clang
+            os: macos-15
+            configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
+          - name: macOS x64 / Apple Clang
+            os: macos-15-intel
+            configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out source
+        uses: actions/checkout@v7
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCWA_BUILD_TESTS=ON
+          ${{ matrix.configure-arguments }}
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build --config Release --parallel
       - name: Test
         run: ctest --test-dir build -C Release --output-on-failure
+
+  project-records:
+    name: Changelog and backlog updated
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out full history
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Verify project records
+        shell: bash
+        run: >-
+          bash scripts/check-project-records.sh
+          "${{ github.event.pull_request.base.sha }}"
+          "${{ github.event.pull_request.head.sha }}"

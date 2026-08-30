@@ -39,6 +39,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   drop display frames. DSP sample blocks must not be dropped to keep UI current.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are
   configurable.
+- Use a functional 2D display only. A 3D spectrum and ornamental GPU effects are
+  explicit non-goals; rendering features must improve operation, diagnostics,
+  accessibility, or performance.
 
 ### Radio and transmission
 
@@ -72,7 +75,8 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 ## Non-functional requirements
 
 - C++20 with CMake; warning-clean on MSVC, Clang, and GCC.
-- Win64 first, with CI builds for current Windows, macOS, and Ubuntu.
+- Windows 11 or newer on x64 is the first release target, with CI builds for
+  Windows, macOS, and Ubuntu. Earlier Windows releases are unsupported.
 - Core and DSP have no dependency on Qt and are usable by tests and tools.
 - No allocation, locks, logging, filesystem access, or UI calls in an audio
   callback.
@@ -101,7 +105,7 @@ limit.
 ## Decisions still required
 
 - Open-source license (GPL-3.0-or-later, MPL-2.0, or another OSI license).
-- Minimum Windows/macOS/Linux versions and reference Win64 hardware.
+- Minimum macOS/Linux versions and reference Windows 11 x64 hardware.
 - Expected WPM range, Farnsworth behavior, international characters, and
   prosigns.
 - First physical transceiver/keying interface used for hardware acceptance.

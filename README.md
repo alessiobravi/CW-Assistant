@@ -2,8 +2,8 @@
 
 CW Assistant is a modular, cross-platform C++ application for receiving,
 visualizing, decoding, and operator-assisted replying to amateur-radio CW. The
-target platforms are Windows 64-bit, macOS, and Linux; Windows is the first
-packaging target.
+target platforms are Windows 11 or newer on x64, macOS, and Linux; Windows is
+the first packaging target.
 
 The project is at foundation stage. The current code provides dependency-free
 core primitives and tests. Audio/CAT/SDR/UI adapters are deliberately kept out
@@ -30,7 +30,9 @@ fixed-size DSP worker pool. Each channel has its own filter, timing, decoder,
 and confidence state; it does not own an operating-system thread.
 
 See [the architecture](docs/architecture.md), [requirements](docs/requirements.md),
-and [roadmap](docs/roadmap.md).
+[prioritized backlog](BACKLOG.md), [changelog](CHANGELOG.md), and
+[roadmap](docs/roadmap.md). The graphical architecture is recorded in
+[ADR 0001](docs/decisions/0001-qt-quick-spectrum-renderer.md).
 
 ## Build the current core
 
@@ -51,6 +53,11 @@ The development host starts in a hardware-safe state:
 Runtime dependencies planned for adapter milestones are Qt 6, PortAudio,
 Hamlib, SoapySDR, SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the
 vendor's platform-specific API/driver.
+
+Every push to `main` and pull request builds and tests the core natively on
+Windows x64, Linux x64, macOS ARM64, and macOS x64. Pull requests containing
+implementation, test, build, or workflow changes must update both the changelog
+and backlog.
 
 ## Safety
 

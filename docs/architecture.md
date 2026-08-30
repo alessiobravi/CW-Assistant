@@ -4,7 +4,7 @@
 
 ```text
 desktop-ui (Qt Quick/QML)
-  |-- spectrum/waterfall renderer
+  |-- custom QQuickItem scene-graph spectrum/waterfall renderer
   |-- receiver/channel controls
   |-- QSO workflow panels
   `-- diagnostics and settings
@@ -65,6 +65,25 @@ The FFT is calculated once per input window. Candidate channels reuse its bins;
 their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
 tone/envelope estimation, adaptive dit timing, symbol decoding, and language
 confidence scoring. This avoids repeating a wide FFT for every signal.
+
+## Graphical rendering
+
+QML owns layout and controls, while a custom C++ `QQuickItem` produces Qt Scene
+Graph geometry and shader nodes. Qt Shader Tools produces portable shader
+packages for Direct3D, Metal, Vulkan, and OpenGL backends.
+
+The spectrum trace, waterfall history/material, channel overlays, interactions,
+and render metrics are separate classes. DSP publishes bounded immutable
+snapshots; it does not share a large mutable render model or wait on the render
+thread. The CPU FFT is shared by detection and display. GPU compute is optional
+future work, while the baseline supports a public-Qt scene-graph path and CPU
+texture fallback.
+
+Only a functional 2D spectrum and waterfall are supported. The renderer does
+not include a 3D spectrum or decorative shader effects.
+
+See [ADR 0001](decisions/0001-qt-quick-spectrum-renderer.md) for the detailed
+rendering decision and accepted constraints.
 
 ## Backpressure
 
