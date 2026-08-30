@@ -1,0 +1,129 @@
+# Architecture
+
+## Component boundaries
+
+```text
+desktop-ui (Qt Quick/QML)
+  |-- spectrum/waterfall renderer
+  |-- receiver/channel controls
+  |-- QSO workflow panels
+  `-- diagnostics and settings
+
+application services
+  |-- receiver coordinator
+  |-- channel tracker/scheduler
+  |-- QSO state machine and macro expansion
+  |-- TX safety supervisor
+  `-- log coordinator and durable outbox
+
+dependency-free core
+  |-- sample and spectral data contracts
+  |-- bounded queues and worker scheduling
+  |-- CW timing/decoding state
+  |-- QSO/ADIF domain model
+  `-- hardware-neutral interfaces
+
+adapters
+  |-- PortAudio input / WAV replay
+  |-- SoapySDR input / SigMF replay
+  |-- Hamlib CAT
+  |-- serial RTS/DTR keying
+  `-- Log4OM UDP ADIF
+```
+
+Dependencies point inward. Hardware adapters implement core interfaces; the
+core never includes Qt, PortAudio, Hamlib, or SoapySDR headers.
+
+## Sample and threading model
+
+```text
+capture callback
+      | fixed block, try_push
+      v
+bounded SPSC ring ----overflow counter----> diagnostics
+      |
+      v
+DSP dispatcher ----FFT frame----> UI snapshot ring ----> render thread
+      |
+      +---- detector/tracker
+      |
+      `---- bounded work queue ----> fixed worker pool
+                                      | per-channel state
+                                      v
+                              decoded event queue
+                                      |
+                                      v
+                              application/QSO thread
+```
+
+There is one capture callback per active source, one dispatcher per receiver,
+and a bounded worker pool. A tracked frequency is a state object, not a thread.
+Tasks for the same channel are serialized and carry monotonically increasing
+sample sequence numbers. Different channels may execute concurrently.
+
+The FFT is calculated once per input window. Candidate channels reuse its bins;
+their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
+tone/envelope estimation, adaptive dit timing, symbol decoding, and language
+confidence scoring. This avoids repeating a wide FFT for every signal.
+
+## Backpressure
+
+- Capture never waits. If its SPSC ring is full, the new block is rejected and
+  an overrun is recorded with its sequence number.
+- DSP work is bounded. The scheduler can pause the lowest-priority unselected
+  channels when the latency budget is exceeded.
+- UI snapshots are replaceable. The renderer consumes the newest complete
+  spectrum/waterfall row and may skip older display-only snapshots.
+- Logging uses a durable outbox because losing a log record is materially
+  different from dropping a display frame.
+
+## Radio profiles
+
+CAT and keying are intentionally distinct. A profile contains a Hamlib model
+and CAT port plus an independent keying port, RTS/DTR assignment, and polarity.
+Multiple profiles may be saved. Initially only one profile owns TX at a time;
+additional receivers can remain active. This prevents two rigs from being keyed
+by one QSO state machine.
+
+Port enumeration is read-only. Opening a keying port initializes both control
+lines to their inactive polarity before the profile can be armed.
+
+## TX safety state machine
+
+```text
+DISARMED -> ARMED -> AWAITING_CONFIRMATION -> CONFIRMED -> TRANSMITTING
+    ^          ^                                      |          |
+    |          `------------- QSO complete -----------'          |
+    `---------------- disarm / restart ---------------------------'
+
+Any state -> FAULT -> explicit reset -> DISARMED
+```
+
+The application state machine grants permission; the serial adapter remains
+responsible for a hard maximum-key-down timer and best-effort line release on
+close. Callsign confidence may enable the confirmation button but cannot bypass
+it.
+
+## QSO panels
+
+Panels will be declarative data, not executable plugins. A workflow contains:
+
+- named fields such as call, RST, serial, name, QTH, and locator;
+- ordered receive/confirm/transmit steps;
+- editable CW message templates with field substitution;
+- validation and completion rules;
+- contest-specific serial-number allocation and duplicate checks.
+
+Once this format is stable, signed or sandboxed extension mechanisms can be
+considered without exposing raw serial/keying access.
+
+## Planned external libraries
+
+- Qt 6 Quick/QML: UI and hardware-accelerated scene graph.
+- PortAudio: low-latency cross-platform audio capture.
+- Hamlib: multi-vendor CAT model abstraction.
+- SoapySDR plus device modules: RTL-SDR and SDRplay IQ input.
+
+All are linked only into their owning adapter or desktop target. Dependency
+versions will be pinned in packaging manifests after the open-source license and
+minimum OS versions are selected.

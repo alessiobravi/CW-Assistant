@@ -1,0 +1,9 @@
+/build/
+/.cache/
+/.idea/
+/.vscode/
+*.user
+*.wav
+*.flac
+*.sigmf-data
+*.sigmf-meta
