@@ -4,12 +4,11 @@ set -euo pipefail
 base_revision="${1:?base revision is required}"
 head_revision="${2:?head revision is required}"
 
-mapfile -t changed_paths < <(git diff --name-only "${base_revision}" "${head_revision}")
 records_required=false
 changelog_updated=false
 backlog_updated=false
 
-for changed_path in "${changed_paths[@]}"; do
+while IFS= read -r changed_path; do
   case "${changed_path}" in
     CHANGELOG.md) changelog_updated=true ;;
     BACKLOG.md) backlog_updated=true ;;
@@ -17,7 +16,7 @@ for changed_path in "${changed_paths[@]}"; do
       records_required=true
       ;;
   esac
-done
+done < <(git diff --name-only "${base_revision}" "${head_revision}")
 
 if [[ "${records_required}" == false ]]; then
   echo "No implementation/build/workflow change; project-record update is optional."

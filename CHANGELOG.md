@@ -33,6 +33,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Ordered ADIF-band station-equipment rules that select radio, transverter, and
   antenna from actual RF frequencies and emit `MY_RIG`/`MY_ANTENNA`, including
   explicit TX/RX descriptions for cross-band operation.
+- Project-record verification now runs on the older Bash bundled with macOS as
+  well as on Linux CI.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

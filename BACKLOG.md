@@ -7,7 +7,7 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 review this file and update affected items or the “Last reviewed” note.
 
 Last reviewed: 2026-08-30 — began licensed Qt desktop/configuration implementation,
-added two Yaesu references, profiles/wizard, and comprehensive analyzer parity.
+added radio/logging foundations, and made the project-record gate macOS-safe.
 
 ## P0 — project decisions and safety
 
