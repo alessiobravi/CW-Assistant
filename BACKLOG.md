@@ -7,7 +7,8 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 review this file and update affected items or the “Last reviewed” note.
 
 Last reviewed: 2026-08-31 — added CAT4OM network control, hosted downloadable
-builds, Debian/Ubuntu packaging, user manuals, and documentation-record gates.
+builds, validated conditional Debian/Ubuntu packaging expressions, user manuals,
+and documentation-record gates.
 
 ## P0 — project decisions and safety
 

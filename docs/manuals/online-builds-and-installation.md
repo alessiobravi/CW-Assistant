@@ -19,7 +19,8 @@ intended for testing until the release/signing workflow is complete.
 
 ## Debian and Ubuntu
 
-The Linux job also produces a `cw-assistant_<version>-<revision>_amd64.deb`
+Only the Linux matrix job runs the Debian packaging stage. It produces a
+`cw-assistant_<version>-<revision>_amd64.deb`
 package. Download it from the `cw-assistant-debian-ubuntu-x64` workflow
 artifact, extract the artifact archive if necessary, then install with APT so
 dependency errors are reported clearly:

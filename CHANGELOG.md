@@ -47,6 +47,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   online artifacts, Debian/Ubuntu installation, and CAT4OM operation.
 - Persistent repository and CI rules requiring user-manual, changelog, and
   backlog updates to accompany implementation and delivery changes.
+- Portable GitHub matrix expressions for conditional Debian package jobs.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
