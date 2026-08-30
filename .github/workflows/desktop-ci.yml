@@ -1,0 +1,61 @@
+name: Cross-platform Desktop CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-desktop:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows 11 x64 / MSVC
+            os: windows-2025
+            qt-arch: win64_msvc2022_64
+            configure-arguments: -A x64
+          - name: Linux x64 / GCC
+            os: ubuntu-24.04
+            qt-arch: gcc_64
+            configure-arguments: ""
+          - name: macOS ARM64 / Apple Clang
+            os: macos-15
+            qt-arch: clang_64
+            configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
+          - name: macOS x64 / Apple Clang
+            os: macos-15-intel
+            qt-arch: clang_64
+            configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.11.2"
+          arch: ${{ matrix.qt-arch }}
+          modules: qtserialport
+          cache: true
+      - name: Configure desktop
+        run: >-
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=Release
+          -DCWA_BUILD_APP=OFF
+          -DCWA_BUILD_DESKTOP=ON
+          -DCWA_BUILD_TESTS=ON
+          ${{ matrix.configure-arguments }}
+      - name: Build desktop and core tests
+        run: cmake --build build --config Release --parallel
+      - name: Run dependency-free tests
+        run: ctest --test-dir build -C Release --output-on-failure

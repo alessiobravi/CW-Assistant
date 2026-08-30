@@ -2,7 +2,10 @@ add_library(cwa_core
   src/adif.cpp
   src/callsign_policy.cpp
   src/channel_scheduler.cpp
+  src/frequency_plan.cpp
+  src/reference_rig_profiles.cpp
   src/remote_control.cpp
+  src/station_equipment.cpp
   src/transmit_guard.cpp
 )
 

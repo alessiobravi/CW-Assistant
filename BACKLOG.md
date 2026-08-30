@@ -6,16 +6,16 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-08-30 — added secure remote station/client architecture,
-station-local CW timing, exclusive leases, reconnect, media, and security work.
+Last reviewed: 2026-08-30 — began licensed Qt desktop/configuration implementation,
+added two Yaesu references, profiles/wizard, and comprehensive analyzer parity.
 
 ## P0 — project decisions and safety
 
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
-| DEC-001 | blocked | Select an OSI-approved project license | `LICENSE` exists and dependency/license policy is documented. Owner decision required. |
+| DEC-001 | done | Select an OSI-approved project license | GPL-3.0-or-later text and dependency/license policy are committed. |
 | REQ-001 | blocked | Fix supported WPM, prosigns, character sets, and break-in scope | Requirements contain testable ranges. Owner input required. |
-| HW-001 | blocked | Select the first reference rig and serial keying interface | Model, CAT settings, cable, line polarity, and safe test procedure are recorded. Owner input required. |
+| HW-001 | active | Validate initial Yaesu radios and direct serial keying | FT-450D and FT-818 editable defaults and preliminary safety notes are recorded; physical adapter polarity and disconnected/dummy-load procedures still require validation. |
 | SAFE-001 | todo | Implement independent maximum-key-down watchdog | KEY and PTT release on timeout, device error, process shutdown, and emergency stop; loopback tests pass. |
 | ARCH-001 | done | Select graphical rendering architecture | ADR 0001 records the scene-graph approach, modular boundaries, 2D scope, and fallback policy. |
 | ARCH-002 | done | Define secure remote-operation boundaries | ADR 0002 records roles, transports, authentication, leases, reconnect, and station-local TX rules. |
@@ -26,12 +26,12 @@ station-local CW timing, exclusive leases, reconnect, media, and security work.
 |---|---|---|---|
 | BUILD-001 | active | Establish dependency-free C++20 core build | Core builds and tests on Windows x64, Linux x64, macOS ARM64, and macOS x64 CI. Mark done after the first full remote matrix passes. |
 | PROC-001 | done | Keep changelog and backlog current | Repository guidance and PR automation enforce records for material implementation changes. |
-| CI-001 | todo | Add full desktop dependency/build matrix | Qt UI and adapter targets compile on all four native runners, in addition to dependency-free core CI. |
+| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; mark done after the first complete remote matrix passes. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
 | REPLAY-001 | todo | Add WAV replay source and deterministic clock | Repeated runs emit identical timestamped sample blocks and hashes. |
 | DSP-001 | todo | Implement windowing, FFT, and spectral averaging | Golden-vector tests pass within documented numerical tolerance. |
-| UI-001 | todo | Create Qt Quick desktop shell | Settings, receiver controls, diagnostics, and empty QSO panel run on all targets. |
+| UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings pane, profile chooser, and guided setup are implemented; native Qt CI and runtime validation remain. |
 | UI-002 | todo | Implement modular 2D scene-graph spectrum/waterfall | ADR 0001 boundaries are preserved; shader and fallback paths maintain selected 30/60 FPS target without blocking DSP; no 3D or ornamental effects. |
 | UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
@@ -39,6 +39,8 @@ station-local CW timing, exclusive leases, reconnect, media, and security work.
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | todo | Add pipeline telemetry | UI exposes overruns, sequence gaps, queue depths, DSP latency, and dropped display frames. |
+| CFG-001 | active | Implement named station profiles and setup helper | Versioned isolated persistence, UI create/select helper, per-profile wizard, and `--profile` selection exist; audio/logger/remote pages and migrations remain. |
+| CFG-002 | todo | Enforce cross-process hardware ownership | Named OS locks prevent serial/audio/SDR devices from being opened by two active profiles and report the owning profile. |
 
 ## P1 — M2 multichannel CW decode
 
@@ -50,13 +52,18 @@ station-local CW timing, exclusive leases, reconnect, media, and security work.
 | DSP-003 | todo | Add bounded per-channel DSP worker pool | Preserves channel order, sheds lowest-priority work, and passes overload soak tests. |
 | CW-001 | todo | Implement adaptive timing and Morse decoder | Publishes text, WPM, confidence, and latency; benchmark report is reproducible. |
 | CALL-001 | todo | Extract and rank callsign candidates | Precision/recall targets are documented and tested, including portable calls. |
+| DSP-004 | todo | Add operational DSP conditioning | Configurable noise blanker, AGC, key-click suppression, mute, and 20–700 Hz monitor filter have replay tests and bypass paths. |
+| DSP-005 | todo | Add frequency and I/Q calibration | Manual/automatic correction, reset, diagnostics, and deterministic imbalance fixtures pass. |
+| CALL-004 | todo | Add validation, watch, and band-plan policies | Configurable validation levels, allocation/pattern checks, master-call data, watch list, and CW-segment filtering are independently testable. |
 
 ## P2 — M3 radio and guarded transmission
 
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
-| CAT-001 | todo | Implement Hamlib serial CAT adapter | Enumerates supported models; connects, reads, and sets frequency on reference rig. |
-| RIG-001 | todo | Persist multiple named rig profiles | CAT and keying ports/lines/polarities are independent and safely switchable. |
+| CAT-001 | todo | Implement Hamlib serial CAT adapter | Enumerates supported models; connects, reads, and sets frequency on both reference rigs. |
+| CAT-002 | active | Implement Windows OmniRig frequency adapter | Settings select Rig 1/2 and open the native configuration through COM; frequency read/set, state diagnostics, and both-radio hardware tests remain. |
+| CAT-003 | active | Implement split and transverter frequency domain | Checked integer-Hz RX/TX resolution, signed offsets, profile persistence, and CAT split contract are implemented; adapters, actual-RF UI preview, Doppler/satellite tracking, and hardware tests remain. |
+| RIG-001 | active | Persist multiple named rig profiles | CAT/keying/framing/poll/display settings are isolated by station profile; full device settings and safe live switching remain. |
 | KEY-001 | todo | Implement cross-platform RTS/DTR adapter | Line loopback tests pass on Windows, macOS, and Linux without discovery toggles. |
 | QSO-001 | todo | Define declarative workflow/panel schema | Ordinary, DX-pileup, and contest panels validate without executable scripts. |
 | QSO-002 | todo | Implement operator-confirmed QSO workflow | Exact callsign confirmation is required before first TX and emergency stop is always available. |
@@ -67,6 +74,11 @@ station-local CW timing, exclusive leases, reconnect, media, and security work.
 |---|---|---|---|
 | LOG-001 | todo | Implement durable logging outbox | Records survive restart and retry state is visible. |
 | LOG-002 | todo | Implement Log4OM 2 UDP ADIF sink | A test QSO is accepted by configurable Log4OM inbound ADIF service. |
+| LOG-003 | active | Maintain ADIF conformance readiness | ADIF 3.1.7 satellite/split fields, exact frequency calculation, full band mapping, and policy exist; validated ADI/ADX import/export, official pinned fixtures, independent parser, and release report remain. |
+| LOG-004 | active | Resolve station equipment by actual-RF band | Ordered ADIF-band rules and `MY_RIG`/`MY_ANTENNA` cross-band serialization are tested; profile rule editor, persistence, overlap diagnostics, and logger acceptance remain. |
+| INT-001 | todo | Add read-only DX-cluster spot service | Verified calls can be served with CQ-only filtering, authentication option, bounded clients, and loopback-safe defaults. |
+| INT-002 | todo | Add UDP spectrum export | Versioned timestamped spectrum frames interoperate with a documented logger/contest consumer fixture. |
+| REC-001 | todo | Add interoperable audio/IQ recorder | WAV/RF64 record/replay, metadata, rotation, looping, inspection, and deterministic replay tests pass. |
 | SDR-001 | todo | Add SoapySDR stream adapter | Enumerates modules and produces timestamped IQ blocks with overflow telemetry. |
 | SDR-002 | todo | Validate RTL-SDR | Installation diagnostics and replay/live acceptance test pass. |
 | SDR-003 | todo | Validate SDRplay 3 | External vendor API is detected and live acceptance test passes. |

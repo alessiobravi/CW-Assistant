@@ -8,6 +8,32 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- GPL-3.0-or-later license text and dependency/contribution licensing policy.
+- Editable Yaesu FT-450D and FT-818/FT-818ND reference profiles with tested CAT
+  framing, Hamlib IDs, compatible OmniRig command descriptions, and direct-COM
+  RTS/PTT plus DTR/KEY starting values.
+- Optional Qt Quick desktop target with a modern expandable receiver workspace,
+  persistent Settings pane, passive serial-port enumeration, and configurable
+  CAT framing, polling, timeout, keying polarity, and display rates/range.
+- Windows native OmniRig configuration-dialog invocation from the Settings pane.
+- Named, isolated station configuration profiles, a startup profile selector,
+  create-profile helper, per-profile first-run setup wizard, and `--profile`
+  override for parallel instances and unattended launches.
+- Testable compatibility scope for band maps, callsign/watch/validation policy,
+  operational DSP controls, I/Q calibration and recording, pointer/keyboard
+  tuning, spot/spectrum exports, band plans, auto-start, and health indicators.
+- Split-capable CAT domain contract and checked integer-Hz frequency resolution
+  with independent signed RX/TX transverter offsets, persisted in station
+  profiles and editable from Settings and guided setup.
+- ADIF 3.1.7 satellite/split logging fields with exact actual-RF `FREQ`,
+  `FREQ_RX`, `BAND`, `BAND_RX`, `PROP_MODE`, `SAT_NAME`, and `SAT_MODE`, plus
+  current band-enumeration mapping and a conformance-readiness policy.
+- Native Qt 6.11.2 desktop build automation for Windows 11 x64, Ubuntu x64,
+  macOS ARM64, and macOS x64 alongside the dependency-free core matrix.
+- Ordered ADIF-band station-equipment rules that select radio, transverter, and
+  antenna from actual RF frequencies and emit `MY_RIG`/`MY_ANTENNA`, including
+  explicit TX/RX descriptions for cross-band operation.
+
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
 - Channel scheduling by signal strength, arrival queue, or operator selection.

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "cwassistant/core/adif.hpp"
+#include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/sample_block.hpp"
 
 namespace cwassistant::core {
@@ -59,16 +60,28 @@ struct SerialSettings {
   std::uint32_t baud_rate{9'600};
   std::uint8_t data_bits{8};
   std::uint8_t stop_bits{1};
+  enum class Parity { None, Even, Odd } parity{Parity::None};
+  enum class FlowControl { None, Hardware } flow_control{FlowControl::None};
   bool rts_active_high{true};
   bool dtr_active_high{true};
 };
 
 enum class SerialKeyLine { Rts, Dtr };
 
+enum class FrequencyControlBackend {
+  OmniRig,
+  Hamlib,
+};
+
 struct RigProfile {
   std::string id;
   std::string display_name;
   std::uint32_t hamlib_model_id{0};
+  std::string omnirig_rig_type;
+  FrequencyControlBackend frequency_backend{FrequencyControlBackend::Hamlib};
+  std::uint8_t omnirig_slot{1};
+  std::uint32_t poll_interval_ms{500};
+  std::uint32_t timeout_ms{4'000};
   SerialSettings cat;
   SerialSettings keying;
   SerialKeyLine ptt_line{SerialKeyLine::Rts};
@@ -95,6 +108,9 @@ class IRigControl {
   [[nodiscard]] virtual bool connected() const noexcept = 0;
   [[nodiscard]] virtual double frequency_hz() = 0;
   virtual bool set_frequency_hz(double frequency) = 0;
+  [[nodiscard]] virtual bool split_capable() const noexcept = 0;
+  [[nodiscard]] virtual VfoFrequencyPlan vfo_frequencies() = 0;
+  virtual bool apply_vfo_frequencies(const VfoFrequencyPlan& plan) = 0;
 };
 
 class IKeyingOutput {

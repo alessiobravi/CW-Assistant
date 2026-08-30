@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(CWAssistant VERSION 0.1.0 LANGUAGES CXX)
 
 option(CWA_BUILD_APP "Build the command-line development host" ON)
+option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
 option(CWA_BUILD_TESTS "Build unit tests" ON)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -13,6 +14,10 @@ add_subdirectory(src/core)
 
 if(CWA_BUILD_APP)
   add_subdirectory(src/app)
+endif()
+
+if(CWA_BUILD_DESKTOP)
+  add_subdirectory(src/desktop)
 endif()
 
 if(CWA_BUILD_TESTS)

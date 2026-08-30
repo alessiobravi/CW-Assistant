@@ -29,6 +29,12 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
 - Replay WAV and SigMF/IQ recordings deterministically.
+- Provide configurable noise blanking, AGC, key-click suppression, audio mute,
+  and a sharp continuously adjustable CW monitor filter without coupling these
+  controls to decoder correctness.
+- Automatically calibrate or manually correct frequency offset and I/Q
+  gain/phase imbalance for quadrature inputs, with visible diagnostics and a
+  resettable calibration state.
 
 ### Display
 
@@ -52,12 +58,27 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Use a functional 2D display only. A 3D spectrum and ornamental GPU effects are
   explicit non-goals; rendering features must improve operation, diagnostics,
   accessibility, or performance.
+- Provide an expandable operator workspace rather than a fixed decoder layout:
+  spectrum, waterfall, band map, active calls, selected decoder, watch list,
+  QSO workflow, logging, and diagnostics are independent dockable panels.
+- Track calls across frequency changes and inactivity, show CQ/running/searching
+  state, and color decoded tokens by semantic type and confidence using an
+  accessible palette.
+- Support keyboard and pointer tuning at an exact frequency, direct selection of
+  a tracked station, next/previous signal and band navigation, and visual panning
+  without unnecessary CAT retunes.
 
 ### Radio and transmission
 
 - Store multiple named transceiver profiles and switch only while TX is idle.
 - Each profile specifies Hamlib model, CAT serial settings, and an independent
   serial keying profile.
+- Every frequency-control adapter exposes RX and TX VFO state and split
+  capability through the shared core contract. Unsupported split requests fail
+  explicitly; they never silently collapse to simplex.
+- Store independent signed RX and TX transverter offsets in hertz. UI and logs
+  distinguish radio dial frequency from calculated actual RF frequency, reject
+  overflow/zero results, and show both before satellite transmission.
 - Support selecting RTS or DTR and active polarity independently for PTT and
   KEY. A profile may use one or two physical serial ports.
 - Start disarmed on every launch and after every device reconnect.
@@ -70,14 +91,69 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   QSO confirmation, and transmission. TX safety rechecks the policy at request,
   confirmation, and keying time. Initial rules are normalized exact matches;
   wildcard/prefix rules are out of scope until their ambiguity is designed.
+- Initial reference radios are Yaesu FT-450D and FT-818/FT-818ND. Their supplied
+  defaults remain fully editable: port, baud, data bits, parity, stop bits,
+  RTS/flow-control mode, polling interval, and timeout.
+- On Windows, OmniRig Rig 1/Rig 2 is the first frequency-control integration and
+  its native configuration is reachable from the application Settings pane.
+  Hamlib provides the platform-neutral frequency-control path.
+
+### Configuration and instances
+
+- First launch of every station profile opens a guided wizard covering radio,
+  CAT alternatives, direct key/PTT, receive source, display defaults, logging,
+  and a non-transmitting configuration review.
+- If multiple profiles are present and none was explicitly selected, show a
+  startup profile chooser with create/select actions. A command-line profile
+  override remains available for shortcuts, headless servers, and automation.
+- Every named station profile isolates radio, keying, audio, SDR, UI, logging,
+  workflow, and remote settings. Multiple processes may run concurrently with
+  different profiles.
+- Acquire OS-level resource ownership locks before opening physical audio, SDR,
+  or serial devices. A second profile receives a clear conflict diagnostic and
+  may not steal an active device.
+- Profiles define ordered station-equipment rules over canonical ADIF bands.
+  Each rule can name the radio, transverter/converter chain, and antenna; the
+  first matching actual-RF band wins. Cross-band QSOs preserve distinct TX and
+  RX equipment descriptions.
 
 ### Logging
 
 - Produce ADIF 3.1.7-compatible QSO records.
+- Treat ADIF conformance as a release gate and follow the current specification,
+  field dependencies, enumerations, deprecation policy, official resources,
+  schemas, and test fixtures as detailed in the conformance policy.
+- For split and satellite QSOs, calculate exact actual-RF transmit and receive
+  frequencies from dial values and signed transverter offsets. Export consistent
+  `FREQ`, `FREQ_RX`, `BAND`, `BAND_RX`, `PROP_MODE=SAT`, `SAT_NAME`, and
+  `SAT_MODE` values as applicable.
+- Derive logging-station `MY_RIG` and `MY_ANTENNA` from the station profile and
+  calculated actual-RF bands. Never populate contacted-station `RIG` from local
+  configuration. Cross-band descriptions identify TX and RX chains explicitly.
 - First integration: Log4OM 2 inbound ADIF message over configurable UDP host
   and port. TCP and other logger protocols are separate future adapters.
 - Queue unsent records locally and make retries visible; never silently report
   a QSO as logged.
+
+### Operational compatibility
+
+- Provide a frequency band map, verified callsign list, operator watch list,
+  editable regional band plans, and an option to decode only designated CW
+  segments.
+- Validate candidate callsigns using configurable strictness, allocation and
+  syntax rules, watch/ignore state, and optional contest master-call data.
+- Export verified spots through a compatible read-only DX-cluster TCP service,
+  optionally restrict output to CQ callers, and default legacy plaintext
+  services to loopback unless the operator deliberately exposes them.
+- Export timestamped spectrum frames by configurable UDP for logger/contest
+  integrations while keeping this adapter independent of the renderer.
+- Record and replay audio or I/Q in interoperable WAV/RF64 form with UTC,
+  operator, station, center-frequency, channel-mapping, and software metadata;
+  rotate safely, loop playback, inspect metadata, and preserve deterministic
+  decoder replay.
+- Support automatic receive startup per profile, a decode-disabled monitoring
+  mode, multiple receivers through profiles/instances, and visible health
+  indicators for CAT, input bandwidth, CPU pressure, overruns, and calibration.
 
 ### SDR
 
@@ -163,9 +239,7 @@ limit.
 
 ## Decisions still required
 
-- Open-source license (GPL-3.0-or-later, MPL-2.0, or another OSI license).
 - Minimum macOS/Linux versions and reference Windows 11 x64 hardware.
 - Expected WPM range, Farnsworth behavior, international characters, and
   prosigns.
-- First physical transceiver/keying interface used for hardware acceptance.
 - Whether full break-in or semi-break-in operation is in the initial scope.

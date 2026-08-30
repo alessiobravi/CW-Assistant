@@ -6,8 +6,11 @@
 #include "cwassistant/core/adif.hpp"
 #include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
+#include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/remote_control.hpp"
+#include "cwassistant/core/reference_rig_profiles.hpp"
 #include "cwassistant/core/spectrum_visualization_settings.hpp"
+#include "cwassistant/core/station_equipment.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
 
@@ -156,6 +159,147 @@ void test_adif() {
   expect(adif.ends_with("<EOR>"), "ADIF terminates the record");
 }
 
+void test_split_transverter_and_satellite_adif() {
+  using namespace cwassistant::core;
+  const VfoFrequencyPlan plan{
+      .rx_dial_hz = 29'900'000,
+      .tx_dial_hz = 28'300'000,
+      .split_enabled = true,
+  };
+  const TransverterOffsets offsets{
+      .rx_offset_hz = 116'000'000,
+      .tx_offset_hz = 407'000'000,
+  };
+  const auto resolved = resolve_frequencies(plan, offsets);
+  expect(resolved.has_value(), "split transverter frequencies resolve");
+  expect(resolved && resolved->rx_rf_hz == 145'900'000,
+         "positive RX transverter offset produces actual downlink RF");
+  expect(resolved && resolved->tx_rf_hz == 435'300'000,
+         "independent positive TX offset produces actual uplink RF");
+
+  QsoRecord qso{
+      .callsign = "I1ABC",
+      .qso_date = "20260830",
+      .time_on = "143512",
+      .mode = "CW",
+      .rst_sent = "599",
+      .rst_received = "579",
+      .station_callsign = "IU0XYZ",
+  };
+  const SatelliteQsoDetails satellite{.name = "AO-7", .mode = "U/V"};
+  expect(populate_qso_frequencies(qso, plan, offsets, &satellite),
+         "satellite QSO receives calculated RF fields");
+  expect(qso.band == "70CM" && qso.band_rx == "2M",
+         "ADIF TX and RX bands derive from actual RF frequencies");
+  expect(qso.frequency_mhz == "435.300000" &&
+             qso.frequency_rx_mhz == "145.900000",
+         "ADIF keeps exact TX and RX frequencies to one hertz");
+
+  const auto adif = to_adif(qso);
+  expect(adif.find("<BAND:4>70CM") != std::string::npos,
+         "ADIF exports transmit band");
+  expect(adif.find("<BAND_RX:2>2M") != std::string::npos,
+         "ADIF exports receive band");
+  expect(adif.find("<FREQ:10>435.300000") != std::string::npos,
+         "ADIF exports actual transmit frequency");
+  expect(adif.find("<FREQ_RX:10>145.900000") != std::string::npos,
+         "ADIF exports actual receive frequency");
+  expect(adif.find("<PROP_MODE:3>SAT") != std::string::npos &&
+             adif.find("<SAT_NAME:4>AO-7") != std::string::npos &&
+             adif.find("<SAT_MODE:3>U/V") != std::string::npos,
+         "ADIF exports satellite propagation, name, and mode");
+}
+
+void test_negative_transverter_offset_and_invalid_frequency() {
+  using namespace cwassistant::core;
+  const auto resolved = resolve_frequencies(
+      {.rx_dial_hz = 145'900'000, .split_enabled = false},
+      {.rx_offset_hz = -116'000'000, .tx_offset_hz = -116'000'000});
+  expect(resolved && resolved->rx_rf_hz == 29'900'000 &&
+             resolved->tx_rf_hz == 29'900'000,
+         "negative transverter offsets are supported for RX and TX");
+  expect(adif_band_from_frequency(29'900'000).empty(),
+         "out-of-band frequency is not mislabeled in ADIF");
+  expect(!resolve_frequencies(
+              {.rx_dial_hz = 10'000'000, .split_enabled = false},
+              {.rx_offset_hz = -10'000'000, .tx_offset_hz = 0}),
+         "offset calculation rejects zero or underflowed actual RF");
+}
+
+void test_band_selected_station_equipment_adif() {
+  using namespace cwassistant::core;
+  const std::vector<StationEquipmentRule> rules{
+      {
+          .bands = {"6M", "10M", "12M", "15M", "17M", "20M"},
+          .equipment = {.radio = "Yaesu FT-450D", .antenna = "Dipole"},
+      },
+      {
+          .bands = {"13CM"},
+          .equipment = {
+              .radio = "Microwave IF radio",
+              .transverter = "DXPatrol Transverter",
+              .antenna = "Offset parabolic dish",
+          },
+      },
+  };
+  const ResolvedFrequencies hf{
+      .rx_rf_hz = 14'025'000,
+      .tx_rf_hz = 14'025'000,
+  };
+  const auto hf_equipment = resolve_station_equipment(hf, rules);
+  expect(hf_equipment && describe_station_rig(*hf_equipment) == "Yaesu FT-450D",
+         "HF band rule selects its configured radio");
+  expect(hf_equipment && describe_station_antenna(*hf_equipment) == "Dipole",
+         "HF band rule selects its configured antenna");
+
+  const ResolvedFrequencies cross_band{
+      .rx_rf_hz = 14'025'000,
+      .tx_rf_hz = 2'320'100'000,
+      .split_enabled = true,
+  };
+  QsoRecord qso;
+  expect(populate_qso_station_equipment(qso, cross_band, rules),
+         "cross-band equipment chains resolve from actual RF bands");
+  expect(qso.station_rig ==
+             "TX: Microwave IF radio + DXPatrol Transverter; RX: Yaesu FT-450D",
+         "different TX/RX radio chains are explicit");
+  expect(qso.station_antenna ==
+             "TX: Offset parabolic dish; RX: Dipole",
+         "different TX/RX antennas are explicit");
+  const auto adif = to_adif(qso);
+  expect(adif.find("<MY_RIG:") != std::string::npos &&
+             adif.find("<MY_ANTENNA:") != std::string::npos,
+         "ADIF exports logging-station rig and antenna fields");
+}
+
+void test_reference_rig_profiles() {
+  using namespace cwassistant::core;
+  const auto profiles = reference_rig_profiles();
+  expect(profiles.size() == 2, "two Yaesu reference profiles are available");
+
+  const auto* ft450d = find_reference_rig_profile("yaesu-ft-450d");
+  expect(ft450d != nullptr, "FT-450D profile is selectable");
+  expect(ft450d != nullptr && ft450d->cat.baud_rate == 4'800 &&
+             ft450d->cat.data_bits == 8 && ft450d->cat.stop_bits == 1,
+         "FT-450D starts with documented 4800 8-N-1 CAT framing");
+  expect(ft450d != nullptr && ft450d->omnirig_rig_type == "FT-450",
+         "FT-450D maps to the OmniRig FT-450 command description");
+
+  const auto* ft818 = find_reference_rig_profile("yaesu-ft-818");
+  expect(ft818 != nullptr, "FT-818 profile is selectable");
+  expect(ft818 != nullptr && ft818->cat.baud_rate == 4'800 &&
+             ft818->cat.data_bits == 8 && ft818->cat.stop_bits == 2,
+         "FT-818 starts with documented 4800 8-N-2 CAT framing");
+  expect(ft818 != nullptr && ft818->omnirig_rig_type == "FT-817",
+         "FT-818 uses the compatible OmniRig FT-817 command description");
+
+  expect(ft450d != nullptr && ft450d->cat.port.empty() &&
+             ft450d->keying.port.empty(),
+         "reference profiles never guess physical COM ports");
+  expect(ft450d != nullptr && ft450d->ptt_line != ft450d->key_line,
+         "direct keying defaults PTT and KEY to different lines");
+}
+
 }  // namespace
 
 int main() {
@@ -166,6 +310,10 @@ int main() {
   test_remote_control_lease();
   test_transmit_guard();
   test_adif();
+  test_split_transverter_and_satellite_adif();
+  test_negative_transverter_offset_and_invalid_frequency();
+  test_band_selected_station_equipment_adif();
+  test_reference_rig_profiles();
   if (failures == 0) {
     std::cout << "All core tests passed\n";
   }
