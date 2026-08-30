@@ -35,6 +35,18 @@ All notable changes to CW Assistant are recorded here. The format follows
   explicit TX/RX descriptions for cross-band operation.
 - Project-record verification now runs on the older Bash bundled with macOS as
   well as on Linux CI.
+- GitHub-hosted desktop builds now stage Qt runtime/QML dependencies and publish
+  downloadable Windows 11 x64, Linux x64, macOS ARM64, and macOS x64 artifacts.
+- Native CAT4OM 1.x Control-channel client foundation with read-only monitoring,
+  password-proof handshake, pushed multi-VFO/split state, sequence-gap recovery,
+  bounded reconnect, explicit ownership requests, and capability-gated frequency
+  controls. CAT4OM PTT/CW commands are deliberately excluded.
+- Debian/Ubuntu `.deb` generation in hosted CI, including desktop integration,
+  license, deployed Qt/QML runtime files, and operator manuals.
+- User-facing manuals for first launch, profiles, configuration examples,
+  online artifacts, Debian/Ubuntu installation, and CAT4OM operation.
+- Persistent repository and CI rules requiring user-manual, changelog, and
+  backlog updates to accompany implementation and delivery changes.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

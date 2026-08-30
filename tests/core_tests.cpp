@@ -5,6 +5,7 @@
 
 #include "cwassistant/core/adif.hpp"
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/remote_control.hpp"
@@ -300,6 +301,48 @@ void test_reference_rig_profiles() {
          "direct keying defaults PTT and KEY to different lines");
 }
 
+void test_cat4om_protocol_contract() {
+  using namespace cwassistant::core;
+  expect(cat4om_protocol_compatible("1.0.0") &&
+             cat4om_protocol_compatible("1.99.3"),
+         "CAT4OM accepts additive changes within protocol major 1");
+  expect(!cat4om_protocol_compatible("2.0.0") &&
+             !cat4om_protocol_compatible("invalid"),
+         "CAT4OM rejects incompatible or malformed protocol versions");
+  expect(cat4om_role_from_string("master") == Cat4OmRole::Master &&
+             cat4om_role_from_string("new-role") == Cat4OmRole::Unknown,
+         "CAT4OM roles degrade safely when a future value is unknown");
+
+  const Cat4OmRadioState simplex{
+      .radio_id = "run",
+      .connection_status = "connected",
+      .active_vfo = "MAIN",
+      .tx_vfo = "SUB",
+      .split = false,
+      .vfos = {{.id = "MAIN", .frequency_hz = 14'025'000},
+               {.id = "SUB", .frequency_hz = 7'010'000}},
+      .available_commands = {"SetFrequency", "SetSplit"},
+  };
+  const auto simplex_plan = cat4om_frequency_plan(simplex);
+  expect(simplex_plan && simplex_plan->rx_dial_hz == 14'025'000 &&
+             simplex_plan->tx_dial_hz == 14'025'000 &&
+             !simplex_plan->split_enabled,
+         "CAT4OM simplex state uses the active VFO for RX and TX");
+  expect(cat4om_has_command(simplex, "setfrequency"),
+         "CAT4OM command capability matching tolerates case only");
+
+  auto split = simplex;
+  split.split = true;
+  const auto split_plan = cat4om_frequency_plan(split);
+  expect(split_plan && split_plan->rx_dial_hz == 14'025'000 &&
+             split_plan->tx_dial_hz == 7'010'000 &&
+             split_plan->split_enabled,
+         "CAT4OM split state preserves independent opaque VFO names");
+  split.tx_vfo = "missing";
+  expect(!cat4om_frequency_plan(split),
+         "CAT4OM refuses an incomplete split frequency snapshot");
+}
+
 }  // namespace
 
 int main() {
@@ -314,6 +357,7 @@ int main() {
   test_negative_transverter_offset_and_invalid_frequency();
   test_band_selected_station_equipment_adif();
   test_reference_rig_profiles();
+  test_cat4om_protocol_contract();
   if (failures == 0) {
     std::cout << "All core tests passed\n";
   }

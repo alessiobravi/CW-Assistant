@@ -1,6 +1,7 @@
 add_library(cwa_core
   src/adif.cpp
   src/callsign_policy.cpp
+  src/cat4om_protocol.cpp
   src/channel_scheduler.cpp
   src/frequency_plan.cpp
   src/reference_rig_profiles.cpp

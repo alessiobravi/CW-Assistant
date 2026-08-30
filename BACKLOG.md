@@ -1,13 +1,13 @@
 # Product backlog
 
-Updated: 2026-08-30
+Updated: 2026-08-31
 
 This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-08-30 — began licensed Qt desktop/configuration implementation,
-added radio/logging foundations, and made the project-record gate macOS-safe.
+Last reviewed: 2026-08-31 — added CAT4OM network control, hosted downloadable
+builds, Debian/Ubuntu packaging, user manuals, and documentation-record gates.
 
 ## P0 — project decisions and safety
 
@@ -25,8 +25,8 @@ added radio/logging foundations, and made the project-record gate macOS-safe.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | BUILD-001 | active | Establish dependency-free C++20 core build | Core builds and tests on Windows x64, Linux x64, macOS ARM64, and macOS x64 CI. Mark done after the first full remote matrix passes. |
-| PROC-001 | done | Keep changelog and backlog current | Repository guidance and PR automation enforce records for material implementation changes. |
-| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; mark done after the first complete remote matrix passes. |
+| PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
+| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish 14-day self-contained build artifacts; mark done after the first complete remote matrix passes. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
 | REPLAY-001 | todo | Add WAV replay source and deterministic clock | Repeated runs emit identical timestamped sample blocks and hashes. |
@@ -63,6 +63,7 @@ added radio/logging foundations, and made the project-record gate macOS-safe.
 | CAT-001 | todo | Implement Hamlib serial CAT adapter | Enumerates supported models; connects, reads, and sets frequency on both reference rigs. |
 | CAT-002 | active | Implement Windows OmniRig frequency adapter | Settings select Rig 1/2 and open the native configuration through COM; frequency read/set, state diagnostics, and both-radio hardware tests remain. |
 | CAT-003 | active | Implement split and transverter frequency domain | Checked integer-Hz RX/TX resolution, signed offsets, profile persistence, and CAT split contract are implemented; adapters, actual-RF UI preview, Doppler/satellite tracking, and hardware tests remain. |
+| CAT-004 | active | Implement CAT4OM network frequency provider | Native 1.x handshake, observer/control connection, password proof, pushed state, ownership, capability checks, reconnect, Settings fields, and core protocol tests exist; finish operating-panel frequency/split command sequencing and live service integration tests. |
 | RIG-001 | active | Persist multiple named rig profiles | CAT/keying/framing/poll/display settings are isolated by station profile; full device settings and safe live switching remain. |
 | KEY-001 | todo | Implement cross-platform RTS/DTR adapter | Line loopback tests pass on Windows, macOS, and Linux without discovery toggles. |
 | QSO-001 | todo | Define declarative workflow/panel schema | Ordinary, DX-pileup, and contest panels validate without executable scripts. |
@@ -93,8 +94,9 @@ added radio/logging foundations, and made the project-record gate macOS-safe.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | PKG-001 | todo | Produce signed Win64 installer | Clean-machine install, upgrade, and uninstall tests pass. |
-| PKG-002 | todo | Produce macOS bundle and Linux packages | Runtime dependencies and hardware-plugin diagnostics are documented. |
-| DOC-001 | todo | Write operator and hardware manuals | Covers setup, safe keying tests, workflows, diagnostics, and compatibility matrix. |
+| PKG-002 | active | Produce macOS bundle and Debian/Ubuntu package | Hosted builds deploy Qt/QML runtime files and publish portable macOS artifacts plus a CPack `.deb`; validate clean supported Debian/Ubuntu installs and add signing before release. |
+| PKG-003 | todo | Publish signed Debian/Ubuntu APT repository | Signed Release/InRelease metadata, protected key rotation, version promotion, retention, and documented repository enrollment pass clean-machine tests. |
+| DOC-001 | active | Maintain operator and hardware manuals | A user-manual index plus setup, settings, hosted-build, Debian/Ubuntu, and CAT4OM guides exist; every implementation change is CI-gated on manual/changelog/backlog updates; safe keying, workflows, diagnostics, and compatibility manuals remain. |
 
 ## P2 — secure remote operation
 

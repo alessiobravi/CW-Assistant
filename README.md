@@ -25,7 +25,7 @@ profile chooser, guided setup, and persistent radio/keying/display settings.
   receive audio/spectrum streaming, and station-local CW timing
 - Multiple saved station profiles with a startup chooser and isolated settings,
   allowing separate application instances to operate separate radios
-- Windows OmniRig frequency control first, with Hamlib as the portable CAT path
+- Windows OmniRig, portable Hamlib, and CAT4OM network frequency-control paths
 - Yaesu FT-450D and FT-818/FT-818ND editable reference configurations
 - Separate configurable serial port and RTS/DTR lines for PTT and keying
 - Human-confirmed QSO initiation with ordinary, DX-pileup, and contest panels
@@ -41,7 +41,8 @@ and confidence state; it does not own an operating-system thread.
 
 See [the architecture](docs/architecture.md), [requirements](docs/requirements.md),
 [prioritized backlog](BACKLOG.md), [changelog](CHANGELOG.md), and
-[roadmap](docs/roadmap.md). The graphical architecture is recorded in
+[roadmap](docs/roadmap.md). Operator-facing setup and examples are maintained in
+the [user manuals](docs/manuals/README.md). The graphical architecture is recorded in
 [ADR 0001](docs/decisions/0001-qt-quick-spectrum-renderer.md).
 ADIF release gates and official-fixture verification are documented in the
 [ADIF conformance policy](docs/adif-conformance.md).
@@ -63,7 +64,7 @@ The development host starts in a hardware-safe state:
 ```
 
 The Qt desktop shell requires Qt 6.5 or newer with Quick, Quick Controls, QML,
-and SerialPort:
+SerialPort, and WebSockets:
 
 ```sh
 cmake -S . -B build/desktop -DCWA_BUILD_DESKTOP=ON
@@ -79,10 +80,11 @@ Runtime dependencies planned for adapter milestones are Qt 6, PortAudio,
 Hamlib, SoapySDR, SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the
 vendor's platform-specific API/driver.
 
-Every push to `main` and pull request builds and tests the core natively on
-Windows x64, Linux x64, macOS ARM64, and macOS x64. Pull requests containing
-implementation, test, build, or workflow changes must update both the changelog
-and backlog.
+Every push to `main` and pull request builds and tests natively on Windows x64,
+Linux x64, macOS ARM64, and macOS x64, then publishes downloadable desktop
+artifacts; Linux also produces a Debian/Ubuntu `.deb`. Pull requests containing
+implementation, test, build, or workflow changes must update the user manuals,
+changelog, and backlog.
 
 ## Safety
 

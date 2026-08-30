@@ -71,6 +71,7 @@ enum class SerialKeyLine { Rts, Dtr };
 enum class FrequencyControlBackend {
   OmniRig,
   Hamlib,
+  Cat4Om,
 };
 
 struct RigProfile {

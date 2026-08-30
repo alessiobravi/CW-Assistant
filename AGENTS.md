@@ -10,6 +10,10 @@ These rules apply to every contributor and coding agent working in this tree.
   no item changes, update its `Last reviewed` note with the date and reason.
 - A change to source, tests, CMake, or GitHub workflows is incomplete unless
   both records are included in the same commit or pull request.
+- Every developed user-facing feature, setting, workflow, platform/package, or
+  behavior must update the relevant readable guide under `docs/manuals/` with
+  setup steps, limitations, and practical examples. Keep engineering documents
+  under `docs/` consistent when architecture or requirements change.
 - Use the repository owner's configured Git identity for commits. Do not add
   Codex, an AI assistant, or another automated system as author or co-author,
   and do not add automated `Co-authored-by` trailers.

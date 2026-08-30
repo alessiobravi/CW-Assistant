@@ -48,7 +48,7 @@ jobs:
         run: ctest --test-dir build -C Release --output-on-failure
 
   project-records:
-    name: Changelog and backlog updated
+    name: Changelog, backlog, and manuals updated
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:

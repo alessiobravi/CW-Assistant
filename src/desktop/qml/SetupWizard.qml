@@ -53,9 +53,13 @@ Dialog {
                 columnSpacing: 18
                 rowSpacing: 12
                 Label { text: "Frequency provider" }
-                ComboBox { Layout.fillWidth: true; model: ["OmniRig (Windows)", "Hamlib"]; currentIndex: appSettings.frequencyBackendIndex; onActivated: appSettings.frequencyBackendIndex = currentIndex }
+                ComboBox { Layout.fillWidth: true; model: ["OmniRig (Windows)", "Hamlib", "CAT4OM network service"]; currentIndex: appSettings.frequencyBackendIndex; onActivated: appSettings.frequencyBackendIndex = currentIndex }
                 Label { text: "OmniRig slot" }
                 SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                Label { text: "CAT4OM Control URL"; visible: appSettings.frequencyBackendIndex === 2 }
+                TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omUrl; placeholderText: "ws://127.0.0.1:5001/"; onEditingFinished: appSettings.cat4omUrl = text }
+                Label { text: "CAT4OM radio ID"; visible: appSettings.frequencyBackendIndex === 2 }
+                TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omRadioId; placeholderText: "Optional"; onEditingFinished: appSettings.cat4omRadioId = text }
                 Label { text: "CAT COM port" }
                 ComboBox { Layout.fillWidth: true; editable: true; model: appSettings.serialPorts; currentIndex: find(appSettings.catPort); displayText: currentIndex >= 0 ? currentText : appSettings.catPort; onActivated: appSettings.catPort = currentText; onAccepted: appSettings.catPort = editText }
                 Label { text: "Baud rate" }

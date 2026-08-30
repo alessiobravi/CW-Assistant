@@ -6,12 +6,16 @@
    begins.
 2. Keep core logic independent of UI and hardware libraries.
 3. Add deterministic tests and run the relevant local test suite.
-4. Add the result under `CHANGELOG.md` → `Unreleased`.
-5. Update the backlog item status, scope, or review note.
-6. Open a pull request and let every cross-platform CI job pass.
+4. Update the relevant operator-facing file under `docs/manuals/`, including
+   usable examples and honest current limitations.
+5. Add the result under `CHANGELOG.md` → `Unreleased`.
+6. Update the backlog item status, scope, or review note.
+7. Open a pull request and let every cross-platform CI job pass.
 
-Pull requests that alter source, tests, build files, or workflows must include
-both `CHANGELOG.md` and `BACKLOG.md`. The `project-records` CI job enforces this.
+Pull requests that alter implementation or delivery files must include
+`CHANGELOG.md`, `BACKLOG.md`, and an appropriate `docs/manuals/` update. The
+`project-records` CI job enforces this baseline; architecture and requirements
+documents must also change when their contracts change.
 
 ## Commit and pull-request scope
 

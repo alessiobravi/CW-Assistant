@@ -97,6 +97,10 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - On Windows, OmniRig Rig 1/Rig 2 is the first frequency-control integration and
   its native configuration is reachable from the application Settings pane.
   Hamlib provides the platform-neutral frequency-control path.
+- CAT4OM is a network frequency-control backend using its native major-version
+  compatible JSON WebSocket Control channel. It consumes pushed state, treats
+  VFO names as opaque identifiers, honors group ownership, and never exposes
+  CAT4OM PTT/CW operations around the local transmit-safety boundary.
 
 ### Configuration and instances
 

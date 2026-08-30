@@ -13,6 +13,7 @@
 #endif
 
 #include "cwassistant/core/reference_rig_profiles.hpp"
+#include "../radio/cat4om_client.hpp"
 
 namespace cwassistant::desktop {
 namespace {
@@ -45,6 +46,13 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   refreshProfiles();
   profile_selection_required_ = !profile_was_explicit && available_profiles_.size() > 1;
   refreshSerialPorts();
+  cat4om_client_ = std::make_unique<Cat4OmClient>(this);
+  connect(cat4om_client_.get(), &Cat4OmClient::statusChanged, this, [this] {
+    setStatusMessage(cat4om_client_->statusText());
+    emit cat4omChanged();
+  });
+  connect(cat4om_client_.get(), &Cat4OmClient::radioStateChanged, this,
+          &AppSettings::cat4omChanged);
 }
 
 AppSettings::~AppSettings() {
@@ -84,6 +92,31 @@ bool AppSettings::omniRigAvailable() const noexcept {
 int AppSettings::referenceRigIndex() const noexcept { return reference_rig_index_; }
 int AppSettings::frequencyBackendIndex() const noexcept { return frequency_backend_index_; }
 int AppSettings::omniRigSlot() const noexcept { return omnirig_slot_; }
+const QString& AppSettings::cat4omUrl() const noexcept { return cat4om_url_; }
+const QString& AppSettings::cat4omRadioId() const noexcept { return cat4om_radio_id_; }
+const QString& AppSettings::cat4omPassword() const noexcept { return cat4om_password_; }
+QString AppSettings::cat4omState() const {
+  return cat4om_client_ ? cat4om_client_->statusText()
+                        : QStringLiteral("Disconnected");
+}
+QString AppSettings::cat4omFrequencySummary() const {
+  if (!cat4om_client_) {
+    return QStringLiteral("No radio state");
+  }
+  const auto plan = cat4om_client_->frequencyPlan();
+  if (!plan) {
+    return QStringLiteral("No radio state");
+  }
+  return plan->split_enabled
+             ? QStringLiteral("RX %1 Hz • TX %2 Hz • split")
+                   .arg(static_cast<qulonglong>(plan->rx_dial_hz))
+                   .arg(static_cast<qulonglong>(plan->tx_dial_hz))
+             : QStringLiteral("%1 Hz • simplex")
+                   .arg(static_cast<qulonglong>(plan->rx_dial_hz));
+}
+bool AppSettings::cat4omCanWrite() const noexcept {
+  return cat4om_client_ && cat4om_client_->canWrite();
+}
 const QString& AppSettings::catPort() const noexcept { return cat_port_; }
 int AppSettings::catBaudRate() const noexcept { return cat_baud_rate_; }
 int AppSettings::catDataBits() const noexcept { return cat_data_bits_; }
@@ -116,6 +149,9 @@ const QString& AppSettings::statusMessage() const noexcept { return status_messa
 
 CWA_SETTER(setFrequencyBackendIndex, frequency_backend_index_, int)
 CWA_SETTER(setOmniRigSlot, omnirig_slot_, int)
+CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
+CWA_SETTER(setCat4omRadioId, cat4om_radio_id_, const QString&)
+CWA_SETTER(setCat4omPassword, cat4om_password_, const QString&)
 CWA_SETTER(setCatPort, cat_port_, const QString&)
 CWA_SETTER(setCatBaudRate, cat_baud_rate_, int)
 CWA_SETTER(setCatDataBits, cat_data_bits_, int)
@@ -191,7 +227,7 @@ void AppSettings::refreshSerialPorts() {
 }
 
 bool AppSettings::apply() {
-  frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 1);
+  frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 2);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
   cat_baud_rate_ = std::clamp(cat_baud_rate_, 300, 1'000'000);
   cat_data_bits_ = std::clamp(cat_data_bits_, 5, 8);
@@ -218,6 +254,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
   settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
+  settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")), cat4om_radio_id_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/catPort")), cat_port_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/catBaudRate")), cat_baud_rate_);
   settings.setValue(storageKey(QStringLiteral("radio/catDataBits")), cat_data_bits_);
@@ -259,6 +297,13 @@ void AppSettings::load() {
   applyReferenceDefaults(reference_rig_index_);
   frequency_backend_index_ = settings.value(storageKey(QStringLiteral("radio/frequencyBackendIndex")), 0).toInt();
   omnirig_slot_ = settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1).toInt();
+  cat4om_url_ = settings
+                    .value(storageKey(QStringLiteral("radio/cat4omUrl")),
+                           QStringLiteral("ws://127.0.0.1:5001/"))
+                    .toString();
+  cat4om_radio_id_ =
+      settings.value(storageKey(QStringLiteral("radio/cat4omRadioId"))).toString();
+  cat4om_password_.clear();
   cat_port_ = settings.value(storageKey(QStringLiteral("radio/catPort"))).toString();
   cat_baud_rate_ = settings.value(storageKey(QStringLiteral("radio/catBaudRate")), cat_baud_rate_).toInt();
   cat_data_bits_ = settings.value(storageKey(QStringLiteral("radio/catDataBits")), cat_data_bits_).toInt();
@@ -401,6 +446,9 @@ void AppSettings::resetInMemorySettings() {
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;
   omnirig_slot_ = 1;
+  cat4om_url_ = QStringLiteral("ws://127.0.0.1:5001/");
+  cat4om_radio_id_.clear();
+  cat4om_password_.clear();
   cat_port_.clear();
   keying_port_.clear();
   split_enabled_ = false;
@@ -461,6 +509,26 @@ void AppSettings::showOmniRigConfiguration() {
 #else
   setStatusMessage(QStringLiteral("OmniRig integration is available on Windows; use Hamlib on this platform."));
 #endif
+}
+
+void AppSettings::testCat4omConnection() {
+  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()),
+                                  cat4om_radio_id_, {}, true);
+}
+
+void AppSettings::connectCat4omControl() {
+  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()),
+                                  cat4om_radio_id_, cat4om_password_, false);
+  cat4om_password_.clear();
+  emit settingsChanged();
+}
+
+void AppSettings::disconnectCat4om() { cat4om_client_->disconnectFromServer(); }
+
+void AppSettings::requestCat4omOwnership() {
+  if (!cat4om_client_->requestOwnership()) {
+    setStatusMessage(cat4om_client_->statusText());
+  }
 }
 
 }  // namespace cwassistant::desktop

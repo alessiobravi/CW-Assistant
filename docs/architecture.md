@@ -107,6 +107,12 @@ Multiple profiles may be saved. Initially only one profile owns TX at a time;
 additional receivers can remain active. This prevents two rigs from being keyed
 by one QSO state machine.
 
+CAT4OM is modeled as a remote CAT service rather than a serial adapter. Its
+Control WebSocket supplies authoritative pushed snapshots and group-wide master
+ownership. The adapter may read/set frequency and split when advertised, but it
+does not route network PTT or CW around CW Assistant's station-local transmit
+guard. Profile passwords are never persisted.
+
 A network SDR is a receive-only source with its own tuned frequency. It is not a
 CAT rig and cannot acquire TX ownership. Any action that copies its frequency to
 a local rig crosses an explicit operator-confirmation boundary.

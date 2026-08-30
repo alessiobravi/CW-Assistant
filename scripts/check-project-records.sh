@@ -7,11 +7,13 @@ head_revision="${2:?head revision is required}"
 records_required=false
 changelog_updated=false
 backlog_updated=false
+manual_updated=false
 
 while IFS= read -r changed_path; do
   case "${changed_path}" in
     CHANGELOG.md) changelog_updated=true ;;
     BACKLOG.md) backlog_updated=true ;;
+    docs/manuals/*) manual_updated=true ;;
     src/*|tests/*|cmake/*|CMakeLists.txt|CMakePresets.json|.github/workflows/*)
       records_required=true
       ;;
@@ -26,11 +28,12 @@ fi
 missing=()
 [[ "${changelog_updated}" == true ]] || missing+=("CHANGELOG.md")
 [[ "${backlog_updated}" == true ]] || missing+=("BACKLOG.md")
+[[ "${manual_updated}" == true ]] || missing+=("docs/manuals/")
 
 if (( ${#missing[@]} > 0 )); then
-  echo "Implementation changes require updated project records."
+  echo "Implementation changes require updated records and user manuals."
   printf 'Missing: %s\n' "${missing[@]}"
   exit 1
 fi
 
-echo "Changelog and backlog accompany this implementation change."
+echo "Changelog, backlog, and user manuals accompany this implementation change."

@@ -24,18 +24,26 @@ jobs:
             os: windows-2025
             qt-arch: win64_msvc2022_64
             configure-arguments: -A x64
+            artifact: cw-assistant-windows11-x64
+            debian-package: false
           - name: Linux x64 / GCC
             os: ubuntu-24.04
             qt-arch: gcc_64
             configure-arguments: ""
+            artifact: cw-assistant-linux-x64
+            debian-package: true
           - name: macOS ARM64 / Apple Clang
             os: macos-15
             qt-arch: clang_64
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
+            artifact: cw-assistant-macos-arm64
+            debian-package: false
           - name: macOS x64 / Apple Clang
             os: macos-15-intel
             qt-arch: clang_64
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
+            artifact: cw-assistant-macos-x64
+            debian-package: false
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out source
@@ -45,7 +53,7 @@ jobs:
         with:
           version: "6.11.2"
           arch: ${{ matrix.qt-arch }}
-          modules: qtserialport
+          modules: qtserialport qtwebsockets
           cache: true
       - name: Configure desktop
         run: >-
@@ -59,3 +67,26 @@ jobs:
         run: cmake --build build --config Release --parallel
       - name: Run dependency-free tests
         run: ctest --test-dir build -C Release --output-on-failure
+      - name: Stage self-contained application
+        run: cmake --install build --config Release --prefix stage
+      - name: Preserve the staged application as an archive
+        run: cmake -E tar czf ${{ matrix.artifact }}.tar.gz --format=gnutar stage
+      - name: Publish downloadable build
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.artifact }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Build Debian/Ubuntu package
+        if: matrix.debian-package
+        run: cpack --config build/CPackConfig.cmake -G DEB -B packages
+      - name: Publish Debian/Ubuntu package
+        if: matrix.debian-package
+        uses: actions/upload-artifact@v7
+        with:
+          name: cw-assistant-debian-ubuntu-x64
+          path: packages/*.deb
+          if-no-files-found: error
+          retention-days: 14

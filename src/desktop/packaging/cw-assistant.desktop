@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=CW Assistant
+Comment=Multichannel amateur-radio CW receiver and operator assistant
+Exec=cw-assistant-desktop
+Icon=cw-assistant
+Terminal=false
+Categories=HamRadio;AudioVideo;Network;
+Keywords=CW;Morse;Ham Radio;SDR;CAT;
+StartupNotify=true

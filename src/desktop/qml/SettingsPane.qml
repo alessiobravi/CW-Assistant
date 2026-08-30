@@ -54,12 +54,31 @@ Pane {
                     Label { text: "Frequency control" }
                     ComboBox {
                         Layout.fillWidth: true
-                        model: ["OmniRig (Windows)", "Hamlib"]
+                        model: ["OmniRig (Windows)", "Hamlib", "CAT4OM network service"]
                         currentIndex: appSettings.frequencyBackendIndex
                         onActivated: appSettings.frequencyBackendIndex = currentIndex
                     }
                     Label { text: "OmniRig radio slot" }
                     SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                    Label { text: "CAT4OM Control URL"; visible: appSettings.frequencyBackendIndex === 2 }
+                    TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omUrl; placeholderText: "ws://127.0.0.1:5001/"; onEditingFinished: appSettings.cat4omUrl = text }
+                    Label { text: "CAT4OM radio ID"; visible: appSettings.frequencyBackendIndex === 2 }
+                    TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omRadioId; placeholderText: "Empty selects the first visible radio"; onEditingFinished: appSettings.cat4omRadioId = text }
+                    Label { text: "CAT4OM password"; visible: appSettings.frequencyBackendIndex === 2 }
+                    TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; echoMode: TextInput.Password; placeholderText: "Session only — never saved"; onTextEdited: appSettings.cat4omPassword = text }
+                    Label { text: "CAT4OM connection"; visible: appSettings.frequencyBackendIndex === 2 }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: appSettings.frequencyBackendIndex === 2
+                        Label { text: appSettings.cat4omState; color: "#91a0b1"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        Label { text: appSettings.cat4omFrequencySummary; color: "#43c6ac" }
+                        RowLayout {
+                            Button { text: "Test read-only"; onClicked: appSettings.testCat4omConnection() }
+                            Button { text: "Connect control"; onClicked: appSettings.connectCat4omControl() }
+                            Button { text: "Request ownership"; enabled: !appSettings.cat4omCanWrite; onClicked: appSettings.requestCat4omOwnership() }
+                            Button { text: "Disconnect"; onClicked: appSettings.disconnectCat4om() }
+                        }
+                    }
                     Label { text: "CAT port" }
                     ComboBox {
                         Layout.fillWidth: true
@@ -101,7 +120,7 @@ Pane {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
-                        text: "All serial values are editable. With OmniRig selected, its native dialog owns the live CAT connection; keep both configurations aligned."
+                        text: "All direct serial values are editable. CAT4OM uses its group Control URL and radio ID instead; its password is held for one connection attempt only and is never saved."
                     }
                 }
             }
