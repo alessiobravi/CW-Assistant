@@ -1,28 +1,6 @@
 #include "cwassistant/core/transmit_guard.hpp"
 
-#include <algorithm>
-#include <cctype>
-
 namespace cwassistant::core {
-namespace {
-
-bool plausible_callsign(const std::string_view value) {
-  if (value.size() < 3 || value.size() > 16) {
-    return false;
-  }
-  const auto has_letter = std::ranges::any_of(value, [](const unsigned char c) {
-    return std::isalpha(c) != 0;
-  });
-  const auto has_digit = std::ranges::any_of(value, [](const unsigned char c) {
-    return std::isdigit(c) != 0;
-  });
-  const auto valid = std::ranges::all_of(value, [](const unsigned char c) {
-    return std::isalnum(c) != 0 || c == '/';
-  });
-  return has_letter && has_digit && valid;
-}
-
-}  // namespace
 
 std::string_view TransmitGuard::state_name() const noexcept {
   switch (state_) {
@@ -50,35 +28,38 @@ void TransmitGuard::disarm() noexcept {
 }
 
 bool TransmitGuard::request_qso(std::string callsign) {
-  if (state_ != TransmitState::Armed || !plausible_callsign(callsign)) {
+  const auto normalized = CallsignPolicy::normalize(callsign);
+  if (state_ != TransmitState::Armed || !normalized.has_value() ||
+      callsign_policy_.is_ignored(*normalized)) {
     return false;
   }
-  std::ranges::transform(callsign, callsign.begin(), [](const unsigned char c) {
-    return static_cast<char>(std::toupper(c));
-  });
-  pending_callsign_ = std::move(callsign);
+  pending_callsign_ = *normalized;
   state_ = TransmitState::AwaitingConfirmation;
   return true;
 }
 
-bool TransmitGuard::confirm(const std::string_view callsign) noexcept {
-  if (state_ != TransmitState::AwaitingConfirmation ||
-      callsign.size() != pending_callsign_.size()) {
+bool TransmitGuard::confirm(const std::string_view callsign) {
+  const auto normalized = CallsignPolicy::normalize(callsign);
+  if (state_ != TransmitState::AwaitingConfirmation || !normalized.has_value() ||
+      *normalized != pending_callsign_) {
     return false;
   }
-  const auto matches = std::ranges::equal(
-      callsign, pending_callsign_, {},
-      [](const unsigned char c) { return static_cast<char>(std::toupper(c)); },
-      [](const char c) { return c; });
-  if (!matches) {
+  if (callsign_policy_.is_ignored(pending_callsign_)) {
+    pending_callsign_.clear();
+    state_ = TransmitState::Armed;
     return false;
   }
   state_ = TransmitState::Confirmed;
   return true;
 }
 
-bool TransmitGuard::begin_transmission() noexcept {
+bool TransmitGuard::begin_transmission() {
   if (state_ != TransmitState::Confirmed) {
+    return false;
+  }
+  if (callsign_policy_.is_ignored(pending_callsign_)) {
+    pending_callsign_.clear();
+    state_ = TransmitState::Armed;
     return false;
   }
   state_ = TransmitState::Transmitting;

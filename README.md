@@ -13,9 +13,16 @@ of the core and will be added as independently replaceable modules.
 
 - Live audio input with selectable device, channel, sample rate, and buffering
 - RTL-SDR and SDRplay reception through SoapySDR modules
+- Selectable receive-only network SDR directory, with KiwiSDR streaming first
+  and browser handoff for receiver types without an authorized client API
 - Accelerated spectrum and scrolling waterfall
 - Detection and stateful decoding of multiple simultaneous CW channels
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
+- Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,
+  palettes, overlays, and delayed callsign detail cards
+- Persistent callsign ignore list enforced by display, queue, and TX safety
+- Standalone, station-server, and remote-client roles with secure control,
+  receive audio/spectrum streaming, and station-local CW timing
 - Multiple saved transceiver profiles using Hamlib serial CAT
 - Separate configurable serial port and RTS/DTR lines for PTT and keying
 - Human-confirmed QSO initiation with ordinary, DX-pileup, and contest panels

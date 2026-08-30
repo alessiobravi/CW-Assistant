@@ -26,6 +26,7 @@ replay the same recording to identical spectral results without overruns.
 - Narrowband filter/decimator and adaptive CW envelope/timing decoder
 - Worker pool with per-channel ordering and load shedding
 - Callsign extraction, confidence, channel list, and waterfall selection
+- Delayed callsign detail card and persistent exact-match ignore policy
 - Corpus annotations and decoder benchmark report
 
 Acceptance: locate and independently decode multiple annotated signals from the
@@ -48,6 +49,9 @@ chosen reference rig without any decoder event directly controlling TX.
 - SoapySDR device discovery and stream adapter
 - RTL-SDR and SDRplay setup diagnostics
 - IQ tuning, frequency mapping, and CAT/SDR frequency synchronization
+- Cached network SDR directory with frequency/location/protocol filters
+- KiwiSDR receive-only WebSocket adapter and browser handoff for unsupported
+  receiver protocols
 
 Acceptance: log a completed QSO into Log4OM and repeat the M2 decoder benchmark
 from both an RTL-SDR and an SDRplay receiver.
@@ -57,3 +61,17 @@ from both an RTL-SDR and an SDRplay receiver.
 - Signed Win64 installer, macOS application bundle, and Linux packages
 - CI build/test matrix, dependency/license manifest, crash diagnostics
 - User manual, hardware compatibility table, and reproducible release process
+
+## M6 — secure remote station operation
+
+- Standalone/server/client startup profiles and headless station service
+- Pairing, mutual identity verification, roles, revocation, and audit log
+- Versioned secure control/event protocol and full reconnect snapshots
+- Exclusive expiring per-rig control leases and fault-injection tests
+- Opus receive audio plus selectable spectrum/event/IQ bandwidth profiles
+- Station-local CW message scheduler with idempotency and disconnect release
+
+Acceptance: an authenticated remote operator completes a human-confirmed QSO
+through a VPN while injected loss, delay, duplication, reconnect, client crash,
+and server-side device removal cannot duplicate a message or leave KEY/PTT
+asserted.

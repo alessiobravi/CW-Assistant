@@ -1,6 +1,8 @@
 add_library(cwa_core
   src/adif.cpp
+  src/callsign_policy.cpp
   src/channel_scheduler.cpp
+  src/remote_control.cpp
   src/transmit_guard.cpp
 )
 

@@ -24,6 +24,16 @@ All notable changes to CW Assistant are recorded here. The format follows
   ring, clickable overlays, fallbacks, and modularity rules.
 - Functional 2D visualization scope, explicitly excluding 3D spectrum and
   ornamental rendering effects.
+- Configurable visualization model with independent FPS and waterfall speed,
+  bounded manual dB range, averaging, and operational overlays.
+- Normalized exact-match callsign ignore policy, enforced again by the TX guard,
+  with unit coverage.
+- Network receiver directory contracts and a receive-only KiwiSDR-first
+  integration policy with safe browser handoff for unsupported protocols.
+- Secure standalone/station-server/remote-client architecture with station-local
+  CW timing, bandwidth profiles, reconnect snapshots, and authenticated control.
+- Dependency-free exclusive per-rig control lease manager with bounded TTL and
+  expiry/ownership tests.
 - Windows 11 x64 or newer established as the supported Windows baseline.
 
 ### Security

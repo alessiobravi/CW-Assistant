@@ -4,7 +4,10 @@
 #include <vector>
 
 #include "cwassistant/core/adif.hpp"
+#include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
+#include "cwassistant/core/remote_control.hpp"
+#include "cwassistant/core/spectrum_visualization_settings.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
 
@@ -54,8 +57,10 @@ void test_scheduler() {
 }
 
 void test_transmit_guard() {
+  using cwassistant::core::CallsignPolicy;
   using cwassistant::core::TransmitGuard;
-  TransmitGuard guard;
+  CallsignPolicy policy;
+  TransmitGuard guard(policy);
   expect(!guard.begin_transmission(), "cannot transmit while disarmed");
   expect(guard.arm(), "operator can arm TX");
   expect(guard.request_qso("i1abc"), "valid selected call requests QSO");
@@ -63,9 +68,74 @@ void test_transmit_guard() {
   expect(guard.confirm("I1ABC"), "operator confirms selected call");
   expect(guard.begin_transmission(), "confirmed QSO permits TX");
   expect(guard.finish_transmission(), "TX completes back to armed state");
+  expect(policy.add_ignored("w1aw"), "operator can ignore a callsign");
+  expect(!guard.request_qso("W1AW"), "ignored callsign cannot request QSO");
+  expect(guard.request_qso("K1ABC"), "another call can request QSO");
+  expect(policy.add_ignored("K1ABC"), "pending call can become ignored");
+  expect(!guard.confirm("K1ABC"), "new ignore rule cancels confirmation");
+  expect(guard.state() == cwassistant::core::TransmitState::Armed,
+         "ignore rule returns TX guard to armed state");
   guard.trip_fault();
   expect(!guard.arm(), "fault cannot be bypassed by arming");
   expect(guard.reset_fault(), "fault reset returns to disarmed");
+}
+
+void test_callsign_policy() {
+  using cwassistant::core::CallsignPolicy;
+  CallsignPolicy policy;
+  expect(policy.add_ignored("  i1abc/p  "), "ignore list normalizes callsign");
+  expect(policy.is_ignored("I1ABC/P"), "ignore matching is case insensitive");
+  expect(!policy.add_ignored("I1ABC/P"), "ignore list rejects duplicates");
+  expect(!policy.add_ignored("NOT A CALL"), "ignore list rejects invalid text");
+  expect(policy.remove_ignored("i1abc/p"), "ignored callsign can be restored");
+  expect(!policy.is_ignored("I1ABC/P"), "removed call is no longer ignored");
+}
+
+void test_spectrum_settings() {
+  cwassistant::core::SpectrumVisualizationSettings settings{
+      .target_fps = 500,
+      .waterfall_lines_per_second = 0,
+      .lower_bound_db = -20.0F,
+      .upper_bound_db = -19.0F,
+      .averaging_frames = 100,
+  };
+  const auto safe = settings.sanitized();
+  expect(safe.target_fps == 120, "spectrum FPS is bounded");
+  expect(safe.waterfall_lines_per_second == 1,
+         "waterfall speed is independently bounded");
+  expect(safe.upper_bound_db - safe.lower_bound_db >= 10.0F,
+         "manual range retains visible span");
+  expect(safe.averaging_frames == 32, "averaging is bounded");
+}
+
+void test_remote_control_lease() {
+  using namespace std::chrono_literals;
+  using cwassistant::core::ControlLeaseManager;
+  ControlLeaseManager leases;
+  const auto start = ControlLeaseManager::TimePoint{};
+
+  expect(leases.acquire("client-a", "rig-1", start, 10s),
+         "first remote client acquires rig lease");
+  expect(!leases.acquire("client-b", "rig-1", start, 10s),
+         "second client cannot steal active rig lease");
+  expect(leases.acquire("client-b", "rig-2", start, 10s),
+         "different rigs have independent leases");
+  expect(leases.owns("client-a", "rig-1", start + 1s),
+         "lease owner is recognized");
+  expect(leases.renew("client-a", "rig-1", start + 1s, 20s),
+         "lease owner can renew heartbeat");
+  expect(leases.owns("client-a", "rig-1", start + 15s),
+         "renewed lease remains active");
+  expect(!leases.owns("client-a", "rig-1", start + 22s),
+         "lease expires without heartbeat");
+  expect(leases.acquire("client-b", "rig-1", start + 22s, 1ms),
+         "new client can acquire expired lease");
+  expect(leases.owns("client-b", "rig-1", start + 23s),
+         "minimum TTL clamp prevents unsafe instant expiry");
+  expect(!leases.release("client-a", "rig-1"),
+         "non-owner cannot release another lease");
+  expect(leases.release("client-b", "rig-1"),
+         "owner can explicitly release lease");
 }
 
 void test_adif() {
@@ -91,6 +161,9 @@ void test_adif() {
 int main() {
   test_ring_buffer();
   test_scheduler();
+  test_callsign_policy();
+  test_spectrum_settings();
+  test_remote_control_lease();
   test_transmit_guard();
   test_adif();
   if (failures == 0) {

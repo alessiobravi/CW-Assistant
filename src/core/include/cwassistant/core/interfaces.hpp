@@ -17,6 +17,43 @@ struct DeviceInfo {
   std::string display_name;
 };
 
+enum class NetworkReceiverProtocol {
+  KiwiSdr,
+  OpenWebRx,
+  BrowserWebSdr,
+  Unknown,
+};
+
+struct FrequencyRange {
+  double lower_hz{0.0};
+  double upper_hz{0.0};
+};
+
+struct NetworkReceiverInfo {
+  std::string id;
+  std::string display_name;
+  std::string endpoint;
+  NetworkReceiverProtocol protocol{NetworkReceiverProtocol::Unknown};
+  std::string country_code;
+  std::string location;
+  std::string grid_locator;
+  double latitude{0.0};
+  double longitude{0.0};
+  std::vector<FrequencyRange> coverage;
+  bool direct_stream_supported{false};
+  bool currently_available{false};
+};
+
+class INetworkReceiverDirectory {
+ public:
+  virtual ~INetworkReceiverDirectory() = default;
+  [[nodiscard]] virtual std::string_view name() const noexcept = 0;
+  [[nodiscard]] virtual std::vector<NetworkReceiverInfo> cached_entries() const = 0;
+  // Refresh is a user/control-plane operation and must implement provider
+  // caching, rate limits, and terms of use.
+  virtual bool refresh() = 0;
+};
+
 struct SerialSettings {
   std::string port;
   std::uint32_t baud_rate{9'600};

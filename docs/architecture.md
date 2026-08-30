@@ -14,7 +14,8 @@ application services
   |-- channel tracker/scheduler
   |-- QSO state machine and macro expansion
   |-- TX safety supervisor
-  `-- log coordinator and durable outbox
+  |-- log coordinator and durable outbox
+  `-- remote station coordinator and state snapshots
 
 dependency-free core
   |-- sample and spectral data contracts
@@ -26,6 +27,8 @@ dependency-free core
 adapters
   |-- PortAudio input / WAV replay
   |-- SoapySDR input / SigMF replay
+  |-- network receiver directory and KiwiSDR WebSocket source
+  |-- secure remote control/event and Opus receive-media transports
   |-- Hamlib CAT
   |-- serial RTS/DTR keying
   `-- Log4OM UDP ADIF
@@ -104,6 +107,10 @@ Multiple profiles may be saved. Initially only one profile owns TX at a time;
 additional receivers can remain active. This prevents two rigs from being keyed
 by one QSO state machine.
 
+A network SDR is a receive-only source with its own tuned frequency. It is not a
+CAT rig and cannot acquire TX ownership. Any action that copies its frequency to
+a local rig crosses an explicit operator-confirmation boundary.
+
 Port enumeration is read-only. Opening a keying port initializes both control
 lines to their inactive polarity before the profile can be armed.
 
@@ -135,6 +142,47 @@ Panels will be declarative data, not executable plugins. A workflow contains:
 
 Once this format is stable, signed or sandboxed extension mechanisms can be
 considered without exposing raw serial/keying access.
+
+## Callsign interaction and policy
+
+Channel overlays publish stable observation IDs so hover/press detail cards can
+be enriched without blocking the render thread. Live DSP fields are available
+immediately; worked-before, prefix, and logger fields arrive asynchronously and
+are discarded if the observation is no longer current.
+
+The persistent exact-match ignore list is a core policy, not a visual toggle.
+Ignored observations are removed before display and queue models. The QSO state
+machine and TX guard independently recheck the same current policy before any
+transition that can lead to keying.
+
+## Network receivers
+
+Directory providers produce normalized metadata but do not open streams.
+Protocol adapters open one selected endpoint and implement `ISampleSource`.
+This keeps discovery, caching, browser handoff, WebSocket framing, and sample
+delivery independently testable.
+
+KiwiSDR is the first direct adapter. Browser-only receivers use an external
+browser/virtual-audio workflow unless their operator exposes a documented and
+authorized stream. Directory refresh has a persistent cache, explicit user
+refresh, rate limiting, and bounded health checks so volunteer receivers are not
+polled aggressively.
+
+## Remote operation
+
+The same application core is hosted by standalone and station-server roles. A
+remote client is a projection of server state plus an authenticated command
+source; it is not a remote serial-port bridge. The station remains authoritative
+for clocks, hardware, safety, logging, decoder state, and callsign policy.
+
+Control/events use a versioned secure reliable channel. Audio and high-rate
+visual data are separate subscriptions with bounded queues and downgradeable
+bandwidth profiles. Each rig has one expiring operator lease, while multiple
+observer clients may subscribe. Complete CW messages are scheduled locally at
+the station, preventing network jitter from changing Morse element timing.
+
+See [ADR 0002](decisions/0002-secure-remote-operation.md) for authentication,
+failure, reconnect, and TX safety rules.
 
 ## Planned external libraries
 
