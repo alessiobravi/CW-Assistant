@@ -29,7 +29,7 @@ jobs:
             debian_package: false
           - name: Linux x64 / GCC
             os: ubuntu-24.04
-            qt-arch: gcc_64
+            qt-arch: linux_gcc_64
             configure-arguments: ""
             artifact: cw-assistant-linux-x64
             marker: linux-x64
@@ -56,12 +56,25 @@ jobs:
         uses: actions/checkout@v7
       - name: Install Qt
         id: install_qt
+        continue-on-error: true
         uses: jurplel/install-qt-action@v4
         with:
           version: "6.11.2"
           arch: ${{ matrix.qt-arch }}
           modules: qtserialport qtwebsockets qttasktree
           cache: true
+      - name: Retry Qt installation from a clean uncached directory
+        id: install_qt_retry
+        if: steps.install_qt.outcome == 'failure'
+        uses: jurplel/install-qt-action@v4
+        with:
+          dir: ${{ runner.temp }}/Qt-retry
+          version: "6.11.2"
+          arch: ${{ matrix.qt-arch }}
+          modules: qtserialport qtwebsockets qttasktree
+          cache: false
+          aqtversion: ==3.3.0
+          py7zrversion: ==1.0.0
       - name: Configure desktop
         id: configure
         run: >-
@@ -111,6 +124,7 @@ jobs:
         env:
           CWA_MARKER: ${{ matrix.marker }}
           CWA_QT_RESULT: ${{ steps.install_qt.outcome }}
+          CWA_QT_RETRY_RESULT: ${{ steps.install_qt_retry.outcome }}
           CWA_CONFIGURE_RESULT: ${{ steps.configure.outcome }}
           CWA_BUILD_RESULT: ${{ steps.build.outcome }}
           CWA_TEST_RESULT: ${{ steps.test.outcome }}
@@ -121,7 +135,7 @@ jobs:
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="qt=${CWA_QT_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           git config user.name "CW Assistant CI"
           git config user.email "ci@cw-assistant.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"

@@ -8,8 +8,9 @@ review this file and update affected items or the “Last reviewed” note.
 
 Last reviewed: 2026-08-31 — reproduced and fixed hosted QML compilation,
 validated the Qt desktop build/install locally, added functional WAV spectrum
-replay, corrected macOS bundle deployment, and added remotely queryable
-verified-commit plus per-platform diagnostic markers.
+replay, corrected macOS bundle deployment and Linux Qt architecture selection,
+and added remotely queryable verified-commit plus per-platform diagnostic
+markers and clean Qt-install retry.
 
 ## P0 — project decisions and safety
 

@@ -27,6 +27,8 @@ the Actions API, each matrix leg publishes a temporary annotated
 configure, build, test, staging, archive, upload, and package steps. A release
 failure publishes the same kind of marker. Successful release publication
 removes those diagnostic tags and advances `continuous`.
+Qt SDK downloads are retried once from a clean uncached directory when the
+hosted installer encounters a transient mirror or archive-extraction failure.
 
 The same files remain available as short-lived workflow artifacts: open the
 repository's **Actions** page, select a successful **Cross-platform Desktop CI**

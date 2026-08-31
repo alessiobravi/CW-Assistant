@@ -102,6 +102,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   than archiving a non-bundle executable without its Qt/QML runtime.
 - Hosted Qt installation now includes the task-tree dependency required by the
   Qt 6.11 QML plugin metadata, eliminating an incomplete-SDK warning.
+- Corrected the Qt 6.11 Linux architecture identifier and added a clean,
+  uncached Qt-install retry with a stable extractor pin for transient hosted
+  archive failures.
 
 ### Security
 
