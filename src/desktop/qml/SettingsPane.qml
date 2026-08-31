@@ -37,6 +37,9 @@ Pane {
             currentIndex: tabs.currentIndex
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.leftMargin: 26
+            Layout.rightMargin: 26
+            Layout.bottomMargin: 8
 
             ScrollView {
                 contentWidth: availableWidth
@@ -69,7 +72,7 @@ Pane {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#f3bd55"
-                        text: "Selection and hot-plug discovery are active. Live capture, input level, channel, sample-rate, and buffer controls are still under implementation; current decoding input is WAV replay."
+                        text: "Use Start live RX in the Receiver workspace to process this device. Capture prefers 48 kHz mono float and falls back to the device PCM format. Advanced channel, rate, buffer, and level controls remain planned."
                     }
                 }
             }
@@ -256,6 +259,22 @@ Pane {
                     spacing: 14
                     Label { text: "Station configuration profile"; font.pixelSize: 17; font.weight: Font.DemiBold }
                     Label { text: appSettings.profileName; font.pixelSize: 15 }
+                    Label { text: "Own station callsign"; font.weight: Font.DemiBold }
+                    TextField {
+                        objectName: "ownCallsignField"
+                        Layout.fillWidth: true
+                        text: appSettings.ownCallsign
+                        placeholderText: "Example: IU0LFQ or AD2FC"
+                        maximumLength: 16
+                        inputMethodHints: Qt.ImhUppercaseOnly | Qt.ImhNoPredictiveText
+                        onEditingFinished: appSettings.ownCallsign = text
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Saved per station profile. This exact normalized callsign will identify replies addressed to you, populate station logging fields, and drive the planned own-call notification and guarded closing macro."
+                    }
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap

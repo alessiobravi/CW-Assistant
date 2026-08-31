@@ -25,7 +25,7 @@ dependency-free core
   `-- hardware-neutral interfaces
 
 adapters
-  |-- PortAudio input / WAV replay
+  |-- Qt Multimedia input / WAV replay
   |-- SoapySDR input / SigMF replay
   |-- network receiver directory and KiwiSDR WebSocket source
   |-- secure remote control/event and Opus receive-media transports

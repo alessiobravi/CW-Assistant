@@ -6,8 +6,9 @@ CW Assistant is pre-release software. The current desktop shell can create and
 select isolated station profiles, guide first-time setup, run in receive-only
 SWL mode, discover serial ports without opening them, identify online radios
 through a supported integration, save radio/keying/display settings, open the Windows
-frequency-provider configuration, monitor a CAT4OM radio, and replay a WAV
-recording through the real spectrum and waterfall. The decoder, direct keying output,
+frequency-provider configuration, monitor a CAT4OM radio, process a selected
+live sound-card input, and replay a WAV recording through the real spectrum and
+waterfall. The decoder, direct keying output,
 logging connection, SDR capture, and remote-station runtime remain under
 implementation. A saved profile does not arm or key a transmitter.
 
@@ -22,9 +23,28 @@ produced spectrum data. The staged application is also launched with the hosted
 runner's native graphics path before its installer or archive is uploaded, with
 a deterministic test spectrum to exercise waterfall texture creation.
 
+## Receive live radio audio
+
+1. Open **Settings → Audio**, select the sound-card input connected to the
+   receiver, and select **Apply**.
+2. In the Receiver workspace, choose **Live audio** instead of **WAV replay**.
+3. Select **Start live RX**. On macOS, approve microphone/audio-input access the
+   first time; the application requests this only when live RX is started.
+4. Confirm the status line names the device and sample rate. Spectrum and
+   waterfall frames now come from that device.
+5. Select **Stop live RX** before changing cables or audio routing.
+
+Capture requests 48 kHz mono floating-point audio when supported. Otherwise it
+uses the input's preferred PCM format, safely averages channels to mono, and
+normalizes integer or float samples. Capture places fixed sample blocks in a
+bounded queue without allocating or blocking; FFT work runs on a separate DSP
+worker. **Input overruns** should remain zero. A rising value indicates the DSP
+cannot keep pace and blocks are being deliberately dropped rather than allowing
+unbounded latency.
+
 ## Replay a receiver recording
 
-1. Select **Open WAV** in the Receiver workspace and choose a local recording.
+1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.
 2. Review the detected filename, sample rate, and duration.
 3. Select **Play**. The upper trace is the current Hann-windowed FFT; the lower
    panel is the scrolling waterfall built from those same spectrum frames.
@@ -47,7 +67,8 @@ independently in each station profile.
 Open **Settings → About** to see the application version, license, author, and
 author website. The displayed author is **Alessio Bravi (IU0LFQ / AD2FC)** and
 the **Author Website** button opens [https://iu0lfq.it/](https://iu0lfq.it/) in
-the system browser.
+the system browser. The application, taskbar/dock entry, and installed shortcuts
+use the same Morse-key dot/dash mark.
 
 ## First launch
 

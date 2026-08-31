@@ -15,6 +15,15 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Native Windows, macOS, and Linux audio-input enumeration with system-default
   following, hot-plug refresh, unavailable-device indication, and per-profile
   selection in an always-present wizard step and Settings → Audio page.
+- Live sound-card RX with operator-controlled start/stop, microphone-permission
+  handling, format conversion/downmix, a bounded allocation-free capture queue,
+  overrun telemetry, and a separate DSP worker feeding the real spectrum and
+  waterfall. WAV input remains available as an explicit replay mode.
+- A normalized per-profile own station callsign field under Settings → Station,
+  ready for station logging and exact own-call notification matching.
+- A modern CW Morse-key application mark with native Windows executable/MSI,
+  macOS bundle, Linux desktop, and Qt window icon assets. The Windows installer
+  creates the **CW Assistant** Start-menu program group and desktop shortcut.
 - Backlog scope for configurable own-callsign decode notification and an
   optional guarded QSO-closing macro.
 
@@ -114,6 +123,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Widened the Settings drawer and added consistent horizontal content margins,
+  preventing Station and device controls from sitting against the window edge.
 - Kept the setup wizard's Back/Next/Finish controls in a fixed footer and made
   oversized setup pages scroll, preventing navigation from being clipped on
   small or scaled displays; the complete hosted QML compiler now validates the

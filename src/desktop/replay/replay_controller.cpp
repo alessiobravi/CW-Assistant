@@ -1,7 +1,9 @@
 #include "replay_controller.hpp"
 
 #include <QFileInfo>
+#include <QCoreApplication>
 #include <QMetaObject>
+#include <QPermissions>
 #include <QTimer>
 
 #include <algorithm>
@@ -11,6 +13,7 @@
 
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
+#include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
 
@@ -191,9 +194,83 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   });
   worker_thread_.setObjectName(QStringLiteral("WAV replay DSP"));
   worker_thread_.start();
+
+  auto pipe = std::make_shared<LiveAudioPipe>();
+  auto* capture_worker = new LiveAudioCaptureWorker(pipe);
+  auto* dsp_worker = new LiveAudioDspWorker(std::move(pipe));
+  audio_capture_worker_ = capture_worker;
+  audio_dsp_worker_ = dsp_worker;
+  capture_worker->moveToThread(&audio_capture_thread_);
+  dsp_worker->moveToThread(&audio_dsp_thread_);
+  connect(&audio_capture_thread_, &QThread::finished, capture_worker,
+          &QObject::deleteLater);
+  connect(&audio_dsp_thread_, &QThread::finished, dsp_worker,
+          &QObject::deleteLater);
+  connect(this, &ReplayController::liveStartRequested, capture_worker,
+          &LiveAudioCaptureWorker::start);
+  connect(this, &ReplayController::liveStopRequested, capture_worker,
+          &LiveAudioCaptureWorker::stop);
+  connect(this, &ReplayController::liveDspStartRequested, dsp_worker,
+          &LiveAudioDspWorker::start);
+  connect(this, &ReplayController::liveDspStopRequested, dsp_worker,
+          &LiveAudioDspWorker::stop);
+  connect(this, &ReplayController::liveDspConfigureRequested, dsp_worker,
+          &LiveAudioDspWorker::configure);
+  connect(capture_worker, &LiveAudioCaptureWorker::started, this,
+          [this](const QString& name, const double sample_rate,
+                 const int channel_count) {
+            source_name_ = name;
+            sample_rate_ = sample_rate;
+            duration_seconds_ = 0.0;
+            position_seconds_ = 0.0;
+            input_overruns_ = 0;
+            live_capturing_ = true;
+            status_text_ =
+                QStringLiteral("Live RX: %1 • %2 Hz • %3 channel(s)")
+                    .arg(name)
+                    .arg(sample_rate, 0, 'f', 0)
+                    .arg(channel_count);
+            emit stateChanged();
+          });
+  connect(capture_worker, &LiveAudioCaptureWorker::stopped, this, [this] {
+    if (live_capturing_) {
+      live_capturing_ = false;
+      status_text_ = QStringLiteral("Live audio stopped");
+      emit stateChanged();
+    }
+  });
+  connect(capture_worker, &LiveAudioCaptureWorker::failed, this,
+          [this](const QString& message) {
+            live_capturing_ = false;
+            emit liveDspStopRequested();
+            setStatus(QStringLiteral("Live audio error: %1").arg(message));
+          });
+  connect(capture_worker, &LiveAudioCaptureWorker::overrunCountChanged, this,
+          [this](const qulonglong count) {
+            input_overruns_ = count;
+            emit stateChanged();
+          });
+  connect(dsp_worker, &LiveAudioDspWorker::frameProduced, this,
+          &ReplayController::frameReady);
+  audio_capture_thread_.setObjectName(QStringLiteral("Live audio capture"));
+  audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
+  audio_capture_thread_.start();
+  audio_dsp_thread_.start();
 }
 
 ReplayController::~ReplayController() {
+  if (audio_capture_worker_ != nullptr && audio_capture_thread_.isRunning()) {
+    QMetaObject::invokeMethod(audio_capture_worker_, "stop",
+                              Qt::BlockingQueuedConnection);
+  }
+  if (audio_dsp_worker_ != nullptr && audio_dsp_thread_.isRunning()) {
+    QMetaObject::invokeMethod(audio_dsp_worker_, "stop",
+                              Qt::BlockingQueuedConnection);
+  }
+  audio_capture_thread_.quit();
+  audio_dsp_thread_.quit();
+  audio_capture_thread_.wait();
+  audio_dsp_thread_.wait();
   if (worker_ != nullptr && worker_thread_.isRunning()) {
     QMetaObject::invokeMethod(worker_, "shutdown", Qt::BlockingQueuedConnection);
   }
@@ -209,6 +286,16 @@ const QString& ReplayController::statusText() const noexcept {
 }
 bool ReplayController::sourceLoaded() const noexcept { return source_loaded_; }
 bool ReplayController::playing() const noexcept { return playing_; }
+int ReplayController::sourceMode() const noexcept { return source_mode_; }
+bool ReplayController::liveCapturing() const noexcept {
+  return live_capturing_;
+}
+bool ReplayController::activeSource() const noexcept {
+  return source_mode_ == 0 ? live_capturing_ : source_loaded_;
+}
+qulonglong ReplayController::inputOverruns() const noexcept {
+  return input_overruns_;
+}
 double ReplayController::sampleRate() const noexcept { return sample_rate_; }
 double ReplayController::durationSeconds() const noexcept {
   return duration_seconds_;
@@ -228,9 +315,37 @@ void ReplayController::setAveragingFrames(const int value) {
   averaging_frames_ = clamped;
   emit averagingFramesChanged();
   emit configureRequested(averaging_frames_);
+  emit liveDspConfigureRequested(averaging_frames_);
+}
+
+void ReplayController::setSourceMode(const int value) {
+  const int clamped = std::clamp(value, 0, 1);
+  if (source_mode_ == clamped) {
+    return;
+  }
+  if (clamped == 0) {
+    emit stopRequested();
+    playing_ = false;
+  } else {
+    stopLiveAudio();
+  }
+  source_mode_ = clamped;
+  emit sourceReset();
+  emit stateChanged();
+}
+
+void ReplayController::setAudioInputSelection(QString encoded_id,
+                                               QString display_name) {
+  const bool changed = audio_input_id_ != encoded_id;
+  audio_input_id_ = std::move(encoded_id);
+  audio_input_name_ = std::move(display_name);
+  if (changed && live_capturing_) {
+    beginLiveAudioCapture();
+  }
 }
 
 void ReplayController::openFile(const QUrl& url) {
+  setSourceMode(1);
   const QString path = url.isLocalFile() ? url.toLocalFile() : QString{};
   if (path.isEmpty()) {
     setStatus(QStringLiteral("Select a local WAV file."));
@@ -245,11 +360,56 @@ void ReplayController::openFile(const QUrl& url) {
   emit openRequested(path);
 }
 
-void ReplayController::play() { emit playRequested(); }
+void ReplayController::play() {
+  setSourceMode(1);
+  emit playRequested();
+}
 void ReplayController::pause() { emit pauseRequested(); }
 void ReplayController::stop() {
   emit stopRequested();
   emit sourceReset();
+}
+
+void ReplayController::startLiveAudio() {
+  setSourceMode(0);
+  QMicrophonePermission permission;
+  auto* application = QCoreApplication::instance();
+  switch (application->checkPermission(permission)) {
+    case Qt::PermissionStatus::Undetermined:
+      setStatus(QStringLiteral("Waiting for microphone/audio-input permission…"));
+      application->requestPermission(
+          permission, this,
+          [this](const QPermission&) { startLiveAudio(); });
+      return;
+    case Qt::PermissionStatus::Denied:
+      setStatus(QStringLiteral(
+          "Audio-input permission was denied. Enable microphone access in the operating-system privacy settings."));
+      return;
+    case Qt::PermissionStatus::Granted:
+      beginLiveAudioCapture();
+      return;
+  }
+}
+
+void ReplayController::beginLiveAudioCapture() {
+  emit stopRequested();
+  playing_ = false;
+  source_loaded_ = false;
+  input_overruns_ = 0;
+  emit sourceReset();
+  setStatus(QStringLiteral("Starting live audio from %1…").arg(audio_input_name_));
+  emit liveDspStartRequested(averaging_frames_);
+  emit liveStartRequested(audio_input_id_);
+}
+
+void ReplayController::stopLiveAudio() {
+  emit liveStopRequested();
+  emit liveDspStopRequested();
+  if (live_capturing_) {
+    live_capturing_ = false;
+    setStatus(QStringLiteral("Live audio stopped"));
+    emit sourceReset();
+  }
 }
 
 void ReplayController::setStatus(QString status) {

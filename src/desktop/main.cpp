@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QCommandLineParser>
 #include <QMetaObject>
 #include <QQmlApplicationEngine>
@@ -21,6 +22,7 @@ int main(int argc, char* argv[]) {
   QCoreApplication::setOrganizationDomain(QStringLiteral("cw-assistant.org"));
   QCoreApplication::setApplicationName(QStringLiteral("CW Assistant"));
   QCoreApplication::setApplicationVersion(QStringLiteral(CWA_VERSION));
+  application.setWindowIcon(QIcon(QStringLiteral(":/icons/cw-assistant.png")));
 
   QCommandLineParser parser;
   parser.setApplicationDescription(
@@ -42,12 +44,23 @@ int main(int argc, char* argv[]) {
 
   cwassistant::desktop::AppSettings settings(parser.value(profile_option),
                                              parser.isSet(profile_option));
+  if (parser.isSet(smoke_test_option)) {
+    settings.setOwnCallsign(QStringLiteral(" iu0lfq/p "));
+  }
   cwassistant::desktop::ReplayController replay_controller;
   replay_controller.setAveragingFrames(settings.averagingFrames());
+  replay_controller.setAudioInputSelection(settings.audioInputId(),
+                                           settings.audioInputDisplayName());
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, [&settings, &replay_controller] {
         replay_controller.setAveragingFrames(settings.averagingFrames());
+      });
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::audioInputsChanged,
+      &replay_controller, [&settings, &replay_controller] {
+        replay_controller.setAudioInputSelection(
+            settings.audioInputId(), settings.audioInputDisplayName());
       });
   qmlRegisterType<cwassistant::desktop::SpectrumWaterfallItem>(
       "CWAssistant", 1, 0, "SpectrumWaterfall");
@@ -79,14 +92,21 @@ int main(int argc, char* argv[]) {
           root_object->findChild<QQuickItem*>(QStringLiteral("setupNextButton"));
       auto* audio_input_combo = root_object->findChild<QQuickItem*>(
           QStringLiteral("setupAudioInputCombo"));
+      auto* live_audio_button = root_object->findChild<QQuickItem*>(
+          QStringLiteral("startLiveAudioButton"));
+      auto* own_callsign_field = root_object->findChild<QQuickItem*>(
+          QStringLiteral("ownCallsignField"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
           next_button->mapToScene(
               QPointF(next_button->width(), next_button->height())).y() >
-              next_button->window()->height() || audio_input_combo == nullptr ||
+          next_button->window()->height() || audio_input_combo == nullptr ||
           audio_input_combo->property("count").toInt() < 1 ||
-          audio_input_combo->property("currentIndex").toInt() < 0) {
+          audio_input_combo->property("currentIndex").toInt() < 0 ||
+          live_audio_button == nullptr || own_callsign_field == nullptr ||
+          own_callsign_field->property("text").toString() !=
+              QStringLiteral("IU0LFQ/P")) {
         QCoreApplication::exit(EXIT_FAILURE);
         return;
       }

@@ -22,6 +22,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY audioInputsChanged)
   Q_PROPERTY(int audioInputIndex READ audioInputIndex NOTIFY audioInputsChanged)
   Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY audioInputsChanged)
+  Q_PROPERTY(QString ownCallsign READ ownCallsign WRITE setOwnCallsign NOTIFY settingsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
   Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
   Q_PROPERTY(QString radioDisplayName READ radioDisplayName NOTIFY settingsChanged)
@@ -75,6 +76,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QStringList& audioInputNames() const noexcept;
   [[nodiscard]] int audioInputIndex() const noexcept;
   [[nodiscard]] QString audioInputDisplayName() const;
+  [[nodiscard]] const QString& audioInputId() const noexcept;
+  [[nodiscard]] const QString& ownCallsign() const noexcept;
   [[nodiscard]] bool omniRigAvailable() const noexcept;
   [[nodiscard]] bool radioEnabled() const noexcept;
   [[nodiscard]] QString radioDisplayName() const;
@@ -115,6 +118,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
+  void setOwnCallsign(const QString& value);
   void setRadioEnabled(bool value);
   void setOmniRigSlot(int value);
   void setCat4omUrl(const QString& value);
@@ -195,6 +199,7 @@ class AppSettings final : public QObject {
   QStringList audio_input_ids_;
   QString audio_input_id_;
   QString audio_input_name_;
+  QString own_callsign_;
   bool radio_enabled_{false};
   QStringList detected_radio_names_;
   QList<int> detected_radio_slots_;

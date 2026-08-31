@@ -17,9 +17,33 @@ devices are added or removed.
   device, then use **Refresh audio inputs** if necessary.
 
 Audio selection applies equally to a CAT-controlled radio and receive-only SWL
-operation. Selection is implemented and persisted; live capture, channel,
-sample-rate, input-level, and buffer controls are not yet active, so the current
-processing source remains WAV replay.
+operation. Use **Start live RX** in the Receiver workspace to begin capture.
+The application requests 48 kHz mono float when supported and otherwise uses
+the device's preferred PCM format, converts it, and downmixes it to mono. Live
+audio and WAV replay are explicit, separate receiver modes.
+
+The status bar exposes bounded-queue input overruns. Advanced channel,
+sample-rate, buffer-size, calibration, and level-meter controls remain under
+implementation.
+
+## Station page
+
+**Own station callsign** is stored separately in every station profile. Input is
+trimmed and normalized to uppercase using the same exact callsign policy as the
+ignore list and transmit guard. Portable suffixes may use a single `/`.
+
+Example values:
+
+```text
+IU0LFQ
+AD2FC
+IU0LFQ/P
+```
+
+The value will populate station logging data and is the exact-match source for
+the planned notification when your call is decoded. The future optional closing
+macro remains subject to explicit configuration, arming, QSO-context checks,
+and cancellation before transmission.
 
 ## Radio page
 

@@ -74,6 +74,11 @@ if(CWA_BUILD_DESKTOP)
     set(CPACK_WIX_ARCHITECTURE x64)
     set(CPACK_WIX_INSTALL_SCOPE perMachine)
     set(CPACK_WIX_UPGRADE_GUID "3310FD2E-106F-4A39-A031-A602683BCB19")
+    set(CPACK_WIX_PRODUCT_ICON
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/cw-assistant.ico")
+    # Keep the launcher inside its own Start-menu program group. The matching
+    # CPACK_PACKAGE_EXECUTABLES/CPACK_CREATE_DESKTOP_LINKS pair above also
+    # creates the all-users desktop shortcut through the WiX generator.
     set(CPACK_WIX_PROGRAM_MENU_FOLDER "CW Assistant")
     set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://iu0lfq.it/")
     set(CPACK_WIX_PROPERTY_ARPURLUPDATEINFO

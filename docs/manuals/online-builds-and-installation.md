@@ -73,9 +73,11 @@ cw-assistant-windows11-x64.msi
 
 Verify its SHA-256 checksum, double-click it, and follow Windows Installer to
 select the installation folder. It installs the self-contained Qt application,
-creates Start-menu and desktop shortcuts, registers the application in
+creates **Start → All → CW Assistant → CW Assistant** as a dedicated program
+group plus a **CW Assistant** desktop shortcut, registers the application in
 **Settings → Apps → Installed apps**, and provides normal uninstall/repair
-behavior.
+behavior. The executable, shortcuts, and installed-app entry use the CW
+Morse-key application icon.
 
 Every hosted package has a monotonically increasing numeric package revision
 and a stable Windows Installer upgrade identity. Running a newer MSI performs a
@@ -95,7 +97,8 @@ downloading and running the newer MSI from the same continuous release page.
 
 ## macOS Sonoma and newer
 
-Both macOS archives contain a self-contained `.app` bundle compiled with
+Both macOS archives contain a self-contained `.app` bundle with the native
+application icon and microphone usage declaration, compiled with
 deployment target 14.0. Choose the Apple silicon archive for M-series Macs and
 the Intel x64 archive for supported Intel Macs. Extract the archive and move
 `cw-assistant-desktop.app` to `/Applications` if desired.
@@ -132,7 +135,7 @@ cw-assistant-desktop
 ```
 
 The package includes the application, deployed Qt/QML runtime components,
-desktop entry, scalable icon, license, and user manuals. The package is built on
+desktop entry, 512 px application icon, license, and user manuals. The package is built on
 Ubuntu 24.04, so runtime validation on supported Debian and Ubuntu releases is a
 release gate. A signed APT repository is planned; until it exists, installing a
 downloaded `.deb` is not the same as subscribing to an APT repository.

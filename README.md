@@ -8,17 +8,18 @@ Apple silicon and Intel x64, and Linux; Windows is the first packaging target.
 The project is at foundation stage. The current code provides dependency-free
 core primitives and tests plus an optional Qt Quick desktop shell with a
 profile chooser, guided setup, persistent radio/keying/display settings, and
-native audio-input discovery/selection. WAV replay currently feeds the real 2D
-spectrum and waterfall while live capture is connected.
+native live audio-input discovery/capture through a bounded queue and dedicated
+DSP worker. WAV replay remains a separate deterministic source for the real 2D
+spectrum and waterfall.
 
 ## Planned capabilities
 
-- Live audio capture with selectable channel, sample rate, and buffering
-  (cross-platform device discovery and per-profile selection are implemented)
+- Advanced live-audio channel, sample-rate, buffer, calibration, and level
+  controls (cross-platform selection and live capture are implemented)
 - RTL-SDR and SDRplay reception through SoapySDR modules
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
-- Live-source spectrum and scrolling waterfall (WAV replay is implemented)
+- Live-source and WAV-replay spectrum with scrolling waterfall
 - Detection and stateful decoding of multiple simultaneous CW channels
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
 - Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,

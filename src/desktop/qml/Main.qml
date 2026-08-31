@@ -92,20 +92,41 @@ ApplicationWindow {
             RowLayout {
                 Layout.fillWidth: true
                 Label { text: "Receiver workspace"; font.pixelSize: 18; font.weight: Font.DemiBold }
+                ComboBox {
+                    model: ["Live audio", "WAV replay"]
+                    currentIndex: replayController.sourceMode
+                    onActivated: replayController.sourceMode = currentIndex
+                }
                 Item { Layout.fillWidth: true }
                 Label {
-                    text: replayController.sourceLoaded
-                          ? replayController.sourceName + "  •  " + replayController.sampleRate.toFixed(0) + " Hz"
-                          : "No replay source"
+                    text: replayController.sourceMode === 0
+                          ? appSettings.audioInputDisplayName
+                          : (replayController.sourceLoaded
+                             ? replayController.sourceName + "  •  " + replayController.sampleRate.toFixed(0) + " Hz"
+                             : "No replay source")
                     color: "#8d9aaa"
                 }
-                Button { text: "Open WAV"; onClicked: wavDialog.open() }
+                Button {
+                    objectName: "startLiveAudioButton"
+                    text: "Start live RX"
+                    visible: replayController.sourceMode === 0
+                    enabled: !replayController.liveCapturing
+                    onClicked: replayController.startLiveAudio()
+                }
+                Button {
+                    text: "Stop live RX"
+                    visible: replayController.sourceMode === 0
+                    enabled: replayController.liveCapturing
+                    onClicked: replayController.stopLiveAudio()
+                }
+                Button { text: "Open WAV"; visible: replayController.sourceMode === 1; onClicked: wavDialog.open() }
                 Button {
                     text: replayController.playing ? "Pause" : "Play"
+                    visible: replayController.sourceMode === 1
                     enabled: replayController.sourceLoaded
                     onClicked: replayController.playing ? replayController.pause() : replayController.play()
                 }
-                Button { text: "Stop"; enabled: replayController.sourceLoaded; onClicked: replayController.stop() }
+                Button { text: "Stop"; visible: replayController.sourceMode === 1; enabled: replayController.sourceLoaded; onClicked: replayController.stop() }
             }
 
             Rectangle {
@@ -164,14 +185,24 @@ ApplicationWindow {
                 }
                 ColumnLayout {
                     anchors.centerIn: parent
-                    visible: !replayController.sourceLoaded
-                    Label { Layout.alignment: Qt.AlignHCenter; text: "Replay a receiver recording"; font.pixelSize: 17 }
+                    visible: !replayController.activeSource
                     Label {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Open a PCM or 32-bit float WAV file to inspect its real spectrum and waterfall"
+                        text: replayController.sourceMode === 0 ? "Live receiver audio" : "Replay a receiver recording"
+                        font.pixelSize: 17
+                    }
+                    Label {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: replayController.sourceMode === 0
+                              ? "Start live RX to process the selected audio input"
+                              : "Open a PCM or 32-bit float WAV file to inspect its real spectrum and waterfall"
                         color: "#8290a0"
                     }
-                    Button { Layout.alignment: Qt.AlignHCenter; text: "Choose WAV recording"; onClicked: wavDialog.open() }
+                    Button {
+                        Layout.alignment: Qt.AlignHCenter
+                        text: replayController.sourceMode === 0 ? "Start live RX" : "Choose WAV recording"
+                        onClicked: replayController.sourceMode === 0 ? replayController.startLiveAudio() : wavDialog.open()
+                    }
                 }
             }
 
@@ -180,14 +211,18 @@ ApplicationWindow {
                 Label { text: replayController.statusText; color: "#91a0b1"; elide: Text.ElideRight; Layout.preferredWidth: 300 }
                 ProgressBar {
                     Layout.fillWidth: true
+                    visible: replayController.sourceMode === 1
                     from: 0
                     to: Math.max(0.001, replayController.durationSeconds)
                     value: replayController.positionSeconds
                 }
                 Label {
-                    text: replayController.positionSeconds.toFixed(1) + " / "
-                          + replayController.durationSeconds.toFixed(1) + " s  •  "
-                          + appSettings.targetFps + " FPS  •  " + appSettings.waterfallRate + " rows/s"
+                    text: replayController.sourceMode === 0
+                          ? "Input overruns: " + replayController.inputOverruns + "  •  "
+                            + appSettings.targetFps + " FPS  •  " + appSettings.waterfallRate + " rows/s"
+                          : replayController.positionSeconds.toFixed(1) + " / "
+                            + replayController.durationSeconds.toFixed(1) + " s  •  "
+                            + appSettings.targetFps + " FPS  •  " + appSettings.waterfallRate + " rows/s"
                     color: "#667789"
                 }
             }
@@ -214,7 +249,7 @@ ApplicationWindow {
     Drawer {
         id: settingsDrawer
         edge: Qt.RightEdge
-        width: Math.min(window.width * 0.62, 860)
+        width: Math.min(window.width * 0.78, 1080)
         height: window.height
         SettingsPane {
             anchors.fill: parent

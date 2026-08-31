@@ -15,6 +15,7 @@
 #endif
 
 #include "cwassistant/core/reference_rig_profiles.hpp"
+#include "cwassistant/core/callsign_policy.hpp"
 #include "../radio/cat4om_client.hpp"
 
 namespace cwassistant::desktop {
@@ -118,6 +119,14 @@ QString AppSettings::audioInputDisplayName() const {
   return audio_input_id_.isEmpty()
              ? QStringLiteral("System default input")
              : audio_input_name_;
+}
+
+const QString& AppSettings::audioInputId() const noexcept {
+  return audio_input_id_;
+}
+
+const QString& AppSettings::ownCallsign() const noexcept {
+  return own_callsign_;
 }
 
 bool AppSettings::omniRigAvailable() const noexcept {
@@ -242,6 +251,28 @@ CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 
 #undef CWA_SETTER
+
+void AppSettings::setOwnCallsign(const QString& value) {
+  const QString trimmed = value.trimmed();
+  if (trimmed.isEmpty()) {
+    if (assign_if_changed(own_callsign_, QString{})) {
+      emit settingsChanged();
+    }
+    return;
+  }
+  const auto normalized =
+      cwassistant::core::CallsignPolicy::normalize(trimmed.toStdString());
+  if (!normalized.has_value()) {
+    setStatusMessage(QStringLiteral(
+        "Enter a valid callsign containing letters and digits; portable suffixes may use a single slash."));
+    emit settingsChanged();
+    return;
+  }
+  if (assign_if_changed(own_callsign_, QString::fromStdString(*normalized))) {
+    setStatusMessage(QStringLiteral("Own callsign normalized and ready to save."));
+    emit settingsChanged();
+  }
+}
 
 void AppSettings::selectReferenceRig(const int index) {
   const auto profiles = cwassistant::core::reference_rig_profiles();
@@ -448,6 +479,7 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
   settings.setValue(storageKey(QStringLiteral("audio/inputId")), audio_input_id_);
   settings.setValue(storageKey(QStringLiteral("audio/inputName")), audio_input_name_);
+  settings.setValue(storageKey(QStringLiteral("station/ownCallsign")), own_callsign_);
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
@@ -497,6 +529,8 @@ void AppSettings::load() {
                           .value(storageKey(QStringLiteral("audio/inputName")),
                                  QStringLiteral("System default input"))
                           .toString();
+  own_callsign_ =
+      settings.value(storageKey(QStringLiteral("station/ownCallsign"))).toString();
   radio_enabled_ = settings
                        .value(storageKey(QStringLiteral("radio/enabled")),
                               setup_complete_)
@@ -660,6 +694,7 @@ void AppSettings::resetInMemorySettings() {
   setup_complete_ = false;
   audio_input_id_.clear();
   audio_input_name_ = QStringLiteral("System default input");
+  own_callsign_.clear();
   radio_enabled_ = false;
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;

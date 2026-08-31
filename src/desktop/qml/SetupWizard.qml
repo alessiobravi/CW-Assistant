@@ -190,7 +190,7 @@ Dialog {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     color: "#f3bd55"
-                    text: "Device selection is saved now. Live capture and level calibration are the next audio implementation stage; this build still uses WAV replay for signal processing."
+                    text: "Live RX uses 48 kHz mono float capture when the device supports it, otherwise its preferred PCM format is downmixed safely. Advanced channel, rate, buffer, and level controls remain planned."
                 }
             }
 
