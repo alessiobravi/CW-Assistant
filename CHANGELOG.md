@@ -64,6 +64,8 @@ All notable changes to CW Assistant are recorded here. The format follows
   automatic/manual dBFS range, DSP averaging, grid, progress, and gap metrics.
 - Continuous verification marker: the `continuous` tag advances only after the
   full cross-platform desktop/core matrix and release publication succeed.
+- Temporary per-platform annotated CI status tags expose exact failed-step
+  outcomes to authorized Git-only automation and are removed after a green run.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

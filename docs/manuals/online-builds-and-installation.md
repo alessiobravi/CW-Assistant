@@ -21,6 +21,13 @@ that fully verified commit only after the release assets and checksums have
 also been published; a failed run leaves the prior known-good downloads and
 marker untouched.
 
+For private-repository automation that can push through Git SSH but cannot read
+the Actions API, each matrix leg publishes a temporary annotated
+`ci-status/<platform>-<commit>` tag containing the outcome of Qt installation,
+configure, build, test, staging, archive, upload, and package steps. A release
+failure publishes the same kind of marker. Successful release publication
+removes those diagnostic tags and advances `continuous`.
+
 The same files remain available as short-lived workflow artifacts: open the
 repository's **Actions** page, select a successful **Cross-platform Desktop CI**
 run, and scroll to **Artifacts**. Workflow artifacts expire after 14 days;
