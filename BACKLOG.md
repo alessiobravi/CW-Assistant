@@ -9,7 +9,7 @@ review this file and update affected items or the “Last reviewed” note.
 Last reviewed: 2026-08-31 — reproduced and fixed hosted QML compilation,
 validated the Qt desktop build/install locally, added functional WAV spectrum
 replay, corrected macOS bundle deployment and Linux Qt architecture selection,
-added remotely queryable CI diagnostics/external-extractor retry, and replaced
+added remotely queryable CI outcomes/log diagnostics plus extractor retry, and replaced
 the Windows archive plan with an upgrade-capable MSI delivery flow.
 
 ## P0 — project decisions and safety

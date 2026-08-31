@@ -163,6 +163,12 @@ jobs:
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
           status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          if [[ "${CWA_QT_RESULT}" == "failure" ]]; then
+            qt_log="$(find "${GITHUB_WORKSPACE}" -type f -name aqtinstall.log -exec tail -n 20 {} \; 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
+            if [[ -n "${qt_log}" ]]; then
+              status_message="${status_message}"$'\n'"qt_log=${qt_log}"
+            fi
+          fi
           git config user.name "CW Assistant CI"
           git config user.email "ci@cw-assistant.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"

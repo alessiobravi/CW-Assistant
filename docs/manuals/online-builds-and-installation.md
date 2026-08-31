@@ -27,6 +27,8 @@ the Actions API, each matrix leg publishes a temporary annotated
 configure, build, test, staging, archive, upload, and package steps. A release
 failure publishes the same kind of marker. Successful release publication
 removes those diagnostic tags and advances `continuous`.
+When Qt installation fails, the status annotation also carries a bounded tail
+of the installer log so authorized Git-only automation can diagnose the cause.
 Qt SDK downloads are retried once from a clean uncached directory with the
 runner's external 7-Zip binary when the hosted Python extractor fails.
 
