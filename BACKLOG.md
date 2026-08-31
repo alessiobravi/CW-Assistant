@@ -18,7 +18,8 @@ exposed a native first-launch render crash; the null-texture path is now removed
 and guarded by empty-render, full-QML, and staged native-graphics startup tests
 with deterministic texture creation on every platform. Setup now distinguishes
 receive-only SWL operation, positively identified online radios, and explicit
-manual templates; the wizard footer is also guarded against clipping.
+manual templates; the wizard footer is also guarded against clipping. Bounded
+compiler diagnostics are now available through the Git-only CI status markers.
 
 ## P0 — project decisions and safety
 

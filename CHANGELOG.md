@@ -73,7 +73,7 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Continuous verification marker: the `continuous` tag advances only after the
   full cross-platform desktop/core matrix and release publication succeed.
 - Temporary per-platform annotated CI status tags expose exact failed-step
-  outcomes and bounded Qt-installer diagnostics to authorized Git-only
+  outcomes and bounded Qt-installer/build diagnostics to authorized Git-only
   automation and are removed after a green run.
 - Windows 11 x64 now publishes an upgrade-capable WiX/MSI installer with stable
   upgrade identity, per-run package revision, Start-menu/desktop shortcuts, and

@@ -104,7 +104,8 @@ jobs:
           ${{ matrix.configure-arguments }}
       - name: Build desktop and core tests
         id: build
-        run: cmake --build build --config Release --parallel
+        shell: bash
+        run: cmake --build build --config Release --parallel 2>&1 | tee build-output.log
       - name: Run dependency-free tests
         id: test
         run: ctest --test-dir build -C Release --output-on-failure
@@ -216,6 +217,12 @@ jobs:
             wix_log="$(tail -n 30 cpack-wix.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${wix_log}" ]]; then
               status_message="${status_message}"$'\n'"wix_log=${wix_log}"
+            fi
+          fi
+          if [[ "${CWA_BUILD_RESULT}" == "failure" ]]; then
+            build_log="$(tail -n 35 build-output.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            if [[ -n "${build_log}" ]]; then
+              status_message="${status_message}"$'\n'"build_log=${build_log}"
             fi
           fi
           git config user.name "CW Assistant CI"
