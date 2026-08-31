@@ -19,6 +19,10 @@ All notable changes to CW Assistant are recorded here. The format follows
   handling, format conversion/downmix, a bounded allocation-free capture queue,
   overrun telemetry, and a separate DSP worker feeding the real spectrum and
   waterfall. WAV input remains available as an explicit replay mode.
+- Per-profile audio conditioning with default DC rejection, optional bounded
+  automatic gain and tunable dBFS target, exact manual gain, and automatic or
+  user-entered processing bandwidth. Automatic display scaling is now clearly
+  identified as visualization-only rather than audio gain.
 - A normalized per-profile own station callsign field under Settings → Station,
   ready for station logging and exact own-call notification matching.
 - A modern CW Morse-key application mark with native Windows executable/MSI,
@@ -123,6 +127,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Removed persistent sound-card DC bias from the leftmost spectrum bin by
+  default and stopped full-Nyquist audio from compressing CW activity against
+  the left edge through a configurable 100–3000 Hz automatic view.
 - Fixed blank live-audio spectrum/waterfall output accompanied by rising input
   overruns. The DSP drain timer now follows its worker onto the processing
   thread, with a cross-thread regression test that requires a real FFT frame.

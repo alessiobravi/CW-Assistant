@@ -26,6 +26,41 @@ The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under
 implementation.
 
+### Audio conditioning and bandwidth
+
+- **Remove input DC offset** is enabled by default. It subtracts the constant
+  component before each FFT and prevents a sound-card bias from appearing as a
+  permanent peak at the left edge.
+- **Automatic gain** is optional software DSP gain and disabled by default. It
+  does not change the operating-system mixer or a receiver's hardware gain. When enabled,
+  **Automatic target** selects the desired peak level from -40 to -1 dBFS. Gain
+  changes are bounded to ±40 dB and smoothed between FFT frames.
+- When automatic gain is disabled, **Manual gain** applies the exact selected
+  value from -40 to +40 dB. Start at 0 dB and increase only if the receiver
+  level is genuinely low.
+- **Automatic from audio sample rate** is the default processing bandwidth. It
+  selects 100–3000 Hz where the input Nyquist limit permits. This is a stable,
+  CW-oriented range derived from the source format; it does not chase an
+  individual signal.
+- Disable automatic bandwidth to set **Lower frequency** and **Upper
+  frequency** manually. Values outside the source Nyquist limit are safely
+  clipped when spectrum bins are produced.
+
+Example for a receiver whose CW pitch is 700 Hz:
+
+```text
+DC rejection: enabled
+Automatic gain: disabled
+Manual gain: 0 dB
+Automatic bandwidth: disabled
+Lower frequency: 300 Hz
+Upper frequency: 1500 Hz
+```
+
+The **Display level range** on the Display page controls only how dBFS values
+are mapped to the trace and waterfall colors. Its automatic mode is not audio
+gain and cannot create or remove a spectral peak.
+
 ## Station page
 
 **Own station callsign** is stored separately in every station profile. Input is

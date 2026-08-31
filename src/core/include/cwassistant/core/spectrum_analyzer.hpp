@@ -12,6 +12,13 @@ namespace cwassistant::core {
 struct SpectrumAnalyzerConfig {
   std::size_t fft_size{2'048};
   std::uint8_t averaging_frames{3};
+  bool audio_dc_rejection{false};
+  bool audio_automatic_gain{false};
+  float audio_gain_db{0.0F};
+  float audio_automatic_gain_target_dbfs{-12.0F};
+  bool audio_automatic_bandwidth{false};
+  double audio_lower_frequency_hz{0.0};
+  double audio_upper_frequency_hz{0.0};
 };
 
 struct SpectrumSnapshot {
@@ -46,8 +53,10 @@ class SpectrumAnalyzer {
   std::vector<float> averaged_power_;
   std::uint64_t frame_timestamp_ns_{0};
   std::uint64_t output_sequence_{0};
+  float applied_audio_gain_db_{0.0F};
   bool stream_initialized_{false};
   bool average_initialized_{false};
+  bool audio_gain_initialized_{false};
 };
 
 }  // namespace cwassistant::core

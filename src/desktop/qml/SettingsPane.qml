@@ -67,12 +67,69 @@ Pane {
                     Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: appSettings.audioInputDisplayName; color: "#43c6ac" }
                     Label { text: "" }
                     Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
+                    Label { text: "DC rejection" }
+                    CheckBox {
+                        objectName: "audioDcRejectionCheck"
+                        text: "Remove input DC offset"
+                        checked: appSettings.audioDcRejection
+                        onToggled: appSettings.audioDcRejection = checked
+                    }
+                    Label { text: "Software input gain" }
+                    CheckBox {
+                        objectName: "audioAutomaticGainCheck"
+                        text: "Automatic gain"
+                        checked: appSettings.audioAutomaticGain
+                        onToggled: appSettings.audioAutomaticGain = checked
+                    }
+                    Label { text: "Manual gain (dB)" }
+                    SpinBox {
+                        editable: true
+                        from: -40
+                        to: 40
+                        value: Math.round(appSettings.audioGainDb)
+                        enabled: !appSettings.audioAutomaticGain
+                        onValueModified: appSettings.audioGainDb = value
+                    }
+                    Label { text: "Automatic target (dBFS)" }
+                    SpinBox {
+                        editable: true
+                        from: -40
+                        to: -1
+                        value: Math.round(appSettings.audioAutomaticGainTargetDbfs)
+                        enabled: appSettings.audioAutomaticGain
+                        onValueModified: appSettings.audioAutomaticGainTargetDbfs = value
+                    }
+                    Label { text: "Processing bandwidth" }
+                    CheckBox {
+                        objectName: "audioAutomaticBandwidthCheck"
+                        text: "Automatic from audio sample rate"
+                        checked: appSettings.audioAutomaticBandwidth
+                        onToggled: appSettings.audioAutomaticBandwidth = checked
+                    }
+                    Label { text: "Lower frequency (Hz)" }
+                    SpinBox {
+                        editable: true
+                        from: 0
+                        to: 95950
+                        value: Math.round(appSettings.audioLowerFrequencyHz)
+                        enabled: !appSettings.audioAutomaticBandwidth
+                        onValueModified: appSettings.audioLowerFrequencyHz = value
+                    }
+                    Label { text: "Upper frequency (Hz)" }
+                    SpinBox {
+                        editable: true
+                        from: 50
+                        to: 96000
+                        value: Math.round(appSettings.audioUpperFrequencyHz)
+                        enabled: !appSettings.audioAutomaticBandwidth
+                        onValueModified: appSettings.audioUpperFrequencyHz = value
+                    }
                     Label { text: "" }
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#f3bd55"
-                        text: "Use Start live RX in the Receiver workspace to process this device. Capture prefers 48 kHz mono float and falls back to the device PCM format. Advanced channel, rate, buffer, and level controls remain planned."
+                        text: "DC rejection removes the persistent zero-frequency peak. Software gain is optional and does not alter the operating-system mixer; when automatic gain is disabled, the manual dB value is exact. Automatic bandwidth derives a 100–3000 Hz CW-oriented view from the input sample rate."
                     }
                 }
             }
@@ -236,8 +293,8 @@ Pane {
                     SpinBox { from: 10; to: 120; value: appSettings.targetFps; onValueModified: appSettings.targetFps = value }
                     Label { text: "Waterfall lines / second" }
                     SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
-                    Label { text: "Dynamic range" }
-                    CheckBox { text: "Automatic"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
+                    Label { text: "Display level range" }
+                    CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
                     Label { text: "Lower bound (dB)" }
                     SpinBox { editable: true; from: -200; to: 50; value: appSettings.lowerBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.lowerBoundDb = value }
                     Label { text: "Upper bound (dB)" }
@@ -247,7 +304,7 @@ Pane {
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
                     Label { text: "" }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "FPS controls presentation redraws; waterfall rate controls accepted history rows. Averaging is applied in DSP. Additional palettes, peak decay, labels, font size, zoom, pan, and accessibility settings will use this same versioned profile." }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Automatic display scaling changes only the visible dBFS bounds; it is separate from input gain on the Audio page. FPS controls presentation redraws, waterfall rate controls accepted history rows, and averaging is applied in DSP." }
                 }
             }
 

@@ -14,8 +14,9 @@ spectrum and waterfall.
 
 ## Planned capabilities
 
-- Advanced live-audio channel, sample-rate, buffer, calibration, and level
-  controls (cross-platform selection and live capture are implemented)
+- Advanced live-audio channel, sample-rate, buffer, calibration, and level-meter
+  controls (cross-platform capture plus DC rejection, manual/automatic gain,
+  and manual/automatic processing bandwidth are implemented)
 - RTL-SDR and SDRplay reception through SoapySDR modules
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
@@ -95,9 +96,10 @@ When multiple station profiles exist, the desktop opens a profile chooser.
 `--profile NAME` bypasses the chooser for dedicated shortcuts, remote stations,
 and parallel instances.
 
-Runtime dependencies planned for adapter milestones are Qt 6, PortAudio,
-Hamlib, SoapySDR, SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the
-vendor's platform-specific API/driver.
+The desktop currently uses Qt 6, including Qt Multimedia for audio capture.
+Dependencies planned for adapter milestones are Hamlib, SoapySDR,
+SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the vendor's
+platform-specific API/driver.
 
 Every push to `main` and pull request builds and tests natively on Windows x64,
 Linux x64, macOS ARM64, and macOS x64 with a Sonoma 14 deployment target, then

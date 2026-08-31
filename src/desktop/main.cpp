@@ -48,14 +48,20 @@ int main(int argc, char* argv[]) {
     settings.setOwnCallsign(QStringLiteral(" iu0lfq/p "));
   }
   cwassistant::desktop::ReplayController replay_controller;
-  replay_controller.setAveragingFrames(settings.averagingFrames());
+  const auto apply_spectrum_processing = [&settings, &replay_controller] {
+    replay_controller.setAveragingFrames(settings.averagingFrames());
+    replay_controller.setSpectrumProcessing(
+        settings.audioDcRejection(), settings.audioAutomaticGain(),
+        settings.audioGainDb(), settings.audioAutomaticGainTargetDbfs(),
+        settings.audioAutomaticBandwidth(), settings.audioLowerFrequencyHz(),
+        settings.audioUpperFrequencyHz());
+  };
+  apply_spectrum_processing();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
-      &replay_controller, [&settings, &replay_controller] {
-        replay_controller.setAveragingFrames(settings.averagingFrames());
-      });
+      &replay_controller, apply_spectrum_processing);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::audioInputsChanged,
       &replay_controller, [&settings, &replay_controller] {
@@ -96,6 +102,12 @@ int main(int argc, char* argv[]) {
           QStringLiteral("startLiveAudioButton"));
       auto* own_callsign_field = root_object->findChild<QQuickItem*>(
           QStringLiteral("ownCallsignField"));
+      auto* dc_rejection_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("audioDcRejectionCheck"));
+      auto* automatic_gain_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("audioAutomaticGainCheck"));
+      auto* automatic_bandwidth_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("audioAutomaticBandwidthCheck"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
@@ -105,6 +117,8 @@ int main(int argc, char* argv[]) {
           audio_input_combo->property("count").toInt() < 1 ||
           audio_input_combo->property("currentIndex").toInt() < 0 ||
           live_audio_button == nullptr || own_callsign_field == nullptr ||
+          dc_rejection_check == nullptr || automatic_gain_check == nullptr ||
+          automatic_bandwidth_check == nullptr ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {
         QCoreApplication::exit(EXIT_FAILURE);

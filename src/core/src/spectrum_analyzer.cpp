@@ -61,7 +61,14 @@ SpectrumAnalyzer::SpectrumAnalyzer(const SpectrumAnalyzerConfig config) {
 
 bool SpectrumAnalyzer::configure(SpectrumAnalyzerConfig config) {
   if (!valid_fft_size(config.fft_size) || config.averaging_frames == 0 ||
-      config.averaging_frames > 32) {
+      config.averaging_frames > 32 || config.audio_gain_db < -40.0F ||
+      config.audio_gain_db > 40.0F ||
+      config.audio_automatic_gain_target_dbfs < -40.0F ||
+      config.audio_automatic_gain_target_dbfs > -1.0F ||
+      config.audio_lower_frequency_hz < 0.0 ||
+      config.audio_upper_frequency_hz < 0.0 ||
+      (config.audio_upper_frequency_hz > 0.0 &&
+       config.audio_upper_frequency_hz <= config.audio_lower_frequency_hz)) {
     return false;
   }
   config_ = config;
@@ -76,6 +83,8 @@ void SpectrumAnalyzer::reset() noexcept {
   frame_timestamp_ns_ = 0;
   stream_initialized_ = false;
   average_initialized_ = false;
+  audio_gain_initialized_ = false;
+  applied_audio_gain_db_ = 0.0F;
 }
 
 const SpectrumAnalyzerConfig& SpectrumAnalyzer::config() const noexcept {
@@ -128,12 +137,45 @@ void SpectrumAnalyzer::rebuild() {
 }
 
 SpectrumSnapshot SpectrumAnalyzer::transform(const std::uint64_t timestamp_ns) {
+  const bool audio = stream_.kind == StreamKind::Audio;
+  std::complex<float> audio_mean{0.0F, 0.0F};
+  if (audio && config_.audio_dc_rejection) {
+    for (const auto& sample : accumulator_) {
+      audio_mean += sample;
+    }
+    audio_mean /= static_cast<float>(config_.fft_size);
+  }
+
+  float audio_peak = 0.0F;
+  if (audio) {
+    for (const auto& sample : accumulator_) {
+      audio_peak = std::max(audio_peak, std::abs(sample - audio_mean));
+    }
+    float requested_gain_db = config_.audio_gain_db;
+    if (config_.audio_automatic_gain && audio_peak > 1.0e-9F) {
+      requested_gain_db = std::clamp(
+          config_.audio_automatic_gain_target_dbfs -
+              20.0F * std::log10(audio_peak),
+          -40.0F, 40.0F);
+    }
+    if (!audio_gain_initialized_ || !config_.audio_automatic_gain) {
+      applied_audio_gain_db_ = requested_gain_db;
+      audio_gain_initialized_ = true;
+    } else {
+      const float smoothing =
+          requested_gain_db < applied_audio_gain_db_ ? 0.5F : 0.1F;
+      applied_audio_gain_db_ +=
+          smoothing * (requested_gain_db - applied_audio_gain_db_);
+    }
+  }
+  const float audio_gain =
+      audio ? std::pow(10.0F, applied_audio_gain_db_ / 20.0F) : 1.0F;
   for (std::size_t index = 0; index < config_.fft_size; ++index) {
-    workspace_[index] = accumulator_[index] * window_[index];
+    workspace_[index] =
+        (accumulator_[index] - audio_mean) * audio_gain * window_[index];
   }
   fft(workspace_);
 
-  const bool audio = stream_.kind == StreamKind::Audio;
   const std::size_t bin_count =
       audio ? config_.fft_size / 2U + 1U : config_.fft_size;
   std::vector<float> current_power(bin_count);
@@ -162,20 +204,44 @@ SpectrumSnapshot SpectrumAnalyzer::transform(const std::uint64_t timestamp_ns) {
     }
   }
 
+  const double bin_width_hz = stream_.sample_rate_hz /
+                              static_cast<double>(config_.fft_size);
+  std::size_t first_bin = 0;
+  std::size_t last_bin = bin_count - 1U;
+  if (audio) {
+    const double nyquist_hz = stream_.sample_rate_hz / 2.0;
+    double lower_hz = config_.audio_lower_frequency_hz;
+    double upper_hz = config_.audio_upper_frequency_hz <= 0.0
+                          ? nyquist_hz
+                          : config_.audio_upper_frequency_hz;
+    if (config_.audio_automatic_bandwidth) {
+      lower_hz = nyquist_hz > 200.0 ? 100.0 : 0.0;
+      upper_hz = std::min(3'000.0, nyquist_hz);
+    }
+    lower_hz = std::clamp(lower_hz, 0.0, nyquist_hz);
+    upper_hz = std::clamp(upper_hz, lower_hz, nyquist_hz);
+    first_bin = std::min(
+        last_bin, static_cast<std::size_t>(std::ceil(lower_hz / bin_width_hz)));
+    last_bin = std::clamp(
+        static_cast<std::size_t>(std::floor(upper_hz / bin_width_hz)),
+        first_bin, last_bin);
+  }
+
   SpectrumSnapshot snapshot{
       .sequence = output_sequence_++,
       .timestamp_ns = timestamp_ns,
       .lower_frequency_hz =
-          audio ? 0.0
+          audio ? static_cast<double>(first_bin) * bin_width_hz
                 : stream_.center_frequency_hz - stream_.sample_rate_hz / 2.0,
       .upper_frequency_hz =
-          audio ? stream_.sample_rate_hz / 2.0
+          audio ? static_cast<double>(last_bin) * bin_width_hz
                 : stream_.center_frequency_hz + stream_.sample_rate_hz / 2.0,
-      .bin_width_hz = stream_.sample_rate_hz /
-                      static_cast<double>(config_.fft_size),
-      .bins_dbfs = std::vector<float>(bin_count),
+      .bin_width_hz = bin_width_hz,
+      .bins_dbfs = std::vector<float>(last_bin - first_bin + 1U),
   };
-  std::transform(averaged_power_.begin(), averaged_power_.end(),
+  std::transform(averaged_power_.begin() + static_cast<std::ptrdiff_t>(first_bin),
+                 averaged_power_.begin() +
+                     static_cast<std::ptrdiff_t>(last_bin + 1U),
                  snapshot.bins_dbfs.begin(), [](const float power) {
                    return 10.0F * std::log10(std::max(power, 1.0e-24F));
                  });

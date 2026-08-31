@@ -35,7 +35,7 @@ adapters
 ```
 
 Dependencies point inward. Hardware adapters implement core interfaces; the
-core never includes Qt, PortAudio, Hamlib, or SoapySDR headers.
+core never includes Qt, Hamlib, or SoapySDR headers.
 
 ## Sample and threading model
 
@@ -91,7 +91,9 @@ scene graph.
 The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
 clock from sample indices, applies a Hann window, and publishes immutable dBFS
 spectrum snapshots with exact frequency coordinates. Audio produces a one-sided
-spectrum; complex I/Q produces an FFT-shifted full-band spectrum. This same
+spectrum; complex I/Q produces an FFT-shifted full-band spectrum. The shared
+audio path can reject frame DC, apply bounded manual or smoothed automatic
+gain, and crop published bins to an input-derived or explicit bandwidth. This same
 snapshot contract feeds the renderer and future channel detector.
 
 Only a functional 2D spectrum and waterfall are supported. The renderer does
@@ -205,7 +207,7 @@ failure, reconnect, and TX safety rules.
 ## Planned external libraries
 
 - Qt 6 Quick/QML: UI and hardware-accelerated scene graph.
-- PortAudio: low-latency cross-platform audio capture.
+- Qt 6 Multimedia: cross-platform audio device discovery and capture.
 - Hamlib: multi-vendor CAT model abstraction.
 - SoapySDR plus device modules: RTL-SDR and SDRplay IQ input.
 

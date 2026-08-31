@@ -225,6 +225,59 @@ void test_spectrum_analyzer() {
              std::abs(snapshots[0].bin_width_hz - 46.875) < 1.0e-9,
          "audio FFT publishes exact frequency coordinates");
 
+  SpectrumAnalyzer conditioned(
+      {.fft_size = fft_size,
+       .averaging_frames = 1,
+       .audio_dc_rejection = true,
+       .audio_automatic_gain = true,
+       .audio_gain_db = 0.0F,
+       .audio_automatic_gain_target_dbfs = -6.0F,
+       .audio_automatic_bandwidth = false,
+       .audio_lower_frequency_hz = 300.0,
+       .audio_upper_frequency_hz = 3'000.0});
+  constexpr std::size_t conditioned_tone_bin = 16;
+  for (std::size_t index = 0; index < fft_size; ++index) {
+    const float phase = 2.0F * std::numbers::pi_v<float> *
+                        static_cast<float>(conditioned_tone_bin * index) /
+                        static_cast<float>(fft_size);
+    block.samples[index] = {0.25F + 0.25F * std::sin(phase), 0.0F};
+  }
+  const auto conditioned_snapshots = conditioned.process(block);
+  expect(conditioned_snapshots.size() == 1 &&
+             conditioned_snapshots[0].bins_dbfs.size() == 58 &&
+             conditioned_snapshots[0].lower_frequency_hz == 328.125 &&
+             conditioned_snapshots[0].upper_frequency_hz == 3'000.0,
+         "manual audio bandwidth crops bins and reports exact displayed coordinates");
+  const auto conditioned_peak = std::max_element(
+      conditioned_snapshots[0].bins_dbfs.begin(),
+      conditioned_snapshots[0].bins_dbfs.end());
+  expect(conditioned_peak != conditioned_snapshots[0].bins_dbfs.end() &&
+             std::abs(*conditioned_peak + 6.0F) < 0.1F,
+         "automatic input gain reaches its configured dBFS target after DC rejection");
+
+  SpectrumAnalyzer dc_rejected(
+      {.fft_size = fft_size,
+       .averaging_frames = 1,
+       .audio_dc_rejection = true});
+  const auto dc_rejected_snapshots = dc_rejected.process(block);
+  expect(dc_rejected_snapshots.size() == 1 &&
+             dc_rejected_snapshots[0].bins_dbfs.front() < -100.0F,
+         "audio DC rejection removes a constant left-edge spectral peak");
+
+  SpectrumAnalyzer automatic_bandwidth(
+      {.fft_size = fft_size,
+       .averaging_frames = 1,
+       .audio_dc_rejection = true,
+       .audio_automatic_gain = false,
+       .audio_gain_db = 0.0F,
+       .audio_automatic_gain_target_dbfs = -12.0F,
+       .audio_automatic_bandwidth = true});
+  const auto automatic_snapshots = automatic_bandwidth.process(block);
+  expect(automatic_snapshots.size() == 1 &&
+             automatic_snapshots[0].lower_frequency_hz == 140.625 &&
+             automatic_snapshots[0].upper_frequency_hz == 3'000.0,
+         "automatic audio bandwidth derives a CW-oriented view from sample rate");
+
   expect(!analyzer.configure({.fft_size = 1'000, .averaging_frames = 1}),
          "spectrum analyzer rejects a non-radix-two transform");
 }

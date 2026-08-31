@@ -48,6 +48,14 @@ live RX starts. If the display remains blank while **Input overruns** rises,
 stop live RX and install a newer build because the processing worker is not
 draining captured blocks correctly.
 
+If a stationary peak fills the far-left edge, open **Settings → Audio** and
+leave **Remove input DC offset** enabled. This is normally sound-card DC bias,
+not gain. Keep **Automatic gain** off for a calibrated receiver and tune
+**Manual gain** from 0 dB; or enable it and choose the automatic dBFS target.
+Use automatic 100–3000 Hz bandwidth for a general CW view, or disable it and
+enter lower/upper frequencies around the receiver passband. Select **Apply** to
+save the values in the active station profile.
+
 ## Replay a receiver recording
 
 1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.

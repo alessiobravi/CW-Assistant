@@ -42,6 +42,12 @@ class ReplayController final : public QObject {
   [[nodiscard]] double positionSeconds() const noexcept;
   [[nodiscard]] int averagingFrames() const noexcept;
   void setAveragingFrames(int value);
+  void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
+                             double gain_db,
+                             double automatic_gain_target_dbfs,
+                             bool automatic_bandwidth,
+                             double lower_frequency_hz,
+                             double upper_frequency_hz);
   void setSourceMode(int value);
   void setAudioInputSelection(QString encoded_id, QString display_name);
 
@@ -62,16 +68,27 @@ class ReplayController final : public QObject {
   void playRequested();
   void pauseRequested();
   void stopRequested();
-  void configureRequested(int averaging_frames);
+  void configureRequested(int averaging_frames, bool dc_rejection,
+                          bool automatic_gain, double gain_db,
+                          double automatic_gain_target_dbfs,
+                          bool automatic_bandwidth,
+                          double lower_frequency_hz,
+                          double upper_frequency_hz);
   void liveStartRequested(const QString& encoded_device_id);
   void liveStopRequested();
-  void liveDspStartRequested(int averaging_frames);
+  void liveDspStartRequested();
   void liveDspStopRequested();
-  void liveDspConfigureRequested(int averaging_frames);
+  void liveDspConfigureRequested(int averaging_frames, bool dc_rejection,
+                                 bool automatic_gain, double gain_db,
+                                 double automatic_gain_target_dbfs,
+                                 bool automatic_bandwidth,
+                                 double lower_frequency_hz,
+                                 double upper_frequency_hz);
 
  private:
   void setStatus(QString status);
   void beginLiveAudioCapture();
+  void publishSpectrumConfiguration();
 
   QThread worker_thread_;
   QObject* worker_{nullptr};
@@ -92,6 +109,13 @@ class ReplayController final : public QObject {
   double duration_seconds_{0.0};
   double position_seconds_{0.0};
   int averaging_frames_{3};
+  bool audio_dc_rejection_{true};
+  bool audio_automatic_gain_{false};
+  double audio_gain_db_{0.0};
+  double audio_automatic_gain_target_dbfs_{-12.0};
+  bool audio_automatic_bandwidth_{true};
+  double audio_lower_frequency_hz_{100.0};
+  double audio_upper_frequency_hz_{3'000.0};
 };
 
 }  // namespace cwassistant::desktop

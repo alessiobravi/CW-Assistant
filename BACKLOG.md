@@ -30,6 +30,9 @@ standalone render regression remains linked against the complete receiver
 source after live-audio integration and handles every current Qt sample-format
 enumerator without compiler warnings. Live DSP timer affinity is now covered by
 a cross-thread FFT regression that prevents blank output with queue overruns.
+Audio conditioning now separates default DC rejection, optional automatic or
+manual gain, visualization scaling, and automatic/manual bandwidth with
+deterministic coordinate and gain tests.
 
 ## P0 — project decisions and safety
 
@@ -50,7 +53,7 @@ a cross-thread FFT regression that prevents blank output with queue overruns.
 | PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
 | CI-001 | done | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests pass on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish artifacts, stable continuous-release assets/checksums, and a verified-commit tag. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
-| AUDIO-001 | active | Add native audio device discovery and capture | Qt Multimedia discovery, hot-plug/default/unavailable state, per-profile selection, permission-gated live capture, PCM conversion/downmix, allocation-free bounded capture queue, DSP worker, overrun count, and deterministic pipeline test are implemented; add operator channel/rate/block controls, level meter, disconnect/reconnect soak tests, and clean-machine hardware validation. |
+| AUDIO-001 | active | Add native audio device discovery and capture | Qt Multimedia discovery, hot-plug/default/unavailable state, per-profile selection, permission-gated live capture, PCM conversion/downmix, allocation-free bounded capture queue, DSP worker, overrun count, DC rejection, bounded manual/automatic gain, selectable/automatic bandwidth, and deterministic pipeline tests are implemented; add operator channel/rate/block controls, level meter, signal-driven bandwidth recommendation, disconnect/reconnect soak tests, and clean-machine hardware validation. |
 | REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, paced UI selection/play/pause/stop, and core tests pass; hash manifests, seek, looping, and repeat-run integration remain. |
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
 | UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, guided setup, cross-platform offscreen QML tests, and staged native-graphics startup tests are implemented; clean-machine hardware validation remains. |

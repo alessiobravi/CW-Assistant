@@ -124,6 +124,25 @@ QString AppSettings::audioInputDisplayName() const {
 const QString& AppSettings::audioInputId() const noexcept {
   return audio_input_id_;
 }
+bool AppSettings::audioDcRejection() const noexcept {
+  return audio_dc_rejection_;
+}
+bool AppSettings::audioAutomaticGain() const noexcept {
+  return audio_automatic_gain_;
+}
+double AppSettings::audioGainDb() const noexcept { return audio_gain_db_; }
+double AppSettings::audioAutomaticGainTargetDbfs() const noexcept {
+  return audio_automatic_gain_target_dbfs_;
+}
+bool AppSettings::audioAutomaticBandwidth() const noexcept {
+  return audio_automatic_bandwidth_;
+}
+double AppSettings::audioLowerFrequencyHz() const noexcept {
+  return audio_lower_frequency_hz_;
+}
+double AppSettings::audioUpperFrequencyHz() const noexcept {
+  return audio_upper_frequency_hz_;
+}
 
 const QString& AppSettings::ownCallsign() const noexcept {
   return own_callsign_;
@@ -221,6 +240,14 @@ const QString& AppSettings::statusMessage() const noexcept { return status_messa
   }
 
 CWA_SETTER(setFrequencyBackendIndex, frequency_backend_index_, int)
+CWA_SETTER(setAudioDcRejection, audio_dc_rejection_, bool)
+CWA_SETTER(setAudioAutomaticGain, audio_automatic_gain_, bool)
+CWA_SETTER(setAudioGainDb, audio_gain_db_, double)
+CWA_SETTER(setAudioAutomaticGainTargetDbfs,
+           audio_automatic_gain_target_dbfs_, double)
+CWA_SETTER(setAudioAutomaticBandwidth, audio_automatic_bandwidth_, bool)
+CWA_SETTER(setAudioLowerFrequencyHz, audio_lower_frequency_hz_, double)
+CWA_SETTER(setAudioUpperFrequencyHz, audio_upper_frequency_hz_, double)
 CWA_SETTER(setRadioEnabled, radio_enabled_, bool)
 CWA_SETTER(setOmniRigSlot, omnirig_slot_, int)
 CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
@@ -452,6 +479,19 @@ void AppSettings::selectDetectedRadio(const int index) {
 }
 
 bool AppSettings::apply() {
+  audio_gain_db_ = std::clamp(audio_gain_db_, -40.0, 40.0);
+  audio_automatic_gain_target_dbfs_ =
+      std::clamp(audio_automatic_gain_target_dbfs_, -40.0, -1.0);
+  audio_lower_frequency_hz_ =
+      std::clamp(audio_lower_frequency_hz_, 0.0, 96'000.0);
+  audio_upper_frequency_hz_ =
+      std::clamp(audio_upper_frequency_hz_, 50.0, 96'000.0);
+  if (audio_upper_frequency_hz_ - audio_lower_frequency_hz_ < 50.0) {
+    audio_upper_frequency_hz_ =
+        std::min(96'000.0, audio_lower_frequency_hz_ + 50.0);
+    audio_lower_frequency_hz_ =
+        std::min(audio_lower_frequency_hz_, audio_upper_frequency_hz_ - 50.0);
+  }
   frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 2);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
   cat_baud_rate_ = std::clamp(cat_baud_rate_, 300, 1'000'000);
@@ -479,6 +519,13 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
   settings.setValue(storageKey(QStringLiteral("audio/inputId")), audio_input_id_);
   settings.setValue(storageKey(QStringLiteral("audio/inputName")), audio_input_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/dcRejection")), audio_dc_rejection_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticGain")), audio_automatic_gain_);
+  settings.setValue(storageKey(QStringLiteral("audio/gainDb")), audio_gain_db_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")), audio_automatic_gain_target_dbfs_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticBandwidth")), audio_automatic_bandwidth_);
+  settings.setValue(storageKey(QStringLiteral("audio/lowerFrequencyHz")), audio_lower_frequency_hz_);
+  settings.setValue(storageKey(QStringLiteral("audio/upperFrequencyHz")), audio_upper_frequency_hz_);
   settings.setValue(storageKey(QStringLiteral("station/ownCallsign")), own_callsign_);
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
@@ -529,6 +576,20 @@ void AppSettings::load() {
                           .value(storageKey(QStringLiteral("audio/inputName")),
                                  QStringLiteral("System default input"))
                           .toString();
+  audio_dc_rejection_ =
+      settings.value(storageKey(QStringLiteral("audio/dcRejection")), true).toBool();
+  audio_automatic_gain_ =
+      settings.value(storageKey(QStringLiteral("audio/automaticGain")), false).toBool();
+  audio_gain_db_ =
+      settings.value(storageKey(QStringLiteral("audio/gainDb")), 0.0).toDouble();
+  audio_automatic_gain_target_dbfs_ =
+      settings.value(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")), -12.0).toDouble();
+  audio_automatic_bandwidth_ =
+      settings.value(storageKey(QStringLiteral("audio/automaticBandwidth")), true).toBool();
+  audio_lower_frequency_hz_ =
+      settings.value(storageKey(QStringLiteral("audio/lowerFrequencyHz")), 100.0).toDouble();
+  audio_upper_frequency_hz_ =
+      settings.value(storageKey(QStringLiteral("audio/upperFrequencyHz")), 3'000.0).toDouble();
   own_callsign_ =
       settings.value(storageKey(QStringLiteral("station/ownCallsign"))).toString();
   radio_enabled_ = settings
@@ -694,6 +755,13 @@ void AppSettings::resetInMemorySettings() {
   setup_complete_ = false;
   audio_input_id_.clear();
   audio_input_name_ = QStringLiteral("System default input");
+  audio_dc_rejection_ = true;
+  audio_automatic_gain_ = false;
+  audio_gain_db_ = 0.0;
+  audio_automatic_gain_target_dbfs_ = -12.0;
+  audio_automatic_bandwidth_ = true;
+  audio_lower_frequency_hz_ = 100.0;
+  audio_upper_frequency_hz_ = 3'000.0;
   own_callsign_.clear();
   radio_enabled_ = false;
   reference_rig_index_ = 0;

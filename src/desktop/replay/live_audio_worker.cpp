@@ -209,8 +209,7 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
   connect(&timer_, &QTimer::timeout, this, &LiveAudioDspWorker::drain);
 }
 
-void LiveAudioDspWorker::start(const int averaging_frames) {
-  configure(averaging_frames);
+void LiveAudioDspWorker::start() {
   analyzer_.reset();
   cwassistant::core::RealtimeSampleBlock stale;
   while (pipe_->blocks.try_pop(stale)) {
@@ -223,10 +222,25 @@ void LiveAudioDspWorker::stop() {
   analyzer_.reset();
 }
 
-void LiveAudioDspWorker::configure(const int averaging_frames) {
+void LiveAudioDspWorker::configure(
+    const int averaging_frames, const bool dc_rejection,
+    const bool automatic_gain, const double gain_db,
+    const double automatic_gain_target_dbfs, const bool automatic_bandwidth,
+    const double lower_frequency_hz, const double upper_frequency_hz) {
   auto config = analyzer_.config();
   config.averaging_frames = static_cast<std::uint8_t>(
       std::clamp(averaging_frames, 1, 32));
+  config.audio_dc_rejection = dc_rejection;
+  config.audio_automatic_gain = automatic_gain;
+  config.audio_gain_db = static_cast<float>(std::clamp(gain_db, -40.0, 40.0));
+  config.audio_automatic_gain_target_dbfs = static_cast<float>(
+      std::clamp(automatic_gain_target_dbfs, -40.0, -1.0));
+  config.audio_automatic_bandwidth = automatic_bandwidth;
+  config.audio_lower_frequency_hz =
+      std::clamp(lower_frequency_hz, 0.0, 95'999.0);
+  config.audio_upper_frequency_hz =
+      std::clamp(upper_frequency_hz,
+                 config.audio_lower_frequency_hz + 1.0, 96'000.0);
   static_cast<void>(analyzer_.configure(config));
 }
 

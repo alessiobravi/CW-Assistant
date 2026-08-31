@@ -21,6 +21,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Enumerate and select audio input devices.
 - Configure sample rate, input channel, block size, latency preference, and
   maximum simultaneously decoded channels.
+- Provide independently selectable DC rejection, bounded manual/automatic
+  input gain, automatic-gain target, and automatic/manual processing bandwidth;
+  keep these controls separate from visualization range scaling.
 - Accept mono audio and complex IQ through the same timestamped block contract.
 - Detect candidate tones using a shared spectral analysis stage.
 - Track frequency drift and maintain separate timing/decoder state per channel.

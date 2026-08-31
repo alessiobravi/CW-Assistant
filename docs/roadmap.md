@@ -10,7 +10,7 @@
 
 ## M1 — receive and visualize
 
-- PortAudio device enumeration and capture adapter
+- Qt Multimedia device enumeration, capture, conditioning, and bounded handoff
 - WAV input and deterministic replay clock
 - Windowing, FFT, spectrum averaging, waterfall row generation
 - Qt Quick application shell and custom scene-graph spectrum/waterfall based on

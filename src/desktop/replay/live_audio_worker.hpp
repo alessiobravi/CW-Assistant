@@ -78,9 +78,13 @@ class LiveAudioDspWorker final : public QObject {
                               QObject* parent = nullptr);
 
  public slots:
-  void start(int averaging_frames);
+  void start();
   void stop();
-  void configure(int averaging_frames);
+  void configure(int averaging_frames, bool dc_rejection,
+                 bool automatic_gain, double gain_db,
+                 double automatic_gain_target_dbfs,
+                 bool automatic_bandwidth, double lower_frequency_hz,
+                 double upper_frequency_hz);
 
  signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);

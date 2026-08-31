@@ -260,7 +260,7 @@ Dialog {
                 Label { text: "Waterfall lines / second" }
                 SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
                 Label { text: "Range" }
-                CheckBox { text: "Automatic dynamic range"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
+                CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "These are starting values. The full Settings pane provides independent visualization controls and future startup calibration recommendations." }
             }
 

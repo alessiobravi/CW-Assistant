@@ -22,6 +22,13 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY audioInputsChanged)
   Q_PROPERTY(int audioInputIndex READ audioInputIndex NOTIFY audioInputsChanged)
   Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY audioInputsChanged)
+  Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE setAudioDcRejection NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE setAudioAutomaticGain NOTIFY settingsChanged)
+  Q_PROPERTY(double audioGainDb READ audioGainDb WRITE setAudioGainDb NOTIFY settingsChanged)
+  Q_PROPERTY(double audioAutomaticGainTargetDbfs READ audioAutomaticGainTargetDbfs WRITE setAudioAutomaticGainTargetDbfs NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioAutomaticBandwidth READ audioAutomaticBandwidth WRITE setAudioAutomaticBandwidth NOTIFY settingsChanged)
+  Q_PROPERTY(double audioLowerFrequencyHz READ audioLowerFrequencyHz WRITE setAudioLowerFrequencyHz NOTIFY settingsChanged)
+  Q_PROPERTY(double audioUpperFrequencyHz READ audioUpperFrequencyHz WRITE setAudioUpperFrequencyHz NOTIFY settingsChanged)
   Q_PROPERTY(QString ownCallsign READ ownCallsign WRITE setOwnCallsign NOTIFY settingsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
   Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
@@ -77,6 +84,13 @@ class AppSettings final : public QObject {
   [[nodiscard]] int audioInputIndex() const noexcept;
   [[nodiscard]] QString audioInputDisplayName() const;
   [[nodiscard]] const QString& audioInputId() const noexcept;
+  [[nodiscard]] bool audioDcRejection() const noexcept;
+  [[nodiscard]] bool audioAutomaticGain() const noexcept;
+  [[nodiscard]] double audioGainDb() const noexcept;
+  [[nodiscard]] double audioAutomaticGainTargetDbfs() const noexcept;
+  [[nodiscard]] bool audioAutomaticBandwidth() const noexcept;
+  [[nodiscard]] double audioLowerFrequencyHz() const noexcept;
+  [[nodiscard]] double audioUpperFrequencyHz() const noexcept;
   [[nodiscard]] const QString& ownCallsign() const noexcept;
   [[nodiscard]] bool omniRigAvailable() const noexcept;
   [[nodiscard]] bool radioEnabled() const noexcept;
@@ -118,6 +132,13 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
+  void setAudioDcRejection(bool value);
+  void setAudioAutomaticGain(bool value);
+  void setAudioGainDb(double value);
+  void setAudioAutomaticGainTargetDbfs(double value);
+  void setAudioAutomaticBandwidth(bool value);
+  void setAudioLowerFrequencyHz(double value);
+  void setAudioUpperFrequencyHz(double value);
   void setOwnCallsign(const QString& value);
   void setRadioEnabled(bool value);
   void setOmniRigSlot(int value);
@@ -199,6 +220,13 @@ class AppSettings final : public QObject {
   QStringList audio_input_ids_;
   QString audio_input_id_;
   QString audio_input_name_;
+  bool audio_dc_rejection_{true};
+  bool audio_automatic_gain_{false};
+  double audio_gain_db_{0.0};
+  double audio_automatic_gain_target_dbfs_{-12.0};
+  bool audio_automatic_bandwidth_{true};
+  double audio_lower_frequency_hz_{100.0};
+  double audio_upper_frequency_hz_{3'000.0};
   QString own_callsign_;
   bool radio_enabled_{false};
   QStringList detected_radio_names_;

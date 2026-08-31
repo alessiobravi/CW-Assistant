@@ -37,8 +37,12 @@ int main(int argc, char* argv[]) {
     block.samples[index] = {0.5F * std::sin(phase), 0.0F};
   }
   dsp_thread.start();
-  QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection,
-                            Q_ARG(int, 1));
+  QMetaObject::invokeMethod(
+      worker, "configure", Qt::BlockingQueuedConnection, Q_ARG(int, 1),
+      Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(double, 0.0),
+      Q_ARG(double, -12.0), Q_ARG(bool, false), Q_ARG(double, 0.0),
+      Q_ARG(double, 24'000.0));
+  QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
   if (!pipe->blocks.try_push(block)) {
     QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
     dsp_thread.quit();
