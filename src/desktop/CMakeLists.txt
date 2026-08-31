@@ -93,12 +93,16 @@ if(CWA_BUILD_TESTS)
 
   qt_add_executable(cwa_desktop_render_startup_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/spectrum_waterfall_startup_test.cpp
+    replay/replay_controller.cpp
+    replay/replay_controller.hpp
+    replay/live_audio_worker.cpp
+    replay/live_audio_worker.hpp
     visualization/spectrum_frame.hpp
     visualization/spectrum_waterfall_item.cpp
     visualization/spectrum_waterfall_item.hpp
   )
   target_link_libraries(cwa_desktop_render_startup_test PRIVATE
-    cwa_core Qt6::Core Qt6::Gui Qt6::Quick)
+    cwa_core Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Quick)
   target_include_directories(cwa_desktop_render_startup_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_desktop_render_startup_test

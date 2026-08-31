@@ -135,6 +135,7 @@ float LiveAudioCaptureWorker::readSample(const char* data) const noexcept {
       return std::clamp(value, -1.0F, 1.0F);
     }
     case QAudioFormat::Unknown:
+    case QAudioFormat::NSampleFormats:
       break;
   }
   return 0.0F;

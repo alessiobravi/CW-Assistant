@@ -25,7 +25,10 @@ the subsequent cross-platform Qt macro/declaration errors. Native audio-input
 enumeration, per-profile selection, and bounded live RX now run for both radio
 and SWL setup. Station settings include the normalized own callsign and wider
 content margins. A CW operating mark is integrated across application packages,
-and the Windows shortcut/program-group contract has been rechecked.
+and the Windows shortcut/program-group contract has been rechecked. The
+standalone render regression remains linked against the complete receiver
+source after live-audio integration and handles every current Qt sample-format
+enumerator without compiler warnings.
 
 ## P0 — project decisions and safety
 

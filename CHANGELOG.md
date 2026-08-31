@@ -123,6 +123,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Kept the standalone spectrum-render startup regression target linked to the
+  complete receiver source implementation and made live-audio sample-format
+  handling warning-clean across current Qt platform SDKs.
 - Widened the Settings drawer and added consistent horizontal content margins,
   preventing Station and device controls from sitting against the window edge.
 - Kept the setup wizard's Back/Next/Finish controls in a fixed footer and made
