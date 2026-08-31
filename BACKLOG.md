@@ -1,12 +1,12 @@
 # Product backlog
 
-Updated: 2026-08-31
+Updated: 2026-09-01
 
 This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-08-31 — reproduced and fixed hosted QML compilation,
+Last reviewed: 2026-09-01 — reproduced and fixed hosted QML compilation,
 validated the Qt desktop build/install locally, added functional WAV spectrum
 replay, corrected macOS bundle deployment and Linux Qt architecture selection,
 set and verify the macOS Sonoma 14+ deployment baseline, documented the
@@ -45,6 +45,9 @@ The waterfall now has a constant profile-selected time span independent of pane
 size, startup fill, and line density, preserves timestamp gaps, derives genuine
 high-rate timing frames with overlapping FFT hops, and provides a configurable
 CW guide plus X-axis frequency scale.
+The first receive-only selected-slice decoder now produces live letters/digits
+and timing telemetry; the soft-evidence, multichannel, calibrated, and
+multiple-pass stages remain explicitly active backlog work.
 
 ## P0 — project decisions and safety
 
@@ -70,7 +73,7 @@ CW guide plus X-axis frequency scale.
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
 | UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, guided setup, cross-platform offscreen QML tests, and staged native-graphics startup tests are implemented; clean-machine hardware validation remains. |
 | UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a backend-native, valid-texture-only waterfall image node render real replay FFT frames with bounded history; empty startup/reset regression tests pass; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
-| UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
+| UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels/traces to absolute RF Hz and stable track IDs; left-click moves the local CW guide to the pointed signal, while right-click issues a separately confirmed/capability-checked RX CAT retune that places the signal at the configured CW pitch using sideband and transverter mapping. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
 | UI-005 | active | Model configurable visualization | FPS, waterfall line rate, constant 5–30 second history, range bounds/mode, stable automatic span, waterfall noise suppression/margin, averaging, grid, red CW center/width guide, and seven-point frequency scale are configurable and persisted; startup, resize, and timestamp gaps cannot collapse or stretch time, and overlapping FFT hops provide real timing samples at the selected line rate; immediate Signal/Display controls sit below the spectrum with explicit profile saving; peak hold, time ticks, palette selection, zoom, and pan remain. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
@@ -88,13 +91,14 @@ CW guide plus X-axis frequency scale.
 | DATA-002 | todo | Build deterministic synthetic CW corpus | Covers agreed speed/keying/SNR/drift/fading/jitter/interference/AGC/audio-path matrix, exact and near-exact co-channel pileups, no-CW hard negatives, exact sample annotations, legally reusable real recordings, and leakage-safe held-out splits. |
 | DSP-002 | todo | Detect and track candidate CW tones | Shared FFT plus phase-aware multirate narrowband evidence meets documented false-channel, weak-signal, and track-continuity targets on corpus. |
 | DSP-003 | todo | Add bounded per-channel DSP worker pool | Preserves channel order, sheds lowest-priority work, and passes overload soak tests. |
-| CW-001 | todo | Implement explainable adaptive timing baseline | A soft-evidence hidden semi-Markov/Viterbi decoder publishes raw evidence, provisional/stable text, alternatives, WPM, calibrated confidence, and latency with a reproducible benchmark report. |
+| CW-001 | active | Implement explainable adaptive timing baseline | A first receive-only SNR-hysteresis/adaptive-dit decoder now publishes selected-slice letters/digits, WPM, tone, SNR, and preliminary confidence for live/WAV input; replace the hard decision with the planned soft-evidence hidden semi-Markov/Viterbi path, add provisional/stable alternatives and prosigns, calibrate confidence, and publish a reproducible benchmark report. |
 | CW-002 | todo | Add compact causal learned likelihood path | Compare tiny causal TCN, CNN-GRU, and compact Conformer models; selected model stays within the published INT8/state/resource budget, has audited training/model provenance, and demonstrates an independent held-out gain while the baseline remains fully usable without it. |
 | CW-003 | todo | Add bounded multiple-pass weak-signal refinement | Live, rolling 2–5 second, and completed-segment passes rescore alternative filters/tracks/timing with explicit revision rules; refinement is load-shed before capture and publishes pass provenance. |
 | CW-004 | todo | Separate co-channel pileup operators and cancel interference | A bounded two-then-three-source factorial timing model fingerprints sub-bin carrier/phase drift, WPM, dit/dah and spacing cadence, keying edges, and fading; confidently reconstructed tracks may be subtracted only when residual/decode scores improve, original evidence is retained, and unidentifiable overlaps are reported as ambiguous. |
 | CW-005 | todo | Add optional coherent receive diversity | Synchronized receiver/antenna inputs can contribute spatial or confidence diversity, but bad alignment or a weak source must never degrade the best single-input held-out result. |
 | PERF-001 | todo | Build decoder accuracy/resource benchmark gate | Reports CER/WER, call precision/recall, false output per no-CW minute, detection versus bandwidth-qualified SNR, separation by co-channel power/frequency/cadence difference, provisional/stable latency and revisions, CPU, memory, real-time factor, and overload behavior per supported reference platform. |
 | CALL-001 | todo | Extract and rank callsign candidates | Precision/recall targets are documented and tested, including portable calls. |
+| CALL-006 | todo | Maintain frequency-anchored decoded observation lifecycle | Every decoded call stores stable track ID and checked absolute RF Hz independently of viewport motion; continued decoding updates the existing overlay/list row, calls enter a visible lost state after configurable silence, reacquisition preserves identity, and expired calls are removed from both models after a configurable retention timeout. |
 | DSP-004 | todo | Add operational DSP conditioning | Configurable noise blanker, AGC, key-click suppression, mute, and 20–700 Hz monitor filter have replay tests and bypass paths. |
 | DSP-005 | todo | Add frequency and I/Q calibration | Manual/automatic correction, reset, diagnostics, and deterministic imbalance fixtures pass. |
 | CALL-004 | todo | Add validation, watch, and band-plan policies | Configurable validation levels, allocation/pattern checks, master-call data, watch list, and CW-segment filtering are independently testable. |

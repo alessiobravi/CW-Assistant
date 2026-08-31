@@ -12,8 +12,9 @@ native live audio-input discovery/capture through a bounded queue and dedicated
 DSP worker. WAV replay remains a separate deterministic source for the real 2D
 spectrum and waterfall. Immediate controls below the spectrum provide signal
 gain/bandwidth, constant-time high-resolution history, a CW frequency guide,
-and stable noise-suppressed display tuning; CW text decoding is
-not implemented in the current build.
+and stable noise-suppressed display tuning. A first receive-only adaptive timing
+decoder shows live text for the configured CW guide slice; multichannel and
+multiple-pass weak-signal decoding remain under active implementation.
 
 ## Planned capabilities
 

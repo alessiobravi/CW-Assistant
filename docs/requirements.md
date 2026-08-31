@@ -69,6 +69,15 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Spectrum and waterfall share the same FFT output used by channel detection.
 - Clicking a trace selects the nearest tracked channel; clicking a callsign
   opens the QSO confirmation panel.
+- Left-clicking the waterfall moves the local CW guide center to the pointed
+  signal. Right-clicking is a distinct RX-only CAT tuning request that maps the
+  pointed actual RF frequency to the configured CW pitch using current
+  sideband, dial frequency, split state, and transverter offset; unavailable or
+  ambiguous mappings are rejected visibly.
+- Anchor decoded observations to checked absolute RF Hz and stable track IDs,
+  not screen coordinates. Continued decoding updates an observation in place;
+  configurable loss and expiry timers remove stale overlays and list entries
+  consistently while permitting short-gap reacquisition.
 - Rendering is independently rate-limited (initial target 30 or 60 FPS) and may
   drop display frames. DSP sample blocks must not be dropped to keep UI current.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are

@@ -8,9 +8,10 @@ SWL mode, discover serial ports without opening them, identify online radios
 through a supported integration, save radio/keying/display settings, open the Windows
 frequency-provider configuration, monitor a CAT4OM radio, process a selected
 live sound-card input, and replay a WAV recording through the real spectrum and
-waterfall. The decoder, direct keying output,
-logging connection, SDR capture, and remote-station runtime remain under
-implementation. A saved profile does not arm or key a transmitter.
+waterfall, and run a first receive-only adaptive decoder on the selected CW
+guide slice. Multichannel/weak-signal decoding, direct keying output, logging
+connection, SDR capture, and remote-station runtime remain under implementation.
+A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
 IEEE float32. Multichannel input is averaged to mono for this audio-analysis
@@ -77,6 +78,13 @@ time and are stored per profile. The frequency labels along the lower X axis
 show where those boundaries sit in the current audio or SDR view. This guide is
 visual only and does not change receiver tuning or decoder bandwidth.
 
+Pointer tuning is planned, not active in this build. The defined behavior is:
+left-click a waterfall trace to move the local CW guide to it; right-click to
+request an RX-only CAT retune that places the pointed actual-RF signal at the
+configured CW pitch. Future decoded-call overlays will be anchored to absolute
+RF Hz and a stable track ID, updated as text improves, marked lost after a short
+silence, and removed from both waterfall and list after a configurable timeout.
+
 For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
 noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
 minimum 60 dB span and follow falling peaks slowly, preventing receiver-noise
@@ -84,15 +92,16 @@ changes from repeatedly driving the palette yellow. A radio's own AGC may still
 change the audio level delivered by the sound card; this application does not
 yet control radio AGC through CAT.
 
-The right-hand calls panel now states when the decoder is unavailable. Spectrum
-and waterfall reception are implemented, but multichannel Morse detection,
-timing, text decoding, and callsign extraction remain the next decoder
-milestone; no callsign output should be expected from this build. The planned
-decoder uses a fast live pass and bounded delayed weak-signal refinement. Later
-passes may revise only text that the UI still labels provisional; stable text
-and the original acoustic evidence are retained. Planned same-frequency pileup
-separation will use carrier, cadence, keying-shape, and fading differences, but
-will report ambiguity when a single audio stream contains no separable evidence.
+The right-hand panel now decodes the strongest tone inside the red CW guide for
+both live audio and WAV replay. It shows text, tracked tone, adaptive WPM, SNR,
+and preliminary confidence. Start with a 700 Hz center and 200 Hz width, then
+narrow the guide around the desired trace. This first receive-only decoder uses
+SNR hysteresis and adaptive dit timing; it handles letters and digits but does
+not yet provide prosigns, multichannel tracking, calibrated confidence,
+multiple-pass weak-signal recovery, or same-frequency pileup separation. Noise
+or multiple callers inside one guide may therefore produce `?` or incorrect
+text. Changing source, center, or width clears decoder state. Decoder output
+cannot arm TX, key a radio, or initiate a QSO.
 
 ## Replay a receiver recording
 

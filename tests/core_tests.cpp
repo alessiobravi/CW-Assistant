@@ -13,6 +13,7 @@
 #include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
+#include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/remote_control.hpp"
 #include "cwassistant/core/reference_rig_profiles.hpp"
@@ -105,6 +106,28 @@ void test_scheduler() {
                           ChannelSelectionPolicy::UserSelectedFirst) ==
              std::vector<std::uint64_t>({3, 2}),
          "manual choice is scheduled first");
+}
+
+void test_cw_timing_decoder() {
+  using cwassistant::core::CwTimingDecoder;
+  CwTimingDecoder decoder({.initial_wpm = 20.0});
+  std::uint64_t now = 0;
+  const auto feed = [&](const bool down, const int milliseconds) {
+    const int steps = milliseconds / 10;
+    for (int i = 0; i < steps; ++i) {
+      now += 10'000'000;
+      static_cast<void>(decoder.process(now, down ? 12.0F : 0.0F));
+    }
+  };
+  feed(false, 100);
+  feed(true, 60); feed(false, 60); feed(true, 60); feed(false, 200);
+  feed(true, 60); feed(false, 60); feed(true, 60); feed(false, 60);
+  feed(true, 60); feed(false, 200);
+  const auto result = decoder.flush(now + 500'000'000);
+  expect(result.text.find("IS") != std::string::npos,
+         "adaptive CW timing decodes deterministic dit sequences");
+  expect(result.wpm > 18.0 && result.wpm < 22.0,
+         "adaptive CW timing reports the keyed speed");
 }
 
 void test_transmit_guard() {
@@ -539,6 +562,7 @@ void test_cat4om_protocol_contract() {
 int main() {
   test_ring_buffer();
   test_scheduler();
+  test_cw_timing_decoder();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

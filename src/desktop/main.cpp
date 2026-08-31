@@ -55,6 +55,8 @@ int main(int argc, char* argv[]) {
         settings.audioGainDb(), settings.audioAutomaticGainTargetDbfs(),
         settings.audioAutomaticBandwidth(), settings.audioLowerFrequencyHz(),
         settings.audioUpperFrequencyHz(), settings.waterfallRate());
+    replay_controller.setCwDecoderSlice(settings.cwGuideCenterHz(),
+                                        settings.cwGuideWidthHz());
   };
   apply_spectrum_processing();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
@@ -114,8 +116,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("liveNoiseSuppressionCheck"));
       auto* live_cw_guide_check = root_object->findChild<QQuickItem*>(
           QStringLiteral("liveCwGuideCheck"));
-      auto* decoder_unavailable_label = root_object->findChild<QQuickItem*>(
-          QStringLiteral("decoderUnavailableLabel"));
+      auto* decoder_status_label = root_object->findChild<QQuickItem*>(
+          QStringLiteral("decoderStatusLabel"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
@@ -129,7 +131,7 @@ int main(int argc, char* argv[]) {
           automatic_bandwidth_check == nullptr ||
           live_levels_check == nullptr || live_noise_check == nullptr ||
           live_cw_guide_check == nullptr ||
-          decoder_unavailable_label == nullptr ||
+          decoder_status_label == nullptr ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {
         QCoreApplication::exit(EXIT_FAILURE);

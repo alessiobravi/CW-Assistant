@@ -2,9 +2,12 @@
 
 ## Status and objective
 
-This document is the implementation proposal for the M2 decoder. The decoder is
-not present in the current downloadable build. Its goal is high weak-signal
-accuracy with bounded CPU, memory, and latency on ordinary desktop hardware.
+This document is the implementation proposal for the complete M2 decoder. A
+first receive-only selected-slice SNR-hysteresis/adaptive-dit baseline is now
+implemented; multichannel detection, soft evidence, calibrated confidence, and
+multiple-pass weak-signal recovery remain planned. The complete decoder's goal
+is high weak-signal accuracy with bounded CPU, memory, and latency on ordinary
+desktop hardware.
 Every claimed improvement must survive the same held-out replay corpus and must
 publish its accuracy, latency, false-output, CPU, and memory results.
 

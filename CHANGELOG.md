@@ -8,6 +8,14 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A first receive-only live CW decoder for the configured guide slice, with
+  SNR hysteresis, adaptive dit timing/WPM, Morse letters and digits, live text,
+  tracked tone/SNR/confidence, deterministic timing tests, and automatic reset
+  on source or slice changes. Decoder output cannot initiate transmission.
+- Backlog/requirements for left-click local CW-slice selection, distinct
+  right-click RX CAT centering, actual-RF anchored decoded tracks, in-place
+  callsign refinement, loss/reacquisition, and synchronized overlay/list expiry.
+
 - Receive-only SWL station profiles that skip CAT and key/PTT wizard pages,
   positively identified online-radio selection through Windows OmniRig status,
   safe refresh without speculative serial probing, and an explicit manual

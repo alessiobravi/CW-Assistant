@@ -298,9 +298,11 @@ ApplicationWindow {
                         }
                         Item { Layout.fillWidth: true }
                         Label {
-                            objectName: "decoderUnavailableLabel"
-                            text: "Decoder unavailable in this build"
-                            color: "#f3bd55"
+                            objectName: "decoderStatusLabel"
+                            text: replayController.decoderKeyDown
+                                  ? "Decoder • KEY DOWN" : "Decoder listening"
+                            color: replayController.decoderKeyDown
+                                   ? "#ff7b84" : "#64e6d2"
                             font.pixelSize: 11
                         }
                         Button { text: "Save profile"; onClicked: appSettings.apply() }
@@ -519,12 +521,29 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 16
-                Label { text: "Active calls"; font.pixelSize: 17; font.weight: Font.DemiBold }
-                Label { text: "Signals selected by confidence, strength, or queue"; color: "#8290a0"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Label { text: "Selected CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                Label { text: "Receive-only baseline • strongest tone inside the red guide"; color: "#8290a0"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
-                Item { Layout.fillHeight: true }
-                Label { Layout.alignment: Qt.AlignHCenter; text: "CW decoder not implemented yet"; color: "#667789" }
-                Item { Layout.fillHeight: true }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    text: replayController.decodedText.length > 0
+                          ? replayController.decodedText
+                          : "Listening inside the CW guide…"
+                    color: replayController.decodedText.length > 0 ? "#e7edf4" : "#667789"
+                    font.pixelSize: 18
+                    wrapMode: Text.Wrap
+                    verticalAlignment: Text.AlignTop
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: replayController.decoderToneHz.toFixed(0) + " Hz  •  "
+                          + replayController.decoderWpm.toFixed(1) + " WPM  •  "
+                          + replayController.decoderSnrDb.toFixed(1) + " dB SNR  •  "
+                          + (replayController.decoderConfidence * 100).toFixed(0) + "%"
+                    color: "#8290a0"
+                    wrapMode: Text.WordWrap
+                }
             }
         }
     }

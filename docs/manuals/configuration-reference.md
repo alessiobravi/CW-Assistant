@@ -90,8 +90,13 @@ for the sharpest element boundaries; higher averaging deliberately smooths time.
 **CW guide** draws red boundaries around the selected audio slice over both the
 spectrum and history. It defaults to a 700 Hz center and 200 Hz width. Change
 the tone and width immediately below the graph to match the receiver pitch and
-filter; the guide is visual and does not retune the radio or filter decoder
-input. Seven X-axis labels show the actual displayed audio or RF frequency.
+filter. The first receive-only decoder uses this same center/width slice but the
+guide's visibility switch changes only the red overlay. It does not retune the
+radio. Seven X-axis labels show the actual displayed audio or RF frequency.
+
+The decoder currently uses fixed 6 dB key-on and 3 dB key-off SNR hysteresis,
+starts timing at 20 WPM, and adapts from measured elements. These thresholds
+will become profile controls after replay benchmarks establish safe ranges.
 
 ## Station page
 

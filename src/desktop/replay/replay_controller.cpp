@@ -161,6 +161,10 @@ class ReplayWorker final : public QObject {
 
 ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   qRegisterMetaType<SpectrumFrame>();
+  connect(this, &ReplayController::frameReady, this,
+          &ReplayController::processDecoderFrame);
+  connect(this, &ReplayController::sourceReset, this,
+          &ReplayController::resetDecoder);
   auto* worker = new ReplayWorker;
   worker_ = worker;
   worker->moveToThread(&worker_thread_);
@@ -326,6 +330,28 @@ double ReplayController::positionSeconds() const noexcept {
 int ReplayController::averagingFrames() const noexcept {
   return averaging_frames_;
 }
+const QString& ReplayController::decodedText() const noexcept {
+  return decoded_text_;
+}
+double ReplayController::decoderWpm() const noexcept { return decoder_wpm_; }
+double ReplayController::decoderSnrDb() const noexcept { return decoder_snr_db_; }
+double ReplayController::decoderToneHz() const noexcept { return decoder_tone_hz_; }
+double ReplayController::decoderConfidence() const noexcept {
+  return decoder_confidence_;
+}
+bool ReplayController::decoderKeyDown() const noexcept {
+  return decoder_key_down_;
+}
+
+void ReplayController::setCwDecoderSlice(const double center_hz,
+                                         const double width_hz) {
+  const double center = std::clamp(center_hz, 0.0, 96'000.0);
+  const double width = std::clamp(width_hz, 10.0, 5'000.0);
+  if (decoder_center_hz_ == center && decoder_width_hz_ == width) return;
+  decoder_center_hz_ = center;
+  decoder_width_hz_ = width;
+  resetDecoder();
+}
 
 void ReplayController::setAveragingFrames(const int value) {
   const int clamped = std::clamp(value, 1, 32);
@@ -386,6 +412,55 @@ void ReplayController::publishSpectrumConfiguration() {
       audio_gain_db_, audio_automatic_gain_target_dbfs_,
       audio_automatic_bandwidth_, audio_lower_frequency_hz_,
       audio_upper_frequency_hz_);
+}
+
+void ReplayController::processDecoderFrame(const SpectrumFrame& frame) {
+  if (frame.bins_dbfs.isEmpty() ||
+      frame.upper_frequency_hz <= frame.lower_frequency_hz) return;
+  const double span = frame.upper_frequency_hz - frame.lower_frequency_hz;
+  const double low = decoder_center_hz_ - decoder_width_hz_ * 0.5;
+  const double high = decoder_center_hz_ + decoder_width_hz_ * 0.5;
+  float peak = -200.0F;
+  qsizetype peak_index = -1;
+  QVector<float> noise;
+  noise.reserve(frame.bins_dbfs.size());
+  for (qsizetype i = 0; i < frame.bins_dbfs.size(); ++i) {
+    const double frequency = frame.lower_frequency_hz +
+        span * static_cast<double>(i) /
+        static_cast<double>(std::max<qsizetype>(1, frame.bins_dbfs.size() - 1));
+    const float level = frame.bins_dbfs[i];
+    if (frequency >= low && frequency <= high && level > peak) {
+      peak = level;
+      peak_index = i;
+    } else if (std::isfinite(level)) {
+      noise.push_back(level);
+    }
+  }
+  if (peak_index < 0 || noise.isEmpty()) return;
+  const qsizetype noise_index = (noise.size() * 3) / 5;
+  std::nth_element(noise.begin(), noise.begin() + noise_index, noise.end());
+  decoder_snr_db_ = static_cast<double>(peak - noise[noise_index]);
+  decoder_tone_hz_ = frame.lower_frequency_hz +
+      span * static_cast<double>(peak_index) /
+      static_cast<double>(std::max<qsizetype>(1, frame.bins_dbfs.size() - 1));
+  const auto result = cw_decoder_.process(
+      frame.timestamp_ns, static_cast<float>(decoder_snr_db_));
+  decoded_text_ = QString::fromStdString(result.text);
+  decoder_wpm_ = result.wpm;
+  decoder_confidence_ = result.confidence;
+  decoder_key_down_ = result.key_down;
+  emit decoderChanged();
+}
+
+void ReplayController::resetDecoder() {
+  cw_decoder_.reset();
+  decoded_text_.clear();
+  decoder_wpm_ = 20.0;
+  decoder_snr_db_ = 0.0;
+  decoder_tone_hz_ = decoder_center_hz_;
+  decoder_confidence_ = 0.0;
+  decoder_key_down_ = false;
+  emit decoderChanged();
 }
 
 void ReplayController::setSourceMode(const int value) {

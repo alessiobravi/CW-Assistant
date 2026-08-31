@@ -78,6 +78,13 @@ distinct from acoustic output. See
 [High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
 resource limits, training corpus, and benchmark gates.
 
+The first delivered M2 increment is intentionally smaller: the desktop selects
+the strongest spectrum bin inside the configured CW guide, estimates noise from
+outside that slice, and feeds SNR observations into a dependency-free
+hysteretic adaptive-dit decoder. It publishes letters/digits, WPM, tone, SNR,
+and preliminary confidence. This receive-only baseline is the measured fallback
+that the soft-evidence and multiple-pass stages will replace or augment.
+
 ## Graphical rendering
 
 QML owns layout and controls, while a custom C++ `QQuickItem` produces Qt Scene
