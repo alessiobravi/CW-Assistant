@@ -34,7 +34,7 @@ ApplicationWindow {
             ColumnLayout {
                 spacing: 0
                 Label { text: appSettings.profileName; font.pixelSize: 14 }
-                Label { text: appSettings.referenceRigNames[appSettings.referenceRigIndex]; color: "#8d9aaa"; font.pixelSize: 11 }
+                Label { text: appSettings.radioDisplayName; color: "#8d9aaa"; font.pixelSize: 11 }
             }
             Item { Layout.fillWidth: true }
             Rectangle {

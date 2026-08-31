@@ -20,6 +20,25 @@ namespace {
 
 constexpr auto kSchemaVersion = 1;
 
+#ifdef Q_OS_WIN
+constexpr long kOmniRigOnlineStatus = 4;
+
+bool automation_property(IDispatch* object, const wchar_t* name,
+                         VARIANT* value) {
+  OLECHAR* property_name = const_cast<OLECHAR*>(name);
+  DISPID property_id{};
+  if (FAILED(object->GetIDsOfNames(IID_NULL, &property_name, 1,
+                                   LOCALE_USER_DEFAULT, &property_id))) {
+    return false;
+  }
+  DISPPARAMS parameters{nullptr, nullptr, 0, 0};
+  VariantInit(value);
+  return SUCCEEDED(object->Invoke(property_id, IID_NULL, LOCALE_USER_DEFAULT,
+                                  DISPATCH_PROPERTYGET, &parameters, value,
+                                  nullptr, nullptr));
+}
+#endif
+
 template <typename T>
 bool assign_if_changed(T& destination, const T& value) {
   if (destination == value) {
@@ -83,10 +102,33 @@ const QStringList& AppSettings::serialPorts() const noexcept { return serial_por
 
 bool AppSettings::omniRigAvailable() const noexcept {
 #ifdef Q_OS_WIN
-  return true;
+  CLSID class_id{};
+  return SUCCEEDED(CLSIDFromProgID(L"OmniRig.OmniRigX", &class_id));
 #else
   return false;
 #endif
+}
+
+bool AppSettings::radioEnabled() const noexcept { return radio_enabled_; }
+
+QString AppSettings::radioDisplayName() const {
+  if (!radio_enabled_) {
+    return QStringLiteral("No radio — receive-only (SWL)");
+  }
+  const auto detected_index = detected_radio_slots_.indexOf(omnirig_slot_);
+  if (frequency_backend_index_ == 0 && detected_index >= 0) {
+    return detected_radio_names_.at(detected_index);
+  }
+  const auto names = referenceRigNames();
+  return names.value(reference_rig_index_, QStringLiteral("Manually configured radio"));
+}
+
+const QStringList& AppSettings::detectedRadioNames() const noexcept {
+  return detected_radio_names_;
+}
+
+int AppSettings::detectedRadioIndex() const noexcept {
+  return detected_radio_slots_.indexOf(omnirig_slot_);
 }
 
 int AppSettings::referenceRigIndex() const noexcept { return reference_rig_index_; }
@@ -150,6 +192,7 @@ const QString& AppSettings::statusMessage() const noexcept { return status_messa
   }
 
 CWA_SETTER(setFrequencyBackendIndex, frequency_backend_index_, int)
+CWA_SETTER(setRadioEnabled, radio_enabled_, bool)
 CWA_SETTER(setOmniRigSlot, omnirig_slot_, int)
 CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
 CWA_SETTER(setCat4omRadioId, cat4om_radio_id_, const QString&)
@@ -230,6 +273,73 @@ void AppSettings::refreshSerialPorts() {
   setStatusMessage(QStringLiteral("Serial ports refreshed without opening or toggling them."));
 }
 
+void AppSettings::refreshDetectedRadios() {
+  QStringList names;
+  QList<int> slots;
+#ifdef Q_OS_WIN
+  if (ensureOmniRigAutomation()) {
+    auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+    for (int slot = 1; slot <= 2; ++slot) {
+      VARIANT rig_value;
+      const auto rig_property = slot == 1 ? L"Rig1" : L"Rig2";
+      if (!automation_property(automation, rig_property, &rig_value)) {
+        continue;
+      }
+      IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+      if (rig == nullptr) {
+        VariantClear(&rig_value);
+        continue;
+      }
+
+      VARIANT type_value;
+      VARIANT status_value;
+      const bool has_type = automation_property(rig, L"RigType", &type_value);
+      const bool has_status = automation_property(rig, L"Status", &status_value);
+      const QString rig_type =
+          has_type && type_value.vt == VT_BSTR
+              ? QString::fromWCharArray(type_value.bstrVal).trimmed()
+              : QString{};
+      const long status =
+          has_status && (status_value.vt == VT_I4 || status_value.vt == VT_INT)
+              ? status_value.lVal
+              : -1;
+      if (!rig_type.isEmpty() && status == kOmniRigOnlineStatus) {
+        names.push_back(QStringLiteral("OmniRig %1 — %2").arg(slot).arg(rig_type));
+        slots.push_back(slot);
+      }
+      if (has_type) {
+        VariantClear(&type_value);
+      }
+      if (has_status) {
+        VariantClear(&status_value);
+      }
+      VariantClear(&rig_value);
+    }
+  }
+#endif
+  const bool changed = names != detected_radio_names_ || slots != detected_radio_slots_;
+  detected_radio_names_ = std::move(names);
+  detected_radio_slots_ = std::move(slots);
+  if (changed) {
+    emit detectedRadiosChanged();
+    emit settingsChanged();
+  }
+  setStatusMessage(detected_radio_names_.isEmpty()
+                       ? QStringLiteral("No positively identified online radio was found. SWL and manual setup remain available.")
+                       : QStringLiteral("Online radios refreshed without probing arbitrary serial ports."));
+}
+
+void AppSettings::selectDetectedRadio(const int index) {
+  if (index < 0 || index >= detected_radio_slots_.size()) {
+    return;
+  }
+  radio_enabled_ = true;
+  frequency_backend_index_ = 0;
+  omnirig_slot_ = detected_radio_slots_.at(index);
+  setStatusMessage(QStringLiteral("Detected radio selected. Transmit remains disarmed."));
+  emit settingsChanged();
+}
+
 bool AppSettings::apply() {
   frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 2);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
@@ -247,7 +357,7 @@ bool AppSettings::apply() {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
 
-  if (ptt_line_index_ == key_line_index_) {
+  if (radio_enabled_ && ptt_line_index_ == key_line_index_) {
     setStatusMessage(QStringLiteral("PTT and KEY must use different COM control lines."));
     emit settingsChanged();
     return false;
@@ -257,6 +367,7 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("configuration/schemaVersion")), kSchemaVersion);
   settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
+  settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
   settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
   settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
@@ -298,6 +409,10 @@ bool AppSettings::apply() {
 void AppSettings::load() {
   QSettings settings;
   setup_complete_ = settings.value(storageKey(QStringLiteral("configuration/setupComplete")), false).toBool();
+  radio_enabled_ = settings
+                       .value(storageKey(QStringLiteral("radio/enabled")),
+                              setup_complete_)
+                       .toBool();
   const int saved_index = settings.value(storageKey(QStringLiteral("radio/referenceRigIndex")), 0).toInt();
   const auto profile_count = static_cast<int>(cwassistant::core::reference_rig_profiles().size());
   reference_rig_index_ = std::clamp(saved_index, 0, std::max(0, profile_count - 1));
@@ -452,6 +567,7 @@ void AppSettings::refreshProfiles() {
 
 void AppSettings::resetInMemorySettings() {
   setup_complete_ = false;
+  radio_enabled_ = false;
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;
   omnirig_slot_ = 1;
@@ -481,23 +597,11 @@ void AppSettings::setStatusMessage(QString message) {
 
 void AppSettings::showOmniRigConfiguration() {
 #ifdef Q_OS_WIN
-  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
-  if (automation == nullptr) {
-    const HRESULT init_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    com_initialized_ = SUCCEEDED(init_result);
-    CLSID class_id{};
-    HRESULT result = CLSIDFromProgID(L"OmniRig.OmniRigX", &class_id);
-    if (SUCCEEDED(result)) {
-      result = CoCreateInstance(class_id, nullptr, CLSCTX_LOCAL_SERVER,
-                                IID_IDispatch,
-                                reinterpret_cast<void**>(&automation));
-    }
-    if (FAILED(result) || automation == nullptr) {
-      setStatusMessage(QStringLiteral("OmniRig is not installed or could not be started."));
-      return;
-    }
-    omnirig_automation_ = automation;
+  if (!ensureOmniRigAutomation()) {
+    setStatusMessage(QStringLiteral("OmniRig is not installed or could not be started."));
+    return;
   }
+  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
 
   OLECHAR* property_name = const_cast<OLECHAR*>(L"DialogVisible");
   DISPID property_id{};
@@ -521,6 +625,32 @@ void AppSettings::showOmniRigConfiguration() {
   setStatusMessage(QStringLiteral("OmniRig integration is available on Windows; use Hamlib on this platform."));
 #endif
 }
+
+#ifdef Q_OS_WIN
+bool AppSettings::ensureOmniRigAutomation() {
+  if (omnirig_automation_ != nullptr) {
+    return true;
+  }
+  if (!com_initialization_attempted_) {
+    const HRESULT init_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    com_initialized_ = SUCCEEDED(init_result);
+    com_initialization_attempted_ = true;
+  }
+  CLSID class_id{};
+  HRESULT result = CLSIDFromProgID(L"OmniRig.OmniRigX", &class_id);
+  IDispatch* automation = nullptr;
+  if (SUCCEEDED(result)) {
+    result = CoCreateInstance(class_id, nullptr, CLSCTX_LOCAL_SERVER,
+                              IID_IDispatch,
+                              reinterpret_cast<void**>(&automation));
+  }
+  if (FAILED(result) || automation == nullptr) {
+    return false;
+  }
+  omnirig_automation_ = automation;
+  return true;
+}
+#endif
 
 void AppSettings::testCat4omConnection() {
   cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()),

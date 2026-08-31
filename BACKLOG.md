@@ -16,7 +16,9 @@ added MSI failure diagnostics, and replaced the Windows archive plan with an
 upgrade-capable MSI delivery flow. The first fully green packaged matrix then
 exposed a native first-launch render crash; the null-texture path is now removed
 and guarded by empty-render, full-QML, and staged native-graphics startup tests
-with deterministic texture creation on every platform.
+with deterministic texture creation on every platform. Setup now distinguishes
+receive-only SWL operation, positively identified online radios, and explicit
+manual templates; the wizard footer is also guarded against clipping.
 
 ## P0 — project decisions and safety
 
@@ -78,6 +80,7 @@ with deterministic texture creation on every platform.
 | KEY-001 | todo | Implement cross-platform RTS/DTR adapter | Line loopback tests pass on Windows, macOS, and Linux without discovery toggles. |
 | QSO-001 | todo | Define declarative workflow/panel schema | Ordinary, DX-pileup, and contest panels validate without executable scripts. |
 | QSO-002 | todo | Implement operator-confirmed QSO workflow | Exact callsign confirmation is required before first TX and emergency stop is always available. |
+| QSO-003 | todo | Notify when the operator's own callsign is decoded | A normalized exact own-call match raises a configurable visual/audio/remote notification; an optional closing macro may be queued only when the QSO context matches, auto-reply is explicitly enabled and armed, all TX guards pass, and the operator can cancel before transmission. |
 
 ## P2 — M4 logging and SDR
 

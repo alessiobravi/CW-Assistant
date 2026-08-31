@@ -5,6 +5,23 @@ radio values are starting points and remain editable.
 
 ## Radio page
 
+### Radio participation and detection
+
+- **No radio — receive-only (SWL):** process audio without CAT, PTT, or KEY.
+  The first-run wizard skips the CAT and Keying pages.
+- **Detected online radio:** lists only a device that a supported integration
+  positively identifies as online. The initial Windows implementation reads
+  the two OmniRig slots. It never treats a COM-port name as a radio model and
+  does not issue speculative CAT commands.
+- **Manual radio template:** exposes the supplied reference templates only when
+  the operator deliberately chooses manual setup. All resulting serial values
+  remain editable.
+
+Use **Refresh detection** after starting or reconfiguring the frequency service.
+An installed but disabled, busy, unresponsive, or unconfigured radio is not
+shown in the detected-radio list. macOS and Linux currently use SWL or manual
+setup until live Hamlib discovery is implemented.
+
 ### Reference radio
 
 - **Yaesu FT-450D:** starts at 4800 baud, 8 data bits, no parity, 1 stop bit.

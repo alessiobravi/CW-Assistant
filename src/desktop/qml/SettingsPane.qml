@@ -45,7 +45,27 @@ Pane {
                     columnSpacing: 18
                     rowSpacing: 12
                     anchors.margins: 22
-                    Label { text: "Reference radio" }
+                    Label { text: "Radio participation" }
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: ["No radio — receive-only (SWL)", "Radio enabled"]
+                        currentIndex: appSettings.radioEnabled ? 1 : 0
+                        onActivated: appSettings.radioEnabled = currentIndex === 1
+                    }
+                    Label { text: "Detected online radio" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: appSettings.detectedRadioNames
+                            enabled: count > 0
+                            currentIndex: appSettings.detectedRadioIndex
+                            displayText: count > 0 ? currentText : "None detected"
+                            onActivated: appSettings.selectDetectedRadio(currentIndex)
+                        }
+                        Button { text: "Refresh"; onClicked: appSettings.refreshDetectedRadios() }
+                    }
+                    Label { text: "Manual radio template" }
                     ComboBox {
                         Layout.fillWidth: true
                         model: appSettings.referenceRigNames
@@ -121,7 +141,9 @@ Pane {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
-                        text: "All direct serial values are editable. CAT4OM uses its group Control URL and radio ID instead; its password is held for one connection attempt only and is never saved."
+                        text: appSettings.radioEnabled
+                              ? "Detected radios are positively identified by an integration; serial ports are never guessed. Manual CAT values remain editable. CAT4OM passwords are held for one connection attempt only and are never saved."
+                              : "SWL mode processes receiver audio without CAT or key/PTT. Stored radio values are retained in case this profile is switched back to radio operation."
                     }
                 }
             }

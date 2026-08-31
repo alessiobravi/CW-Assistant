@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QString>
 #include <QStringList>
 
@@ -19,6 +20,10 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool setupComplete READ setupComplete NOTIFY setupCompleteChanged)
   Q_PROPERTY(QStringList serialPorts READ serialPorts NOTIFY serialPortsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
+  Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(QString radioDisplayName READ radioDisplayName NOTIFY settingsChanged)
+  Q_PROPERTY(QStringList detectedRadioNames READ detectedRadioNames NOTIFY detectedRadiosChanged)
+  Q_PROPERTY(int detectedRadioIndex READ detectedRadioIndex NOTIFY settingsChanged)
   Q_PROPERTY(int referenceRigIndex READ referenceRigIndex NOTIFY settingsChanged)
   Q_PROPERTY(int frequencyBackendIndex READ frequencyBackendIndex WRITE setFrequencyBackendIndex NOTIFY settingsChanged)
   Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
@@ -65,6 +70,10 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool setupComplete() const noexcept;
   [[nodiscard]] const QStringList& serialPorts() const noexcept;
   [[nodiscard]] bool omniRigAvailable() const noexcept;
+  [[nodiscard]] bool radioEnabled() const noexcept;
+  [[nodiscard]] QString radioDisplayName() const;
+  [[nodiscard]] const QStringList& detectedRadioNames() const noexcept;
+  [[nodiscard]] int detectedRadioIndex() const noexcept;
   [[nodiscard]] int referenceRigIndex() const noexcept;
   [[nodiscard]] int frequencyBackendIndex() const noexcept;
   [[nodiscard]] int omniRigSlot() const noexcept;
@@ -100,6 +109,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
+  void setRadioEnabled(bool value);
   void setOmniRigSlot(int value);
   void setCat4omUrl(const QString& value);
   void setCat4omRadioId(const QString& value);
@@ -131,6 +141,8 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
   Q_INVOKABLE void refreshSerialPorts();
+  Q_INVOKABLE void refreshDetectedRadios();
+  Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
   Q_INVOKABLE bool completeSetup();
   Q_INVOKABLE bool selectProfile(const QString& profile_name);
@@ -150,6 +162,7 @@ class AppSettings final : public QObject {
   void profilesChanged();
   void profileSelectionRequiredChanged();
   void cat4omChanged();
+  void detectedRadiosChanged();
 
  private:
   void load();
@@ -159,6 +172,9 @@ class AppSettings final : public QObject {
   [[nodiscard]] static QString normalizeProfileKey(const QString& name);
   void refreshProfiles();
   void resetInMemorySettings();
+#ifdef Q_OS_WIN
+  [[nodiscard]] bool ensureOmniRigAutomation();
+#endif
 
   QString profile_name_;
   QString profile_storage_key_;
@@ -166,6 +182,9 @@ class AppSettings final : public QObject {
   bool profile_selection_required_{false};
   bool setup_complete_{false};
   QStringList serial_ports_;
+  bool radio_enabled_{false};
+  QStringList detected_radio_names_;
+  QList<int> detected_radio_slots_;
   int reference_rig_index_{0};
   int frequency_backend_index_{0};
   int omnirig_slot_{1};
@@ -198,6 +217,7 @@ class AppSettings final : public QObject {
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};
+  bool com_initialization_attempted_{false};
   std::unique_ptr<Cat4OmClient> cat4om_client_;
 };
 

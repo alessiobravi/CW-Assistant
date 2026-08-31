@@ -3,8 +3,9 @@
 ## Current development status
 
 CW Assistant is pre-release software. The current desktop shell can create and
-select isolated station profiles, guide first-time setup, discover serial ports
-without opening them, save radio/keying/display settings, open the Windows
+select isolated station profiles, guide first-time setup, run in receive-only
+SWL mode, discover serial ports without opening them, identify online radios
+through a supported integration, save radio/keying/display settings, open the Windows
 frequency-provider configuration, monitor a CAT4OM radio, and replay a WAV
 recording through the real spectrum and waterfall. The decoder, direct keying output,
 logging connection, SDR capture, and remote-station runtime remain under
@@ -53,16 +54,30 @@ the system browser.
 1. Start `cw-assistant-desktop`.
 2. Enter a descriptive station profile name, such as `HF desk` or
    `Satellite station`.
-3. Choose one of the reference radios as a safe starting point.
-4. Select the frequency provider and edit every connection value to match the
-   radio and cable.
-5. Select a physically separate direct-COM key/PTT interface. Discovery never
-   toggles RTS or DTR.
-6. Review the display defaults and finish the wizard.
+3. For audio-only decoding, select **No radio — receive-only audio decoding
+   (SWL)**. The wizard skips CAT and Keying and proceeds to Display.
+4. For radio operation, select a positively identified online radio. On
+   Windows, the initial detector reads the online state and model name from the
+   installed OmniRig service; it does not send probe commands to arbitrary COM
+   ports.
+5. If the radio cannot be identified, select **Set up a radio manually**, choose
+   the nearest reference template, then edit every value to match the radio and
+   cable.
+6. Select a physically separate direct-COM key/PTT interface. Port enumeration
+   never toggles RTS or DTR.
+7. Review the display defaults and finish the wizard.
+
+The Back and Next controls live in a fixed wizard footer and remain visible when
+a setup page must scroll on a small or scaled display.
 
 Finishing the wizard saves settings only. Hardware ownership, a keying loopback
 test, and the transmit guard will be required before transmission is enabled in
 a later milestone.
+
+Selecting SWL mode persists that choice per profile, disables radio/keying
+validation, and labels the workspace as receive-only. Previously entered radio
+values are retained so switching the profile back to radio operation does not
+discard configuration.
 
 ## Multiple radios and application instances
 

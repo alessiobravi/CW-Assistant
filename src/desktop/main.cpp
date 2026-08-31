@@ -60,15 +60,40 @@ int main(int argc, char* argv[]) {
       [] { QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);
   engine.loadFromModule(QStringLiteral("CWAssistant"), QStringLiteral("Main"));
   if (parser.isSet(smoke_test_option)) {
-    QTimer::singleShot(100, &application, [&engine] {
-      auto* display = engine.rootObjects().isEmpty()
-                          ? nullptr
-                          : engine.rootObjects()
-                                .constFirst()
-                                ->findChild<cwassistant::desktop::
-                                                SpectrumWaterfallItem*>(
-                                    QStringLiteral("spectrumDisplay"));
+    QTimer::singleShot(250, &application, [&engine] {
+      QObject* root_object = engine.rootObjects().isEmpty()
+                                 ? nullptr
+                                 : engine.rootObjects().constFirst();
+      auto* display =
+          root_object == nullptr
+              ? nullptr
+              : root_object
+                    ->findChild<cwassistant::desktop::SpectrumWaterfallItem*>(
+                        QStringLiteral("spectrumDisplay"));
       if (display == nullptr) {
+        QCoreApplication::exit(EXIT_FAILURE);
+        return;
+      }
+      auto* next_button =
+          root_object->findChild<QQuickItem*>(QStringLiteral("setupNextButton"));
+      if (next_button == nullptr || !next_button->isVisible() ||
+          next_button->width() < 1.0 || next_button->height() < 1.0 ||
+          next_button->window() == nullptr ||
+          next_button->mapToScene(
+              QPointF(next_button->width(), next_button->height())).y() >
+              next_button->window()->height()) {
+        QCoreApplication::exit(EXIT_FAILURE);
+        return;
+      }
+      QObject* setup_wizard =
+          root_object->findChild<QObject*>(QStringLiteral("setupWizard"));
+      if (setup_wizard == nullptr ||
+          !QMetaObject::invokeMethod(setup_wizard, "goForward",
+                                     Qt::DirectConnection) ||
+          setup_wizard->property("step").toInt() != 3 ||
+          !QMetaObject::invokeMethod(setup_wizard, "goBack",
+                                     Qt::DirectConnection) ||
+          setup_wizard->property("step").toInt() != 0) {
         QCoreApplication::exit(EXIT_FAILURE);
         return;
       }

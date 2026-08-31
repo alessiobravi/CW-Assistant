@@ -8,6 +8,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Receive-only SWL station profiles that skip CAT and key/PTT wizard pages,
+  positively identified online-radio selection through Windows OmniRig status,
+  safe refresh without speculative serial probing, and an explicit manual
+  template path for radios that cannot be detected.
+- Backlog scope for configurable own-callsign decode notification and an
+  optional guarded QSO-closing macro.
+
 - GPL-3.0-or-later license text and dependency/contribution licensing policy.
 - Editable Yaesu FT-450D and FT-818/FT-818ND reference profiles with tested CAT
   framing, Hamlib IDs, compatible OmniRig command descriptions, and direct-COM
@@ -19,6 +26,7 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Named, isolated station configuration profiles, a startup profile selector,
   create-profile helper, per-profile first-run setup wizard, and `--profile`
   override for parallel instances and unattended launches.
+
 - Testable compatibility scope for band maps, callsign/watch/validation policy,
   operational DSP controls, I/Q calibration and recording, pointer/keyboard
   tuning, spot/spectrum exports, band plans, auto-start, and health indicators.
@@ -103,6 +111,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Kept the setup wizard's Back/Next/Finish controls in a fixed footer and made
+  oversized setup pages scroll, preventing navigation from being clipped on
+  small or scaled displays.
 - Fixed the cross-platform first-launch crash in the spectrum renderer. The
   waterfall now uses a backend-native image node created only after a valid
   texture exists; it never passes a null texture into the Qt scene graph.

@@ -4,12 +4,58 @@ import QtQuick.Layouts
 
 Dialog {
     id: root
-    width: 780
-    height: 620
+    objectName: "setupWizard"
+    width: Math.max(420, Math.min(780, parent ? parent.width - 32 : 780))
+    height: Math.max(520, Math.min(680, parent ? parent.height - 32 : 680))
     modal: true
     closePolicy: Popup.NoAutoClose
     title: "Station setup — " + appSettings.profileName
     property int step: 0
+    property bool manualRadioSetup: appSettings.radioEnabled
+    onStepChanged: pageFlick.contentY = 0
+    Component.onCompleted: appSettings.refreshDetectedRadios()
+
+    function goForward() {
+        if (root.step === 0 && !appSettings.radioEnabled)
+            root.step = 3
+        else
+            root.step++
+    }
+
+    function goBack() {
+        if (root.step === 3 && !appSettings.radioEnabled)
+            root.step = 0
+        else
+            root.step--
+    }
+
+    footer: Rectangle {
+        implicitHeight: footerLayout.implicitHeight + 24
+        color: "#151b23"
+        border.color: "#2b3541"
+
+        RowLayout {
+            id: footerLayout
+            anchors.fill: parent
+            anchors.margins: 12
+            Label { text: appSettings.statusMessage; color: "#91a0b1"; Layout.fillWidth: true; elide: Text.ElideRight }
+            Button { text: "Cancel"; visible: appSettings.setupComplete; onClicked: { root.step = 0; root.close() } }
+            Button { text: "Back"; enabled: root.step > 0; onClicked: root.goBack() }
+            Button {
+                objectName: "setupNextButton"
+                text: root.step < 4 ? "Next" : "Finish"
+                highlighted: true
+                onClicked: {
+                    if (root.step < 4)
+                        root.goForward()
+                    else if (appSettings.completeSetup()) {
+                        root.step = 0
+                        root.close()
+                    }
+                }
+            }
+        }
+    }
 
     contentItem: ColumnLayout {
         spacing: 16
@@ -30,25 +76,88 @@ Dialog {
         }
         ProgressBar { Layout.fillWidth: true; from: 0; to: 4; value: root.step }
 
-        StackLayout {
-            currentIndex: root.step
+        Flickable {
+            id: pageFlick
             Layout.fillWidth: true
             Layout.fillHeight: true
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            contentWidth: width
+            contentHeight: Math.max(height, pageStack.implicitHeight)
+            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-            ColumnLayout {
+            StackLayout {
+                id: pageStack
+                currentIndex: root.step
+                width: Math.max(0, pageFlick.width - 14)
+                height: Math.max(pageFlick.height, implicitHeight)
+
+                ColumnLayout {
                 spacing: 16
-                Label { text: "Which radio is connected?"; font.pixelSize: 22; font.weight: Font.DemiBold }
-                Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Choose a tested starting point. The next page lets you customize every serial value to match the radio menu and cable." }
+                Label { text: "Choose the receiver setup"; font.pixelSize: 22; font.weight: Font.DemiBold }
+                RadioButton {
+                    text: "No radio — receive-only audio decoding (SWL)"
+                    checked: !appSettings.radioEnabled
+                    onClicked: {
+                        appSettings.radioEnabled = false
+                        root.manualRadioSetup = false
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b1"
+                    text: "SWL mode skips CAT and direct key/PTT setup. It never opens a radio port and cannot transmit."
+                }
+                Label { text: "Detected online radios"; font.weight: Font.DemiBold }
                 ComboBox {
                     Layout.fillWidth: true
+                    model: appSettings.detectedRadioNames
+                    enabled: count > 0
+                    currentIndex: appSettings.detectedRadioIndex
+                    displayText: count > 0 ? currentText : "No positively identified online radio found"
+                    onActivated: {
+                        appSettings.selectDetectedRadio(currentIndex)
+                        root.manualRadioSetup = false
+                    }
+                }
+                RowLayout {
+                    Button { text: "Refresh detection"; onClicked: appSettings.refreshDetectedRadios() }
+                    Button {
+                        text: root.manualRadioSetup ? "Hide manual setup" : "Set up a radio manually"
+                        checkable: true
+                        checked: root.manualRadioSetup
+                        onClicked: {
+                            root.manualRadioSetup = checked
+                            if (checked)
+                                appSettings.radioEnabled = true
+                        }
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b1"
+                    visible: root.manualRadioSetup
+                    text: "Manual radio template (all CAT values remain editable)"
+                }
+                ComboBox {
+                    Layout.fillWidth: true
+                    visible: root.manualRadioSetup
                     model: appSettings.referenceRigNames
                     currentIndex: appSettings.referenceRigIndex
                     onActivated: appSettings.selectReferenceRig(currentIndex)
                 }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b1"
+                    text: "Serial ports are not presented as radios: a port name cannot safely identify the connected model. Detection uses an installed integration and lists only radios reporting an online state."
+                }
                 Item { Layout.fillHeight: true }
             }
 
-            GridLayout {
+                GridLayout {
                 columns: 2
                 columnSpacing: 18
                 rowSpacing: 12
@@ -85,7 +194,7 @@ Dialog {
                 }
             }
 
-            GridLayout {
+                GridLayout {
                 columns: 2
                 columnSpacing: 18
                 rowSpacing: 12
@@ -105,7 +214,7 @@ Dialog {
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "A hardware loopback test and maximum-key-down watchdog will be required before this profile can be armed for transmission." }
             }
 
-            GridLayout {
+                GridLayout {
                 columns: 2
                 columnSpacing: 18
                 rowSpacing: 12
@@ -118,34 +227,15 @@ Dialog {
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "These are starting values. The full Settings pane provides independent visualization controls and future startup calibration recommendations." }
             }
 
-            ColumnLayout {
+                ColumnLayout {
                 spacing: 14
                 Label { text: "Ready to create this station profile"; font.pixelSize: 22; font.weight: Font.DemiBold }
                 Label { text: "Profile: " + appSettings.profileName }
-                Label { text: "Radio: " + appSettings.referenceRigNames[appSettings.referenceRigIndex] }
-                Label { text: "CAT: " + (appSettings.catPort || "not selected") + " • " + appSettings.catBaudRate + " baud" }
-                Label { text: "Direct key/PTT: " + (appSettings.keyingPort || "not selected") }
+                Label { text: "Radio: " + appSettings.radioDisplayName }
+                Label { text: appSettings.radioEnabled ? "CAT: " + (appSettings.catPort || "not selected") + " • " + appSettings.catBaudRate + " baud" : "CAT: skipped in SWL mode" }
+                Label { text: appSettings.radioEnabled ? "Direct key/PTT: " + (appSettings.keyingPort || "not selected") : "Direct key/PTT: disabled in SWL mode" }
                 Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#f3bd55"; text: "Finishing saves configuration only. It does not open ports, arm the transmitter, or send a test signal." }
                 Item { Layout.fillHeight: true }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            Label { text: appSettings.statusMessage; color: "#91a0b1"; Layout.fillWidth: true; elide: Text.ElideRight }
-            Button { text: "Cancel"; visible: appSettings.setupComplete; onClicked: { root.step = 0; root.close() } }
-            Button { text: "Back"; enabled: root.step > 0; onClicked: root.step-- }
-            Button {
-                text: root.step < 4 ? "Next" : "Finish"
-                highlighted: true
-                onClicked: {
-                    if (root.step < 4)
-                        root.step++
-                    else if (appSettings.completeSetup()) {
-                        root.step = 0
-                        root.close()
-                    }
-                }
             }
         }
     }
