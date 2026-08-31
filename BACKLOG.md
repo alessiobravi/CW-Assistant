@@ -13,7 +13,10 @@ set and verify the macOS Sonoma 14+ deployment baseline, documented the
 temporary Windows SDK-downloader source pin, added remotely queryable CI
 outcomes/log diagnostics plus extractor retry, corrected WiX license input and
 added MSI failure diagnostics, and replaced the Windows archive plan with an
-upgrade-capable MSI delivery flow.
+upgrade-capable MSI delivery flow. The first fully green packaged matrix then
+exposed a native first-launch render crash; the null-texture path is now removed
+and guarded by empty-render, full-QML, and staged native-graphics startup tests
+with deterministic texture creation on every platform.
 
 ## P0 — project decisions and safety
 
@@ -30,21 +33,22 @@ upgrade-capable MSI delivery flow.
 
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
-| BUILD-001 | active | Establish dependency-free C++20 core build | Core builds and tests on Windows x64, Linux x64, macOS ARM64, and macOS x64 CI. Mark done after the first full remote matrix passes. |
+| BUILD-001 | done | Establish dependency-free C++20 core build | Core builds and tests passed on Windows x64, Linux x64, macOS ARM64, and macOS x64 in the first complete hosted matrix. |
 | PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
-| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish short-lived artifacts, update stable continuous-prerelease assets/checksums, and advance a remotely queryable verified-commit tag; mark done after the first complete remote matrix passes. |
+| CI-001 | done | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests pass on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish artifacts, stable continuous-release assets/checksums, and a verified-commit tag. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
 | REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, paced UI selection/play/pause/stop, and core tests pass; hash manifests, seek, looping, and repeat-run integration remain. |
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
-| UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, and guided setup are implemented; native Qt CI and runtime validation remain. |
-| UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a portable CPU-colored waterfall texture render real replay FFT frames with bounded history; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
+| UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, guided setup, cross-platform offscreen QML tests, and staged native-graphics startup tests are implemented; clean-machine hardware validation remains. |
+| UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a backend-native, valid-texture-only waterfall image node render real replay FFT frames with bounded history; empty startup/reset regression tests pass; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
 | UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
 | UI-005 | active | Model configurable visualization | FPS, waterfall line rate, range bounds/mode, averaging, and grid are independently configurable and persisted; peak hold, labels, palette/levels, zoom, and pan remain. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | todo | Add pipeline telemetry | UI exposes overruns, sequence gaps, queue depths, DSP latency, and dropped display frames. |
+| OBS-002 | todo | Add operator-accessible native crash diagnostics | Windows minidumps and macOS/Linux crash-report guidance identify build/profile/backend without exposing station secrets; diagnostic export is documented and tested. |
 | CFG-001 | active | Implement named station profiles and setup helper | Versioned isolated persistence, UI create/select helper, per-profile wizard, and `--profile` selection exist; audio/logger/remote pages and migrations remain. |
 | CFG-002 | todo | Enforce cross-process hardware ownership | Named OS locks prevent serial/audio/SDR devices from being opened by two active profiles and report the owning profile. |
 

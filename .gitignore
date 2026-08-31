@@ -7,6 +7,9 @@
 *.flac
 *.sigmf-data
 *.sigmf-meta
+.DS_Store
+/errors/*
+!/errors/README.md
 /binaries/*
 !/binaries/README.md
 !/binaries/latest.json

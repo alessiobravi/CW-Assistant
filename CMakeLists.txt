@@ -15,6 +15,10 @@ option(CWA_BUILD_APP "Build the command-line development host" ON)
 option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
 option(CWA_BUILD_TESTS "Build unit tests" ON)
 
+if(CWA_BUILD_TESTS)
+  include(CTest)
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -30,7 +34,6 @@ if(CWA_BUILD_DESKTOP)
 endif()
 
 if(CWA_BUILD_TESTS)
-  include(CTest)
   add_subdirectory(tests)
 endif()
 

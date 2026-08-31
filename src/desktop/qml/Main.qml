@@ -117,6 +117,7 @@ ApplicationWindow {
 
                 SpectrumWaterfall {
                     id: spectrumDisplay
+                    objectName: "spectrumDisplay"
                     anchors.fill: parent
                     anchors.margins: 10
                     source: replayController

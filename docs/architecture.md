@@ -82,6 +82,12 @@ thread. The CPU FFT is shared by detection and display. GPU compute is optional
 future work, while the baseline supports a public-Qt scene-graph path and CPU
 texture fallback.
 
+The baseline waterfall uses the render backend's `QSGImageNode`. The node is
+created on the render thread only after `createTextureFromImage()` returns a
+valid texture, and it owns replacement textures. An empty/reset receiver keeps
+the waterfall node absent or hidden; null textures are never attached to the
+scene graph.
+
 The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
 clock from sample indices, applies a Hann window, and publishes immutable dBFS
 spectrum snapshots with exact frequency coordinates. Audio produces a one-sided

@@ -73,16 +73,6 @@ All notable changes to CW Assistant are recorded here. The format follows
 - macOS Sonoma 14 or newer is now the explicit compiled baseline for both Apple
   silicon and Intel x64 artifacts, with hosted Mach-O deployment-target checks.
 
-### Fixed
-
-- Windows Qt 6.11 SDK installation uses an immutable upstream downloader commit
-  containing the new repository-layout correction until that correction ships
-  in a released downloader. This build-only pin does not change the bundled Qt
-  runtime, MSI version, or stable Windows upgrade identity.
-- Windows MSI generation now supplies the canonical GPL text through CPack's
-  supported UTF-8 `.txt` license input and publishes bounded WiX diagnostics on
-  packaging failure.
-
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
 - Channel scheduling by signal strength, arrival queue, or operator selection.
@@ -113,6 +103,20 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Fixed the cross-platform first-launch crash in the spectrum renderer. The
+  waterfall now uses a backend-native image node created only after a valid
+  texture exists; it never passes a null texture into the Qt scene graph.
+- Added direct empty-render and full-QML startup regression tests to every
+  hosted desktop build, plus a native-graphics launch test of each staged
+  package with deterministic spectrum injection, covering both the empty launch
+  state and waterfall texture creation.
+- Windows Qt 6.11 SDK installation uses an immutable upstream downloader commit
+  containing the new repository-layout correction until that correction ships
+  in a released downloader. This build-only pin does not change the bundled Qt
+  runtime, MSI version, or stable Windows upgrade identity.
+- Windows MSI generation now supplies the canonical GPL text through CPack's
+  supported UTF-8 `.txt` license input and publishes bounded WiX diagnostics on
+  packaging failure.
 - Corrected invalid setup-wizard QML that stopped hosted desktop compilation.
 - macOS packaging now creates and deploys a self-contained `.app` bundle rather
   than archiving a non-bundle executable without its Qt/QML runtime.

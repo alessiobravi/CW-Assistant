@@ -85,6 +85,10 @@ another thread's mutable storage.
 
 GPU resource creation, updates, and destruction occur only at Qt-sanctioned
 scene-graph phases. Cleanup is scheduled on the render thread when required.
+Backend-native image nodes are created only after a valid texture exists, own
+their render-thread textures, and are retained with an empty rectangle across
+receiver resets. A texture node with null texture is invalid Qt scene-graph
+state and must never be added or updated.
 
 ## Consequences
 

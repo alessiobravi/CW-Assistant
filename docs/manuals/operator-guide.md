@@ -14,6 +14,13 @@ The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
 IEEE float32. Multichannel input is averaged to mono for this audio-analysis
 path. Compressed WAV codecs are rejected with a clear diagnostic.
 
+Every supported-platform build runs an empty-receiver render regression test
+and loads the complete QML desktop shell before it can be published. This
+specifically covers first launch before a WAV, audio device, or SDR source has
+produced spectrum data. The staged application is also launched with the hosted
+runner's native graphics path before its installer or archive is uploaded, with
+a deterministic test spectrum to exercise waterfall texture creation.
+
 ## Replay a receiver recording
 
 1. Select **Open WAV** in the Receiver workspace and choose a local recording.

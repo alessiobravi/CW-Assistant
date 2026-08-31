@@ -54,6 +54,32 @@ target_link_libraries(cw-assistant-desktop PRIVATE
 target_compile_definitions(cw-assistant-desktop PRIVATE
   CWA_VERSION="${PROJECT_VERSION}")
 
+if(CWA_BUILD_TESTS)
+  qt_add_executable(cwa_desktop_render_startup_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/spectrum_waterfall_startup_test.cpp
+    replay/replay_controller.cpp
+    replay/replay_controller.hpp
+    visualization/spectrum_frame.hpp
+    visualization/spectrum_waterfall_item.cpp
+    visualization/spectrum_waterfall_item.hpp
+  )
+  target_link_libraries(cwa_desktop_render_startup_test PRIVATE
+    cwa_core Qt6::Core Qt6::Gui Qt6::Quick)
+  target_include_directories(cwa_desktop_render_startup_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_desktop_render_startup_test
+    COMMAND cwa_desktop_render_startup_test)
+  set_tests_properties(cwa_desktop_render_startup_test PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
+    TIMEOUT 10)
+
+  add_test(NAME cwa_desktop_qml_startup_smoke
+    COMMAND cw-assistant-desktop --profile ci-smoke --smoke-test)
+  set_tests_properties(cwa_desktop_qml_startup_smoke PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
+    TIMEOUT 15)
+endif()
+
 include(GNUInstallDirs)
 install(TARGETS cw-assistant-desktop
   BUNDLE DESTINATION .

@@ -52,6 +52,15 @@ core tests on every supported architecture. The lighter core-only workflow is
 retained for pull requests and manual diagnostics instead of duplicating every
 push run.
 
+Before packaging, each platform also exercises the empty spectrum/waterfall
+render path directly and loads the complete QML desktop shell in an offscreen
+software-rendering smoke test. These checks guard first launch when no receiver
+data exists. The staged package must then launch and exit cleanly with each
+runner's native graphics path before it is archived or uploaded. Clean-machine
+testing on representative graphics hardware remains a release gate. The native
+smoke run injects a deterministic spectrum row so it covers texture creation as
+well as the empty first frame.
+
 ## Windows 11 x64
 
 The Windows download is an MSI installer, not a compressed archive:

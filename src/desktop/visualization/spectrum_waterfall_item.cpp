@@ -5,7 +5,7 @@
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>
 #include <QSGGeometryNode>
-#include <QSGSimpleTextureNode>
+#include <QSGImageNode>
 #include <QSGTexture>
 
 #include <algorithm>
@@ -22,17 +22,12 @@ constexpr std::size_t kMaximumWaterfallRows = 512;
 class DisplayNode final : public QSGNode {
  public:
   DisplayNode() {
-    waterfall = new QSGSimpleTextureNode;
-    appendChildNode(waterfall);
-
     grid = makeGeometryNode(QSGGeometry::DrawLines, QColor("#2a3a49"));
     appendChildNode(grid);
     spectrum = makeGeometryNode(QSGGeometry::DrawLineStrip,
                                 QColor("#64e6d2"));
     appendChildNode(spectrum);
   }
-
-  ~DisplayNode() override { delete texture; }
 
   static QSGGeometryNode* makeGeometryNode(
       const QSGGeometry::DrawingMode mode, const QColor& color) {
@@ -50,10 +45,9 @@ class DisplayNode final : public QSGNode {
     return node;
   }
 
-  QSGSimpleTextureNode* waterfall{nullptr};
+  QSGImageNode* waterfall{nullptr};
   QSGGeometryNode* grid{nullptr};
   QSGGeometryNode* spectrum{nullptr};
-  QSGTexture* texture{nullptr};
 };
 
 QRgb waterfallColor(const float value) {
@@ -320,9 +314,6 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   }
   root->grid->markDirty(QSGNode::DirtyGeometry);
 
-  root->waterfall->setTexture(nullptr);
-  delete root->texture;
-  root->texture = nullptr;
   if (!waterfall_rows_.empty() && window() != nullptr) {
     const int image_width = waterfall_rows_.front().size();
     const int image_height = static_cast<int>(waterfall_rows_.size());
@@ -337,11 +328,27 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
         scanline[x] = waterfallColor(normalized);
       }
     }
-    root->texture = window()->createTextureFromImage(image);
-    root->waterfall->setTexture(root->texture);
+    auto* texture = window()->createTextureFromImage(image);
+    if (texture == nullptr) {
+      if (root->waterfall != nullptr) root->waterfall->setRect(QRectF{});
+      return root;
+    }
+    if (root->waterfall == nullptr) {
+      root->waterfall = window()->createImageNode();
+      if (root->waterfall == nullptr) {
+        delete texture;
+        return root;
+      }
+      root->waterfall->setTexture(texture);
+      root->waterfall->setOwnsTexture(true);
+      root->prependChildNode(root->waterfall);
+    } else {
+      // The image node owns and releases the previous render-thread texture.
+      root->waterfall->setTexture(texture);
+    }
     root->waterfall->setRect(0.0F, waterfall_top, width, waterfall_height);
     root->waterfall->setFiltering(QSGTexture::Linear);
-  } else {
+  } else if (root->waterfall != nullptr) {
     root->waterfall->setRect(QRectF{});
   }
   return root;
