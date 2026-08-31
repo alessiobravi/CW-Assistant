@@ -53,6 +53,12 @@ All notable changes to CW Assistant are recorded here. The format follows
   checksums after the complete hosted matrix succeeds.
 - Application About page and Linux metadata identifying Alessio Bravi
   (IU0LFQ / AD2FC) as author and linking to the author website.
+- Dependency-free deterministic WAV replay for PCM 8/16/24/32-bit and IEEE
+  float32 input, with bounded blocks, multichannel mono downmix, sample-derived
+  timestamps, restart behavior, and malformed-format diagnostics.
+- Hann-windowed radix-2 audio/IQ spectrum analyzer with coherent-gain dBFS
+  normalization, configurable exponential power averaging, exact frequency
+  coordinates, and deterministic tone/replay tests.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

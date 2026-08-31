@@ -5,10 +5,15 @@
 CW Assistant is pre-release software. The current desktop shell can create and
 select isolated station profiles, guide first-time setup, discover serial ports
 without opening them, save radio/keying/display settings, open the Windows
-frequency-provider configuration, and monitor a CAT4OM radio. The decoder,
-waterfall renderer, direct keying output, logging connection, SDR capture, and
-remote-station runtime are still under implementation. A saved profile does not
-arm or key a transmitter.
+frequency-provider configuration, and monitor a CAT4OM radio. Deterministic WAV
+parsing and spectral analysis are implemented in the core; the file selector and
+renderer are the next integration step. The decoder, direct keying output,
+logging connection, SDR capture, and remote-station runtime remain under
+implementation. A saved profile does not arm or key a transmitter.
+
+The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
+IEEE float32. Multichannel input is averaged to mono for this audio-analysis
+path. Compressed WAV codecs are rejected with a clear diagnostic.
 
 ## About and author
 

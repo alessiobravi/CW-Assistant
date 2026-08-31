@@ -82,6 +82,12 @@ thread. The CPU FFT is shared by detection and display. GPU compute is optional
 future work, while the baseline supports a public-Qt scene-graph path and CPU
 texture fallback.
 
+The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
+clock from sample indices, applies a Hann window, and publishes immutable dBFS
+spectrum snapshots with exact frequency coordinates. Audio produces a one-sided
+spectrum; complex I/Q produces an FFT-shifted full-band spectrum. This same
+snapshot contract feeds the renderer and future channel detector.
+
 Only a functional 2D spectrum and waterfall are supported. The renderer does
 not include a 3D spectrum or decorative shader effects.
 

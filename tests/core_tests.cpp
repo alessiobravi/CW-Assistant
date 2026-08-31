@@ -1,5 +1,11 @@
+#include <algorithm>
+#include <cmath>
 #include <cstdlib>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <numbers>
 #include <string>
 #include <vector>
 
@@ -11,9 +17,11 @@
 #include "cwassistant/core/remote_control.hpp"
 #include "cwassistant/core/reference_rig_profiles.hpp"
 #include "cwassistant/core/spectrum_visualization_settings.hpp"
+#include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/station_equipment.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
+#include "cwassistant/core/wav_replay_source.hpp"
 
 namespace {
 
@@ -24,6 +32,45 @@ void expect(const bool condition, const std::string& message) {
     std::cerr << "FAIL: " << message << '\n';
     ++failures;
   }
+}
+
+void write_u16(std::ostream& stream, const std::uint16_t value) {
+  stream.put(static_cast<char>(value & 0xFFU));
+  stream.put(static_cast<char>((value >> 8U) & 0xFFU));
+}
+
+void write_u32(std::ostream& stream, const std::uint32_t value) {
+  stream.put(static_cast<char>(value & 0xFFU));
+  stream.put(static_cast<char>((value >> 8U) & 0xFFU));
+  stream.put(static_cast<char>((value >> 16U) & 0xFFU));
+  stream.put(static_cast<char>((value >> 24U) & 0xFFU));
+}
+
+std::filesystem::path write_test_wav() {
+  constexpr std::uint32_t sample_rate = 8'000;
+  constexpr std::uint16_t channels = 2;
+  constexpr std::uint32_t frame_count = 5'000;
+  constexpr std::uint32_t data_size = frame_count * channels * 2U;
+  const auto path =
+      std::filesystem::temp_directory_path() / "cwassistant-replay-test.wav";
+  std::ofstream output(path, std::ios::binary | std::ios::trunc);
+  output.write("RIFF", 4);
+  write_u32(output, 36U + data_size);
+  output.write("WAVEfmt ", 8);
+  write_u32(output, 16);
+  write_u16(output, 1);
+  write_u16(output, channels);
+  write_u32(output, sample_rate);
+  write_u32(output, sample_rate * channels * 2U);
+  write_u16(output, channels * 2U);
+  write_u16(output, 16);
+  output.write("data", 4);
+  write_u32(output, data_size);
+  for (std::uint32_t frame = 0; frame < frame_count; ++frame) {
+    write_u16(output, static_cast<std::uint16_t>(16'384));
+    write_u16(output, static_cast<std::uint16_t>(8'192));
+  }
+  return path;
 }
 
 void test_ring_buffer() {
@@ -110,6 +157,76 @@ void test_spectrum_settings() {
   expect(safe.upper_bound_db - safe.lower_bound_db >= 10.0F,
          "manual range retains visible span");
   expect(safe.averaging_frames == 32, "averaging is bounded");
+}
+
+void test_wav_replay_source() {
+  using namespace std::chrono_literals;
+  using namespace cwassistant::core;
+  const auto path = write_test_wav();
+  WavReplaySource source;
+  expect(source.open(path.string(), {}), "PCM16 stereo WAV opens for replay");
+  expect(source.stream_descriptor().sample_rate_hz == 8'000.0 &&
+             source.stream_descriptor().channel_count == 1,
+         "WAV replay exposes deterministic mono output metadata");
+  expect(source.total_frames() == 5'000 &&
+             std::abs(source.duration_seconds() - 0.625) < 1.0e-9,
+         "WAV replay reports exact frame count and duration");
+  expect(source.start(), "WAV replay starts from frame zero");
+
+  RealtimeSampleBlock first;
+  expect(source.read(first, 0ms) && first.sample_count == 4'096 &&
+             first.sequence == 0 && first.timestamp_ns == 0,
+         "first WAV block has bounded size and deterministic origin");
+  expect(std::abs(first.samples[0].real() - 0.375F) < 1.0e-6F,
+         "stereo WAV channels downmix to normalized mono");
+
+  RealtimeSampleBlock second;
+  expect(source.read(second, 0ms) && second.sample_count == 904 &&
+             second.sequence == 1 && second.timestamp_ns == 512'000'000,
+         "second WAV block timestamp derives exactly from frame position");
+  expect(!source.read(second, 0ms), "WAV replay stops cleanly at end of file");
+  expect(source.start() && source.read(first, 0ms) && first.sequence == 0,
+         "restarting WAV replay is deterministic");
+  source.stop();
+  std::error_code removal_error;
+  std::filesystem::remove(path, removal_error);
+}
+
+void test_spectrum_analyzer() {
+  using namespace cwassistant::core;
+  constexpr std::size_t fft_size = 1'024;
+  constexpr std::size_t tone_bin = 75;
+  RealtimeSampleBlock block;
+  block.stream = {.kind = StreamKind::Audio,
+                  .sample_rate_hz = 48'000.0,
+                  .center_frequency_hz = 0.0,
+                  .channel_count = 1};
+  block.sample_count = fft_size;
+  for (std::size_t index = 0; index < fft_size; ++index) {
+    const float phase = 2.0F * std::numbers::pi_v<float> *
+                        static_cast<float>(tone_bin * index) /
+                        static_cast<float>(fft_size);
+    block.samples[index] = {std::sin(phase), 0.0F};
+  }
+
+  SpectrumAnalyzer analyzer({.fft_size = fft_size, .averaging_frames = 1});
+  const auto snapshots = analyzer.process(block);
+  expect(snapshots.size() == 1 && snapshots[0].bins_dbfs.size() == 513,
+         "audio FFT emits one-sided bins including Nyquist");
+  const auto peak = static_cast<std::size_t>(std::distance(
+      snapshots[0].bins_dbfs.begin(),
+      std::max_element(snapshots[0].bins_dbfs.begin(),
+                       snapshots[0].bins_dbfs.end())));
+  expect(peak == tone_bin, "windowed FFT locates a bin-centered CW tone");
+  expect(std::abs(snapshots[0].bins_dbfs[peak]) < 0.05F,
+         "window coherent-gain normalization reports a full-scale tone near 0 dBFS");
+  expect(snapshots[0].lower_frequency_hz == 0.0 &&
+             snapshots[0].upper_frequency_hz == 24'000.0 &&
+             std::abs(snapshots[0].bin_width_hz - 46.875) < 1.0e-9,
+         "audio FFT publishes exact frequency coordinates");
+
+  expect(!analyzer.configure({.fft_size = 1'000, .averaging_frames = 1}),
+         "spectrum analyzer rejects a non-radix-two transform");
 }
 
 void test_remote_control_lease() {
@@ -350,6 +467,8 @@ int main() {
   test_scheduler();
   test_callsign_policy();
   test_spectrum_settings();
+  test_wav_replay_source();
+  test_spectrum_analyzer();
   test_remote_control_lease();
   test_transmit_guard();
   test_adif();

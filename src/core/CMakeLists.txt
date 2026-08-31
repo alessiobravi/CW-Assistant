@@ -7,7 +7,9 @@ add_library(cwa_core
   src/reference_rig_profiles.cpp
   src/remote_control.cpp
   src/station_equipment.cpp
+  src/spectrum_analyzer.cpp
   src/transmit_guard.cpp
+  src/wav_replay_source.cpp
 )
 
 target_include_directories(cwa_core PUBLIC include)

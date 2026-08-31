@@ -30,8 +30,8 @@ and documentation-record gates.
 | CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish short-lived artifacts and the complete matrix updates stable continuous-prerelease assets with checksums; mark done after the first complete remote matrix passes. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
-| REPLAY-001 | todo | Add WAV replay source and deterministic clock | Repeated runs emit identical timestamped sample blocks and hashes. |
-| DSP-001 | todo | Implement windowing, FFT, and spectral averaging | Golden-vector tests pass within documented numerical tolerance. |
+| REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, and core tests pass; UI selection, hash manifests, pause/seek, and repeat-run integration remain. |
+| DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
 | UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, and guided setup are implemented; native Qt CI and runtime validation remain. |
 | UI-002 | todo | Implement modular 2D scene-graph spectrum/waterfall | ADR 0001 boundaries are preserved; shader and fallback paths maintain selected 30/60 FPS target without blocking DSP; no 3D or ornamental effects. |
 | UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
