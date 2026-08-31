@@ -93,9 +93,15 @@ Dialog {
                 Label { text: "Key/PTT COM port" }
                 ComboBox { Layout.fillWidth: true; editable: true; model: appSettings.serialPorts; currentIndex: find(appSettings.keyingPort); displayText: currentIndex >= 0 ? currentText : appSettings.keyingPort; onActivated: appSettings.keyingPort = currentText; onAccepted: appSettings.keyingPort = editText }
                 Label { text: "PTT" }
-                RowLayout { ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.pttLineIndex; onActivated: appSettings.pttLineIndex = currentIndex }; CheckBox { text: "Active high"; checked: appSettings.pttActiveHigh; onToggled: appSettings.pttActiveHigh = checked } }
+                RowLayout {
+                    ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.pttLineIndex; onActivated: appSettings.pttLineIndex = currentIndex }
+                    CheckBox { text: "Active high"; checked: appSettings.pttActiveHigh; onToggled: appSettings.pttActiveHigh = checked }
+                }
                 Label { text: "KEY" }
-                RowLayout { ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.keyLineIndex; onActivated: appSettings.keyLineIndex = currentIndex }; CheckBox { text: "Active high"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked } }
+                RowLayout {
+                    ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.keyLineIndex; onActivated: appSettings.keyLineIndex = currentIndex }
+                    CheckBox { text: "Active high"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
+                }
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "A hardware loopback test and maximum-key-down watchdog will be required before this profile can be armed for transmission." }
             }
 

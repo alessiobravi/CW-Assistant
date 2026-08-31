@@ -2,6 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Controls.Material
+import QtQuick.Dialogs
+import CWAssistant 1.0
 
 ApplicationWindow {
     id: window
@@ -91,58 +93,102 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 Label { text: "Receiver workspace"; font.pixelSize: 18; font.weight: Font.DemiBold }
                 Item { Layout.fillWidth: true }
-                Label { text: "No source connected"; color: "#8d9aaa" }
-                Button { text: "Choose input"; onClicked: settingsDrawer.open() }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: 230
-                radius: 10
-                color: "#111822"
-                border.color: "#263241"
-                ColumnLayout {
-                    anchors.centerIn: parent
-                    spacing: 8
-                    Label { Layout.alignment: Qt.AlignHCenter; text: "Spectrum"; font.pixelSize: 16 }
-                    Label {
-                        Layout.alignment: Qt.AlignHCenter
-                        text: "Connect an audio or SDR source to begin"
-                        color: "#8290a0"
-                    }
-                }
                 Label {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 12
-                    text: appSettings.lowerBoundDb.toFixed(0) + " … " + appSettings.upperBoundDb.toFixed(0) + " dB"
-                    color: "#718092"
-                    font.pixelSize: 11
+                    text: replayController.sourceLoaded
+                          ? replayController.sourceName + "  •  " + replayController.sampleRate.toFixed(0) + " Hz"
+                          : "No replay source"
+                    color: "#8d9aaa"
                 }
+                Button { text: "Open WAV"; onClicked: wavDialog.open() }
+                Button {
+                    text: replayController.playing ? "Pause" : "Play"
+                    enabled: replayController.sourceLoaded
+                    onClicked: replayController.playing ? replayController.pause() : replayController.play()
+                }
+                Button { text: "Stop"; enabled: replayController.sourceLoaded; onClicked: replayController.stop() }
             }
 
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 10
-                color: "#0b121b"
+                color: "#09111a"
                 border.color: "#263241"
+
+                SpectrumWaterfall {
+                    id: spectrumDisplay
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    source: replayController
+                    targetFps: appSettings.targetFps
+                    waterfallRate: appSettings.waterfallRate
+                    automaticRange: appSettings.automaticRange
+                    lowerBoundDb: appSettings.lowerBoundDb
+                    upperBoundDb: appSettings.upperBoundDb
+                    showGrid: appSettings.showGrid
+                }
+
+                Label {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.margins: 14
+                    text: spectrumDisplay.effectiveUpperBoundDb.toFixed(0) + " dBFS"
+                    color: "#8394a6"
+                    font.pixelSize: 11
+                }
+                Label {
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.topMargin: parent.height * 0.34
+                    anchors.leftMargin: 14
+                    text: spectrumDisplay.effectiveLowerBoundDb.toFixed(0) + " dBFS"
+                    color: "#8394a6"
+                    font.pixelSize: 11
+                }
+                Label {
+                    anchors.left: parent.left
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 14
+                    text: spectrumDisplay.lowerFrequencyHz.toFixed(0) + " Hz"
+                    color: "#8394a6"
+                    font.pixelSize: 11
+                }
+                Label {
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 14
+                    text: spectrumDisplay.upperFrequencyHz.toFixed(0) + " Hz"
+                    color: "#8394a6"
+                    font.pixelSize: 11
+                }
                 ColumnLayout {
                     anchors.centerIn: parent
-                    spacing: 8
-                    Label { Layout.alignment: Qt.AlignHCenter; text: "Waterfall and decoded channels"; font.pixelSize: 16 }
+                    visible: !replayController.sourceLoaded
+                    Label { Layout.alignment: Qt.AlignHCenter; text: "Replay a receiver recording"; font.pixelSize: 17 }
                     Label {
                         Layout.alignment: Qt.AlignHCenter
-                        text: "Tracked callsigns and channel detail cards will appear here"
+                        text: "Open a PCM or 32-bit float WAV file to inspect its real spectrum and waterfall"
                         color: "#8290a0"
                     }
+                    Button { Layout.alignment: Qt.AlignHCenter; text: "Choose WAV recording"; onClicked: wavDialog.open() }
                 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                Label { text: appSettings.statusMessage; color: "#91a0b1"; elide: Text.ElideRight; Layout.fillWidth: true }
-                Label { text: appSettings.targetFps + " FPS target  •  " + appSettings.waterfallRate + " lines/s"; color: "#667789" }
+                Label { text: replayController.statusText; color: "#91a0b1"; elide: Text.ElideRight; Layout.preferredWidth: 300 }
+                ProgressBar {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: Math.max(0.001, replayController.durationSeconds)
+                    value: replayController.positionSeconds
+                }
+                Label {
+                    text: replayController.positionSeconds.toFixed(1) + " / "
+                          + replayController.durationSeconds.toFixed(1) + " s  •  "
+                          + appSettings.targetFps + " FPS  •  " + appSettings.waterfallRate + " rows/s"
+                    color: "#667789"
+                }
             }
         }
 
@@ -184,6 +230,14 @@ ApplicationWindow {
     SetupWizard {
         id: setupWizard
         anchors.centerIn: Overlay.overlay
+    }
+
+    FileDialog {
+        id: wavDialog
+        title: "Open receiver WAV recording"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["WAV audio (*.wav *.wave)", "All files (*)"]
+        onAccepted: replayController.openFile(selectedFile)
     }
 
     Component.onCompleted: {

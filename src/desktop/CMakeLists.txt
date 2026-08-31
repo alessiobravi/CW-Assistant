@@ -1,13 +1,28 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 SerialPort WebSockets)
+find_package(Qt6 6.5 REQUIRED COMPONENTS
+  Core Gui Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(cw-assistant-desktop
   main.cpp
+  replay/replay_controller.cpp
+  replay/replay_controller.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
   settings/app_settings.cpp
   settings/app_settings.hpp
+  visualization/spectrum_frame.hpp
+  visualization/spectrum_waterfall_item.cpp
+  visualization/spectrum_waterfall_item.hpp
+)
+
+set_target_properties(cw-assistant-desktop PROPERTIES
+  MACOSX_BUNDLE TRUE
+  MACOSX_BUNDLE_BUNDLE_NAME "CW Assistant"
+  MACOSX_BUNDLE_GUI_IDENTIFIER "it.iu0lfq.CWAssistant"
+  MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+  MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+  WIN32_EXECUTABLE TRUE
 )
 
 set_source_files_properties(qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
@@ -32,6 +47,7 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::Qml
   Qt6::Quick
   Qt6::QuickControls2
+  Qt6::QuickDialogs2
   Qt6::SerialPort
   Qt6::WebSockets
 )

@@ -7,7 +7,8 @@ the first packaging target.
 
 The project is at foundation stage. The current code provides dependency-free
 core primitives and tests plus an optional Qt Quick desktop shell with a
-profile chooser, guided setup, and persistent radio/keying/display settings.
+profile chooser, guided setup, persistent radio/keying/display settings, and
+WAV replay through a real 2D spectrum and waterfall.
 
 ## Planned capabilities
 
@@ -15,7 +16,7 @@ profile chooser, guided setup, and persistent radio/keying/display settings.
 - RTL-SDR and SDRplay reception through SoapySDR modules
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
-- Accelerated spectrum and scrolling waterfall
+- Live-source spectrum and scrolling waterfall (WAV replay is implemented)
 - Detection and stateful decoding of multiple simultaneous CW channels
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
 - Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,

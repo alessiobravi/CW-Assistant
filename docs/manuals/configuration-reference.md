@@ -55,7 +55,11 @@ can transmit through this path in the current build.
 
 - **Target FPS:** UI redraw target from 10 to 120.
 - **Waterfall lines/second:** independent scroll/update rate from 1 to 120.
-- **Automatic range:** lets the future renderer adapt its visible dB range.
+- **Automatic range:** adapts the visible dBFS range using smoothed robust
+  spectrum levels. Disable it to use the editable lower and upper bounds.
+- **Spectrum averaging:** applies exponential power averaging in DSP from 1 to
+  32 frames; higher values steady the trace but react more slowly.
+- **Reference grid:** shows or hides functional frequency/level guide lines.
 - **Lower/upper dB:** manual bounds; at least 10 dB of span is enforced.
 
 The current receiver canvas is an honest empty state and does not draw simulated

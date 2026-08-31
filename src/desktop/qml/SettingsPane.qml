@@ -180,8 +180,12 @@ Pane {
                     SpinBox { editable: true; from: -200; to: 50; value: appSettings.lowerBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.lowerBoundDb = value }
                     Label { text: "Upper bound (dB)" }
                     SpinBox { editable: true; from: -190; to: 100; value: appSettings.upperBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.upperBoundDb = value }
+                    Label { text: "Spectrum averaging" }
+                    SpinBox { from: 1; to: 32; value: appSettings.averagingFrames; onValueModified: appSettings.averagingFrames = value }
+                    Label { text: "Reference grid" }
+                    CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
                     Label { text: "" }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Additional palettes, averaging, peak decay, labels, font size, zoom, pan, and accessibility settings will use this same versioned profile." }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "FPS controls presentation redraws; waterfall rate controls accepted history rows. Averaging is applied in DSP. Additional palettes, peak decay, labels, font size, zoom, pan, and accessibility settings will use this same versioned profile." }
                 }
             }
 

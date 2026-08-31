@@ -5,15 +5,34 @@
 CW Assistant is pre-release software. The current desktop shell can create and
 select isolated station profiles, guide first-time setup, discover serial ports
 without opening them, save radio/keying/display settings, open the Windows
-frequency-provider configuration, and monitor a CAT4OM radio. Deterministic WAV
-parsing and spectral analysis are implemented in the core; the file selector and
-renderer are the next integration step. The decoder, direct keying output,
+frequency-provider configuration, monitor a CAT4OM radio, and replay a WAV
+recording through the real spectrum and waterfall. The decoder, direct keying output,
 logging connection, SDR capture, and remote-station runtime remain under
 implementation. A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
 IEEE float32. Multichannel input is averaged to mono for this audio-analysis
 path. Compressed WAV codecs are rejected with a clear diagnostic.
+
+## Replay a receiver recording
+
+1. Select **Open WAV** in the Receiver workspace and choose a local recording.
+2. Review the detected filename, sample rate, and duration.
+3. Select **Play**. The upper trace is the current Hann-windowed FFT; the lower
+   panel is the scrolling waterfall built from those same spectrum frames.
+4. Use **Pause** to retain the current display or **Stop** to return to the
+   beginning. Opening another file clears the previous display.
+
+The progress bar and elapsed time follow sample-derived recording time rather
+than wall-clock guesses. The first integration does not yet provide seeking or
+looping. Frequency labels cover 0 Hz through half the WAV sample rate because
+ordinary WAV replay is treated as real-valued audio, not complex I/Q.
+
+Open **Settings → Display** to select the redraw target, waterfall row rate,
+automatic or manual dBFS range, DSP averaging from 1 to 32 frames, and the
+reference grid. Automatic range uses a smoothed robust estimate so an isolated
+strong bin does not repeatedly rescale the entire view. These values are saved
+independently in each station profile.
 
 ## About and author
 

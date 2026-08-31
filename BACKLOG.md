@@ -6,9 +6,9 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-08-31 — added CAT4OM network control, hosted downloadable
-builds, validated conditional Debian/Ubuntu packaging expressions, user manuals,
-and documentation-record gates.
+Last reviewed: 2026-08-31 — reproduced and fixed hosted QML compilation,
+validated the Qt desktop build/install locally, added functional WAV spectrum
+replay, corrected macOS bundle deployment, and added a verified-commit marker.
 
 ## P0 — project decisions and safety
 
@@ -27,16 +27,16 @@ and documentation-record gates.
 |---|---|---|---|
 | BUILD-001 | active | Establish dependency-free C++20 core build | Core builds and tests on Windows x64, Linux x64, macOS ARM64, and macOS x64 CI. Mark done after the first full remote matrix passes. |
 | PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
-| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish short-lived artifacts and the complete matrix updates stable continuous-prerelease assets with checksums; mark done after the first complete remote matrix passes. |
+| CI-001 | active | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests are configured on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish short-lived artifacts, update stable continuous-prerelease assets/checksums, and advance a remotely queryable verified-commit tag; mark done after the first complete remote matrix passes. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
-| REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, and core tests pass; UI selection, hash manifests, pause/seek, and repeat-run integration remain. |
+| REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, paced UI selection/play/pause/stop, and core tests pass; hash manifests, seek, looping, and repeat-run integration remain. |
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
 | UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, and guided setup are implemented; native Qt CI and runtime validation remain. |
-| UI-002 | todo | Implement modular 2D scene-graph spectrum/waterfall | ADR 0001 boundaries are preserved; shader and fallback paths maintain selected 30/60 FPS target without blocking DSP; no 3D or ornamental effects. |
+| UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a portable CPU-colored waterfall texture render real replay FFT frames with bounded history; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
 | UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
-| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, range bounds/mode, averaging, peak hold, grid, labels, palette/levels, zoom, and pan are independently configurable and persisted. Core bounds are implemented; UI/persistence remain. |
+| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, range bounds/mode, averaging, and grid are independently configurable and persisted; peak hold, labels, palette/levels, zoom, and pan remain. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | todo | Add pipeline telemetry | UI exposes overruns, sequence gaps, queue depths, DSP latency, and dropped display frames. |

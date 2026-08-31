@@ -10,7 +10,10 @@
    usable examples and honest current limitations.
 5. Add the result under `CHANGELOG.md` → `Unreleased`.
 6. Update the backlog item status, scope, or review note.
-7. Open a pull request and let every cross-platform CI job pass.
+7. After pushing, monitor all applicable GitHub Actions jobs to completion. Fix
+   and repush every failure or cancellation until the complete result is green;
+   an unqueried or incomplete run is not considered verified.
+8. Open a pull request and let every cross-platform CI job pass.
 
 Pull requests that alter implementation or delivery files must include
 `CHANGELOG.md`, `BACKLOG.md`, and an appropriate `docs/manuals/` update. The

@@ -59,6 +59,11 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Hann-windowed radix-2 audio/IQ spectrum analyzer with coherent-gain dBFS
   normalization, configurable exponential power averaging, exact frequency
   coordinates, and deterministic tone/replay tests.
+- Receiver-workspace WAV selection and paced replay through a functional 2D Qt
+  scene-graph spectrum/waterfall, with profile-persisted FPS, waterfall rate,
+  automatic/manual dBFS range, DSP averaging, grid, progress, and gap metrics.
+- Continuous verification marker: the `continuous` tag advances only after the
+  full cross-platform desktop/core matrix and release publication succeed.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
@@ -87,6 +92,14 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Dependency-free exclusive per-rig control lease manager with bounded TTL and
   expiry/ownership tests.
 - Windows 11 x64 or newer established as the supported Windows baseline.
+
+### Fixed
+
+- Corrected invalid setup-wizard QML that stopped hosted desktop compilation.
+- macOS packaging now creates and deploys a self-contained `.app` bundle rather
+  than archiving a non-bundle executable without its Qt/QML runtime.
+- Hosted Qt installation now includes the task-tree dependency required by the
+  Qt 6.11 QML plugin metadata, eliminating an incomplete-SDK warning.
 
 ### Security
 

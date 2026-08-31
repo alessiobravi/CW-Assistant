@@ -3,8 +3,11 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <qqml.h>
 
+#include "replay/replay_controller.hpp"
 #include "settings/app_settings.hpp"
+#include "visualization/spectrum_waterfall_item.hpp"
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
@@ -29,9 +32,20 @@ int main(int argc, char* argv[]) {
 
   cwassistant::desktop::AppSettings settings(parser.value(profile_option),
                                              parser.isSet(profile_option));
+  cwassistant::desktop::ReplayController replay_controller;
+  replay_controller.setAveragingFrames(settings.averagingFrames());
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, [&settings, &replay_controller] {
+        replay_controller.setAveragingFrames(settings.averagingFrames());
+      });
+  qmlRegisterType<cwassistant::desktop::SpectrumWaterfallItem>(
+      "CWAssistant", 1, 0, "SpectrumWaterfall");
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("appSettings"),
                                            &settings);
+  engine.rootContext()->setContextProperty(QStringLiteral("replayController"),
+                                           &replay_controller);
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
       [] { QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);

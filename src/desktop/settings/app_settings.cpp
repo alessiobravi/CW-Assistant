@@ -138,6 +138,8 @@ int AppSettings::waterfallRate() const noexcept { return waterfall_rate_; }
 bool AppSettings::automaticRange() const noexcept { return automatic_range_; }
 double AppSettings::lowerBoundDb() const noexcept { return lower_bound_db_; }
 double AppSettings::upperBoundDb() const noexcept { return upper_bound_db_; }
+int AppSettings::averagingFrames() const noexcept { return averaging_frames_; }
+bool AppSettings::showGrid() const noexcept { return show_grid_; }
 const QString& AppSettings::statusMessage() const noexcept { return status_message_; }
 
 #define CWA_SETTER(Method, Member, Type)            \
@@ -173,6 +175,8 @@ CWA_SETTER(setWaterfallRate, waterfall_rate_, int)
 CWA_SETTER(setAutomaticRange, automatic_range_, bool)
 CWA_SETTER(setLowerBoundDb, lower_bound_db_, double)
 CWA_SETTER(setUpperBoundDb, upper_bound_db_, double)
+CWA_SETTER(setAveragingFrames, averaging_frames_, int)
+CWA_SETTER(setShowGrid, show_grid_, bool)
 
 #undef CWA_SETTER
 
@@ -238,6 +242,7 @@ bool AppSettings::apply() {
   timeout_ms_ = std::clamp(timeout_ms_, 100, 60'000);
   target_fps_ = std::clamp(target_fps_, 10, 120);
   waterfall_rate_ = std::clamp(waterfall_rate_, 1, 120);
+  averaging_frames_ = std::clamp(averaging_frames_, 1, 32);
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -277,6 +282,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("display/automaticRange")), automatic_range_);
   settings.setValue(storageKey(QStringLiteral("display/lowerBoundDb")), lower_bound_db_);
   settings.setValue(storageKey(QStringLiteral("display/upperBoundDb")), upper_bound_db_);
+  settings.setValue(storageKey(QStringLiteral("display/averagingFrames")), averaging_frames_);
+  settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -325,6 +332,8 @@ void AppSettings::load() {
   automatic_range_ = settings.value(storageKey(QStringLiteral("display/automaticRange")), true).toBool();
   lower_bound_db_ = settings.value(storageKey(QStringLiteral("display/lowerBoundDb")), -120.0).toDouble();
   upper_bound_db_ = settings.value(storageKey(QStringLiteral("display/upperBoundDb")), -20.0).toDouble();
+  averaging_frames_ = settings.value(storageKey(QStringLiteral("display/averagingFrames")), 3).toInt();
+  show_grid_ = settings.value(storageKey(QStringLiteral("display/showGrid")), true).toBool();
 }
 
 bool AppSettings::completeSetup() {
@@ -459,6 +468,8 @@ void AppSettings::resetInMemorySettings() {
   automatic_range_ = true;
   lower_bound_db_ = -120.0;
   upper_bound_db_ = -20.0;
+  averaging_frames_ = 3;
+  show_grid_ = true;
   applyReferenceDefaults(0);
 }
 

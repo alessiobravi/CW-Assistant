@@ -16,13 +16,21 @@ For the simplest download, open the repository's root
 [`binaries/`](../../binaries/README.md) index. It points to stable asset names in
 the **Continuous development builds** prerelease and includes a machine-readable
 manifest and SHA-256 checksum link. The prerelease is updated only after the
-complete platform matrix passes.
+complete platform matrix passes. Its `continuous` Git tag is force-moved to
+that fully verified commit only after the release assets and checksums have
+also been published; a failed run leaves the prior known-good downloads and
+marker untouched.
 
 The same files remain available as short-lived workflow artifacts: open the
 repository's **Actions** page, select a successful **Cross-platform Desktop CI**
 run, and scroll to **Artifacts**. Workflow artifacts expire after 14 days;
 continuous-release assets remain available until superseded. Both are unsigned
 and intended for testing until the signing workflow is complete.
+
+The push workflow is the superset verification path: it builds the desktop and
+core tests on every supported architecture. The lighter core-only workflow is
+retained for pull requests and manual diagnostics instead of duplicating every
+push run.
 
 ## Debian and Ubuntu
 

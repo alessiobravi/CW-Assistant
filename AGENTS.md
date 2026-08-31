@@ -24,6 +24,11 @@ These rules apply to every contributor and coding agent working in this tree.
 - Add or update deterministic tests with behavior changes.
 - Run the relevant local build/tests and allow the complete GitHub Actions
   matrix to pass before merging.
+- After every implementation push, monitor every applicable GitHub Actions job
+  through completion. Treat only an all-green result as verified: inspect every
+  failure or cancellation, correct it, push the fix, and repeat until all jobs
+  pass. If Actions cannot be queried, report that verification gap explicitly
+  and do not claim the work is fully verified.
 - Do not weaken, skip, or conditionally bypass a platform failure merely to make
   CI green. Record genuine platform exclusions in the requirements and backlog.
 

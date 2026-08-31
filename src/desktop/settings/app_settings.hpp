@@ -49,6 +49,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange NOTIFY settingsChanged)
   Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY settingsChanged)
   Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY settingsChanged)
+  Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames NOTIFY settingsChanged)
+  Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
  public:
@@ -93,6 +95,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool automaticRange() const noexcept;
   [[nodiscard]] double lowerBoundDb() const noexcept;
   [[nodiscard]] double upperBoundDb() const noexcept;
+  [[nodiscard]] int averagingFrames() const noexcept;
+  [[nodiscard]] bool showGrid() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -121,6 +125,8 @@ class AppSettings final : public QObject {
   void setAutomaticRange(bool value);
   void setLowerBoundDb(double value);
   void setUpperBoundDb(double value);
+  void setAveragingFrames(int value);
+  void setShowGrid(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -187,6 +193,8 @@ class AppSettings final : public QObject {
   bool automatic_range_{true};
   double lower_bound_db_{-120.0};
   double upper_bound_db_{-20.0};
+  int averaging_frames_{3};
+  bool show_grid_{true};
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};
