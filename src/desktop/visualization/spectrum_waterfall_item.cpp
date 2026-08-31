@@ -133,12 +133,50 @@ void SpectrumWaterfallItem::setAutomaticRange(const bool value) {
   if (automatic_range_ == value) return;
   automatic_range_ = value;
   if (!automatic_range_) {
+    automatic_range_initialized_ = false;
     effective_lower_bound_db_ = lower_bound_db_;
     effective_upper_bound_db_ = upper_bound_db_;
     emit rangeChanged();
   } else if (!latest_bins_.isEmpty()) {
     updateAutomaticRange(latest_bins_);
   }
+  emit displayChanged();
+  update();
+}
+double SpectrumWaterfallItem::automaticRangeSpanDb() const noexcept {
+  return automatic_range_span_db_;
+}
+void SpectrumWaterfallItem::setAutomaticRangeSpanDb(const double value) {
+  const double clamped = std::clamp(value, 30.0, 100.0);
+  if (qFuzzyCompare(automatic_range_span_db_, clamped)) return;
+  automatic_range_span_db_ = clamped;
+  if (automatic_range_ && !latest_bins_.isEmpty()) {
+    automatic_range_initialized_ = false;
+    updateAutomaticRange(latest_bins_);
+  }
+  emit displayChanged();
+  update();
+}
+bool SpectrumWaterfallItem::noiseSuppression() const noexcept {
+  return noise_suppression_;
+}
+void SpectrumWaterfallItem::setNoiseSuppression(const bool value) {
+  if (noise_suppression_ == value) return;
+  noise_suppression_ = value;
+  waterfall_rows_.clear();
+  last_row_timestamp_ns_ = 0;
+  emit displayChanged();
+  update();
+}
+double SpectrumWaterfallItem::noiseMarginDb() const noexcept {
+  return noise_margin_db_;
+}
+void SpectrumWaterfallItem::setNoiseMarginDb(const double value) {
+  const double clamped = std::clamp(value, 0.0, 30.0);
+  if (qFuzzyCompare(noise_margin_db_, clamped)) return;
+  noise_margin_db_ = clamped;
+  waterfall_rows_.clear();
+  last_row_timestamp_ns_ = 0;
   emit displayChanged();
   update();
 }
@@ -180,6 +218,9 @@ double SpectrumWaterfallItem::upperFrequencyHz() const noexcept {
 qulonglong SpectrumWaterfallItem::droppedRows() const noexcept {
   return dropped_rows_;
 }
+double SpectrumWaterfallItem::estimatedNoiseFloorDb() const noexcept {
+  return estimated_noise_floor_db_;
+}
 
 void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   if (frame.bins_dbfs.isEmpty()) return;
@@ -196,13 +237,14 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   }
   last_sequence_ = frame.sequence;
   has_sequence_ = true;
+  updateNoiseFloor(latest_bins_);
   if (automatic_range_) updateAutomaticRange(latest_bins_);
 
   const std::uint64_t row_interval =
       1'000'000'000ULL / static_cast<std::uint64_t>(waterfall_rate_);
   if (last_row_timestamp_ns_ == 0 ||
       frame.timestamp_ns >= last_row_timestamp_ns_ + row_interval) {
-    waterfall_rows_.push_front(latest_bins_);
+    waterfall_rows_.push_front(conditionedWaterfallRow(latest_bins_));
     if (waterfall_rows_.size() > kMaximumWaterfallRows) {
       waterfall_rows_.pop_back();
     }
@@ -217,10 +259,19 @@ void SpectrumWaterfallItem::resetFrames() {
   last_row_timestamp_ns_ = 0;
   last_sequence_ = 0;
   has_sequence_ = false;
+  automatic_range_initialized_ = false;
+  noise_floor_initialized_ = false;
+  estimated_noise_floor_db_ = -120.0;
+  if (automatic_range_) {
+    effective_lower_bound_db_ = -120.0;
+    effective_upper_bound_db_ = -20.0;
+    emit rangeChanged();
+  }
   dropped_rows_ = 0;
   lower_frequency_hz_ = 0.0;
   upper_frequency_hz_ = 0.0;
   emit droppedRowsChanged();
+  emit noiseFloorChanged();
   emit frequencyRangeChanged();
   update();
 }
@@ -233,25 +284,87 @@ void SpectrumWaterfallItem::updateAutomaticRange(const QVector<float>& bins) {
   }
   if (finite.isEmpty()) return;
   std::sort(finite.begin(), finite.end());
-  const qsizetype low_index = static_cast<qsizetype>(finite.size() / 10);
   const qsizetype high_index = static_cast<qsizetype>(
       (static_cast<quint64>(finite.size() - 1) * 99ULL) / 100ULL);
-  double low = std::clamp(static_cast<double>(finite[low_index]) - 8.0,
-                          -200.0, 20.0);
-  double high = std::clamp(static_cast<double>(finite[high_index]) + 3.0,
-                           -190.0, 50.0);
-  if (high - low < 30.0) low = high - 30.0;
-  constexpr double smoothing = 0.16;
-  const double next_low = effective_lower_bound_db_ * (1.0 - smoothing) +
-                          low * smoothing;
-  const double next_high = effective_upper_bound_db_ * (1.0 - smoothing) +
-                           high * smoothing;
+  double low = std::clamp(estimated_noise_floor_db_ - 8.0, -200.0, 20.0);
+  double high = std::max(static_cast<double>(finite[high_index]) + 3.0,
+                         low + automatic_range_span_db_);
+  high = std::clamp(high, -190.0, 50.0);
+  if (high - low < automatic_range_span_db_) {
+    low = std::max(-200.0, high - automatic_range_span_db_);
+  }
+  if (!automatic_range_initialized_) {
+    effective_lower_bound_db_ = low;
+    effective_upper_bound_db_ = high;
+    automatic_range_initialized_ = true;
+    emit rangeChanged();
+    return;
+  }
+  constexpr double floor_smoothing = 0.04;
+  const double ceiling_smoothing =
+      high > effective_upper_bound_db_ ? 0.25 : 0.02;
+  const double next_low =
+      effective_lower_bound_db_ * (1.0 - floor_smoothing) +
+      low * floor_smoothing;
+  const double next_high =
+      effective_upper_bound_db_ * (1.0 - ceiling_smoothing) +
+      high * ceiling_smoothing;
   if (std::abs(next_low - effective_lower_bound_db_) > 0.02 ||
       std::abs(next_high - effective_upper_bound_db_) > 0.02) {
     effective_lower_bound_db_ = next_low;
     effective_upper_bound_db_ = next_high;
     emit rangeChanged();
   }
+}
+
+void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
+  QVector<float> finite;
+  finite.reserve(bins.size());
+  for (const float bin : bins) {
+    if (std::isfinite(bin)) finite.push_back(bin);
+  }
+  if (finite.isEmpty()) return;
+  const qsizetype index = static_cast<qsizetype>(finite.size() / 5);
+  std::nth_element(finite.begin(), finite.begin() + index, finite.end());
+  const double observed = static_cast<double>(finite[index]);
+  const double previous = estimated_noise_floor_db_;
+  if (!noise_floor_initialized_) {
+    estimated_noise_floor_db_ = observed;
+    noise_floor_initialized_ = true;
+  } else {
+    // Follow an AGC-driven rise promptly so the waterfall gate does not flash
+    // yellow, but release slowly enough that momentary quiet does not pump the
+    // palette in the opposite direction.
+    const double smoothing = observed > estimated_noise_floor_db_ ? 0.15 : 0.03;
+    estimated_noise_floor_db_ +=
+        smoothing * (observed - estimated_noise_floor_db_);
+  }
+  if (std::abs(previous - estimated_noise_floor_db_) > 0.02) {
+    emit noiseFloorChanged();
+  }
+}
+
+QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
+    const QVector<float>& bins) const {
+  if (!noise_suppression_ || !noise_floor_initialized_) return bins;
+  QVector<float> conditioned = bins;
+  const double cutoff = estimated_noise_floor_db_ + noise_margin_db_;
+  const double muted = estimated_noise_floor_db_ - 18.0;
+  const double knee = std::max(1.0, noise_margin_db_);
+  for (float& bin : conditioned) {
+    if (!std::isfinite(bin)) {
+      bin = static_cast<float>(muted);
+      continue;
+    }
+    if (static_cast<double>(bin) < cutoff) {
+      const double mix = std::clamp(
+          (static_cast<double>(bin) - estimated_noise_floor_db_) / knee,
+          0.0, 1.0);
+      bin = static_cast<float>(muted * (1.0 - mix) +
+                               static_cast<double>(bin) * mix);
+    }
+  }
+  return conditioned;
 }
 
 void SpectrumWaterfallItem::scheduleRender() {

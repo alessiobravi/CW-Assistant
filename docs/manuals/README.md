@@ -14,4 +14,7 @@ available in a downloadable build.
   read-only testing, ownership, security, and troubleshooting.
 
 Engineering architecture, requirements, decisions, conformance policy, and the
-delivery backlog remain one level above this folder.
+delivery backlog remain one level above this folder. The planned decoder,
+weak-signal multiple-pass behavior, and same-frequency pileup separation are
+described in the [high-accuracy decoder strategy](../decoder-strategy.md); they
+are not yet part of the downloadable application.

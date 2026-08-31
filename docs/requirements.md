@@ -27,10 +27,35 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Accept mono audio and complex IQ through the same timestamped block contract.
 - Detect candidate tones using a shared spectral analysis stage.
 - Track frequency drift and maintain separate timing/decoder state per channel.
+- Preserve soft tone/envelope/timing evidence and combine an explainable
+  adaptive timing decoder with an optional compact causal learned likelihood
+  model; decoding must continue when that model is unavailable.
+- Run a low-latency causal pass plus bounded delayed refinement passes over a
+  rolling narrowband buffer. Later passes may revise only visibly provisional
+  text and must never block capture.
+- For co-channel pileups, use sub-bin frequency/phase, WPM, element/spacing
+  cadence, edge shape, and fading as probabilistic operator fingerprints. Joint
+  separation and reconstruction/cancellation must retain the original mixture
+  and expose ambiguity when the input is not identifiable.
+- Permit conservative strongest-track reconstruction/cancellation before a
+  weak-track retry; reject the retry unless both residual and decode scores
+  improve.
 - Schedule candidates by signal strength, arrival order, or explicit operator
   selection. Manual selection always has a configurable priority boost.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
+- Distinguish raw evidence, provisional text, stable text, and context-derived
+  suggestions. Store per-character pass/evidence provenance and calibrate
+  confidence on held-out recordings.
+- Optionally predict and validate partial decoded callsigns against a pinned,
+  checksummed list. The main decoding workspace controls this in real time;
+  suggestions must remain visibly separate from raw decoder output and expose
+  confidence and list provenance. Absence from a list is never proof of an
+  invalid callsign.
+- Keep callsign data behind a provider interface. Settings select provider
+  roles, precedence, update policy, and credentials so fast offline completion,
+  jurisdiction-limited official validation, and optional directory enrichment
+  can be combined without hard-coding a logger or service.
 - Replay WAV and SigMF/IQ recordings deterministically.
 - Provide configurable noise blanking, AGC, key-click suppression, audio mute,
   and a sharp continuously adjustable CW monitor filter without coupling these

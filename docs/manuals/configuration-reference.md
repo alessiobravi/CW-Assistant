@@ -61,6 +61,22 @@ The **Display level range** on the Display page controls only how dBFS values
 are mapped to the trace and waterfall colors. Its automatic mode is not audio
 gain and cannot create or remove a spectral peak.
 
+## Live spectrum controls
+
+The compact panel immediately below the spectrum mirrors the operational
+settings that need adjustment while listening:
+
+- **Signal**: DC rejection, automatic/manual software gain, gain target, and
+  automatic/manual bandwidth.
+- **Display**: automatic/manual dBFS levels, automatic span, waterfall noise
+  suppression, suppression margin, and the measured noise floor.
+
+Changes are applied immediately to active live audio and WAV replay. Select
+**Save profile** to persist them. The default 60 dB automatic span anchors the
+palette well above the measured floor, while noise suppression darkens only
+waterfall pixels below `noise floor + margin`. Raw spectrum bins are retained
+for future detection and decoding.
+
 ## Station page
 
 **Own station callsign** is stored separately in every station profile. Input is

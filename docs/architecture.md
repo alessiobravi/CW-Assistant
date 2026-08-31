@@ -69,6 +69,15 @@ their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
 tone/envelope estimation, adaptive dit timing, symbol decoding, and language
 confidence scoring. This avoids repeating a wide FFT for every signal.
 
+The planned decoder uses an explainable semi-Markov timing path plus an optional
+compact causal learned likelihood path. A bounded rolling buffer permits
+delayed multi-hypothesis rescoring, joint co-channel separation, and
+conservative strongest-track interference cancellation without delaying live
+capture. Context and callsign sources can re-rank alternatives but remain
+distinct from acoustic output. See
+[High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
+resource limits, training corpus, and benchmark gates.
+
 ## Graphical rendering
 
 QML owns layout and controls, while a custom C++ `QQuickItem` produces Qt Scene

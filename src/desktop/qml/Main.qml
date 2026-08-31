@@ -145,8 +145,11 @@ ApplicationWindow {
                     targetFps: appSettings.targetFps
                     waterfallRate: appSettings.waterfallRate
                     automaticRange: appSettings.automaticRange
+                    automaticRangeSpanDb: appSettings.automaticRangeSpanDb
                     lowerBoundDb: appSettings.lowerBoundDb
                     upperBoundDb: appSettings.upperBoundDb
+                    noiseSuppression: appSettings.waterfallNoiseSuppression
+                    noiseMarginDb: appSettings.waterfallNoiseMarginDb
                     showGrid: appSettings.showGrid
                 }
 
@@ -206,6 +209,165 @@ ApplicationWindow {
                 }
             }
 
+            Frame {
+                Layout.fillWidth: true
+                padding: 8
+                background: Rectangle {
+                    radius: 8
+                    color: "#151b23"
+                    border.color: "#2b3541"
+                }
+                ColumnLayout {
+                    width: parent.width
+                    spacing: 4
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label { text: "Live spectrum controls"; font.weight: Font.DemiBold }
+                        TabBar {
+                            id: liveControlTabs
+                            Layout.preferredWidth: 190
+                            TabButton { text: "Signal" }
+                            TabButton { text: "Display" }
+                        }
+                        Item { Layout.fillWidth: true }
+                        Label {
+                            objectName: "decoderUnavailableLabel"
+                            text: "Decoder unavailable in this build"
+                            color: "#f3bd55"
+                            font.pixelSize: 11
+                        }
+                        Button { text: "Save profile"; onClicked: appSettings.apply() }
+                    }
+                    StackLayout {
+                        Layout.fillWidth: true
+                        currentIndex: liveControlTabs.currentIndex
+                        ScrollView {
+                            Layout.fillWidth: true
+                            implicitHeight: signalControls.implicitHeight + 4
+                            contentWidth: signalControls.implicitWidth
+                            contentHeight: signalControls.implicitHeight
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
+                            ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+                            RowLayout {
+                                id: signalControls
+                                spacing: 8
+                            CheckBox {
+                                text: "DC rejection"
+                                checked: appSettings.audioDcRejection
+                                onToggled: appSettings.audioDcRejection = checked
+                            }
+                            CheckBox {
+                                text: "Auto gain"
+                                checked: appSettings.audioAutomaticGain
+                                onToggled: appSettings.audioAutomaticGain = checked
+                            }
+                            Label { text: appSettings.audioAutomaticGain ? "Target" : "Gain" }
+                            SpinBox {
+                                editable: true
+                                from: -40
+                                to: appSettings.audioAutomaticGain ? -1 : 40
+                                value: Math.round(appSettings.audioAutomaticGain
+                                                  ? appSettings.audioAutomaticGainTargetDbfs
+                                                  : appSettings.audioGainDb)
+                                onValueModified: {
+                                    if (appSettings.audioAutomaticGain)
+                                        appSettings.audioAutomaticGainTargetDbfs = value
+                                    else
+                                        appSettings.audioGainDb = value
+                                }
+                            }
+                            Label { text: "dB" + (appSettings.audioAutomaticGain ? "FS" : "") }
+                            CheckBox {
+                                text: "Auto bandwidth"
+                                checked: appSettings.audioAutomaticBandwidth
+                                onToggled: appSettings.audioAutomaticBandwidth = checked
+                            }
+                            Label { text: "Low"; visible: !appSettings.audioAutomaticBandwidth }
+                            SpinBox {
+                                editable: true
+                                from: 0
+                                to: 95950
+                                value: Math.round(appSettings.audioLowerFrequencyHz)
+                                visible: !appSettings.audioAutomaticBandwidth
+                                onValueModified: appSettings.audioLowerFrequencyHz = value
+                            }
+                            Label { text: "High"; visible: !appSettings.audioAutomaticBandwidth }
+                            SpinBox {
+                                editable: true
+                                from: 50
+                                to: 96000
+                                value: Math.round(appSettings.audioUpperFrequencyHz)
+                                visible: !appSettings.audioAutomaticBandwidth
+                                onValueModified: appSettings.audioUpperFrequencyHz = value
+                            }
+                            Label { text: "Hz"; visible: !appSettings.audioAutomaticBandwidth }
+                            }
+                        }
+                        ScrollView {
+                            Layout.fillWidth: true
+                            implicitHeight: displayControls.implicitHeight + 4
+                            contentWidth: displayControls.implicitWidth
+                            contentHeight: displayControls.implicitHeight
+                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
+                            ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
+                            RowLayout {
+                                id: displayControls
+                                spacing: 8
+                            CheckBox {
+                                objectName: "liveAutomaticLevelsCheck"
+                                text: "Auto levels"
+                                checked: appSettings.automaticRange
+                                onToggled: appSettings.automaticRange = checked
+                            }
+                            Label { text: "Span"; visible: appSettings.automaticRange }
+                            SpinBox {
+                                editable: true
+                                from: 30
+                                to: 100
+                                value: Math.round(appSettings.automaticRangeSpanDb)
+                                visible: appSettings.automaticRange
+                                onValueModified: appSettings.automaticRangeSpanDb = value
+                            }
+                            Label { text: "Floor"; visible: !appSettings.automaticRange }
+                            SpinBox {
+                                editable: true
+                                from: -200
+                                to: 40
+                                value: Math.round(appSettings.lowerBoundDb)
+                                visible: !appSettings.automaticRange
+                                onValueModified: appSettings.lowerBoundDb = value
+                            }
+                            Label { text: "Ceiling"; visible: !appSettings.automaticRange }
+                            SpinBox {
+                                editable: true
+                                from: -190
+                                to: 50
+                                value: Math.round(appSettings.upperBoundDb)
+                                visible: !appSettings.automaticRange
+                                onValueModified: appSettings.upperBoundDb = value
+                            }
+                            CheckBox {
+                                objectName: "liveNoiseSuppressionCheck"
+                                text: "Suppress noise"
+                                checked: appSettings.waterfallNoiseSuppression
+                                onToggled: appSettings.waterfallNoiseSuppression = checked
+                            }
+                            Label { text: "Margin" }
+                            SpinBox {
+                                editable: true
+                                from: 0
+                                to: 30
+                                value: Math.round(appSettings.waterfallNoiseMarginDb)
+                                enabled: appSettings.waterfallNoiseSuppression
+                                onValueModified: appSettings.waterfallNoiseMarginDb = value
+                            }
+                            Label { text: "dB  •  Noise " + spectrumDisplay.estimatedNoiseFloorDb.toFixed(0) + " dBFS"; color: "#8290a0" }
+                            }
+                        }
+                    }
+                }
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 Label { text: replayController.statusText; color: "#91a0b1"; elide: Text.ElideRight; Layout.preferredWidth: 300 }
@@ -240,7 +402,7 @@ ApplicationWindow {
                 Label { text: "Signals selected by confidence, strength, or queue"; color: "#8290a0"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
                 Item { Layout.fillHeight: true }
-                Label { Layout.alignment: Qt.AlignHCenter; text: "No decoded callsigns"; color: "#667789" }
+                Label { Layout.alignment: Qt.AlignHCenter; text: "CW decoder not implemented yet"; color: "#667789" }
                 Item { Layout.fillHeight: true }
             }
         }

@@ -116,6 +116,7 @@ class ReplayController final : public QObject {
   bool audio_automatic_bandwidth_{true};
   double audio_lower_frequency_hz_{100.0};
   double audio_upper_frequency_hz_{3'000.0};
+  bool spectrum_processing_configured_{false};
 };
 
 }  // namespace cwassistant::desktop

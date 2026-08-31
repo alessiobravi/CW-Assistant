@@ -10,7 +10,9 @@ core primitives and tests plus an optional Qt Quick desktop shell with a
 profile chooser, guided setup, persistent radio/keying/display settings, and
 native live audio-input discovery/capture through a bounded queue and dedicated
 DSP worker. WAV replay remains a separate deterministic source for the real 2D
-spectrum and waterfall.
+spectrum and waterfall. Immediate controls below the spectrum provide signal
+gain/bandwidth and stable noise-suppressed display tuning; CW text decoding is
+not implemented in the current build.
 
 ## Planned capabilities
 
@@ -36,6 +38,9 @@ spectrum and waterfall.
 - Human-confirmed QSO initiation with ordinary, DX-pileup, and contest panels
 - ADIF 3 records sent to Log4OM 2 through its inbound UDP integration
 - Deterministic replay of audio and IQ captures for decoder regression tests
+- A documented high-accuracy decoder plan with explainable timing, optional
+  compact causal inference, multiple-pass weak-signal refinement, and
+  same-frequency pileup separation
 
 ## Architecture
 
@@ -49,6 +54,8 @@ See [the architecture](docs/architecture.md), [requirements](docs/requirements.m
 [roadmap](docs/roadmap.md). Operator-facing setup and examples are maintained in
 the [user manuals](docs/manuals/README.md). The graphical architecture is recorded in
 [ADR 0001](docs/decisions/0001-qt-quick-spectrum-renderer.md).
+The proposed decoder pipeline and measurable acceptance gates are in the
+[high-accuracy decoder strategy](docs/decoder-strategy.md).
 ADIF release gates and official-fixture verification are documented in the
 [ADIF conformance policy](docs/adif-conformance.md).
 

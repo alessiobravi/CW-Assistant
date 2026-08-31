@@ -16,6 +16,9 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY displayChanged)
   Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY displayChanged)
   Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange NOTIFY displayChanged)
+  Q_PROPERTY(double automaticRangeSpanDb READ automaticRangeSpanDb WRITE setAutomaticRangeSpanDb NOTIFY displayChanged)
+  Q_PROPERTY(bool noiseSuppression READ noiseSuppression WRITE setNoiseSuppression NOTIFY displayChanged)
+  Q_PROPERTY(double noiseMarginDb READ noiseMarginDb WRITE setNoiseMarginDb NOTIFY displayChanged)
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY displayChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY displayChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY displayChanged)
@@ -24,6 +27,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(double lowerFrequencyHz READ lowerFrequencyHz NOTIFY frequencyRangeChanged)
   Q_PROPERTY(double upperFrequencyHz READ upperFrequencyHz NOTIFY frequencyRangeChanged)
   Q_PROPERTY(qulonglong droppedRows READ droppedRows NOTIFY droppedRowsChanged)
+  Q_PROPERTY(double estimatedNoiseFloorDb READ estimatedNoiseFloorDb NOTIFY noiseFloorChanged)
 
  public:
   explicit SpectrumWaterfallItem(QQuickItem* parent = nullptr);
@@ -36,6 +40,12 @@ class SpectrumWaterfallItem : public QQuickItem {
   void setUpperBoundDb(double value);
   [[nodiscard]] bool automaticRange() const noexcept;
   void setAutomaticRange(bool value);
+  [[nodiscard]] double automaticRangeSpanDb() const noexcept;
+  void setAutomaticRangeSpanDb(double value);
+  [[nodiscard]] bool noiseSuppression() const noexcept;
+  void setNoiseSuppression(bool value);
+  [[nodiscard]] double noiseMarginDb() const noexcept;
+  void setNoiseMarginDb(double value);
   [[nodiscard]] int targetFps() const noexcept;
   void setTargetFps(int value);
   [[nodiscard]] int waterfallRate() const noexcept;
@@ -47,6 +57,10 @@ class SpectrumWaterfallItem : public QQuickItem {
   [[nodiscard]] double lowerFrequencyHz() const noexcept;
   [[nodiscard]] double upperFrequencyHz() const noexcept;
   [[nodiscard]] qulonglong droppedRows() const noexcept;
+  [[nodiscard]] double estimatedNoiseFloorDb() const noexcept;
+
+ public slots:
+  void acceptFrame(const cwassistant::desktop::SpectrumFrame& frame);
 
  signals:
   void sourceChanged();
@@ -54,17 +68,20 @@ class SpectrumWaterfallItem : public QQuickItem {
   void rangeChanged();
   void frequencyRangeChanged();
   void droppedRowsChanged();
+  void noiseFloorChanged();
 
  protected:
   QSGNode* updatePaintNode(QSGNode* old_node,
                            UpdatePaintNodeData*) override;
 
  private slots:
-  void acceptFrame(const cwassistant::desktop::SpectrumFrame& frame);
   void resetFrames();
 
  private:
   void updateAutomaticRange(const QVector<float>& bins);
+  void updateNoiseFloor(const QVector<float>& bins);
+  [[nodiscard]] QVector<float> conditionedWaterfallRow(
+      const QVector<float>& bins) const;
   void scheduleRender();
 
   QObject* source_{nullptr};
@@ -74,9 +91,15 @@ class SpectrumWaterfallItem : public QQuickItem {
   double upper_bound_db_{-20.0};
   double effective_lower_bound_db_{-120.0};
   double effective_upper_bound_db_{-20.0};
+  double automatic_range_span_db_{60.0};
+  double noise_margin_db_{6.0};
+  double estimated_noise_floor_db_{-120.0};
   double lower_frequency_hz_{0.0};
   double upper_frequency_hz_{0.0};
   bool automatic_range_{true};
+  bool automatic_range_initialized_{false};
+  bool noise_suppression_{true};
+  bool noise_floor_initialized_{false};
   bool show_grid_{true};
   int target_fps_{60};
   int waterfall_rate_{30};

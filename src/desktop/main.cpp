@@ -108,6 +108,12 @@ int main(int argc, char* argv[]) {
           QStringLiteral("audioAutomaticGainCheck"));
       auto* automatic_bandwidth_check = root_object->findChild<QQuickItem*>(
           QStringLiteral("audioAutomaticBandwidthCheck"));
+      auto* live_levels_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("liveAutomaticLevelsCheck"));
+      auto* live_noise_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("liveNoiseSuppressionCheck"));
+      auto* decoder_unavailable_label = root_object->findChild<QQuickItem*>(
+          QStringLiteral("decoderUnavailableLabel"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
@@ -119,6 +125,8 @@ int main(int argc, char* argv[]) {
           live_audio_button == nullptr || own_callsign_field == nullptr ||
           dc_rejection_check == nullptr || automatic_gain_check == nullptr ||
           automatic_bandwidth_check == nullptr ||
+          live_levels_check == nullptr || live_noise_check == nullptr ||
+          decoder_unavailable_label == nullptr ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {
         QCoreApplication::exit(EXIT_FAILURE);

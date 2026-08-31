@@ -24,13 +24,20 @@ replay the same recording to identical spectral results without overruns.
 
 - Peak detector and channel lifecycle tracker
 - Narrowband filter/decimator and adaptive CW envelope/timing decoder
+- Confidence-fused deterministic/compact-causal decoder with explicit
+  provisional and stable text
+- Bounded rolling-buffer refinement, multi-hypothesis rescoring, co-channel
+  operator fingerprinting, and conservative interference cancellation for weak
+  and overlapping signals
 - Worker pool with per-channel ordering and load shedding
 - Callsign extraction, confidence, channel list, and waterfall selection
 - Delayed callsign detail card and persistent exact-match ignore policy
 - Corpus annotations and decoder benchmark report
 
 Acceptance: locate and independently decode multiple annotated signals from the
-CC0 pileup fixture with published accuracy and latency metrics.
+CC0 pileup fixture with published accuracy, false-output, latency, revision,
+CPU, and memory metrics. Every optional learned or later-pass stage must show an
+independent held-out gain over the deterministic baseline.
 
 ## M3 — radio, guarded transmit, and QSO panels
 

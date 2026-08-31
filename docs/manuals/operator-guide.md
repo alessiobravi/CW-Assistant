@@ -56,6 +56,29 @@ Use automatic 100–3000 Hz bandwidth for a general CW view, or disable it and
 enter lower/upper frequencies around the receiver passband. Select **Apply** to
 save the values in the active station profile.
 
+The same operational controls now sit immediately below the spectrum. Changes
+to DC rejection, software gain, bandwidth, display levels, automatic span, and
+waterfall noise suppression take effect while RX is running. **Save profile**
+persists the current values; the Settings pages remain available for complete
+profile configuration.
+
+For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
+noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
+minimum 60 dB span and follow falling peaks slowly, preventing receiver-noise
+changes from repeatedly driving the palette yellow. A radio's own AGC may still
+change the audio level delivered by the sound card; this application does not
+yet control radio AGC through CAT.
+
+The right-hand calls panel now states when the decoder is unavailable. Spectrum
+and waterfall reception are implemented, but multichannel Morse detection,
+timing, text decoding, and callsign extraction remain the next decoder
+milestone; no callsign output should be expected from this build. The planned
+decoder uses a fast live pass and bounded delayed weak-signal refinement. Later
+passes may revise only text that the UI still labels provisional; stable text
+and the original acoustic evidence are retained. Planned same-frequency pileup
+separation will use carrier, cadence, keying-shape, and fading differences, but
+will report ambiguity when a single audio stream contains no separable evidence.
+
 ## Replay a receiver recording
 
 1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.

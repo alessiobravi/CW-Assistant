@@ -298,13 +298,19 @@ Pane {
                     Label { text: "Lower bound (dB)" }
                     SpinBox { editable: true; from: -200; to: 50; value: appSettings.lowerBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.lowerBoundDb = value }
                     Label { text: "Upper bound (dB)" }
-                    SpinBox { editable: true; from: -190; to: 100; value: appSettings.upperBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.upperBoundDb = value }
+                    SpinBox { editable: true; from: -190; to: 50; value: appSettings.upperBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.upperBoundDb = value }
+                    Label { text: "Automatic span (dB)" }
+                    SpinBox { editable: true; from: 30; to: 100; value: appSettings.automaticRangeSpanDb; enabled: appSettings.automaticRange; onValueModified: appSettings.automaticRangeSpanDb = value }
+                    Label { text: "Waterfall noise suppression" }
+                    CheckBox { text: "Darken bins near the measured noise floor"; checked: appSettings.waterfallNoiseSuppression; onToggled: appSettings.waterfallNoiseSuppression = checked }
+                    Label { text: "Noise margin (dB)" }
+                    SpinBox { editable: true; from: 0; to: 30; value: appSettings.waterfallNoiseMarginDb; enabled: appSettings.waterfallNoiseSuppression; onValueModified: appSettings.waterfallNoiseMarginDb = value }
                     Label { text: "Spectrum averaging" }
                     SpinBox { from: 1; to: 32; value: appSettings.averagingFrames; onValueModified: appSettings.averagingFrames = value }
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
                     Label { text: "" }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Automatic display scaling changes only the visible dBFS bounds; it is separate from input gain on the Audio page. FPS controls presentation redraws, waterfall rate controls accepted history rows, and averaging is applied in DSP." }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum." }
                 }
             }
 

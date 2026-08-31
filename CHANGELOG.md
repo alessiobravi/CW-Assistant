@@ -23,6 +23,11 @@ All notable changes to CW Assistant are recorded here. The format follows
   automatic gain and tunable dBFS target, exact manual gain, and automatic or
   user-entered processing bandwidth. Automatic display scaling is now clearly
   identified as visualization-only rather than audio gain.
+- A two-tab live spectrum control panel directly below the visualization for
+  immediate signal/display tuning and explicit profile saving, plus a clear
+  decoder-unavailable state until the decoding milestone is implemented.
+- Stable automatic display span, smoothed noise-floor/ceiling tracking,
+  adjustable waterfall-only noise suppression, and live noise-floor telemetry.
 - A normalized per-profile own station callsign field under Settings → Station,
   ready for station logging and exact own-call notification matching.
 - A modern CW Morse-key application mark with native Windows executable/MSI,
@@ -30,6 +35,15 @@ All notable changes to CW Assistant are recorded here. The format follows
   creates the **CW Assistant** Start-menu program group and desktop shortcut.
 - Backlog scope for configurable own-callsign decode notification and an
   optional guarded QSO-closing macro.
+- Backlog scope for optional real-time callsign prediction/validation using a
+  versioned, provenance-visible callsign list while preserving raw decoder text.
+- A researched high-accuracy decoder strategy combining a low-resource
+  explainable timing baseline, an optional compact causal likelihood model,
+  calibrated confidence, and bounded multiple-pass weak-signal refinement.
+- Decoder backlog and acceptance gates for co-channel operator fingerprinting,
+  joint timing separation, conservative interference cancellation, optional
+  coherent receive diversity, data provenance, false-output measurement, and
+  CPU/memory budgets.
 
 - GPL-3.0-or-later license text and dependency/contribution licensing policy.
 - Editable Yaesu FT-450D and FT-818/FT-818ND reference profiles with tested CAT
@@ -127,6 +141,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Prevented flat receiver noise and radio-AGC level movement from pumping the
+  waterfall through bright yellow by anchoring automatic levels to a stable
+  minimum span and slowing downward ceiling/floor movement.
 - Removed persistent sound-card DC bias from the leftmost spectrum bin by
   default and stopped full-Nyquist audio from compressing CW activity against
   the left edge through a configurable 100–3000 Hz automatic view.
