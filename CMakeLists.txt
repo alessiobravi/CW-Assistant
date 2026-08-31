@@ -53,6 +53,12 @@ if(CWA_BUILD_DESKTOP)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
   if(WIN32)
+    # CPack's WiX generator accepts UTF-8 .txt or RTF license input. Keep the
+    # canonical GPL text extensionless in the repository and copy it at build
+    # time so every installer presents the exact same license.
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+      "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" COPYONLY)
+    set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
     if(NOT CWA_PACKAGE_REVISION MATCHES "^[0-9]+$")
       message(FATAL_ERROR "CWA_PACKAGE_REVISION must contain only digits")
     endif()

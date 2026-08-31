@@ -145,7 +145,8 @@ jobs:
       - name: Build upgrade-capable Windows installer
         id: build_windows_installer
         if: matrix.windows_installer
-        run: cpack --config build/CPackConfig.cmake -G WIX -B packages
+        shell: bash
+        run: cpack --config build/CPackConfig.cmake -G WIX -B packages 2>&1 | tee cpack-wix.log
       - name: Publish Windows installer
         id: upload_windows_installer
         if: matrix.windows_installer
@@ -193,6 +194,12 @@ jobs:
             qt_log="$(find "${GITHUB_WORKSPACE}" -type f -name aqtinstall.log -exec tail -n 20 {} \; 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${qt_log}" ]]; then
               status_message="${status_message}"$'\n'"qt_log=${qt_log}"
+            fi
+          fi
+          if [[ "${CWA_WINDOWS_INSTALLER_RESULT}" == "failure" ]]; then
+            wix_log="$(tail -n 30 cpack-wix.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
+            if [[ -n "${wix_log}" ]]; then
+              status_message="${status_message}"$'\n'"wix_log=${wix_log}"
             fi
           fi
           git config user.name "CW Assistant CI"

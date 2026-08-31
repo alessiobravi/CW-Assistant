@@ -79,6 +79,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   containing the new repository-layout correction until that correction ships
   in a released downloader. This build-only pin does not change the bundled Qt
   runtime, MSI version, or stable Windows upgrade identity.
+- Windows MSI generation now supplies the canonical GPL text through CPack's
+  supported UTF-8 `.txt` license input and publishes bounded WiX diagnostics on
+  packaging failure.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

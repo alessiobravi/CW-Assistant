@@ -69,8 +69,12 @@ behavior.
 Every hosted package has a monotonically increasing numeric package revision
 and a stable Windows Installer upgrade identity. Running a newer MSI performs a
 major upgrade of the existing installation; station profiles remain in the
-user's application settings and are not removed with program files. Downgrades
+user’s application settings and are not removed with program files. Downgrades
 are rejected by Windows Installer.
+
+The installer presents the canonical GPL-3.0-or-later text. The build copies
+that UTF-8 source into the `.txt` input format required by CPack's WiX generator;
+the repository license remains the single source of truth.
 
 Development installers are currently unsigned, so Windows may identify the
 publisher as unknown. Verify `SHA256SUMS` before continuing. Automatic in-app

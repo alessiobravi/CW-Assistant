@@ -11,8 +11,9 @@ validated the Qt desktop build/install locally, added functional WAV spectrum
 replay, corrected macOS bundle deployment and Linux Qt architecture selection,
 set and verify the macOS Sonoma 14+ deployment baseline, documented the
 temporary Windows SDK-downloader source pin, added remotely queryable CI
-outcomes/log diagnostics plus extractor retry, and replaced the Windows archive
-plan with an upgrade-capable MSI delivery flow.
+outcomes/log diagnostics plus extractor retry, corrected WiX license input and
+added MSI failure diagnostics, and replaced the Windows archive plan with an
+upgrade-capable MSI delivery flow.
 
 ## P0 — project decisions and safety
 
