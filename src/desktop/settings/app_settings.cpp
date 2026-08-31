@@ -275,7 +275,7 @@ void AppSettings::refreshSerialPorts() {
 
 void AppSettings::refreshDetectedRadios() {
   QStringList names;
-  QList<int> slots;
+  QList<int> detected_slots;
 #ifdef Q_OS_WIN
   if (ensureOmniRigAutomation()) {
     auto* automation = static_cast<IDispatch*>(omnirig_automation_);
@@ -305,7 +305,7 @@ void AppSettings::refreshDetectedRadios() {
               : -1;
       if (!rig_type.isEmpty() && status == kOmniRigOnlineStatus) {
         names.push_back(QStringLiteral("OmniRig %1 — %2").arg(slot).arg(rig_type));
-        slots.push_back(slot);
+        detected_slots.push_back(slot);
       }
       if (has_type) {
         VariantClear(&type_value);
@@ -317,9 +317,10 @@ void AppSettings::refreshDetectedRadios() {
     }
   }
 #endif
-  const bool changed = names != detected_radio_names_ || slots != detected_radio_slots_;
+  const bool changed = names != detected_radio_names_ ||
+                       detected_slots != detected_radio_slots_;
   detected_radio_names_ = std::move(names);
-  detected_radio_slots_ = std::move(slots);
+  detected_radio_slots_ = std::move(detected_slots);
   if (changed) {
     emit detectedRadiosChanged();
     emit settingsChanged();

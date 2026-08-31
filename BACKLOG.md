@@ -20,7 +20,8 @@ with deterministic texture creation on every platform. Setup now distinguishes
 receive-only SWL operation, positively identified online radios, and explicit
 manual templates; the wizard footer is also guarded against clipping. Bounded
 compiler diagnostics are now available through the Git-only CI status markers,
-which identified and closed the initial setup-dialog QML syntax failure.
+which identified and closed the initial setup-dialog QML syntax failure and
+the subsequent cross-platform Qt macro/declaration errors.
 
 ## P0 — project decisions and safety
 

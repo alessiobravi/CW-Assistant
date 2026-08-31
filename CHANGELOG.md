@@ -114,7 +114,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Kept the setup wizard's Back/Next/Finish controls in a fixed footer and made
   oversized setup pages scroll, preventing navigation from being clipped on
   small or scaled displays; the complete hosted QML compiler now validates the
-  restructured dialog before packaging.
+  restructured dialog before packaging, including portable Qt/C++ declarations
+  used by its runtime navigation smoke test.
 - Fixed the cross-platform first-launch crash in the spectrum renderer. The
   waterfall now uses a backend-native image node created only after a valid
   texture exists; it never passes a null texture into the Qt scene graph.
