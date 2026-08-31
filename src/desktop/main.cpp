@@ -54,7 +54,7 @@ int main(int argc, char* argv[]) {
         settings.audioDcRejection(), settings.audioAutomaticGain(),
         settings.audioGainDb(), settings.audioAutomaticGainTargetDbfs(),
         settings.audioAutomaticBandwidth(), settings.audioLowerFrequencyHz(),
-        settings.audioUpperFrequencyHz());
+        settings.audioUpperFrequencyHz(), settings.waterfallRate());
   };
   apply_spectrum_processing();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
@@ -112,6 +112,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("liveAutomaticLevelsCheck"));
       auto* live_noise_check = root_object->findChild<QQuickItem*>(
           QStringLiteral("liveNoiseSuppressionCheck"));
+      auto* live_cw_guide_check = root_object->findChild<QQuickItem*>(
+          QStringLiteral("liveCwGuideCheck"));
       auto* decoder_unavailable_label = root_object->findChild<QQuickItem*>(
           QStringLiteral("decoderUnavailableLabel"));
       if (next_button == nullptr || !next_button->isVisible() ||
@@ -126,6 +128,7 @@ int main(int argc, char* argv[]) {
           dc_rejection_check == nullptr || automatic_gain_check == nullptr ||
           automatic_bandwidth_check == nullptr ||
           live_levels_check == nullptr || live_noise_check == nullptr ||
+          live_cw_guide_check == nullptr ||
           decoder_unavailable_label == nullptr ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {

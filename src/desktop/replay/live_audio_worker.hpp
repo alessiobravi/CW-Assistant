@@ -80,7 +80,7 @@ class LiveAudioDspWorker final : public QObject {
  public slots:
   void start();
   void stop();
-  void configure(int averaging_frames, bool dc_rejection,
+  void configure(int averaging_frames, int frame_rate_hz, bool dc_rejection,
                  bool automatic_gain, double gain_db,
                  double automatic_gain_target_dbfs,
                  bool automatic_bandwidth, double lower_frequency_hz,

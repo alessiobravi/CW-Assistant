@@ -62,6 +62,21 @@ waterfall noise suppression take effect while RX is running. **Save profile**
 persists the current values; the Settings pages remain available for complete
 profile configuration.
 
+The waterfall always represents the selected fixed number of **History**
+seconds from top to bottom. At startup, unavailable older time stays dark rather
+than stretching the first received rows over the pane. Resizing changes only
+the pixel height, and capture gaps remain visible as dark time. **Lines/s**
+controls genuine overlapping analysis updates without changing the window
+duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subject
+to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
+it only when a steadier but less time-sharp display is more useful.
+
+Enable **CW guide** to draw red boundaries around the desired receive tone. The
+default is centered at 700 Hz with a 200 Hz width; both values update in real
+time and are stored per profile. The frequency labels along the lower X axis
+show where those boundaries sit in the current audio or SDR view. This guide is
+visual only and does not change receiver tuning or decoder bandwidth.
+
 For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
 noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
 minimum 60 dB span and follow falling peaks slowly, preventing receiver-noise

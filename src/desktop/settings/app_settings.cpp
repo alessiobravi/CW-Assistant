@@ -225,6 +225,9 @@ bool AppSettings::pttActiveHigh() const noexcept { return ptt_active_high_; }
 bool AppSettings::keyActiveHigh() const noexcept { return key_active_high_; }
 int AppSettings::targetFps() const noexcept { return target_fps_; }
 int AppSettings::waterfallRate() const noexcept { return waterfall_rate_; }
+int AppSettings::waterfallTimeSpanSeconds() const noexcept {
+  return waterfall_time_span_seconds_;
+}
 bool AppSettings::automaticRange() const noexcept { return automatic_range_; }
 double AppSettings::lowerBoundDb() const noexcept { return lower_bound_db_; }
 double AppSettings::upperBoundDb() const noexcept { return upper_bound_db_; }
@@ -236,6 +239,13 @@ bool AppSettings::waterfallNoiseSuppression() const noexcept {
 }
 double AppSettings::waterfallNoiseMarginDb() const noexcept {
   return waterfall_noise_margin_db_;
+}
+bool AppSettings::showCwGuide() const noexcept { return show_cw_guide_; }
+double AppSettings::cwGuideCenterHz() const noexcept {
+  return cw_guide_center_hz_;
+}
+double AppSettings::cwGuideWidthHz() const noexcept {
+  return cw_guide_width_hz_;
 }
 int AppSettings::averagingFrames() const noexcept { return averaging_frames_; }
 bool AppSettings::showGrid() const noexcept { return show_grid_; }
@@ -280,12 +290,16 @@ CWA_SETTER(setPttActiveHigh, ptt_active_high_, bool)
 CWA_SETTER(setKeyActiveHigh, key_active_high_, bool)
 CWA_SETTER(setTargetFps, target_fps_, int)
 CWA_SETTER(setWaterfallRate, waterfall_rate_, int)
+CWA_SETTER(setWaterfallTimeSpanSeconds, waterfall_time_span_seconds_, int)
 CWA_SETTER(setAutomaticRange, automatic_range_, bool)
 CWA_SETTER(setLowerBoundDb, lower_bound_db_, double)
 CWA_SETTER(setUpperBoundDb, upper_bound_db_, double)
 CWA_SETTER(setAutomaticRangeSpanDb, automatic_range_span_db_, double)
 CWA_SETTER(setWaterfallNoiseSuppression, waterfall_noise_suppression_, bool)
 CWA_SETTER(setWaterfallNoiseMarginDb, waterfall_noise_margin_db_, double)
+CWA_SETTER(setShowCwGuide, show_cw_guide_, bool)
+CWA_SETTER(setCwGuideCenterHz, cw_guide_center_hz_, double)
+CWA_SETTER(setCwGuideWidthHz, cw_guide_width_hz_, double)
 CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 
@@ -515,11 +529,15 @@ bool AppSettings::apply() {
   timeout_ms_ = std::clamp(timeout_ms_, 100, 60'000);
   target_fps_ = std::clamp(target_fps_, 10, 120);
   waterfall_rate_ = std::clamp(waterfall_rate_, 1, 120);
+  waterfall_time_span_seconds_ =
+      std::clamp(waterfall_time_span_seconds_, 5, 30);
   averaging_frames_ = std::clamp(averaging_frames_, 1, 32);
   automatic_range_span_db_ =
       std::clamp(automatic_range_span_db_, 30.0, 100.0);
   waterfall_noise_margin_db_ =
       std::clamp(waterfall_noise_margin_db_, 0.0, 30.0);
+  cw_guide_center_hz_ = std::clamp(cw_guide_center_hz_, 0.0, 96'000.0);
+  cw_guide_width_hz_ = std::clamp(cw_guide_width_hz_, 10.0, 5'000.0);
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -567,12 +585,16 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("keying/keyActiveHigh")), key_active_high_);
   settings.setValue(storageKey(QStringLiteral("display/targetFps")), target_fps_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallRate")), waterfall_rate_);
+  settings.setValue(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), waterfall_time_span_seconds_);
   settings.setValue(storageKey(QStringLiteral("display/automaticRange")), automatic_range_);
   settings.setValue(storageKey(QStringLiteral("display/lowerBoundDb")), lower_bound_db_);
   settings.setValue(storageKey(QStringLiteral("display/upperBoundDb")), upper_bound_db_);
   settings.setValue(storageKey(QStringLiteral("display/automaticRangeSpanDb")), automatic_range_span_db_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallNoiseSuppression")), waterfall_noise_suppression_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallNoiseMarginDb")), waterfall_noise_margin_db_);
+  settings.setValue(storageKey(QStringLiteral("display/showCwGuide")), show_cw_guide_);
+  settings.setValue(storageKey(QStringLiteral("display/cwGuideCenterHz")), cw_guide_center_hz_);
+  settings.setValue(storageKey(QStringLiteral("display/cwGuideWidthHz")), cw_guide_width_hz_);
   settings.setValue(storageKey(QStringLiteral("display/averagingFrames")), averaging_frames_);
   settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
   settings.sync();
@@ -645,7 +667,9 @@ void AppSettings::load() {
   ptt_active_high_ = settings.value(storageKey(QStringLiteral("keying/pttActiveHigh")), true).toBool();
   key_active_high_ = settings.value(storageKey(QStringLiteral("keying/keyActiveHigh")), true).toBool();
   target_fps_ = settings.value(storageKey(QStringLiteral("display/targetFps")), 60).toInt();
-  waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 30).toInt();
+  waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60).toInt();
+  waterfall_time_span_seconds_ =
+      settings.value(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), 10).toInt();
   automatic_range_ = settings.value(storageKey(QStringLiteral("display/automaticRange")), true).toBool();
   lower_bound_db_ = settings.value(storageKey(QStringLiteral("display/lowerBoundDb")), -120.0).toDouble();
   upper_bound_db_ = settings.value(storageKey(QStringLiteral("display/upperBoundDb")), -20.0).toDouble();
@@ -655,6 +679,12 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("display/waterfallNoiseSuppression")), true).toBool();
   waterfall_noise_margin_db_ =
       settings.value(storageKey(QStringLiteral("display/waterfallNoiseMarginDb")), 6.0).toDouble();
+  show_cw_guide_ =
+      settings.value(storageKey(QStringLiteral("display/showCwGuide")), true).toBool();
+  cw_guide_center_hz_ =
+      settings.value(storageKey(QStringLiteral("display/cwGuideCenterHz")), 700.0).toDouble();
+  cw_guide_width_hz_ =
+      settings.value(storageKey(QStringLiteral("display/cwGuideWidthHz")), 200.0).toDouble();
   averaging_frames_ = settings.value(storageKey(QStringLiteral("display/averagingFrames")), 3).toInt();
   show_grid_ = settings.value(storageKey(QStringLiteral("display/showGrid")), true).toBool();
 }
@@ -801,13 +831,17 @@ void AppSettings::resetInMemorySettings() {
   rx_transverter_offset_hz_ = 0;
   tx_transverter_offset_hz_ = 0;
   target_fps_ = 60;
-  waterfall_rate_ = 30;
+  waterfall_rate_ = 60;
+  waterfall_time_span_seconds_ = 10;
   automatic_range_ = true;
   lower_bound_db_ = -120.0;
   upper_bound_db_ = -20.0;
   automatic_range_span_db_ = 60.0;
   waterfall_noise_suppression_ = true;
   waterfall_noise_margin_db_ = 6.0;
+  show_cw_guide_ = true;
+  cw_guide_center_hz_ = 700.0;
+  cw_guide_width_hz_ = 200.0;
   averaging_frames_ = 3;
   show_grid_ = true;
   applyReferenceDefaults(0);

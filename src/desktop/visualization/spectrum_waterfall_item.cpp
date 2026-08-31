@@ -11,13 +11,14 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #include "../replay/replay_controller.hpp"
 
 namespace cwassistant::desktop {
 namespace {
 
-constexpr std::size_t kMaximumWaterfallRows = 512;
+constexpr int kMaximumWaterfallRows = 3'600;
 
 class DisplayNode final : public QSGNode {
  public:
@@ -165,6 +166,7 @@ void SpectrumWaterfallItem::setNoiseSuppression(const bool value) {
   noise_suppression_ = value;
   waterfall_rows_.clear();
   last_row_timestamp_ns_ = 0;
+  has_row_timestamp_ = false;
   emit displayChanged();
   update();
 }
@@ -177,6 +179,7 @@ void SpectrumWaterfallItem::setNoiseMarginDb(const double value) {
   noise_margin_db_ = clamped;
   waterfall_rows_.clear();
   last_row_timestamp_ns_ = 0;
+  has_row_timestamp_ = false;
   emit displayChanged();
   update();
 }
@@ -194,7 +197,31 @@ void SpectrumWaterfallItem::setWaterfallRate(const int value) {
   const int clamped = std::clamp(value, 1, 120);
   if (waterfall_rate_ == clamped) return;
   waterfall_rate_ = clamped;
+  waterfall_rows_.clear();
+  has_row_timestamp_ = false;
   emit displayChanged();
+  update();
+}
+int SpectrumWaterfallItem::waterfallTimeSpanSeconds() const noexcept {
+  return waterfall_time_span_seconds_;
+}
+void SpectrumWaterfallItem::setWaterfallTimeSpanSeconds(const int value) {
+  const int clamped = std::clamp(value, 5, 30);
+  if (waterfall_time_span_seconds_ == clamped) return;
+  waterfall_time_span_seconds_ = clamped;
+  while (waterfall_rows_.size() >
+         static_cast<std::size_t>(waterfallRowCapacity())) {
+    waterfall_rows_.pop_back();
+  }
+  emit displayChanged();
+  update();
+}
+int SpectrumWaterfallItem::waterfallRowCapacity() const noexcept {
+  return std::clamp(waterfall_rate_ * waterfall_time_span_seconds_, 1,
+                    kMaximumWaterfallRows);
+}
+int SpectrumWaterfallItem::storedWaterfallRows() const noexcept {
+  return static_cast<int>(waterfall_rows_.size());
 }
 bool SpectrumWaterfallItem::showGrid() const noexcept { return show_grid_; }
 void SpectrumWaterfallItem::setShowGrid(const bool value) {
@@ -224,6 +251,10 @@ double SpectrumWaterfallItem::estimatedNoiseFloorDb() const noexcept {
 
 void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   if (frame.bins_dbfs.isEmpty()) return;
+  if (!latest_bins_.isEmpty() && latest_bins_.size() != frame.bins_dbfs.size()) {
+    waterfall_rows_.clear();
+    has_row_timestamp_ = false;
+  }
   latest_bins_ = frame.bins_dbfs;
   if (!qFuzzyCompare(lower_frequency_hz_, frame.lower_frequency_hz) ||
       !qFuzzyCompare(upper_frequency_hz_, frame.upper_frequency_hz)) {
@@ -242,13 +273,23 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
 
   const std::uint64_t row_interval =
       1'000'000'000ULL / static_cast<std::uint64_t>(waterfall_rate_);
-  if (last_row_timestamp_ns_ == 0 ||
-      frame.timestamp_ns >= last_row_timestamp_ns_ + row_interval) {
-    waterfall_rows_.push_front(conditionedWaterfallRow(latest_bins_));
-    if (waterfall_rows_.size() > kMaximumWaterfallRows) {
-      waterfall_rows_.pop_back();
-    }
+  if (!has_row_timestamp_) {
+    appendWaterfallRow(conditionedWaterfallRow(latest_bins_));
     last_row_timestamp_ns_ = frame.timestamp_ns;
+    has_row_timestamp_ = true;
+  } else if (frame.timestamp_ns >= last_row_timestamp_ns_ + row_interval) {
+    const std::uint64_t elapsed_intervals =
+        (frame.timestamp_ns - last_row_timestamp_ns_) / row_interval;
+    const std::uint64_t missing_intervals = elapsed_intervals - 1;
+    const std::uint64_t retained_missing = std::min<std::uint64_t>(
+        missing_intervals,
+        static_cast<std::uint64_t>(waterfallRowCapacity() - 1));
+    const QVector<float> blank = blankWaterfallRow(latest_bins_.size());
+    for (std::uint64_t i = 0; i < retained_missing; ++i) {
+      appendWaterfallRow(blank);
+    }
+    appendWaterfallRow(conditionedWaterfallRow(latest_bins_));
+    last_row_timestamp_ns_ += elapsed_intervals * row_interval;
   }
   scheduleRender();
 }
@@ -257,6 +298,7 @@ void SpectrumWaterfallItem::resetFrames() {
   latest_bins_.clear();
   waterfall_rows_.clear();
   last_row_timestamp_ns_ = 0;
+  has_row_timestamp_ = false;
   last_sequence_ = 0;
   has_sequence_ = false;
   automatic_range_initialized_ = false;
@@ -367,6 +409,22 @@ QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
   return conditioned;
 }
 
+QVector<float> SpectrumWaterfallItem::blankWaterfallRow(
+    const qsizetype width) const {
+  const float level = static_cast<float>(
+      noise_floor_initialized_ ? estimated_noise_floor_db_ - 18.0
+                               : effective_lower_bound_db_);
+  return QVector<float>(width, level);
+}
+
+void SpectrumWaterfallItem::appendWaterfallRow(QVector<float> row) {
+  waterfall_rows_.push_front(std::move(row));
+  while (waterfall_rows_.size() >
+         static_cast<std::size_t>(waterfallRowCapacity())) {
+    waterfall_rows_.pop_back();
+  }
+}
+
 void SpectrumWaterfallItem::scheduleRender() {
   const qint64 minimum_interval = 1'000 / target_fps_;
   if (!render_clock_.isValid() || render_clock_.elapsed() >= minimum_interval) {
@@ -427,13 +485,18 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   }
   root->grid->markDirty(QSGNode::DirtyGeometry);
 
-  if (!waterfall_rows_.empty() && window() != nullptr) {
-    const int image_width = waterfall_rows_.front().size();
-    const int image_height = static_cast<int>(waterfall_rows_.size());
+  if (!latest_bins_.isEmpty() && window() != nullptr) {
+    const int image_width = latest_bins_.size();
+    const int image_height = waterfallRowCapacity();
     QImage image(image_width, image_height, QImage::Format_RGB32);
+    const QRgb blank_color = waterfallColor(0.0F);
     for (int y = 0; y < image_height; ++y) {
-      const auto& row = waterfall_rows_[static_cast<std::size_t>(y)];
       auto* scanline = reinterpret_cast<QRgb*>(image.scanLine(y));
+      if (y >= storedWaterfallRows()) {
+        std::fill_n(scanline, image_width, blank_color);
+        continue;
+      }
+      const auto& row = waterfall_rows_[static_cast<std::size_t>(y)];
       for (int x = 0; x < image_width; ++x) {
         const float normalized = static_cast<float>(std::clamp(
             (static_cast<double>(row[x]) - effective_lower_bound_db_) / span,

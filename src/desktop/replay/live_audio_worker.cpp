@@ -223,13 +223,16 @@ void LiveAudioDspWorker::stop() {
 }
 
 void LiveAudioDspWorker::configure(
-    const int averaging_frames, const bool dc_rejection,
+    const int averaging_frames, const int frame_rate_hz,
+    const bool dc_rejection,
     const bool automatic_gain, const double gain_db,
     const double automatic_gain_target_dbfs, const bool automatic_bandwidth,
     const double lower_frequency_hz, const double upper_frequency_hz) {
   auto config = analyzer_.config();
   config.averaging_frames = static_cast<std::uint8_t>(
       std::clamp(averaging_frames, 1, 32));
+  config.frame_rate_hz = static_cast<std::uint16_t>(
+      std::clamp(frame_rate_hz, 1, 120));
   config.audio_dc_rejection = dc_rejection;
   config.audio_automatic_gain = automatic_gain;
   config.audio_gain_db = static_cast<float>(std::clamp(gain_db, -40.0, 40.0));

@@ -23,6 +23,12 @@ int main(int argc, char* argv[]) {
   item.setAutomaticRangeSpanDb(60.0);
   item.setNoiseSuppression(true);
   item.setNoiseMarginDb(6.0);
+  item.setWaterfallRate(30);
+  item.setWaterfallTimeSpanSeconds(15);
+  if (item.waterfallRowCapacity() != 450 ||
+      item.waterfallTimeSpanSeconds() != 15) {
+    return 2;
+  }
 
   cwassistant::desktop::SpectrumFrame noise_frame{
       .bins_dbfs = QVector<float>(128, -90.0F),
@@ -34,8 +40,9 @@ int main(int argc, char* argv[]) {
   item.acceptFrame(noise_frame);
   if (item.effectiveUpperBoundDb() - item.effectiveLowerBoundDb() < 59.9 ||
       std::abs(item.estimatedNoiseFloorDb() + 90.0) > 0.1) {
-    return 2;
+    return 3;
   }
+  if (item.storedWaterfallRows() != 1) return 4;
 
   const double first_ceiling = item.effectiveUpperBoundDb();
   noise_frame.bins_dbfs.fill(-80.0F);
@@ -43,11 +50,12 @@ int main(int argc, char* argv[]) {
   noise_frame.timestamp_ns = 2'000'000'000;
   item.acceptFrame(noise_frame);
   if (item.effectiveUpperBoundDb() - first_ceiling > 3.0) {
-    return 3;
+    return 5;
   }
+  if (item.storedWaterfallRows() != 31) return 6;
 
   QSGNode* node = item.updatePaintNode(nullptr, nullptr);
-  if (node == nullptr) return 4;
+  if (node == nullptr) return 7;
 
   node = item.updatePaintNode(node, nullptr);
   delete node;

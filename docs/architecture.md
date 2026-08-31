@@ -97,6 +97,14 @@ valid texture, and it owns replacement textures. An empty/reset receiver keeps
 the waterfall node absent or hidden; null textures are never attached to the
 scene graph.
 
+Waterfall rows occupy a timestamp-anchored constant-duration window. The row
+capacity is `line rate × history seconds`; missing intervals and unfilled older
+history are dark rows. The complete fixed-height time image is scaled to the
+available pane, so resizing changes pixel pitch but never the time represented
+from top to bottom. The analyzer uses overlapping 2,048-sample Hann windows with
+a sample-rate-derived hop matching the selected line density, retaining
+frequency resolution while increasing real dit/dah timing observations.
+
 The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
 clock from sample indices, applies a Hann window, and publishes immutable dBFS
 spectrum snapshots with exact frequency coordinates. Audio produces a one-sided

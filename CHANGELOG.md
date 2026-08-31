@@ -28,6 +28,16 @@ All notable changes to CW Assistant are recorded here. The format follows
   decoder-unavailable state until the decoding milestone is implemented.
 - Stable automatic display span, smoothed noise-floor/ceiling tracking,
   adjustable waterfall-only noise suppression, and live noise-floor telemetry.
+- A profile-persisted constant waterfall time window that remains stable while
+  history fills or the pane is resized, preserves source-time gaps as dark
+  rows, and decouples represented seconds from selectable line density.
+- Overlapping FFT hops tied to the selected waterfall line rate for real
+  high-resolution dit/dah timing updates without sacrificing the 2,048-sample
+  frequency window.
+- New-profile waterfall defaults of 60 timing lines/s over a constant 10-second
+  view, with immediate history control for magnifying short elements.
+- A toggleable red CW passband guide with configurable 700 Hz center/width and
+  a seven-point frequency scale across the spectrum/waterfall X axis.
 - A normalized per-profile own station callsign field under Settings → Station,
   ready for station logging and exact own-call notification matching.
 - A modern CW Morse-key application mark with native Windows executable/MSI,

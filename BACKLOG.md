@@ -41,6 +41,10 @@ The M2 plan now defines a measured hybrid decoder, bounded multi-pass weak-signa
 refinement, and same-frequency pileup separation using operator fingerprints,
 joint timing inference, conservative cancellation, and optional receive
 diversity.
+The waterfall now has a constant profile-selected time span independent of pane
+size, startup fill, and line density, preserves timestamp gaps, derives genuine
+high-rate timing frames with overlapping FFT hops, and provides a configurable
+CW guide plus X-axis frequency scale.
 
 ## P0 — project decisions and safety
 
@@ -68,7 +72,7 @@ diversity.
 | UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a backend-native, valid-texture-only waterfall image node render real replay FFT frames with bounded history; empty startup/reset regression tests pass; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
 | UI-003 | todo | Add clickable channel/callsign overlays | Hit testing maps labels and traces to the same frequency source of truth and emits operator-selection events. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
-| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, range bounds/mode, stable automatic span, waterfall noise suppression/margin, averaging, and grid are independently configurable and persisted; immediate Signal/Display controls sit below the spectrum with explicit profile saving; peak hold, labels, palette selection, zoom, and pan remain. |
+| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, constant 5–30 second history, range bounds/mode, stable automatic span, waterfall noise suppression/margin, averaging, grid, red CW center/width guide, and seven-point frequency scale are configurable and persisted; startup, resize, and timestamp gaps cannot collapse or stretch time, and overlapping FFT hops provide real timing samples at the selected line rate; immediate Signal/Display controls sit below the spectrum with explicit profile saving; peak hold, time ticks, palette selection, zoom, and pan remain. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | todo | Add pipeline telemetry | UI exposes overruns, sequence gaps, queue depths, DSP latency, and dropped display frames. |

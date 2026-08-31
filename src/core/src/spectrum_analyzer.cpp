@@ -61,7 +61,8 @@ SpectrumAnalyzer::SpectrumAnalyzer(const SpectrumAnalyzerConfig config) {
 
 bool SpectrumAnalyzer::configure(SpectrumAnalyzerConfig config) {
   if (!valid_fft_size(config.fft_size) || config.averaging_frames == 0 ||
-      config.averaging_frames > 32 || config.audio_gain_db < -40.0F ||
+      config.averaging_frames > 32 || config.frame_rate_hz == 0 ||
+      config.frame_rate_hz > 240 || config.audio_gain_db < -40.0F ||
       config.audio_gain_db > 40.0F ||
       config.audio_automatic_gain_target_dbfs < -40.0F ||
       config.audio_automatic_gain_target_dbfs > -1.0F ||
@@ -81,9 +82,11 @@ void SpectrumAnalyzer::reset() noexcept {
   averaged_power_.clear();
   output_sequence_ = 0;
   frame_timestamp_ns_ = 0;
+  expected_input_timestamp_ns_ = 0;
   stream_initialized_ = false;
   average_initialized_ = false;
   audio_gain_initialized_ = false;
+  input_timing_initialized_ = false;
   applied_audio_gain_db_ = 0.0F;
 }
 
@@ -106,6 +109,19 @@ std::vector<SpectrumSnapshot> SpectrumAnalyzer::process(
     stream_initialized_ = true;
   }
 
+  if (input_timing_initialized_) {
+    const std::uint64_t difference =
+        block.timestamp_ns > expected_input_timestamp_ns_
+            ? block.timestamp_ns - expected_input_timestamp_ns_
+            : expected_input_timestamp_ns_ - block.timestamp_ns;
+    const auto tolerance_ns = static_cast<std::uint64_t>(
+        std::ceil(2.0 * 1'000'000'000.0 / block.stream.sample_rate_hz));
+    if (difference > tolerance_ns) {
+      accumulator_.clear();
+      frame_timestamp_ns_ = block.timestamp_ns;
+    }
+  }
+
   accumulator_.reserve(config_.fft_size);
   for (std::size_t index = 0; index < block.sample_count; ++index) {
     if (accumulator_.empty()) {
@@ -116,10 +132,36 @@ std::vector<SpectrumSnapshot> SpectrumAnalyzer::process(
     accumulator_.push_back(block.samples[index]);
     if (accumulator_.size() == config_.fft_size) {
       output.push_back(transform(frame_timestamp_ns_));
-      accumulator_.clear();
+      const std::size_t hop = hopSize();
+      if (hop >= accumulator_.size()) {
+        accumulator_.clear();
+      } else {
+        accumulator_.erase(
+            accumulator_.begin(),
+            accumulator_.begin() + static_cast<std::ptrdiff_t>(hop));
+        frame_timestamp_ns_ += static_cast<std::uint64_t>(
+            static_cast<long double>(hop) * 1'000'000'000.0L /
+            block.stream.sample_rate_hz);
+      }
     }
   }
+  expected_input_timestamp_ns_ =
+      block.timestamp_ns + static_cast<std::uint64_t>(
+                               static_cast<long double>(block.sample_count) *
+                               1'000'000'000.0L /
+                               block.stream.sample_rate_hz);
+  input_timing_initialized_ = true;
   return output;
+}
+
+std::size_t SpectrumAnalyzer::hopSize() const noexcept {
+  if (!stream_initialized_ || stream_.sample_rate_hz <= 0.0) {
+    return config_.fft_size;
+  }
+  const auto requested = static_cast<std::size_t>(std::max<long long>(
+      1, std::llround(stream_.sample_rate_hz /
+                      static_cast<double>(config_.frame_rate_hz))));
+  return std::min(requested, config_.fft_size);
 }
 
 void SpectrumAnalyzer::rebuild() {

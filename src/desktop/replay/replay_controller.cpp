@@ -82,7 +82,8 @@ class ReplayWorker final : public QObject {
     source_.stop();
   }
 
-  void configure(const int averaging_frames, const bool dc_rejection,
+  void configure(const int averaging_frames, const int frame_rate_hz,
+                 const bool dc_rejection,
                  const bool automatic_gain, const double gain_db,
                  const double automatic_gain_target_dbfs,
                  const bool automatic_bandwidth,
@@ -91,6 +92,8 @@ class ReplayWorker final : public QObject {
     auto config = analyzer_.config();
     config.averaging_frames = static_cast<std::uint8_t>(
         std::clamp(averaging_frames, 1, 32));
+    config.frame_rate_hz = static_cast<std::uint16_t>(
+        std::clamp(frame_rate_hz, 1, 120));
     config.audio_dc_rejection = dc_rejection;
     config.audio_automatic_gain = automatic_gain;
     config.audio_gain_db =
@@ -337,7 +340,8 @@ void ReplayController::setAveragingFrames(const int value) {
 void ReplayController::setSpectrumProcessing(
     const bool dc_rejection, const bool automatic_gain, const double gain_db,
     const double automatic_gain_target_dbfs, const bool automatic_bandwidth,
-    const double lower_frequency_hz, const double upper_frequency_hz) {
+    const double lower_frequency_hz, const double upper_frequency_hz,
+    const int frame_rate_hz) {
   const double clamped_gain_db = std::clamp(gain_db, -40.0, 40.0);
   const double clamped_target_dbfs =
       std::clamp(automatic_gain_target_dbfs, -40.0, -1.0);
@@ -345,6 +349,7 @@ void ReplayController::setSpectrumProcessing(
       std::clamp(lower_frequency_hz, 0.0, 95'999.0);
   const double clamped_upper_hz =
       std::clamp(upper_frequency_hz, clamped_lower_hz + 1.0, 96'000.0);
+  const int clamped_frame_rate_hz = std::clamp(frame_rate_hz, 1, 120);
   if (spectrum_processing_configured_ &&
       audio_dc_rejection_ == dc_rejection &&
       audio_automatic_gain_ == automatic_gain &&
@@ -352,7 +357,8 @@ void ReplayController::setSpectrumProcessing(
       audio_automatic_gain_target_dbfs_ == clamped_target_dbfs &&
       audio_automatic_bandwidth_ == automatic_bandwidth &&
       audio_lower_frequency_hz_ == clamped_lower_hz &&
-      audio_upper_frequency_hz_ == clamped_upper_hz) {
+      audio_upper_frequency_hz_ == clamped_upper_hz &&
+      spectrum_frame_rate_hz_ == clamped_frame_rate_hz) {
     return;
   }
   audio_dc_rejection_ = dc_rejection;
@@ -362,18 +368,21 @@ void ReplayController::setSpectrumProcessing(
   audio_automatic_bandwidth_ = automatic_bandwidth;
   audio_lower_frequency_hz_ = clamped_lower_hz;
   audio_upper_frequency_hz_ = clamped_upper_hz;
+  spectrum_frame_rate_hz_ = clamped_frame_rate_hz;
   spectrum_processing_configured_ = true;
   publishSpectrumConfiguration();
 }
 
 void ReplayController::publishSpectrumConfiguration() {
   emit configureRequested(
-      averaging_frames_, audio_dc_rejection_, audio_automatic_gain_,
+      averaging_frames_, spectrum_frame_rate_hz_, audio_dc_rejection_,
+      audio_automatic_gain_,
       audio_gain_db_, audio_automatic_gain_target_dbfs_,
       audio_automatic_bandwidth_, audio_lower_frequency_hz_,
       audio_upper_frequency_hz_);
   emit liveDspConfigureRequested(
-      averaging_frames_, audio_dc_rejection_, audio_automatic_gain_,
+      averaging_frames_, spectrum_frame_rate_hz_, audio_dc_rejection_,
+      audio_automatic_gain_,
       audio_gain_db_, audio_automatic_gain_target_dbfs_,
       audio_automatic_bandwidth_, audio_lower_frequency_hz_,
       audio_upper_frequency_hz_);

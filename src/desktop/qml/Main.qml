@@ -17,6 +17,14 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: "#43c6ac"
 
+    function formatFrequency(hz) {
+        if (Math.abs(hz) >= 1000000)
+            return (hz / 1000000).toFixed(3) + " MHz"
+        if (Math.abs(hz) >= 10000)
+            return (hz / 1000).toFixed(1) + " kHz"
+        return hz.toFixed(0) + " Hz"
+    }
+
     header: ToolBar {
         height: 64
         background: Rectangle { color: "#151b23" }
@@ -130,6 +138,7 @@ ApplicationWindow {
             }
 
             Rectangle {
+                id: spectrumPanel
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 radius: 10
@@ -144,6 +153,7 @@ ApplicationWindow {
                     source: replayController
                     targetFps: appSettings.targetFps
                     waterfallRate: appSettings.waterfallRate
+                    waterfallTimeSpanSeconds: appSettings.waterfallTimeSpanSeconds
                     automaticRange: appSettings.automaticRange
                     automaticRangeSpanDb: appSettings.automaticRangeSpanDb
                     lowerBoundDb: appSettings.lowerBoundDb
@@ -170,21 +180,78 @@ ApplicationWindow {
                     color: "#8394a6"
                     font.pixelSize: 11
                 }
-                Label {
-                    anchors.left: parent.left
-                    anchors.bottom: parent.bottom
-                    anchors.margins: 14
-                    text: spectrumDisplay.lowerFrequencyHz.toFixed(0) + " Hz"
-                    color: "#8394a6"
-                    font.pixelSize: 11
+                Repeater {
+                    model: 7
+                    delegate: Item {
+                        required property int index
+                        property real fraction: index / 6.0
+                        property real tickX: spectrumDisplay.x
+                                             + fraction * spectrumDisplay.width
+                        visible: spectrumDisplay.upperFrequencyHz
+                                 > spectrumDisplay.lowerFrequencyHz
+                        x: tickX
+                        y: spectrumDisplay.y + spectrumDisplay.height - 22
+                        z: 4
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 1
+                            height: 6
+                            color: "#75879a"
+                        }
+                        Label {
+                            x: index === 0 ? 2
+                               : (index === 6 ? -implicitWidth - 2
+                                  : -implicitWidth / 2)
+                            y: 5
+                            text: window.formatFrequency(
+                                      spectrumDisplay.lowerFrequencyHz
+                                      + fraction
+                                        * (spectrumDisplay.upperFrequencyHz
+                                           - spectrumDisplay.lowerFrequencyHz))
+                            color: "#9cabb9"
+                            font.pixelSize: 10
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: 2
+                    delegate: Rectangle {
+                        required property int index
+                        property real boundaryHz: appSettings.cwGuideCenterHz
+                                                  + (index === 0 ? -0.5 : 0.5)
+                                                    * appSettings.cwGuideWidthHz
+                        visible: appSettings.showCwGuide
+                                 && boundaryHz >= spectrumDisplay.lowerFrequencyHz
+                                 && boundaryHz <= spectrumDisplay.upperFrequencyHz
+                                 && spectrumDisplay.upperFrequencyHz
+                                    > spectrumDisplay.lowerFrequencyHz
+                        x: spectrumDisplay.x
+                           + (boundaryHz - spectrumDisplay.lowerFrequencyHz)
+                             / (spectrumDisplay.upperFrequencyHz
+                                - spectrumDisplay.lowerFrequencyHz)
+                             * spectrumDisplay.width
+                        y: spectrumDisplay.y
+                        width: 2
+                        height: spectrumDisplay.height
+                        color: "#ff4d5a"
+                        opacity: 0.85
+                        z: 3
+                    }
                 }
                 Label {
+                    visible: appSettings.showCwGuide
+                             && spectrumDisplay.upperFrequencyHz
+                                > spectrumDisplay.lowerFrequencyHz
+                    anchors.top: parent.top
                     anchors.right: parent.right
-                    anchors.bottom: parent.bottom
                     anchors.margins: 14
-                    text: spectrumDisplay.upperFrequencyHz.toFixed(0) + " Hz"
-                    color: "#8394a6"
-                    font.pixelSize: 11
+                    text: "CW guide  " + appSettings.cwGuideCenterHz.toFixed(0)
+                          + " Hz  •  " + appSettings.cwGuideWidthHz.toFixed(0)
+                          + " Hz wide"
+                    color: "#ff7b84"
+                    font.pixelSize: 10
+                    z: 4
                 }
                 ColumnLayout {
                     anchors.centerIn: parent
@@ -313,6 +380,27 @@ ApplicationWindow {
                             RowLayout {
                                 id: displayControls
                                 spacing: 8
+                            Label { text: "FPS" }
+                            SpinBox {
+                                from: 10
+                                to: 120
+                                value: appSettings.targetFps
+                                onValueModified: appSettings.targetFps = value
+                            }
+                            Label { text: "Lines/s" }
+                            SpinBox {
+                                from: 1
+                                to: 120
+                                value: appSettings.waterfallRate
+                                onValueModified: appSettings.waterfallRate = value
+                            }
+                            Label { text: "Avg" }
+                            SpinBox {
+                                from: 1
+                                to: 32
+                                value: appSettings.averagingFrames
+                                onValueModified: appSettings.averagingFrames = value
+                            }
                             CheckBox {
                                 objectName: "liveAutomaticLevelsCheck"
                                 text: "Auto levels"
@@ -345,6 +433,39 @@ ApplicationWindow {
                                 value: Math.round(appSettings.upperBoundDb)
                                 visible: !appSettings.automaticRange
                                 onValueModified: appSettings.upperBoundDb = value
+                            }
+                            Label { text: "History" }
+                            SpinBox {
+                                editable: true
+                                from: 5
+                                to: 30
+                                value: appSettings.waterfallTimeSpanSeconds
+                                onValueModified: appSettings.waterfallTimeSpanSeconds = value
+                            }
+                            Label { text: "seconds"; color: "#8290a0" }
+                            CheckBox {
+                                objectName: "liveCwGuideCheck"
+                                text: "CW guide"
+                                checked: appSettings.showCwGuide
+                                onToggled: appSettings.showCwGuide = checked
+                            }
+                            Label { text: "Tone"; enabled: appSettings.showCwGuide }
+                            SpinBox {
+                                editable: true
+                                from: 0
+                                to: 96000
+                                value: Math.round(appSettings.cwGuideCenterHz)
+                                enabled: appSettings.showCwGuide
+                                onValueModified: appSettings.cwGuideCenterHz = value
+                            }
+                            Label { text: "Width"; enabled: appSettings.showCwGuide }
+                            SpinBox {
+                                editable: true
+                                from: 10
+                                to: 5000
+                                value: Math.round(appSettings.cwGuideWidthHz)
+                                enabled: appSettings.showCwGuide
+                                onValueModified: appSettings.cwGuideWidthHz = value
                             }
                             CheckBox {
                                 objectName: "liveNoiseSuppressionCheck"

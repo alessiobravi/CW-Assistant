@@ -280,6 +280,27 @@ void test_spectrum_analyzer() {
 
   expect(!analyzer.configure({.fft_size = 1'000, .averaging_frames = 1}),
          "spectrum analyzer rejects a non-radix-two transform");
+
+  RealtimeSampleBlock overlap_block = block;
+  overlap_block.sample_count = 2'048;
+  for (std::size_t index = 0; index < overlap_block.sample_count; ++index) {
+    const float phase = 2.0F * std::numbers::pi_v<float> *
+                        static_cast<float>(tone_bin * index) /
+                        static_cast<float>(fft_size);
+    overlap_block.samples[index] = {std::sin(phase), 0.0F};
+  }
+  SpectrumAnalyzer overlapping(
+      {.fft_size = fft_size, .averaging_frames = 1, .frame_rate_hz = 120});
+  const auto overlap_snapshots = overlapping.process(overlap_block);
+  expect(overlap_snapshots.size() == 3 &&
+             overlap_snapshots[1].timestamp_ns == 8'333'333,
+         "overlapping FFT hops add genuine high-rate waterfall timing frames");
+  overlap_block.sample_count = fft_size;
+  overlap_block.timestamp_ns = 2'000'000'000;
+  const auto after_gap = overlapping.process(overlap_block);
+  expect(after_gap.size() == 1 &&
+             after_gap.front().timestamp_ns == overlap_block.timestamp_ns,
+         "analysis resets overlap at a capture gap so waterfall time is not compressed");
 }
 
 void test_remote_control_lease() {

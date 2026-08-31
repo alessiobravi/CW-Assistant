@@ -47,7 +47,8 @@ class ReplayController final : public QObject {
                              double automatic_gain_target_dbfs,
                              bool automatic_bandwidth,
                              double lower_frequency_hz,
-                             double upper_frequency_hz);
+                             double upper_frequency_hz,
+                             int frame_rate_hz);
   void setSourceMode(int value);
   void setAudioInputSelection(QString encoded_id, QString display_name);
 
@@ -68,7 +69,8 @@ class ReplayController final : public QObject {
   void playRequested();
   void pauseRequested();
   void stopRequested();
-  void configureRequested(int averaging_frames, bool dc_rejection,
+  void configureRequested(int averaging_frames, int frame_rate_hz,
+                          bool dc_rejection,
                           bool automatic_gain, double gain_db,
                           double automatic_gain_target_dbfs,
                           bool automatic_bandwidth,
@@ -78,7 +80,8 @@ class ReplayController final : public QObject {
   void liveStopRequested();
   void liveDspStartRequested();
   void liveDspStopRequested();
-  void liveDspConfigureRequested(int averaging_frames, bool dc_rejection,
+  void liveDspConfigureRequested(int averaging_frames, int frame_rate_hz,
+                                 bool dc_rejection,
                                  bool automatic_gain, double gain_db,
                                  double automatic_gain_target_dbfs,
                                  bool automatic_bandwidth,
@@ -116,6 +119,7 @@ class ReplayController final : public QObject {
   bool audio_automatic_bandwidth_{true};
   double audio_lower_frequency_hz_{100.0};
   double audio_upper_frequency_hz_{3'000.0};
+  int spectrum_frame_rate_hz_{60};
   bool spectrum_processing_configured_{false};
 };
 

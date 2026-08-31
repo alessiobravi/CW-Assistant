@@ -293,6 +293,14 @@ Pane {
                     SpinBox { from: 10; to: 120; value: appSettings.targetFps; onValueModified: appSettings.targetFps = value }
                     Label { text: "Waterfall lines / second" }
                     SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
+                    Label { text: "Waterfall history (seconds)" }
+                    SpinBox { from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onValueModified: appSettings.waterfallTimeSpanSeconds = value }
+                    Label { text: "CW frequency guide" }
+                    CheckBox { text: "Show red passband boundaries"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
+                    Label { text: "CW guide center tone (Hz)" }
+                    SpinBox { editable: true; from: 0; to: 96000; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideCenterHz = value }
+                    Label { text: "CW guide width (Hz)" }
+                    SpinBox { editable: true; from: 10; to: 5000; value: appSettings.cwGuideWidthHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideWidthHz = value }
                     Label { text: "Display level range" }
                     CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
                     Label { text: "Lower bound (dB)" }
@@ -310,7 +318,7 @@ Pane {
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
                     Label { text: "" }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum." }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Waterfall history is a constant time window: resizing, startup fill, and line density do not stretch or collapse Morse timing. Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum." }
                 }
             }
 

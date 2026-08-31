@@ -259,6 +259,14 @@ Dialog {
                 SpinBox { from: 10; to: 120; value: appSettings.targetFps; onValueModified: appSettings.targetFps = value }
                 Label { text: "Waterfall lines / second" }
                 SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
+                Label { text: "Waterfall history (seconds)" }
+                SpinBox { from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onValueModified: appSettings.waterfallTimeSpanSeconds = value }
+                Label { text: "CW tone guide" }
+                RowLayout {
+                    CheckBox { text: "Show"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
+                    SpinBox { editable: true; from: 0; to: 96000; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideCenterHz = value }
+                    Label { text: "Hz" }
+                }
                 Label { text: "Range" }
                 CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "These are starting values. The full Settings pane provides independent visualization controls and future startup calibration recommendations." }

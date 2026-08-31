@@ -74,6 +74,13 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are
   configurable.
 - Configure target render FPS and waterfall line/scroll rate independently.
+- Keep the displayed waterfall history on a constant configurable time axis.
+  Pane resizing, startup fill, and missing source intervals must not stretch or
+  collapse dit/dah timing; line rate changes temporal resolution, not duration.
+- Generate genuine waterfall timing frames with bounded overlapping analysis;
+  never duplicate a spectrum row merely to satisfy a requested line rate.
+- Provide a toggleable, configurable CW center/passband guide and labeled
+  frequency ticks on the X axis.
   Configure automatic/manual range, lower and upper dB bounds, averaging, peak
   hold/decay, palette, color gain, black level, contrast/gamma, grid, label
   density/font, spectrum height, zoom, and pan. Invalid combinations are

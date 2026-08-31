@@ -62,12 +62,16 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool keyActiveHigh READ keyActiveHigh WRITE setKeyActiveHigh NOTIFY settingsChanged)
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY settingsChanged)
+  Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
   Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange NOTIFY settingsChanged)
   Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY settingsChanged)
   Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY settingsChanged)
   Q_PROPERTY(double automaticRangeSpanDb READ automaticRangeSpanDb WRITE setAutomaticRangeSpanDb NOTIFY settingsChanged)
   Q_PROPERTY(bool waterfallNoiseSuppression READ waterfallNoiseSuppression WRITE setWaterfallNoiseSuppression NOTIFY settingsChanged)
   Q_PROPERTY(double waterfallNoiseMarginDb READ waterfallNoiseMarginDb WRITE setWaterfallNoiseMarginDb NOTIFY settingsChanged)
+  Q_PROPERTY(bool showCwGuide READ showCwGuide WRITE setShowCwGuide NOTIFY settingsChanged)
+  Q_PROPERTY(double cwGuideCenterHz READ cwGuideCenterHz WRITE setCwGuideCenterHz NOTIFY settingsChanged)
+  Q_PROPERTY(double cwGuideWidthHz READ cwGuideWidthHz WRITE setCwGuideWidthHz NOTIFY settingsChanged)
   Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames NOTIFY settingsChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
@@ -127,12 +131,16 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool keyActiveHigh() const noexcept;
   [[nodiscard]] int targetFps() const noexcept;
   [[nodiscard]] int waterfallRate() const noexcept;
+  [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
   [[nodiscard]] bool automaticRange() const noexcept;
   [[nodiscard]] double lowerBoundDb() const noexcept;
   [[nodiscard]] double upperBoundDb() const noexcept;
   [[nodiscard]] double automaticRangeSpanDb() const noexcept;
   [[nodiscard]] bool waterfallNoiseSuppression() const noexcept;
   [[nodiscard]] double waterfallNoiseMarginDb() const noexcept;
+  [[nodiscard]] bool showCwGuide() const noexcept;
+  [[nodiscard]] double cwGuideCenterHz() const noexcept;
+  [[nodiscard]] double cwGuideWidthHz() const noexcept;
   [[nodiscard]] int averagingFrames() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
@@ -169,12 +177,16 @@ class AppSettings final : public QObject {
   void setKeyActiveHigh(bool value);
   void setTargetFps(int value);
   void setWaterfallRate(int value);
+  void setWaterfallTimeSpanSeconds(int value);
   void setAutomaticRange(bool value);
   void setLowerBoundDb(double value);
   void setUpperBoundDb(double value);
   void setAutomaticRangeSpanDb(double value);
   void setWaterfallNoiseSuppression(bool value);
   void setWaterfallNoiseMarginDb(double value);
+  void setShowCwGuide(bool value);
+  void setCwGuideCenterHz(double value);
+  void setCwGuideWidthHz(double value);
   void setAveragingFrames(int value);
   void setShowGrid(bool value);
 
@@ -263,13 +275,17 @@ class AppSettings final : public QObject {
   bool ptt_active_high_{true};
   bool key_active_high_{true};
   int target_fps_{60};
-  int waterfall_rate_{30};
+  int waterfall_rate_{60};
+  int waterfall_time_span_seconds_{10};
   bool automatic_range_{true};
   double lower_bound_db_{-120.0};
   double upper_bound_db_{-20.0};
   double automatic_range_span_db_{60.0};
   bool waterfall_noise_suppression_{true};
   double waterfall_noise_margin_db_{6.0};
+  bool show_cw_guide_{true};
+  double cw_guide_center_hz_{700.0};
+  double cw_guide_width_hz_{200.0};
   int averaging_frames_{3};
   bool show_grid_{true};
   QString status_message_;

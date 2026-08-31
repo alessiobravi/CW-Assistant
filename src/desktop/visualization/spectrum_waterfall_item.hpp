@@ -21,6 +21,8 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(double noiseMarginDb READ noiseMarginDb WRITE setNoiseMarginDb NOTIFY displayChanged)
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY displayChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY displayChanged)
+  Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY displayChanged)
+  Q_PROPERTY(int waterfallRowCapacity READ waterfallRowCapacity NOTIFY displayChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY displayChanged)
   Q_PROPERTY(double effectiveLowerBoundDb READ effectiveLowerBoundDb NOTIFY rangeChanged)
   Q_PROPERTY(double effectiveUpperBoundDb READ effectiveUpperBoundDb NOTIFY rangeChanged)
@@ -50,6 +52,10 @@ class SpectrumWaterfallItem : public QQuickItem {
   void setTargetFps(int value);
   [[nodiscard]] int waterfallRate() const noexcept;
   void setWaterfallRate(int value);
+  [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
+  void setWaterfallTimeSpanSeconds(int value);
+  [[nodiscard]] int waterfallRowCapacity() const noexcept;
+  [[nodiscard]] int storedWaterfallRows() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
   void setShowGrid(bool value);
   [[nodiscard]] double effectiveLowerBoundDb() const noexcept;
@@ -82,6 +88,8 @@ class SpectrumWaterfallItem : public QQuickItem {
   void updateNoiseFloor(const QVector<float>& bins);
   [[nodiscard]] QVector<float> conditionedWaterfallRow(
       const QVector<float>& bins) const;
+  [[nodiscard]] QVector<float> blankWaterfallRow(qsizetype width) const;
+  void appendWaterfallRow(QVector<float> row);
   void scheduleRender();
 
   QObject* source_{nullptr};
@@ -102,8 +110,10 @@ class SpectrumWaterfallItem : public QQuickItem {
   bool noise_floor_initialized_{false};
   bool show_grid_{true};
   int target_fps_{60};
-  int waterfall_rate_{30};
+  int waterfall_rate_{60};
+  int waterfall_time_span_seconds_{10};
   std::uint64_t last_row_timestamp_ns_{0};
+  bool has_row_timestamp_{false};
   std::uint64_t last_sequence_{0};
   bool has_sequence_{false};
   qulonglong dropped_rows_{0};

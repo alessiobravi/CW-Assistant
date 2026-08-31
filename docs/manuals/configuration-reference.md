@@ -69,13 +69,29 @@ settings that need adjustment while listening:
 - **Signal**: DC rejection, automatic/manual software gain, gain target, and
   automatic/manual bandwidth.
 - **Display**: automatic/manual dBFS levels, automatic span, waterfall noise
-  suppression, suppression margin, and the measured noise floor.
+  suppression, suppression margin, measured noise floor, FPS, line density,
+  constant history seconds, and the CW frequency guide.
 
 Changes are applied immediately to active live audio and WAV replay. Select
 **Save profile** to persist them. The default 60 dB automatic span anchors the
 palette well above the measured floor, while noise suppression darkens only
 waterfall pixels below `noise floor + margin`. Raw spectrum bins are retained
 for future detection and decoding.
+
+**Waterfall history** selects a constant 5–30 second vertical time window. The
+default is 10 seconds. **Lines / second** changes temporal sampling density, not
+the displayed duration. Higher values request overlapping FFT hops, so the
+additional rows contain new timing observations instead of copies; 60–120
+lines/s makes high-speed dit/dah edges easier to inspect at a higher CPU/render
+cost. Resizing and initial fill retain the chosen duration. Capture timestamp
+gaps are rendered as dark rows instead of being compressed. Set **Avg** to 1–2
+for the sharpest element boundaries; higher averaging deliberately smooths time.
+
+**CW guide** draws red boundaries around the selected audio slice over both the
+spectrum and history. It defaults to a 700 Hz center and 200 Hz width. Change
+the tone and width immediately below the graph to match the receiver pitch and
+filter; the guide is visual and does not retune the radio or filter decoder
+input. Seven X-axis labels show the actual displayed audio or RF frequency.
 
 ## Station page
 
