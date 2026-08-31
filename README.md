@@ -47,6 +47,21 @@ the [user manuals](docs/manuals/README.md). The graphical architecture is record
 ADIF release gates and official-fixture verification are documented in the
 [ADIF conformance policy](docs/adif-conformance.md).
 
+## Download current development binaries
+
+The following unsigned builds are published only after the complete hosted
+matrix and core tests pass:
+
+- [Windows 11 x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.tar.gz)
+- [Debian/Ubuntu x64 `.deb`](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb)
+- [Linux x64 portable archive](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz)
+- [macOS Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
+- [macOS Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
+
+See the repository [binary index](binaries/README.md) for checksums, the
+machine-readable manifest, and installation notes. GitHub authentication is
+required while this repository is private.
+
 ## Build the current core
 
 Requirements: a C++20 compiler and CMake 3.24 or newer.
@@ -98,3 +113,7 @@ release are required before hardware TX is enabled.
 CW Assistant is licensed under the GNU General Public License v3.0 or later
 (`GPL-3.0-or-later`). See [LICENSE](LICENSE) and the
 [dependency licensing policy](docs/licensing.md).
+
+## Author
+
+Alessio Bravi (IU0LFQ / AD2FC) — [https://iu0lfq.it/](https://iu0lfq.it/)

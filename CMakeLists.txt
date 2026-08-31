@@ -28,7 +28,7 @@ endif()
 
 if(CWA_BUILD_DESKTOP)
   set(CPACK_PACKAGE_NAME "cw-assistant")
-  set(CPACK_PACKAGE_VENDOR "CW Assistant contributors")
+  set(CPACK_PACKAGE_VENDOR "Alessio Bravi (IU0LFQ / AD2FC)")
   set(CPACK_PACKAGE_CONTACT "Alessio Bravi <alessio@bravi.org>")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
       "Cross-platform multichannel amateur-radio CW assistant")

@@ -48,6 +48,11 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Persistent repository and CI rules requiring user-manual, changelog, and
   backlog updates to accompany implementation and delivery changes.
 - Portable GitHub matrix expressions for conditional Debian package jobs.
+- Root binary-download index and machine-readable manifest with exact stable
+  platform URLs, plus automatic continuous-prerelease publication and SHA-256
+  checksums after the complete hosted matrix succeeds.
+- Application About page and Linux metadata identifying Alessio Bravi
+  (IU0LFQ / AD2FC) as author and linking to the author website.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.

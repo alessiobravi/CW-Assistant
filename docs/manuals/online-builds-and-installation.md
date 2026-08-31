@@ -12,10 +12,17 @@ and uploads one artifact for each platform:
 - macOS ARM64
 - macOS x64
 
-Open the repository's **Actions** page, select a successful
-**Cross-platform Desktop CI** run, and download the artifact for the required
-platform. Development artifacts expire after 14 days. They are unsigned and
-intended for testing until the release/signing workflow is complete.
+For the simplest download, open the repository's root
+[`binaries/`](../../binaries/README.md) index. It points to stable asset names in
+the **Continuous development builds** prerelease and includes a machine-readable
+manifest and SHA-256 checksum link. The prerelease is updated only after the
+complete platform matrix passes.
+
+The same files remain available as short-lived workflow artifacts: open the
+repository's **Actions** page, select a successful **Cross-platform Desktop CI**
+run, and scroll to **Artifacts**. Workflow artifacts expire after 14 days;
+continuous-release assets remain available until superseded. Both are unsigned
+and intended for testing until the signing workflow is complete.
 
 ## Debian and Ubuntu
 
@@ -27,6 +34,14 @@ dependency errors are reported clearly:
 
 ```sh
 sudo apt install ./cw-assistant_0.1.0-1_amd64.deb
+```
+
+The stable continuous-release filename is
+`cw-assistant-debian-ubuntu-x64.deb`, so a release download can instead be
+installed with:
+
+```sh
+sudo apt install ./cw-assistant-debian-ubuntu-x64.deb
 ```
 
 Launch from the desktop application menu or run:

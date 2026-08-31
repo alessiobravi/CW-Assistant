@@ -29,6 +29,7 @@ Pane {
             TabButton { text: "Keying" }
             TabButton { text: "Display" }
             TabButton { text: "Station" }
+            TabButton { text: "About" }
         }
 
         StackLayout {
@@ -199,6 +200,35 @@ Pane {
                         text: "Open Profiles from the main toolbar to create or select another station. For dedicated shortcuts or services, launch with --profile \"name\". Separate processes can use separate profiles and radios."
                     }
                     Button { text: "Run setup helper again"; onClicked: root.setupRequested() }
+                }
+            }
+
+            ScrollView {
+                contentWidth: availableWidth
+                ColumnLayout {
+                    width: parent.width
+                    anchors.margins: 22
+                    spacing: 14
+                    Label { text: "About CW Assistant"; font.pixelSize: 22; font.weight: Font.DemiBold }
+                    Label { text: "Version " + Qt.application.version; color: "#91a0b1" }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2b3541" }
+                    Label { text: "Author"; color: "#8290a0" }
+                    Label { text: "Alessio Bravi (IU0LFQ / AD2FC)"; font.pixelSize: 17; font.weight: Font.Medium }
+                    Label { text: "Author Website"; color: "#8290a0" }
+                    Button {
+                        text: "https://iu0lfq.it/"
+                        flat: true
+                        onClicked: Qt.openUrlExternally("https://iu0lfq.it/")
+                    }
+                    Label { text: "License"; color: "#8290a0" }
+                    Label { text: "GNU General Public License v3.0 or later"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Cross-platform multichannel amateur-radio CW receiver and operator assistant."
+                    }
+                    Item { Layout.fillHeight: true }
                 }
             }
         }

@@ -35,6 +35,8 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::SerialPort
   Qt6::WebSockets
 )
+target_compile_definitions(cw-assistant-desktop PRIVATE
+  CWA_VERSION="${PROJECT_VERSION}")
 
 include(GNUInstallDirs)
 install(TARGETS cw-assistant-desktop
@@ -54,6 +56,8 @@ if(UNIX AND NOT APPLE)
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
   install(FILES packaging/cw-assistant.svg
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps)
+  install(FILES packaging/it.iu0lfq.CWAssistant.metainfo.xml
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo)
 endif()
 
 install(FILES ${PROJECT_SOURCE_DIR}/LICENSE

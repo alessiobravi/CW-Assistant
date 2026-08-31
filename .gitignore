@@ -7,3 +7,6 @@
 *.flac
 *.sigmf-data
 *.sigmf-meta
+/binaries/*
+!/binaries/README.md
+!/binaries/latest.json

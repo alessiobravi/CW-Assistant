@@ -90,3 +90,65 @@ jobs:
           path: packages/*.deb
           if-no-files-found: error
           retention-days: 14
+
+  publish-continuous-release:
+    name: Publish continuous binaries
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-desktop
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Check out binary index
+        uses: actions/checkout@v7
+      - name: Download every successful platform package
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cw-assistant-*
+          path: release-assets
+          merge-multiple: true
+      - name: Normalize names and generate integrity metadata
+        shell: bash
+        run: |
+          shopt -s nullglob
+          deb_packages=(release-assets/*.deb)
+          if (( ${#deb_packages[@]} != 1 )); then
+            echo "Expected exactly one Debian package; found ${#deb_packages[@]}." >&2
+            exit 1
+          fi
+          mv "${deb_packages[0]}" release-assets/cw-assistant-debian-ubuntu-x64.deb
+          cp binaries/latest.json release-assets/latest.json
+          (
+            cd release-assets
+            sha256sum cw-assistant-* | sort -k2 > SHA256SUMS
+          )
+      - name: Write continuous-release notes
+        shell: bash
+        run: |
+          {
+            echo "Automated, unsigned development builds from commit ${GITHUB_SHA}."
+            echo
+            echo "Every platform build and the core tests passed before these assets were published."
+            echo "Use SHA256SUMS to verify the downloaded payload."
+          } > continuous-release-notes.md
+      - name: Create or update continuous prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view continuous >/dev/null 2>&1; then
+            gh release upload continuous release-assets/* --clobber
+            gh release edit continuous \
+              --title "Continuous development builds" \
+              --notes-file continuous-release-notes.md \
+              --prerelease \
+              --latest=false
+          else
+            gh release create continuous release-assets/* \
+              --target "${GITHUB_SHA}" \
+              --title "Continuous development builds" \
+              --notes-file continuous-release-notes.md \
+              --prerelease \
+              --latest=false
+          fi

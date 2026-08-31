@@ -10,6 +10,13 @@ waterfall renderer, direct keying output, logging connection, SDR capture, and
 remote-station runtime are still under implementation. A saved profile does not
 arm or key a transmitter.
 
+## About and author
+
+Open **Settings → About** to see the application version, license, author, and
+author website. The displayed author is **Alessio Bravi (IU0LFQ / AD2FC)** and
+the **Author Website** button opens [https://iu0lfq.it/](https://iu0lfq.it/) in
+the system browser.
+
 ## First launch
 
 1. Start `cw-assistant-desktop`.

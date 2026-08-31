@@ -11,6 +11,7 @@ int main(int argc, char* argv[]) {
   QCoreApplication::setOrganizationName(QStringLiteral("CW Assistant"));
   QCoreApplication::setOrganizationDomain(QStringLiteral("cw-assistant.org"));
   QCoreApplication::setApplicationName(QStringLiteral("CW Assistant"));
+  QCoreApplication::setApplicationVersion(QStringLiteral(CWA_VERSION));
 
   QCommandLineParser parser;
   parser.setApplicationDescription(
