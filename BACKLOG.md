@@ -28,7 +28,8 @@ content margins. A CW operating mark is integrated across application packages,
 and the Windows shortcut/program-group contract has been rechecked. The
 standalone render regression remains linked against the complete receiver
 source after live-audio integration and handles every current Qt sample-format
-enumerator without compiler warnings.
+enumerator without compiler warnings. Live DSP timer affinity is now covered by
+a cross-thread FFT regression that prevents blank output with queue overruns.
 
 ## P0 — project decisions and safety
 

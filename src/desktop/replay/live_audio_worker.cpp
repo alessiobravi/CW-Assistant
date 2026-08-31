@@ -204,7 +204,7 @@ void LiveAudioCaptureWorker::handleStateChanged() {
 
 LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
                                        QObject* parent)
-    : QObject(parent), pipe_(std::move(pipe)) {
+    : QObject(parent), pipe_(std::move(pipe)), timer_(this) {
   timer_.setInterval(5);
   connect(&timer_, &QTimer::timeout, this, &LiveAudioDspWorker::drain);
 }

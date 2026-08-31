@@ -123,6 +123,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Fixed blank live-audio spectrum/waterfall output accompanied by rising input
+  overruns. The DSP drain timer now follows its worker onto the processing
+  thread, with a cross-thread regression test that requires a real FFT frame.
 - Kept the standalone spectrum-render startup regression target linked to the
   complete receiver source implementation and made live-audio sample-format
   handling warning-clean across current Qt platform SDKs.

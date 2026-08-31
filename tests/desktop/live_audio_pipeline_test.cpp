@@ -1,4 +1,6 @@
 #include <QCoreApplication>
+#include <QMetaObject>
+#include <QThread>
 #include <QTimer>
 
 #include <cmath>
@@ -10,10 +12,14 @@
 int main(int argc, char* argv[]) {
   QCoreApplication application(argc, argv);
   auto pipe = std::make_shared<cwassistant::desktop::LiveAudioPipe>();
-  cwassistant::desktop::LiveAudioDspWorker worker(pipe);
+  QThread dsp_thread;
+  auto* worker = new cwassistant::desktop::LiveAudioDspWorker(pipe);
+  worker->moveToThread(&dsp_thread);
+  QObject::connect(&dsp_thread, &QThread::finished, worker,
+                   &QObject::deleteLater);
 
   QObject::connect(
-      &worker, &cwassistant::desktop::LiveAudioDspWorker::frameProduced,
+      worker, &cwassistant::desktop::LiveAudioDspWorker::frameProduced,
       &application,
       [&application](const cwassistant::desktop::SpectrumFrame& frame) {
         const bool valid = frame.bins_dbfs.size() == 1'025 &&
@@ -30,13 +36,22 @@ int main(int argc, char* argv[]) {
                         static_cast<float>(index) / 48'000.0F;
     block.samples[index] = {0.5F * std::sin(phase), 0.0F};
   }
-  worker.start(1);
+  dsp_thread.start();
+  QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection,
+                            Q_ARG(int, 1));
   if (!pipe->blocks.try_push(block)) {
+    QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
+    dsp_thread.quit();
+    dsp_thread.wait();
     return 2;
   }
 
   QTimer::singleShot(2'000, &application, [&application] {
     application.exit(3);
   });
-  return application.exec();
+  const int result = application.exec();
+  QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
+  dsp_thread.quit();
+  dsp_thread.wait();
+  return result;
 }

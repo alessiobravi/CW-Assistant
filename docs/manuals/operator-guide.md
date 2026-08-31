@@ -42,6 +42,12 @@ worker. **Input overruns** should remain zero. A rising value indicates the DSP
 cannot keep pace and blocks are being deliberately dropped rather than allowing
 unbounded latency.
 
+The spectrum and waterfall visualize all audio energy; they do not wait for a
+Morse signal. Receiver noise alone should begin filling the waterfall after
+live RX starts. If the display remains blank while **Input overruns** rises,
+stop live RX and install a newer build because the processing worker is not
+draining captured blocks correctly.
+
 ## Replay a receiver recording
 
 1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.
