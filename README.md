@@ -53,7 +53,7 @@ ADIF release gates and official-fixture verification are documented in the
 The following unsigned builds are published only after the complete hosted
 matrix and core tests pass:
 
-- [Windows 11 x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.tar.gz)
+- [Windows 11 x64 installer](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.msi)
 - [Debian/Ubuntu x64 `.deb`](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb)
 - [Linux x64 portable archive](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz)
 - [macOS Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)

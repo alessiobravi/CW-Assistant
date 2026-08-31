@@ -26,6 +26,8 @@ jobs:
             configure-arguments: -A x64
             artifact: cw-assistant-windows11-x64
             marker: windows11-x64
+            portable_archive: false
+            windows_installer: true
             debian_package: false
           - name: Linux x64 / GCC
             os: ubuntu-24.04
@@ -33,6 +35,8 @@ jobs:
             configure-arguments: ""
             artifact: cw-assistant-linux-x64
             marker: linux-x64
+            portable_archive: true
+            windows_installer: false
             debian_package: true
           - name: macOS ARM64 / Apple Clang
             os: macos-15
@@ -40,6 +44,8 @@ jobs:
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
             artifact: cw-assistant-macos-arm64
             marker: macos-arm64
+            portable_archive: true
+            windows_installer: false
             debian_package: false
           - name: macOS x64 / Apple Clang
             os: macos-15-intel
@@ -47,6 +53,8 @@ jobs:
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
             artifact: cw-assistant-macos-x64
             marker: macos-x64
+            portable_archive: true
+            windows_installer: false
             debian_package: false
     runs-on: ${{ matrix.os }}
     permissions:
@@ -75,6 +83,7 @@ jobs:
           cache: false
           aqtversion: ==3.3.0
           py7zrversion: ==1.0.0
+          extra: --external 7z
       - name: Configure desktop
         id: configure
         run: >-
@@ -83,6 +92,7 @@ jobs:
           -DCWA_BUILD_APP=OFF
           -DCWA_BUILD_DESKTOP=ON
           -DCWA_BUILD_TESTS=ON
+          -DCWA_PACKAGE_REVISION=${{ github.run_number }}
           ${{ matrix.configure-arguments }}
       - name: Build desktop and core tests
         id: build
@@ -95,15 +105,30 @@ jobs:
         run: cmake --install build --config Release --prefix stage
       - name: Preserve the staged application as an archive
         id: archive
+        if: matrix.portable_archive
         run: cmake -E tar czf ${{ matrix.artifact }}.tar.gz --format=gnutar stage
       - name: Publish downloadable build
         id: upload
+        if: matrix.portable_archive
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}.tar.gz
           if-no-files-found: error
           compression-level: 0
+          retention-days: 14
+      - name: Build upgrade-capable Windows installer
+        id: build_windows_installer
+        if: matrix.windows_installer
+        run: cpack --config build/CPackConfig.cmake -G WIX -B packages
+      - name: Publish Windows installer
+        id: upload_windows_installer
+        if: matrix.windows_installer
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: packages/*.msi
+          if-no-files-found: error
           retention-days: 14
       - name: Build Debian/Ubuntu package
         id: build_deb
@@ -131,11 +156,13 @@ jobs:
           CWA_INSTALL_RESULT: ${{ steps.install.outcome }}
           CWA_ARCHIVE_RESULT: ${{ steps.archive.outcome }}
           CWA_UPLOAD_RESULT: ${{ steps.upload.outcome }}
+          CWA_WINDOWS_INSTALLER_RESULT: ${{ steps.build_windows_installer.outcome }}
+          CWA_WINDOWS_UPLOAD_RESULT: ${{ steps.upload_windows_installer.outcome }}
           CWA_DEB_RESULT: ${{ steps.build_deb.outcome }}
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           git config user.name "CW Assistant CI"
           git config user.email "ci@cw-assistant.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"
@@ -170,6 +197,12 @@ jobs:
             exit 1
           fi
           mv "${deb_packages[0]}" release-assets/cw-assistant-debian-ubuntu-x64.deb
+          windows_installers=(release-assets/*.msi)
+          if (( ${#windows_installers[@]} != 1 )); then
+            echo "Expected exactly one Windows installer; found ${#windows_installers[@]}." >&2
+            exit 1
+          fi
+          mv "${windows_installers[0]}" release-assets/cw-assistant-windows11-x64.msi
           cp binaries/latest.json release-assets/latest.json
           (
             cd release-assets

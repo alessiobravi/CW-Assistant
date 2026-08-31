@@ -27,8 +27,8 @@ the Actions API, each matrix leg publishes a temporary annotated
 configure, build, test, staging, archive, upload, and package steps. A release
 failure publishes the same kind of marker. Successful release publication
 removes those diagnostic tags and advances `continuous`.
-Qt SDK downloads are retried once from a clean uncached directory when the
-hosted installer encounters a transient mirror or archive-extraction failure.
+Qt SDK downloads are retried once from a clean uncached directory with the
+runner's external 7-Zip binary when the hosted Python extractor fails.
 
 The same files remain available as short-lived workflow artifacts: open the
 repository's **Actions** page, select a successful **Cross-platform Desktop CI**
@@ -40,6 +40,32 @@ The push workflow is the superset verification path: it builds the desktop and
 core tests on every supported architecture. The lighter core-only workflow is
 retained for pull requests and manual diagnostics instead of duplicating every
 push run.
+
+## Windows 11 x64
+
+The Windows download is an MSI installer, not a compressed archive:
+
+```text
+cw-assistant-windows11-x64.msi
+```
+
+Verify its SHA-256 checksum, double-click it, and follow Windows Installer to
+select the installation folder. It installs the self-contained Qt application,
+creates Start-menu and desktop shortcuts, registers the application in
+**Settings → Apps → Installed apps**, and provides normal uninstall/repair
+behavior.
+
+Every hosted package has a monotonically increasing numeric package revision
+and a stable Windows Installer upgrade identity. Running a newer MSI performs a
+major upgrade of the existing installation; station profiles remain in the
+user's application settings and are not removed with program files. Downgrades
+are rejected by Windows Installer.
+
+Development installers are currently unsigned, so Windows may identify the
+publisher as unknown. Verify `SHA256SUMS` before continuing. Automatic in-app
+download/install is intentionally not enabled until the MSI, update manifest,
+and channel metadata are cryptographically signed. For now, update by
+downloading and running the newer MSI from the same continuous release page.
 
 ## Debian and Ubuntu
 

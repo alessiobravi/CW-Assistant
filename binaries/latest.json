@@ -5,7 +5,7 @@
   "releasePage": "https://github.com/alessiobravi/CW-Assistant/releases/tag/continuous",
   "checksums": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/SHA256SUMS",
   "artifacts": {
-    "windows11-x64": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.tar.gz",
+    "windows11-x64-installer": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.msi",
     "debian-ubuntu-x64": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb",
     "linux-x64-portable": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz",
     "macos-arm64": "https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz",

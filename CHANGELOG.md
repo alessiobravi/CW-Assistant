@@ -66,6 +66,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   full cross-platform desktop/core matrix and release publication succeed.
 - Temporary per-platform annotated CI status tags expose exact failed-step
   outcomes to authorized Git-only automation and are removed after a green run.
+- Windows 11 x64 now publishes an upgrade-capable WiX/MSI installer with stable
+  upgrade identity, per-run package revision, Start-menu/desktop shortcuts, and
+  normal repair/uninstall registration instead of a `.tar.gz` binary archive.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
@@ -103,8 +106,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Hosted Qt installation now includes the task-tree dependency required by the
   Qt 6.11 QML plugin metadata, eliminating an incomplete-SDK warning.
 - Corrected the Qt 6.11 Linux architecture identifier and added a clean,
-  uncached Qt-install retry with a stable extractor pin for transient hosted
-  archive failures.
+  uncached Qt-install retry using the hosted runner's external 7-Zip binary for
+  archive failures in the Python extractor.
 
 ### Security
 
