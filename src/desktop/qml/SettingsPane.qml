@@ -25,6 +25,7 @@ Pane {
         TabBar {
             id: tabs
             Layout.fillWidth: true
+            TabButton { text: "Audio" }
             TabButton { text: "Radio" }
             TabButton { text: "Keying" }
             TabButton { text: "Display" }
@@ -36,6 +37,42 @@ Pane {
             currentIndex: tabs.currentIndex
             Layout.fillWidth: true
             Layout.fillHeight: true
+
+            ScrollView {
+                contentWidth: availableWidth
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 18
+                    rowSpacing: 12
+                    anchors.margins: 22
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Choose the sound-card input carrying receiver audio. The selection is independent of radio control and is used in radio and SWL profiles."
+                    }
+                    Label { text: "Audio input" }
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: appSettings.audioInputNames
+                        currentIndex: appSettings.audioInputIndex
+                        onActivated: appSettings.selectAudioInput(currentIndex)
+                    }
+                    Label { text: "Selected input" }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: appSettings.audioInputDisplayName; color: "#43c6ac" }
+                    Label { text: "" }
+                    Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
+                    Label { text: "" }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#f3bd55"
+                        text: "Selection and hot-plug discovery are active. Live capture, input level, channel, sample-rate, and buffer controls are still under implementation; current decoding input is WAV replay."
+                    }
+                }
+            }
 
             ScrollView {
                 contentWidth: availableWidth

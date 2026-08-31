@@ -75,7 +75,7 @@ jobs:
         with:
           version: "6.11.2"
           arch: ${{ matrix.qt-arch }}
-          modules: qtserialport qtwebsockets qttasktree
+          modules: qtserialport qtmultimedia qtwebsockets qttasktree
           cache: true
           aqtsource: ${{ matrix.aqt_source }}
       - name: Retry Qt installation from a clean uncached directory
@@ -86,7 +86,7 @@ jobs:
           dir: ${{ runner.temp }}/Qt-retry
           version: "6.11.2"
           arch: ${{ matrix.qt-arch }}
-          modules: qtserialport qtwebsockets qttasktree
+          modules: qtserialport qtmultimedia qtwebsockets qttasktree
           cache: false
           aqtsource: ${{ matrix.aqt_source }}
           aqtversion: ==3.3.0

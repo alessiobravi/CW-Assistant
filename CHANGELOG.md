@@ -12,6 +12,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   positively identified online-radio selection through Windows OmniRig status,
   safe refresh without speculative serial probing, and an explicit manual
   template path for radios that cannot be detected.
+- Native Windows, macOS, and Linux audio-input enumeration with system-default
+  following, hot-plug refresh, unavailable-device indication, and per-profile
+  selection in an always-present wizard step and Settings → Audio page.
 - Backlog scope for configurable own-callsign decode notification and an
   optional guarded QSO-closing macro.
 

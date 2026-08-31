@@ -3,6 +3,24 @@
 Settings are stored separately for every named station profile. All supplied
 radio values are starting points and remain editable.
 
+## Audio page
+
+Select the operating-system audio input carrying receiver audio. The list is
+populated from native Windows, macOS, or Linux audio services and refreshes when
+devices are added or removed.
+
+- **System default input (recommended):** follows the current OS default rather
+  than binding the profile to one device identifier.
+- **Named input:** binds the profile to that specific device.
+- **Unavailable:** preserves a disconnected device selection visibly instead of
+  silently changing the profile to another input. Reconnect it or select a new
+  device, then use **Refresh audio inputs** if necessary.
+
+Audio selection applies equally to a CAT-controlled radio and receive-only SWL
+operation. Selection is implemented and persisted; live capture, channel,
+sample-rate, input-level, and buffer controls are not yet active, so the current
+processing source remains WAV replay.
+
 ## Radio page
 
 ### Radio participation and detection

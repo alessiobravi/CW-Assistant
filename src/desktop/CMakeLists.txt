@@ -1,5 +1,5 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-  Core Gui Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
+  Core Gui Multimedia Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -44,6 +44,7 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   cwa_core
   Qt6::Core
   Qt6::Gui
+  Qt6::Multimedia
   Qt6::Qml
   Qt6::Quick
   Qt6::QuickControls2

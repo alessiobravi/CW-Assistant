@@ -55,7 +55,7 @@ the system browser.
 2. Enter a descriptive station profile name, such as `HF desk` or
    `Satellite station`.
 3. For audio-only decoding, select **No radio — receive-only audio decoding
-   (SWL)**. The wizard skips CAT and Keying and proceeds to Display.
+   (SWL)**. The wizard skips CAT and Keying after the Audio step.
 4. For radio operation, select a positively identified online radio. On
    Windows, the initial detector reads the online state and model name from the
    installed OmniRig service; it does not send probe commands to arbitrary COM
@@ -63,9 +63,12 @@ the system browser.
 5. If the radio cannot be identified, select **Set up a radio manually**, choose
    the nearest reference template, then edit every value to match the radio and
    cable.
-6. Select a physically separate direct-COM key/PTT interface. Port enumeration
+6. On **Audio**, select the sound-card input carrying receiver audio. **System
+   default input** follows the operating-system default when devices change.
+   This step is always present for radio and SWL profiles.
+7. Select a physically separate direct-COM key/PTT interface. Port enumeration
    never toggles RTS or DTR.
-7. Review the display defaults and finish the wizard.
+8. Review the display defaults and finish the wizard.
 
 The Back and Next controls live in a fixed wizard footer and remain visible when
 a setup page must scroll on a small or scaled display.
@@ -78,6 +81,12 @@ Selecting SWL mode persists that choice per profile, disables radio/keying
 validation, and labels the workspace as receive-only. Previously entered radio
 values are retained so switching the profile back to radio operation does not
 discard configuration.
+
+The current build discovers, displays, and saves audio-input selection, including
+an unavailable marker when a previously selected device is disconnected. Live
+sound-card capture, input level metering, channel/sample-rate selection, and
+buffer controls are still under implementation; use **Open WAV** for the active
+signal-processing path in this build.
 
 ## Multiple radios and application instances
 

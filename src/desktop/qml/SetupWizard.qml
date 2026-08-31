@@ -16,15 +16,15 @@ Dialog {
     Component.onCompleted: appSettings.refreshDetectedRadios()
 
     function goForward() {
-        if (root.step === 0 && !appSettings.radioEnabled)
-            root.step = 3
+        if (root.step === 1 && !appSettings.radioEnabled)
+            root.step = 4
         else
             root.step++
     }
 
     function goBack() {
-        if (root.step === 3 && !appSettings.radioEnabled)
-            root.step = 0
+        if (root.step === 4 && !appSettings.radioEnabled)
+            root.step = 1
         else
             root.step--
     }
@@ -43,10 +43,10 @@ Dialog {
             Button { text: "Back"; enabled: root.step > 0; onClicked: root.goBack() }
             Button {
                 objectName: "setupNextButton"
-                text: root.step < 4 ? "Next" : "Finish"
+                text: root.step < 5 ? "Next" : "Finish"
                 highlighted: true
                 onClicked: {
-                    if (root.step < 4)
+                    if (root.step < 5)
                         root.goForward()
                     else if (appSettings.completeSetup()) {
                         root.step = 0
@@ -62,7 +62,7 @@ Dialog {
         RowLayout {
             Layout.fillWidth: true
             Repeater {
-                model: ["Radio", "CAT", "Keying", "Display", "Review"]
+                model: ["Receiver", "Audio", "CAT", "Keying", "Display", "Review"]
                 delegate: Label {
                     required property string modelData
                     required property int index
@@ -74,7 +74,7 @@ Dialog {
                 }
             }
         }
-        ProgressBar { Layout.fillWidth: true; from: 0; to: 4; value: root.step }
+        ProgressBar { Layout.fillWidth: true; from: 0; to: 5; value: root.step }
 
         Flickable {
             id: pageFlick
@@ -161,6 +161,43 @@ Dialog {
                 columns: 2
                 columnSpacing: 18
                 rowSpacing: 12
+                Label {
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: "Select the sound-card input carrying receiver audio. This is required for both radio and receive-only SWL operation."
+                    color: "#91a0b1"
+                }
+                Label { text: "Audio input" }
+                ComboBox {
+                    objectName: "setupAudioInputCombo"
+                    Layout.fillWidth: true
+                    model: appSettings.audioInputNames
+                    currentIndex: appSettings.audioInputIndex
+                    onActivated: appSettings.selectAudioInput(currentIndex)
+                }
+                Label { text: "Selected input" }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: appSettings.audioInputDisplayName
+                    color: "#43c6ac"
+                }
+                Label { text: "" }
+                Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
+                Label {
+                    Layout.columnSpan: 2
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#f3bd55"
+                    text: "Device selection is saved now. Live capture and level calibration are the next audio implementation stage; this build still uses WAV replay for signal processing."
+                }
+            }
+
+                GridLayout {
+                columns: 2
+                columnSpacing: 18
+                rowSpacing: 12
                 Label { text: "Frequency provider" }
                 ComboBox { Layout.fillWidth: true; model: ["OmniRig (Windows)", "Hamlib", "CAT4OM network service"]; currentIndex: appSettings.frequencyBackendIndex; onActivated: appSettings.frequencyBackendIndex = currentIndex }
                 Label { text: "OmniRig slot" }
@@ -231,6 +268,7 @@ Dialog {
                 spacing: 14
                 Label { text: "Ready to create this station profile"; font.pixelSize: 22; font.weight: Font.DemiBold }
                 Label { text: "Profile: " + appSettings.profileName }
+                Label { text: "Audio input: " + appSettings.audioInputDisplayName }
                 Label { text: "Radio: " + appSettings.radioDisplayName }
                 Label { text: appSettings.radioEnabled ? "CAT: " + (appSettings.catPort || "not selected") + " • " + appSettings.catBaudRate + " baud" : "CAT: skipped in SWL mode" }
                 Label { text: appSettings.radioEnabled ? "Direct key/PTT: " + (appSettings.keyingPort || "not selected") : "Direct key/PTT: disabled in SWL mode" }

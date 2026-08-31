@@ -3,7 +3,8 @@
 ## Build entirely on GitHub
 
 Every push and pull request starts the desktop workflow on GitHub-hosted
-runners. It installs the pinned Qt modules, configures with CMake, builds the
+runners. It installs the pinned Qt modules, including native multimedia device
+discovery, configures with CMake, builds the
 desktop application and core tests, runs the tests, stages runtime dependencies,
 and uploads one artifact for each platform:
 

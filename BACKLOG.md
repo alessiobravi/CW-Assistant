@@ -21,7 +21,8 @@ receive-only SWL operation, positively identified online radios, and explicit
 manual templates; the wizard footer is also guarded against clipping. Bounded
 compiler diagnostics are now available through the Git-only CI status markers,
 which identified and closed the initial setup-dialog QML syntax failure and
-the subsequent cross-platform Qt macro/declaration errors.
+the subsequent cross-platform Qt macro/declaration errors. Native audio-input
+enumeration and per-profile selection now run for both radio and SWL setup.
 
 ## P0 — project decisions and safety
 
@@ -42,7 +43,7 @@ the subsequent cross-platform Qt macro/declaration errors.
 | PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
 | CI-001 | done | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests pass on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish artifacts, stable continuous-release assets/checksums, and a verified-commit tag. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
-| AUDIO-001 | todo | Add PortAudio device discovery and capture | User can select device/channel/rate/block size; callback performs no allocation or blocking. |
+| AUDIO-001 | active | Add native audio device discovery and capture | Qt Multimedia device discovery, hot-plug refresh, unavailable-device state, default-device following, and per-profile input selection are implemented; connect live capture to the bounded DSP input with channel/rate/block controls, allocation-free callbacks, level metering, and macOS permission handling. |
 | REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, paced UI selection/play/pause/stop, and core tests pass; hash manifests, seek, looping, and repeat-run integration remain. |
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |
 | UI-001 | active | Create Qt Quick desktop shell | Modern expandable receiver workspace, Settings/About panes, author metadata, profile chooser, guided setup, cross-platform offscreen QML tests, and staged native-graphics startup tests are implemented; clean-machine hardware validation remains. |

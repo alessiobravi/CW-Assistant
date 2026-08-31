@@ -77,12 +77,16 @@ int main(int argc, char* argv[]) {
       }
       auto* next_button =
           root_object->findChild<QQuickItem*>(QStringLiteral("setupNextButton"));
+      auto* audio_input_combo = root_object->findChild<QQuickItem*>(
+          QStringLiteral("setupAudioInputCombo"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
           next_button->mapToScene(
               QPointF(next_button->width(), next_button->height())).y() >
-              next_button->window()->height()) {
+              next_button->window()->height() || audio_input_combo == nullptr ||
+          audio_input_combo->property("count").toInt() < 1 ||
+          audio_input_combo->property("currentIndex").toInt() < 0) {
         QCoreApplication::exit(EXIT_FAILURE);
         return;
       }
@@ -91,7 +95,13 @@ int main(int argc, char* argv[]) {
       if (setup_wizard == nullptr ||
           !QMetaObject::invokeMethod(setup_wizard, "goForward",
                                      Qt::DirectConnection) ||
-          setup_wizard->property("step").toInt() != 3 ||
+          setup_wizard->property("step").toInt() != 1 ||
+          !QMetaObject::invokeMethod(setup_wizard, "goForward",
+                                     Qt::DirectConnection) ||
+          setup_wizard->property("step").toInt() != 4 ||
+          !QMetaObject::invokeMethod(setup_wizard, "goBack",
+                                     Qt::DirectConnection) ||
+          setup_wizard->property("step").toInt() != 1 ||
           !QMetaObject::invokeMethod(setup_wizard, "goBack",
                                      Qt::DirectConnection) ||
           setup_wizard->property("step").toInt() != 0) {

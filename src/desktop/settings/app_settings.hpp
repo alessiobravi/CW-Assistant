@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QList>
+#include <QMediaDevices>
 #include <QString>
 #include <QStringList>
 
@@ -10,7 +11,6 @@
 namespace cwassistant::desktop {
 
 class Cat4OmClient;
-
 class AppSettings final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QStringList referenceRigNames READ referenceRigNames CONSTANT)
@@ -19,6 +19,9 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool profileSelectionRequired READ profileSelectionRequired NOTIFY profileSelectionRequiredChanged)
   Q_PROPERTY(bool setupComplete READ setupComplete NOTIFY setupCompleteChanged)
   Q_PROPERTY(QStringList serialPorts READ serialPorts NOTIFY serialPortsChanged)
+  Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY audioInputsChanged)
+  Q_PROPERTY(int audioInputIndex READ audioInputIndex NOTIFY audioInputsChanged)
+  Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY audioInputsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
   Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
   Q_PROPERTY(QString radioDisplayName READ radioDisplayName NOTIFY settingsChanged)
@@ -69,6 +72,9 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool profileSelectionRequired() const noexcept;
   [[nodiscard]] bool setupComplete() const noexcept;
   [[nodiscard]] const QStringList& serialPorts() const noexcept;
+  [[nodiscard]] const QStringList& audioInputNames() const noexcept;
+  [[nodiscard]] int audioInputIndex() const noexcept;
+  [[nodiscard]] QString audioInputDisplayName() const;
   [[nodiscard]] bool omniRigAvailable() const noexcept;
   [[nodiscard]] bool radioEnabled() const noexcept;
   [[nodiscard]] QString radioDisplayName() const;
@@ -141,6 +147,8 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
   Q_INVOKABLE void refreshSerialPorts();
+  Q_INVOKABLE void refreshAudioInputs();
+  Q_INVOKABLE void selectAudioInput(int index);
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
@@ -156,6 +164,7 @@ class AppSettings final : public QObject {
  signals:
   void settingsChanged();
   void serialPortsChanged();
+  void audioInputsChanged();
   void statusMessageChanged();
   void setupCompleteChanged();
   void profileChanged();
@@ -182,6 +191,10 @@ class AppSettings final : public QObject {
   bool profile_selection_required_{false};
   bool setup_complete_{false};
   QStringList serial_ports_;
+  QStringList audio_input_names_;
+  QStringList audio_input_ids_;
+  QString audio_input_id_;
+  QString audio_input_name_;
   bool radio_enabled_{false};
   QStringList detected_radio_names_;
   QList<int> detected_radio_slots_;
@@ -219,6 +232,7 @@ class AppSettings final : public QObject {
   bool com_initialized_{false};
   bool com_initialization_attempted_{false};
   std::unique_ptr<Cat4OmClient> cat4om_client_;
+  std::unique_ptr<QMediaDevices> media_devices_;
 };
 
 }  // namespace cwassistant::desktop

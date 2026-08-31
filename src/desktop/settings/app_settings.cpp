@@ -2,6 +2,8 @@
 
 #include <QSettings>
 #include <QSerialPortInfo>
+#include <QAudioDevice>
+#include <QMediaDevices>
 #include <QRegularExpression>
 #include <QtGlobal>
 
@@ -65,6 +67,10 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   refreshProfiles();
   profile_selection_required_ = !profile_was_explicit && available_profiles_.size() > 1;
   refreshSerialPorts();
+  media_devices_ = std::make_unique<QMediaDevices>();
+  connect(media_devices_.get(), &QMediaDevices::audioInputsChanged, this,
+          &AppSettings::refreshAudioInputs);
+  refreshAudioInputs();
   cat4om_client_ = std::make_unique<Cat4OmClient>(this);
   connect(cat4om_client_.get(), &Cat4OmClient::statusChanged, this, [this] {
     setStatusMessage(cat4om_client_->statusText());
@@ -99,6 +105,20 @@ bool AppSettings::profileSelectionRequired() const noexcept { return profile_sel
 bool AppSettings::setupComplete() const noexcept { return setup_complete_; }
 
 const QStringList& AppSettings::serialPorts() const noexcept { return serial_ports_; }
+
+const QStringList& AppSettings::audioInputNames() const noexcept {
+  return audio_input_names_;
+}
+
+int AppSettings::audioInputIndex() const noexcept {
+  return audio_input_ids_.indexOf(audio_input_id_);
+}
+
+QString AppSettings::audioInputDisplayName() const {
+  return audio_input_id_.isEmpty()
+             ? QStringLiteral("System default input")
+             : audio_input_name_;
+}
 
 bool AppSettings::omniRigAvailable() const noexcept {
 #ifdef Q_OS_WIN
@@ -273,6 +293,65 @@ void AppSettings::refreshSerialPorts() {
   setStatusMessage(QStringLiteral("Serial ports refreshed without opening or toggling them."));
 }
 
+void AppSettings::refreshAudioInputs() {
+  QStringList names{QStringLiteral("System default input (recommended)")};
+  QStringList ids{QString{}};
+  for (const auto& device : QMediaDevices::audioInputs()) {
+    const QString id = QString::fromLatin1(
+        device.id().toBase64(QByteArray::Base64UrlEncoding |
+                             QByteArray::OmitTrailingEquals));
+    if (id.isEmpty() || ids.contains(id)) {
+      continue;
+    }
+    QString name = device.description().trimmed();
+    if (name.isEmpty()) {
+      name = QStringLiteral("Audio input %1").arg(ids.size());
+    }
+    if (device.isDefault()) {
+      name += QStringLiteral(" (current default)");
+    }
+    names.push_back(name);
+    ids.push_back(id);
+  }
+
+  if (!audio_input_id_.isEmpty() && !ids.contains(audio_input_id_)) {
+    const QString unavailable_name =
+        audio_input_name_.isEmpty() ? QStringLiteral("Previously selected input")
+                                    : audio_input_name_;
+    names.push_back(unavailable_name + QStringLiteral(" (unavailable)"));
+    ids.push_back(audio_input_id_);
+  }
+
+  const int selected_index = ids.indexOf(audio_input_id_);
+  if (selected_index > 0) {
+    audio_input_name_ = names.at(selected_index);
+    if (audio_input_name_.endsWith(QStringLiteral(" (unavailable)"))) {
+      audio_input_name_.chop(QStringLiteral(" (unavailable)").size());
+    }
+  }
+
+  if (names != audio_input_names_ || ids != audio_input_ids_) {
+    audio_input_names_ = std::move(names);
+    audio_input_ids_ = std::move(ids);
+    emit audioInputsChanged();
+  }
+}
+
+void AppSettings::selectAudioInput(const int index) {
+  if (index < 0 || index >= audio_input_ids_.size()) {
+    return;
+  }
+  audio_input_id_ = audio_input_ids_.at(index);
+  audio_input_name_ = index == 0 ? QStringLiteral("System default input")
+                                 : audio_input_names_.at(index);
+  if (audio_input_name_.endsWith(QStringLiteral(" (unavailable)"))) {
+    audio_input_name_.chop(QStringLiteral(" (unavailable)").size());
+  }
+  setStatusMessage(QStringLiteral("Audio input selected. Live capture remains disarmed until started by the operator."));
+  emit audioInputsChanged();
+  emit settingsChanged();
+}
+
 void AppSettings::refreshDetectedRadios() {
   QStringList names;
   QList<int> detected_slots;
@@ -367,6 +446,8 @@ bool AppSettings::apply() {
   QSettings settings;
   settings.setValue(storageKey(QStringLiteral("configuration/schemaVersion")), kSchemaVersion);
   settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputId")), audio_input_id_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputName")), audio_input_name_);
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
@@ -410,6 +491,12 @@ bool AppSettings::apply() {
 void AppSettings::load() {
   QSettings settings;
   setup_complete_ = settings.value(storageKey(QStringLiteral("configuration/setupComplete")), false).toBool();
+  audio_input_id_ =
+      settings.value(storageKey(QStringLiteral("audio/inputId"))).toString();
+  audio_input_name_ = settings
+                          .value(storageKey(QStringLiteral("audio/inputName")),
+                                 QStringLiteral("System default input"))
+                          .toString();
   radio_enabled_ = settings
                        .value(storageKey(QStringLiteral("radio/enabled")),
                               setup_complete_)
@@ -487,10 +574,12 @@ bool AppSettings::selectProfile(const QString& profile_name) {
                       .toString();
   resetInMemorySettings();
   load();
+  refreshAudioInputs();
   profile_selection_required_ = false;
   emit profileChanged();
   emit setupCompleteChanged();
   emit profileSelectionRequiredChanged();
+  emit audioInputsChanged();
   emit settingsChanged();
   setStatusMessage(QStringLiteral("Station profile selected. Transmit remains disarmed."));
   return true;
@@ -526,6 +615,7 @@ bool AppSettings::createProfile(const QString& profile_name) {
   emit profileChanged();
   emit setupCompleteChanged();
   emit profileSelectionRequiredChanged();
+  emit audioInputsChanged();
   emit settingsChanged();
   setStatusMessage(QStringLiteral("New station profile created. Complete its setup."));
   return true;
@@ -568,6 +658,8 @@ void AppSettings::refreshProfiles() {
 
 void AppSettings::resetInMemorySettings() {
   setup_complete_ = false;
+  audio_input_id_.clear();
+  audio_input_name_ = QStringLiteral("System default input");
   radio_enabled_ = false;
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;
