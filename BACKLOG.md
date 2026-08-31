@@ -9,8 +9,10 @@ review this file and update affected items or the “Last reviewed” note.
 Last reviewed: 2026-08-31 — reproduced and fixed hosted QML compilation,
 validated the Qt desktop build/install locally, added functional WAV spectrum
 replay, corrected macOS bundle deployment and Linux Qt architecture selection,
-added remotely queryable CI outcomes/log diagnostics plus extractor retry, and replaced
-the Windows archive plan with an upgrade-capable MSI delivery flow.
+set and verify the macOS Sonoma 14+ deployment baseline, documented the
+temporary Windows SDK-downloader source pin, added remotely queryable CI
+outcomes/log diagnostics plus extractor retry, and replaced the Windows archive
+plan with an upgrade-capable MSI delivery flow.
 
 ## P0 — project decisions and safety
 
@@ -97,7 +99,7 @@ the Windows archive plan with an upgrade-capable MSI delivery flow.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | PKG-001 | active | Produce signed Win64 installer | Hosted WiX/MSI generation, stable major-upgrade identity, numeric build revisions, shortcuts, and stable download naming are implemented; clean Windows 11 install/upgrade/repair/uninstall tests, Authenticode signing, and signed update metadata remain. |
-| PKG-002 | active | Produce macOS bundle and Debian/Ubuntu package | Hosted builds deploy Qt/QML runtime files and publish portable macOS artifacts plus a CPack `.deb`; the root binary index points to stable continuous-release filenames; validate clean supported Debian/Ubuntu installs and add signing before release. |
+| PKG-002 | active | Produce macOS bundle and Debian/Ubuntu package | Hosted builds deploy Qt/QML runtime files and publish portable Sonoma 14+ Apple silicon/Intel artifacts plus a CPack `.deb`; CI verifies the Mach-O 14.0 deployment target and the root binary index points to stable filenames; validate clean Sonoma and supported Debian/Ubuntu installs and add signing before release. |
 | PKG-003 | todo | Publish signed Debian/Ubuntu APT repository | Signed Release/InRelease metadata, protected key rotation, version promotion, retention, and documented repository enrollment pass clean-machine tests. |
 | DOC-001 | active | Maintain operator and hardware manuals | A user-manual index plus setup, settings, hosted-build, Debian/Ubuntu, and CAT4OM guides exist; every implementation change is CI-gated on manual/changelog/backlog updates; safe keying, workflows, diagnostics, and compatibility manuals remain. |
 

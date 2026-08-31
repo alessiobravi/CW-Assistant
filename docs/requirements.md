@@ -214,8 +214,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 ## Non-functional requirements
 
 - C++20 with CMake; warning-clean on MSVC, Clang, and GCC.
-- Windows 11 or newer on x64 is the first release target, with CI builds for
-  Windows, macOS, and Ubuntu. Earlier Windows releases are unsupported.
+- Windows 11 or newer on x64 is the first release target. macOS Sonoma 14 or
+  newer is supported on Apple silicon and Intel x64; Debian and Ubuntu are the
+  supported Linux families. Earlier Windows and macOS releases are unsupported.
 - Core and DSP have no dependency on Qt and are usable by tests and tools.
 - No allocation, locks, logging, filesystem access, or UI calls in an audio
   callback.
@@ -243,7 +244,7 @@ limit.
 
 ## Decisions still required
 
-- Minimum macOS/Linux versions and reference Windows 11 x64 hardware.
+- Minimum supported Debian/Ubuntu versions and reference Windows 11 x64 hardware.
 - Expected WPM range, Farnsworth behavior, international characters, and
   prosigns.
 - Whether full break-in or semi-break-in operation is in the initial scope.

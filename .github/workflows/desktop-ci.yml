@@ -26,6 +26,9 @@ jobs:
             configure-arguments: -A x64
             artifact: cw-assistant-windows11-x64
             marker: windows11-x64
+            # Build-tool pin only: remove after a released aqtinstall includes
+            # the Qt 6.11 Windows repository-layout fix from this commit.
+            aqt_source: git+https://github.com/miurahr/aqtinstall.git@8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b
             portable_archive: false
             windows_installer: true
             debian_package: false
@@ -35,6 +38,7 @@ jobs:
             configure-arguments: ""
             artifact: cw-assistant-linux-x64
             marker: linux-x64
+            aqt_source: ""
             portable_archive: true
             windows_installer: false
             debian_package: true
@@ -44,6 +48,7 @@ jobs:
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
             artifact: cw-assistant-macos-arm64
             marker: macos-arm64
+            aqt_source: ""
             portable_archive: true
             windows_installer: false
             debian_package: false
@@ -53,6 +58,7 @@ jobs:
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
             artifact: cw-assistant-macos-x64
             marker: macos-x64
+            aqt_source: ""
             portable_archive: true
             windows_installer: false
             debian_package: false
@@ -71,6 +77,7 @@ jobs:
           arch: ${{ matrix.qt-arch }}
           modules: qtserialport qtwebsockets qttasktree
           cache: true
+          aqtsource: ${{ matrix.aqt_source }}
       - name: Retry Qt installation from a clean uncached directory
         id: install_qt_retry
         if: steps.install_qt.outcome == 'failure'
@@ -81,6 +88,7 @@ jobs:
           arch: ${{ matrix.qt-arch }}
           modules: qtserialport qtwebsockets qttasktree
           cache: false
+          aqtsource: ${{ matrix.aqt_source }}
           aqtversion: ==3.3.0
           py7zrversion: ==1.0.0
           extra: --external 7z
@@ -103,6 +111,23 @@ jobs:
       - name: Stage self-contained application
         id: install
         run: cmake --install build --config Release --prefix stage
+      - name: Verify staged platform layout
+        id: verify_stage
+        shell: bash
+        run: |
+          case "${RUNNER_OS}" in
+            Windows)
+              test -f stage/bin/cw-assistant-desktop.exe
+              ;;
+            macOS)
+              app_binary=stage/cw-assistant-desktop.app/Contents/MacOS/cw-assistant-desktop
+              test -x "${app_binary}"
+              xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
+              ;;
+            Linux)
+              test -x stage/bin/cw-assistant-desktop
+              ;;
+          esac
       - name: Preserve the staged application as an archive
         id: archive
         if: matrix.portable_archive
@@ -154,6 +179,7 @@ jobs:
           CWA_BUILD_RESULT: ${{ steps.build.outcome }}
           CWA_TEST_RESULT: ${{ steps.test.outcome }}
           CWA_INSTALL_RESULT: ${{ steps.install.outcome }}
+          CWA_VERIFY_STAGE_RESULT: ${{ steps.verify_stage.outcome }}
           CWA_ARCHIVE_RESULT: ${{ steps.archive.outcome }}
           CWA_UPLOAD_RESULT: ${{ steps.upload.outcome }}
           CWA_WINDOWS_INSTALLER_RESULT: ${{ steps.build_windows_installer.outcome }}
@@ -162,7 +188,7 @@ jobs:
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           if [[ "${CWA_QT_RESULT}" == "failure" ]]; then
             qt_log="$(find "${GITHUB_WORKSPACE}" -type f -name aqtinstall.log -exec tail -n 20 {} \; 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${qt_log}" ]]; then

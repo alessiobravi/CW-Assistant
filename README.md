@@ -2,8 +2,8 @@
 
 CW Assistant is a modular, cross-platform C++ application for receiving,
 visualizing, decoding, and operator-assisted replying to amateur-radio CW. The
-target platforms are Windows 11 or newer on x64, macOS, and Linux; Windows is
-the first packaging target.
+target platforms are Windows 11 or newer on x64, macOS Sonoma 14 or newer on
+Apple silicon and Intel x64, and Linux; Windows is the first packaging target.
 
 The project is at foundation stage. The current code provides dependency-free
 core primitives and tests plus an optional Qt Quick desktop shell with a
@@ -56,8 +56,8 @@ matrix and core tests pass:
 - [Windows 11 x64 installer](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.msi)
 - [Debian/Ubuntu x64 `.deb`](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb)
 - [Linux x64 portable archive](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz)
-- [macOS Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
-- [macOS Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
+- [macOS Sonoma 14+ Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
+- [macOS Sonoma 14+ Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
 
 See the repository [binary index](binaries/README.md) for checksums, the
 machine-readable manifest, and installation notes. GitHub authentication is
@@ -97,8 +97,8 @@ Hamlib, SoapySDR, SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the
 vendor's platform-specific API/driver.
 
 Every push to `main` and pull request builds and tests natively on Windows x64,
-Linux x64, macOS ARM64, and macOS x64, then publishes downloadable desktop
-artifacts; Linux also produces a Debian/Ubuntu `.deb`. Pull requests containing
+Linux x64, macOS ARM64, and macOS x64 with a Sonoma 14 deployment target, then
+publishes downloadable desktop artifacts; Linux also produces a Debian/Ubuntu `.deb`. Pull requests containing
 implementation, test, build, or workflow changes must update the user manuals,
 changelog, and backlog.
 

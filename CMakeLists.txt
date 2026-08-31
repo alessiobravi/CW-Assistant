@@ -1,5 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
+if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
+  set(CMAKE_OSX_DEPLOYMENT_TARGET "14.0" CACHE STRING
+    "Minimum supported macOS version (Sonoma or newer)")
+endif()
+
 project(CWAssistant VERSION 0.1.0 LANGUAGES CXX
   HOMEPAGE_URL "https://github.com/alessiobravi/CW-Assistant")
 

@@ -10,8 +10,8 @@ in Git history.
 - [Windows 11 x64 installer](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.msi)
 - [Debian/Ubuntu x64 package](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb)
 - [Linux x64 portable archive](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz)
-- [macOS Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
-- [macOS Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
+- [macOS Sonoma 14+ Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
+- [macOS Sonoma 14+ Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
 - [SHA-256 checksums](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/SHA256SUMS)
 - [Machine-readable download manifest](latest.json)
 

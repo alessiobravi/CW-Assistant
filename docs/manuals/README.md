@@ -9,7 +9,7 @@ available in a downloadable build.
 - [Configuration reference](configuration-reference.md): every currently
   exposed station-profile setting, with practical examples.
 - [Online builds and installation](online-builds-and-installation.md): GitHub
-  builds, Windows/macOS archives, and Debian/Ubuntu packages.
+  builds, the Windows MSI, macOS Sonoma 14+ bundles, and Debian/Ubuntu packages.
 - [CAT4OM setup](cat4om-setup.md): native WebSocket connection, radio ID,
   read-only testing, ownership, security, and troubleshooting.
 

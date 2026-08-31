@@ -9,8 +9,8 @@ and uploads one artifact for each platform:
 
 - Windows 11 x64
 - Ubuntu Linux x64
-- macOS ARM64
-- macOS x64
+- macOS Sonoma 14 or newer, Apple silicon
+- macOS Sonoma 14 or newer, Intel x64
 
 For the simplest download, open the repository's root
 [`binaries/`](../../binaries/README.md) index. It points to stable asset names in
@@ -31,6 +31,15 @@ When Qt installation fails, the status annotation also carries a bounded tail
 of the installer log so authorized Git-only automation can diagnose the cause.
 Qt SDK downloads are retried once from a clean uncached directory with the
 runner's external 7-Zip binary when the hosted Python extractor fails.
+
+The Windows leg temporarily installs the SDK downloader from immutable upstream
+commit `8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b`. That commit contains the Qt
+6.11 Windows repository-layout correction missing from the current downloader
+release. This is a build-tool pin only: the application still bundles the
+explicit Qt 6.11.2 runtime, and MSI application upgrades continue to use CW
+Assistant's stable upgrade identity and monotonically increasing package
+revision. Replace the source pin with a released downloader only after a hosted
+Windows build proves that the release contains the same correction.
 
 The same files remain available as short-lived workflow artifacts: open the
 repository's **Actions** page, select a successful **Cross-platform Desktop CI**
@@ -68,6 +77,18 @@ publisher as unknown. Verify `SHA256SUMS` before continuing. Automatic in-app
 download/install is intentionally not enabled until the MSI, update manifest,
 and channel metadata are cryptographically signed. For now, update by
 downloading and running the newer MSI from the same continuous release page.
+
+## macOS Sonoma and newer
+
+Both macOS archives contain a self-contained `.app` bundle compiled with
+deployment target 14.0. Choose the Apple silicon archive for M-series Macs and
+the Intel x64 archive for supported Intel Macs. Extract the archive and move
+`cw-assistant-desktop.app` to `/Applications` if desired.
+
+The hosted matrix inspects the staged executable's Mach-O build metadata and
+rejects an artifact unless its minimum macOS version is exactly 14.0. Builds are
+currently unsigned and not notarized; signing and notarization remain release
+gates.
 
 ## Debian and Ubuntu
 

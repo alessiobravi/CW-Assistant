@@ -70,6 +70,15 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Windows 11 x64 now publishes an upgrade-capable WiX/MSI installer with stable
   upgrade identity, per-run package revision, Start-menu/desktop shortcuts, and
   normal repair/uninstall registration instead of a `.tar.gz` binary archive.
+- macOS Sonoma 14 or newer is now the explicit compiled baseline for both Apple
+  silicon and Intel x64 artifacts, with hosted Mach-O deployment-target checks.
+
+### Fixed
+
+- Windows Qt 6.11 SDK installation uses an immutable upstream downloader commit
+  containing the new repository-layout correction until that correction ships
+  in a released downloader. This build-only pin does not change the bundled Qt
+  runtime, MSI version, or stable Windows upgrade identity.
 
 - Cross-platform C++20/CMake project foundation.
 - Dependency-free sample block and bounded SPSC ring-buffer primitives.
