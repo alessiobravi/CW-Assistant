@@ -61,7 +61,7 @@ class CwChannelBank {
     std::uint64_t id;
     double frequency_hz;
     std::uint64_t last_detected_ns;
-    CwTimingDecoder decoder;
+    CwMultiSpeedDecoder decoder;
     CwDecoderUpdate update;
     float snr_db{0.0F};
     float spectral_snr_db{0.0F};

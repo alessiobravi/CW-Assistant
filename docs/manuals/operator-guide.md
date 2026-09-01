@@ -10,9 +10,10 @@ frequency-provider configuration, monitor a CAT4OM radio, process a selected
 live sound-card input, and replay a WAV recording through the real spectrum and
 waterfall, and run a receive-only decoder across the complete processed
 passband. Each tracked frequency now obtains keying evidence from a narrowband
-filter over the original audio rather than the display spectrum. Multi-speed
-acquisition, weak-signal refinement, direct keying output, logging connection,
-SDR capture, and remote-station runtime remain under implementation.
+filter over the original audio rather than the display spectrum. Bounded
+multi-speed acquisition is active; weak-signal refinement, direct keying
+output, logging connection, SDR capture, and remote-station runtime remain
+under implementation.
 A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
@@ -111,11 +112,22 @@ and supplies new soft evidence 500 times per second to that track's adaptive
 timing decoder. This is deliberately independent of spectrum averaging,
 waterfall levels, display gain, and the 700 Hz visual guide.
 
+Each new track evaluates nine timing starts from 8 through 60 WPM. During at
+least the first 2.5 seconds after keyed evidence begins, the best current path
+is intentionally shown as amber provisional text because it may change as
+slower hypotheses gain enough evidence. After the timing score and
+decoded-symbol threshold pass, one
+path locks and continues adapting its WPM. A gap of at least 2.5 seconds after a
+locked transmission preserves stable text and starts a fresh speed acquisition,
+so another transmission on that frequency can use a substantially different
+speed. Short or ambiguous fragments may remain provisional rather than being
+presented as certain.
+
 The baseline handles letters, digits, common punctuation, and selected
 prosigns, but does not yet provide automatic decoder-filter width selection,
-broad multi-speed hypotheses, calibrated confidence, multiple-pass weak-signal
-recovery, or separation of callers occupying the same frequency. Signals
-closer than about 45 Hz may therefore appear as one track, and noise or non-CW
+calibrated confidence, multiple-pass weak-signal recovery, or separation of
+callers occupying the same frequency. Signals closer than about 45 Hz may
+therefore appear as one track, and noise or non-CW
 carriers may produce `?` or incorrect text. Changing the audio source or
 processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.

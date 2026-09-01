@@ -105,6 +105,14 @@ current bin are excluded, and decoded tracks currently remain visible for eight
 seconds after their signal disappears. Decoder filter width/evidence rate and
 these other starting limits are not yet exposed as profile controls.
 
+Timing acquisition evaluates nine fixed starting hypotheses at 8, 12, 16, 20,
+25, 32, 40, 50, and 60 WPM. The current leader is provisional for at least 2.5
+seconds of signal evidence and locks only after enough decoded symbols and score
+separation. After a locked track has been silent for 2.5 seconds, its stable
+text is retained and timing acquisition restarts for the next transmission.
+These acquisition thresholds are internal measured defaults in this build;
+profile controls will be added only with benchmark-backed safe ranges.
+
 ## Station page
 
 **Own station callsign** is stored separately in every station profile. Input is

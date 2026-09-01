@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
+#include <limits>
 #include <string>
 #include <string_view>
 
@@ -64,6 +66,9 @@ void CwTimingDecoder::reset() noexcept {
   last_snr_db_ = 0.0F; key_down_probability_ = 0.0F;
   confidence_ = 0.0F; element_confidence_sum_ = 0.0F;
   mark_probability_sum_ = 0.0F; mark_probability_duration_ms_ = 0.0;
+  timing_quality_sum_ = 0.0F;
+  decoded_symbol_count_ = 0;
+  unknown_symbol_count_ = 0;
   element_count_ = 0;
   initialized_ = false; key_down_ = false; character_finished_ = false;
   word_space_emitted_ = false;
@@ -198,6 +203,12 @@ void CwTimingDecoder::finishCharacter() {
                        static_cast<float>(element_count_),
                    0.0F, 1.0F);
   if (provisional_text_ == "?") confidence_ *= 0.35F;
+  timing_quality_sum_ += confidence_;
+  if (decoded_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
+    ++decoded_symbol_count_;
+  if (provisional_text_ == "?" &&
+      unknown_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
+    ++unknown_symbol_count_;
   elements_.clear(); character_finished_ = true;
   element_confidence_sum_ = 0.0F;
   element_count_ = 0;
@@ -222,11 +233,189 @@ float CwTimingDecoder::probabilityForSnr(const float snr_db) const noexcept {
 }
 
 CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
+  const float timing_quality = decoded_symbol_count_ == 0
+      ? 0.0F
+      : timing_quality_sum_ / static_cast<float>(decoded_symbol_count_);
   return {.changed = changed, .key_down = key_down_,
           .key_down_probability = key_down_probability_,
           .wpm = 1'200.0 / dot_ms_, .confidence = confidence_,
           .text = stable_text_, .provisional_text = provisional_text_,
-          .pending_elements = elements_};
+          .pending_elements = elements_, .timing_quality = timing_quality,
+          .decoded_symbols = decoded_symbol_count_,
+          .unknown_symbols = unknown_symbol_count_};
+}
+
+CwMultiSpeedDecoder::Hypothesis::Hypothesis(
+    const double speed_wpm, CwDecoderConfig config)
+    : seed_wpm(speed_wpm),
+      decoder([&] {
+        config.initial_wpm = speed_wpm;
+        return config;
+      }()) {}
+
+CwMultiSpeedDecoder::CwMultiSpeedDecoder(
+    CwDecoderConfig decoder_config, CwMultiSpeedConfig config)
+    : decoder_config_(decoder_config), config_(config) {
+  config_.preferred_wpm = std::clamp(config_.preferred_wpm, 5.0, 80.0);
+  config_.minimum_acquisition_ms =
+      std::clamp(config_.minimum_acquisition_ms, 100.0, 5'000.0);
+  config_.reacquire_after_silence_ms =
+      std::clamp(config_.reacquire_after_silence_ms, 500.0, 15'000.0);
+  config_.lock_after_symbols =
+      std::clamp<std::uint8_t>(config_.lock_after_symbols, 1, 8);
+  config_.lock_score_margin =
+      std::clamp(config_.lock_score_margin, 0.0F, 1.0F);
+  reset();
+}
+
+void CwMultiSpeedDecoder::reset() {
+  committed_prefix_.clear();
+  resetHypotheses();
+}
+
+void CwMultiSpeedDecoder::resetHypotheses() {
+  static constexpr double speeds[]{8.0, 12.0, 16.0, 20.0, 25.0,
+                                   32.0, 40.0, 50.0, 60.0};
+  hypotheses_.clear();
+  hypotheses_.reserve(std::size(speeds));
+  for (const double speed : speeds)
+    hypotheses_.emplace_back(speed, decoder_config_);
+  leader_index_ = 3;
+  locked_index_ = 0;
+  first_timestamp_ns_ = 0;
+  last_signal_timestamp_ns_ = 0;
+  locked_ = false;
+  initialized_ = false;
+  signal_seen_ = false;
+}
+
+CwDecoderUpdate CwMultiSpeedDecoder::process(
+    const std::uint64_t timestamp_ns, const float snr_db) {
+  if (snr_db >= decoder_config_.key_off_snr_db) {
+    last_signal_timestamp_ns_ = timestamp_ns;
+    signal_seen_ = true;
+  }
+  if (!initialized_ && snr_db >= decoder_config_.key_on_snr_db) {
+    first_timestamp_ns_ = timestamp_ns;
+    initialized_ = true;
+  }
+  if (locked_) {
+    auto& selected = hypotheses_[locked_index_];
+    selected.update = selected.decoder.process(timestamp_ns, snr_db);
+    leader_index_ = locked_index_;
+    const double silence_ms = signal_seen_ &&
+            timestamp_ns >= last_signal_timestamp_ns_
+        ? milliseconds(timestamp_ns - last_signal_timestamp_ns_)
+        : 0.0;
+    if (!selected.update.key_down && selected.update.decoded_symbols > 0 &&
+        silence_ms >= config_.reacquire_after_silence_ms) {
+      committed_prefix_ += selected.update.text;
+      if (!committed_prefix_.empty() && committed_prefix_.back() != ' ')
+        committed_prefix_.push_back(' ');
+      if (committed_prefix_.size() > 4'096)
+        committed_prefix_.erase(0, committed_prefix_.size() - 4'096);
+      resetHypotheses();
+      return snapshot(true);
+    }
+    return snapshot(selected.update.changed);
+  }
+
+  bool changed = false;
+  for (auto& hypothesis : hypotheses_) {
+    hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
+    changed = changed || hypothesis.update.changed;
+  }
+  const std::size_t previous_leader = leader_index_;
+  float margin = 0.0F;
+  leader_index_ = selectLeader(&margin);
+  changed = changed || leader_index_ != previous_leader;
+  const double observed_ms = timestamp_ns >= first_timestamp_ns_
+      ? milliseconds(timestamp_ns - first_timestamp_ns_)
+      : 0.0;
+  if (observed_ms >= config_.minimum_acquisition_ms) considerLock(margin);
+  return snapshot(changed || locked_);
+}
+
+CwDecoderUpdate CwMultiSpeedDecoder::flush(
+    const std::uint64_t timestamp_ns) {
+  if (locked_) {
+    auto& selected = hypotheses_[locked_index_];
+    selected.update = selected.decoder.flush(timestamp_ns);
+    leader_index_ = locked_index_;
+    return snapshot(true);
+  }
+  for (auto& hypothesis : hypotheses_)
+    hypothesis.update = hypothesis.decoder.flush(timestamp_ns);
+  leader_index_ = selectLeader();
+  locked_index_ = leader_index_;
+  locked_ = true;
+  return snapshot(true);
+}
+
+std::size_t CwMultiSpeedDecoder::hypothesisCount() const noexcept {
+  return hypotheses_.size();
+}
+
+std::size_t CwMultiSpeedDecoder::stateBytes() const noexcept {
+  return sizeof(*this) + hypotheses_.capacity() * sizeof(Hypothesis) +
+         committed_prefix_.capacity();
+}
+
+float CwMultiSpeedDecoder::score(
+    const Hypothesis& hypothesis) const noexcept {
+  const auto& update = hypothesis.update;
+  const float prior_distance = static_cast<float>(std::abs(
+      std::log2(hypothesis.seed_wpm / config_.preferred_wpm)));
+  if (update.decoded_symbols == 0)
+    return -0.20F * prior_distance;
+  const float known_fraction = 1.0F -
+      static_cast<float>(update.unknown_symbols) /
+          static_cast<float>(update.decoded_symbols);
+  return 2.5F * update.timing_quality + 0.4F * known_fraction -
+         0.15F * (1.0F - update.confidence) -
+         0.20F * prior_distance;
+}
+
+std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
+  std::size_t best_index = 0;
+  float best_score = score(hypotheses_.front());
+  float second_score = -1'000.0F;
+  for (std::size_t index = 1; index < hypotheses_.size(); ++index) {
+    const float candidate_score = score(hypotheses_[index]);
+    if (candidate_score > best_score) {
+      second_score = best_score;
+      best_score = candidate_score;
+      best_index = index;
+    } else {
+      second_score = std::max(second_score, candidate_score);
+    }
+  }
+  if (margin != nullptr) *margin = best_score - second_score;
+  return best_index;
+}
+
+CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
+  CwDecoderUpdate result = hypotheses_[leader_index_].update;
+  result.changed = changed;
+  if (!locked_) {
+    result.provisional_text = result.text + result.provisional_text;
+    result.text = committed_prefix_;
+  } else {
+    result.text = committed_prefix_ + result.text;
+  }
+  return result;
+}
+
+void CwMultiSpeedDecoder::considerLock(const float margin) {
+  const auto& leader = hypotheses_[leader_index_].update;
+  if (leader.decoded_symbols < config_.lock_after_symbols) return;
+  if (margin < config_.lock_score_margin &&
+      leader.decoded_symbols <
+          static_cast<std::uint32_t>(config_.lock_after_symbols) + 3U) {
+    return;
+  }
+  locked_index_ = leader_index_;
+  locked_ = true;
 }
 
 }  // namespace cwassistant::core

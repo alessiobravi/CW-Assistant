@@ -8,8 +8,11 @@ now implemented. Every frequency track owns a phase-continuous complex mixer,
 three-stage 120 Hz raw-sample filter, adjacent-band noise references, independent
 soft SNR likelihood, adaptive timing decoder, provisional/stable text contract,
 stable color, and expiry lifecycle. Sub-bin drift tracking, alternative-width
-selection, multi-speed timing, confidence calibration, and multiple-pass
-weak-signal recovery remain planned. The complete decoder's goal
+selection, confidence calibration, and multiple-pass weak-signal recovery
+remain planned. Initial bounded multi-speed timing is now
+delivered: nine 8–60 WPM paths compete during a provisional acquisition window,
+then the selected path adapts continuously and may reacquire after a bounded
+transmission gap. The complete decoder's goal
 is high weak-signal accuracy with bounded CPU, memory, and latency on ordinary
 desktop hardware.
 Every claimed improvement must survive the same held-out replay corpus and must
@@ -180,12 +183,15 @@ context pass.
 
 ## Benchmarks and acceptance gates
 
-The first deterministic executable gate (`cwa_decoder_benchmark`) reports
-character edits/CER, false characters during a fixed no-CW minute, processed
-updates, simulated duration, wall time, real-time factor, and decoder object
-size. Its initial cases cover 12, 20, and 25 WPM with fixed weak-SNR and timing-
-jitter sequences. This is a regression floor, not the final corpus or a claim
-of calibrated over-the-air performance. Separate core regressions drive two
+The deterministic executable gate (`cwa_decoder_benchmark`) reports character
+edits/CER, acquired-WPM error, false characters during a fixed no-CW minute,
+processed updates, simulated duration, wall time, real-time factor, bounded
+hypothesis count, and allocated decoder state. Its cases cover 8, 12, 20, 25,
+40, and 55 WPM with fixed weak-SNR and timing-jitter sequences, plus a 12→40 WPM
+change across a transmission gap. The current deterministic baseline has 0/49
+edits, no speed-limit failures, and no false characters in the synthetic noise
+minute. This is a regression floor, not the final corpus or a claim of
+calibrated over-the-air performance. Separate core regressions drive two
 simultaneous original-sample tones through the channel bank, verify independent
 decodes and stable identity, and reject an adjacent non-tracked tone. The Qt
 pipeline regression verifies that the live DSP worker publishes both a spectrum
@@ -214,7 +220,7 @@ gain is repeatable and its resource cost is within the published budget.
 
 1. Build deterministic synthetic/noise fixtures and the benchmark runner.
 2. Implement tone tracking, initial raw-sample narrowband evidence, and the
-   explainable timing baseline. (Initial path delivered; multi-speed next.)
+   explainable timing baseline. (Initial path and bounded multi-speed delivered.)
 3. Add provisional/stable text and calibrated confidence contracts.
 4. Add bounded rolling refinement and multi-hypothesis passes.
 5. Train and evaluate compact learned likelihood models; ship one only after

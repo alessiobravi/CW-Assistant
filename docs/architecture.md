@@ -82,9 +82,10 @@ The delivered M2 baseline scans the complete processed FFT passband for local
 peaks, suppresses duplicate nearby candidates, and maintains a bounded
 independent state object for every tracked frequency. Candidate discovery uses
 the shared display FFT and rejects numerical-floor peaks outside an initial
-96 dB range below its strongest bin, then each track consumes the original audio block using
-a phase-continuous complex mixer, three cascaded low-pass stages with an initial
-120 Hz width, adjacent-band noise references, and 500 Hz evidence updates. That
+96 dB range below its strongest bin, then each track consumes the original
+audio block using a phase-continuous complex mixer, three cascaded low-pass
+stages with an initial 120 Hz width, adjacent-band noise references, and 500 Hz
+evidence updates. That
 raw narrowband SNR drives smoothed key probability and adaptive timing; display
 averaging, gain, palette, and guide settings cannot assert key-down. This work
 runs inside the live/WAV DSP workers rather than the UI thread.
@@ -93,8 +94,19 @@ Each track separates provisional from stable text and publishes letters,
 digits, punctuation/prosigns, WPM, SNR, and an initial evidence-derived
 confidence score. Stable track IDs select one of 24 shared UI colors, and silent
 tracks expire after a bounded hold. The 700 Hz guide is a rendering reference
-only and is absent from the decoder data path. Sub-bin frequency/drift
-estimation, alternative automatic/configurable filter widths, robust noise
+only and is absent from the decoder data path.
+
+Timing acquisition is also bounded per track: nine deterministic decoders start
+at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Accumulated element quality,
+unknown-symbol rate, and a conservative 20 WPM prior rank them while output is
+provisional. After at least 2.5 seconds of keyed evidence and sufficient symbol
+or score separation, only the winning adaptive path continues processing. A
+2.5-second post-transmission silence commits its stable prefix and permits a
+fresh bounded acquisition for a different sender/speed. Current allocated state
+is about 3.2 KiB per active track in the deterministic benchmark.
+
+Sub-bin frequency/drift estimation, alternative automatic/configurable filter
+widths, robust noise
 quantiles, calibrated confidence, delayed multi-pass refinement, a bounded
 worker pool for those heavier passes, and co-channel source separation remain.
 

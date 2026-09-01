@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace cwassistant::core {
 
@@ -26,6 +28,9 @@ struct CwDecoderUpdate {
   std::string text;
   std::string provisional_text;
   std::string pending_elements;
+  float timing_quality{0.0F};
+  std::uint32_t decoded_symbols{0};
+  std::uint32_t unknown_symbols{0};
 };
 
 class CwTimingDecoder {
@@ -56,11 +61,61 @@ class CwTimingDecoder {
   float element_confidence_sum_{0.0F};
   float mark_probability_sum_{0.0F};
   double mark_probability_duration_ms_{0.0};
+  float timing_quality_sum_{0.0F};
+  std::uint32_t decoded_symbol_count_{0};
+  std::uint32_t unknown_symbol_count_{0};
   std::uint8_t element_count_{0};
   bool initialized_{false};
   bool key_down_{false};
   bool character_finished_{false};
   bool word_space_emitted_{false};
+};
+
+struct CwMultiSpeedConfig {
+  double preferred_wpm{20.0};
+  double minimum_acquisition_ms{2'500.0};
+  double reacquire_after_silence_ms{2'500.0};
+  std::uint8_t lock_after_symbols{2};
+  float lock_score_margin{0.10F};
+};
+
+class CwMultiSpeedDecoder {
+ public:
+  explicit CwMultiSpeedDecoder(CwDecoderConfig decoder_config = {},
+                               CwMultiSpeedConfig config = {});
+  void reset();
+  [[nodiscard]] CwDecoderUpdate process(std::uint64_t timestamp_ns,
+                                        float snr_db);
+  [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
+  [[nodiscard]] std::size_t hypothesisCount() const noexcept;
+  [[nodiscard]] std::size_t stateBytes() const noexcept;
+
+ private:
+  struct Hypothesis {
+    Hypothesis(double speed_wpm, CwDecoderConfig config);
+
+    double seed_wpm;
+    CwTimingDecoder decoder;
+    CwDecoderUpdate update;
+  };
+
+  [[nodiscard]] float score(const Hypothesis& hypothesis) const noexcept;
+  [[nodiscard]] std::size_t selectLeader(float* margin = nullptr) const;
+  [[nodiscard]] CwDecoderUpdate snapshot(bool changed) const;
+  void considerLock(float margin);
+  void resetHypotheses();
+
+  CwDecoderConfig decoder_config_;
+  CwMultiSpeedConfig config_;
+  std::vector<Hypothesis> hypotheses_;
+  std::size_t leader_index_{0};
+  std::size_t locked_index_{0};
+  std::uint64_t first_timestamp_ns_{0};
+  std::uint64_t last_signal_timestamp_ns_{0};
+  std::string committed_prefix_;
+  bool locked_{false};
+  bool initialized_{false};
+  bool signal_seen_{false};
 };
 
 }  // namespace cwassistant::core

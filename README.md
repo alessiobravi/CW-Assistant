@@ -15,9 +15,10 @@ gain/bandwidth, constant-time high-resolution history, a CW frequency guide,
 and stable noise-suppressed display tuning. A receive-only full-passband channel
 bank detects multiple spectral peaks, then derives independent keying evidence
 from the original samples through a phase-continuous narrowband filter for each
-frequency. It maintains adaptive timing state and shows color-linked spectrum
-markers and decode rows. The 700 Hz guide is visual only. Broader multi-speed
-acquisition and multiple-pass weak-signal decoding remain under implementation.
+frequency. It evaluates bounded 8–60 WPM timing hypotheses, maintains adaptive
+timing state, and shows color-linked spectrum markers and decode rows. The
+700 Hz guide is visual only. Multiple-pass weak-signal decoding remains under
+active implementation.
 
 ## Planned capabilities
 

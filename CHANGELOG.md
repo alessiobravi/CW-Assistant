@@ -8,6 +8,15 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Bounded multi-speed timing acquisition per frequency. Nine deterministic
+  hypotheses spanning 8–60 WPM compete on accumulated timing quality and a
+  conservative speed prior; the leader remains explicitly provisional during
+  the 2.5-second evidence window, then one adaptive path is locked. A 2.5-second
+  transmission gap permits safe speed reacquisition while preserving prior
+  stable text. The benchmark now gates six speeds, weak/jittered inputs, WPM
+  error, a 12→40 WPM transition, nine-hypothesis state size, CER, false output,
+  and real-time factor (0/49 edits and zero speed failures in the deterministic
+  baseline).
 - Per-frequency raw-audio CW evidence in both live-input and WAV DSP workers.
   Each tracked channel now uses a phase-continuous complex mixer, a three-stage
   120 Hz narrowband filter, 500 Hz evidence updates, and adjacent-band noise

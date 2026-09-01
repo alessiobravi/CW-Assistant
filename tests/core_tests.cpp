@@ -200,10 +200,12 @@ void test_cw_channel_bank() {
     const auto low_color = channels[0].color_index;
     const auto high_color = channels[1].color_index;
     expect(std::abs(channels[0].frequency_hz - 300.0) < 5.0 &&
-               channels[0].text.find('E') != std::string::npos,
+               (channels[0].text + channels[0].provisional_text)
+                       .find('E') != std::string::npos,
            "lower-frequency slice decodes its own dit");
     expect(std::abs(channels[1].frequency_hz - 700.0) < 5.0 &&
-               channels[1].text.find('T') != std::string::npos,
+               (channels[1].text + channels[1].provisional_text)
+                       .find('T') != std::string::npos,
            "upper-frequency slice decodes its own dah");
     expect(channels[0].color_index != channels[1].color_index,
            "simultaneous tracks receive stable distinct colors");
