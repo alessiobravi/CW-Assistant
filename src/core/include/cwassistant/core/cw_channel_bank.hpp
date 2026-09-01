@@ -30,6 +30,7 @@ enum class CwVerificationReason : std::uint8_t {
   TooManyUnknownSymbols,
   LowTimingQuality,
   LowCharacterConfidence,
+  ImplausibleCharacterDistribution,
   Verified,
   SignalLost,
 };
@@ -40,6 +41,19 @@ inline constexpr std::size_t kCwVerificationReasonCount =
 [[nodiscard]] const char* cwTrackStateName(CwTrackState state) noexcept;
 [[nodiscard]] const char* cwVerificationReasonName(
     CwVerificationReason reason) noexcept;
+
+// A long run of decoded text dominated by only the two single-element
+// characters (E, T) is the statistical signature of timing noise being
+// classified as Morse rather than genuine text: random on/off fluctuations
+// rarely sustain the longer runs needed for other characters, while real
+// ham/English text sits close to natural letter frequency (E+T is typically
+// ~20%). False below `minimum_characters` since the fraction is not yet
+// statistically meaningful. Exposed standalone (rather than inlined into the
+// verification gate) so its threshold behavior can be tested directly
+// against literal decoded-text examples.
+[[nodiscard]] bool isCharacterDistributionImplausible(
+    const std::string& text, std::uint16_t minimum_characters,
+    float maximum_simple_character_fraction) noexcept;
 
 struct CwChannelBankConfig {
   float acquisition_snr_db{7.0F};
@@ -65,6 +79,17 @@ struct CwChannelBankConfig {
   float minimum_verification_timing_quality{0.45F};
   float minimum_verification_cadence_quality{0.48F};
   float minimum_character_confidence{0.50F};
+  // A long run of decoded text dominated by only the two single-element
+  // characters (E, T) is the statistical signature of timing noise being
+  // classified as Morse rather than genuine text: random on/off
+  // fluctuations rarely sustain the longer runs needed for other
+  // characters, while real ham/English text sits close to natural letter
+  // frequency (E+T is typically ~20%). This check only applies once enough
+  // text has accumulated to be statistically meaningful, and — unlike every
+  // other gate — is re-evaluated even for an already-verified track, since
+  // it can only be judged from accumulated text, not a single instant.
+  std::uint16_t minimum_plausibility_check_characters{40};
+  float maximum_simple_character_fraction{0.35F};
   float minimum_narrowband_coherence{2.0F};
   float maximum_verification_unknown_fraction{0.20F};
 };

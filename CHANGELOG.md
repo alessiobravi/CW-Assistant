@@ -8,6 +8,34 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Fixed the root cause behind reports of CW visibly present in the spectrum
+  never being identified: analysis of an operator-provided debug capture
+  (using the new `OBS-003` capture tool) showed every falsely verified track
+  decoding to text overwhelmingly made of just `E` and `T` — the two
+  single-element Morse characters, which timing noise reproduces far more
+  often than any other character since random on/off fluctuations rarely
+  sustain the longer runs needed for anything else — while the existing
+  unknown-symbol-fraction gate stayed well under its threshold throughout
+  (1-11%), so it never caught this failure mode. Added a character-
+  distribution plausibility gate (`CwVerificationReason::
+  ImplausibleCharacterDistribution`, config fields
+  `minimum_plausibility_check_characters` [default 40] and
+  `maximum_simple_character_fraction` [default 0.35]) that holds a track out
+  of, or retroactively removes it from, `Verified` once enough decoded text
+  has accumulated to judge it — unlike every other gate, this one keeps
+  re-checking even an already-verified track, since implausibility can only
+  be judged from accumulated text, not a single instant's evidence. The
+  0.35 threshold was calibrated directly against the real capture: the three
+  false-positive tracks measured 0.59, 0.45, and 0.76, while the most
+  plausible real candidate measured 0.27 and the benchmark's own legitimate
+  decoded text ("SOSCQTEST123") measures 0.25. The check itself is exposed
+  as a standalone, directly testable pure function
+  (`isCharacterDistributionImplausible`) rather than inlined into the gate,
+  and is covered by dedicated unit tests plus the full existing
+  `cwa_verification_benchmark` hard-negative suite (still 0 false
+  publications) and `ctest` suite (all 6 tests), confirmed with both the CI
+  compiler matrix's designated-initializer-strict GCC and a direct local GCC
+  build.
 - The hosted live-audio integration fixture now sends actual keyed Morse and
   waits for a verified channel instead of treating a continuous carrier as a
   valid decoded station.

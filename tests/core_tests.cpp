@@ -510,6 +510,31 @@ void test_cw_channel_bank_state_reason_consistency() {
          "least once, so the consistency checks above are not vacuous");
 }
 
+void test_cw_channel_bank_implausible_character_distribution() {
+  using cwassistant::core::isCharacterDistributionImplausible;
+
+  // Real field data (a genuine debug capture of noise misclassified as CW)
+  // showed E+T fractions of 0.59, 0.45, and 0.76 for false-positive tracks,
+  // versus 0.27 for the most plausible real candidate and 0.25 for the
+  // benchmark's own legitimate decoded text ("SOSCQTEST123") — the default
+  // 0.35 threshold sits in the gap between those two groups.
+  expect(!isCharacterDistributionImplausible("SOSCQTEST123", 10, 0.35F),
+         "legitimate varied decoded text is never flagged implausible");
+  expect(isCharacterDistributionImplausible("TETETETETETETETETET", 10, 0.35F),
+         "a run of only E/T characters is flagged implausible");
+  expect(!isCharacterDistributionImplausible("TETETETETETETETETET", 40, 0.35F),
+         "the check does not fire before minimum_characters worth of text "
+         "has accumulated, since the fraction is not yet meaningful");
+  expect(!isCharacterDistributionImplausible("", 0, 0.35F),
+         "empty decoded text is never flagged (no letters to judge)");
+  expect(isCharacterDistributionImplausible(
+             "TE TE TE TE TE TE TE TE TE TE", 10, 0.35F),
+         "inter-character spaces are ignored when computing the fraction, "
+         "so a spaced-out run of only E/T is still flagged");
+  expect(!isCharacterDistributionImplausible("SOS DE W1AW K", 10, 0.60F),
+         "raising the threshold config value relaxes the gate accordingly");
+}
+
 void test_transmit_guard() {
   using cwassistant::core::CallsignPolicy;
   using cwassistant::core::TransmitGuard;
@@ -1009,6 +1034,7 @@ int main() {
   test_cw_timing_decoder();
   test_cw_channel_bank();
   test_cw_channel_bank_state_reason_consistency();
+  test_cw_channel_bank_implausible_character_distribution();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

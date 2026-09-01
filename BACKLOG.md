@@ -6,6 +6,21 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-01 — fixed the root cause of the field-reported
+"visible CW never decodes" case, isolated using a real operator debug
+capture: falsely verified tracks decoded to text overwhelmingly made of the
+two single-element characters E and T (the statistical signature of timing
+noise, not genuine text), which the existing unknown-symbol-fraction gate did
+not catch since it stayed under threshold throughout. Added a
+character-distribution plausibility gate
+(`CwVerificationReason::ImplausibleCharacterDistribution`) that re-checks
+even an already-verified track once enough decoded text has accumulated to
+judge it, calibrated directly against the real capture's numbers (0.35
+threshold; the three real false positives measured 0.59/0.45/0.76, the
+benchmark's legitimate text measures 0.25). Exposed as a standalone testable
+function; full `ctest` suite and `cwa_verification_benchmark` hard negatives
+confirmed clean, plus a real-GCC local compile (designated-initializer
+strict) as an extra portability check.
 Last reviewed: 2026-09-01 — implemented an initial OBS-003 slice: an
 operator-started, bounded "Debug capture" that records raw live audio (WAV)
 and a per-track private diagnostic log (JSON lines, once per second) to a
@@ -150,7 +165,7 @@ translucent band rather than two signal-like lines.
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | active | Add pipeline telemetry | Pre-verification candidate/Morse-likely counts and a rejection-reason tally are exposed as an opt-in, once-per-second "Diagnostics" toggle (off by default) in the decoder panel after an always-visible version proved too flickering; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |
-| OBS-003 | active | Add operator-controlled diagnostic capture bundles | A "Debug capture" control records raw live audio (WAV) and per-track private diagnostics (JSON lines, 1 Hz, every track including unverified) to a timestamped folder, capped at 5 minutes, requiring explicit start and never silent. Conditioned/spectrum frames, overruns, profile/radio state, a review step, and credential/private-identifier redaction before export remain to add. |
+| OBS-003 | active | Add operator-controlled diagnostic capture bundles | A "Debug capture" control records raw live audio (WAV) and per-track private diagnostics (JSON lines, 1 Hz, every track including unverified) to a timestamped folder, capped at 5 minutes, requiring explicit start and never silent. Remaining: move the control into the Settings pane (currently only in the decoder panel header), add a button to open the capture folder directly, make the auto-stop duration a configurable Settings value (default 5 minutes, currently fixed), plus conditioned/spectrum frames, overruns, profile/radio state, a review step, and credential/private-identifier redaction before export. |
 | OBS-002 | todo | Add operator-accessible native crash diagnostics | Windows minidumps and macOS/Linux crash-report guidance identify build/profile/backend without exposing station secrets; diagnostic export is documented and tested. |
 | CFG-001 | active | Implement named station profiles and setup helper | Versioned isolated persistence, UI create/select helper, per-profile wizard, and `--profile` selection exist; audio/logger/remote pages and migrations remain. |
 | CFG-002 | todo | Enforce cross-process hardware ownership | Named OS locks prevent serial/audio/SDR devices from being opened by two active profiles and report the owning profile. |
@@ -161,7 +176,7 @@ translucent band rather than two signal-like lines.
 |---|---|---|---|
 | DATA-001 | todo | Register the located CC0 pileup WAV | Manifest records source, CC0, checksum, audio format, preprocessing, and storage location. |
 | DATA-002 | todo | Build deterministic synthetic CW corpus | Covers agreed speed/keying/SNR/drift/fading/jitter/interference/AGC/audio-path matrix, exact and near-exact co-channel pileups, no-CW hard negatives, exact sample annotations, legally reusable real recordings, and leakage-safe held-out splits. |
-| DSP-002 | active | Detect and track candidate CW tones | The bounded full-passband bank provides sub-bin peaks, drift prediction, nearby-candidate suppression, numerical-floor and FFT-resolution-aware near/far prominence guards, and short private-candidate expiry. Candidate → Morse-likely → verified → lost transitions combine repeated spectral persistence across normal key-up gaps, keyed edges, narrowband coherence, cadence, known-symbol ratio, timing, and character confidence; only verified tracks publish IDs/colors. The deterministic verification corpus acquires clean, 30 WPM, and weak/fading/drifting CW within six seconds while publishing zero tracks for steady carriers, AM-like leakage, irregular impulses, and pumping broadband noise. Add real legally reusable recordings, robust noise quantiles, and held-out targets. |
+| DSP-002 | active | Detect and track candidate CW tones | The bounded full-passband bank provides sub-bin peaks, drift prediction, nearby-candidate suppression, numerical-floor and FFT-resolution-aware near/far prominence guards, and short private-candidate expiry. Candidate → Morse-likely → verified → lost transitions combine repeated spectral persistence across normal key-up gaps, keyed edges, narrowband coherence, cadence, known-symbol ratio, timing, character confidence, and a character-distribution plausibility check (re-evaluated even for an already-verified track, calibrated against real captured false positives) that catches noise decoding to overwhelmingly E/T text the unknown-symbol gate missed; only verified tracks publish IDs/colors. The deterministic verification corpus acquires clean, 30 WPM, and weak/fading/drifting CW within six seconds while publishing zero tracks for steady carriers, AM-like leakage, irregular impulses, and pumping broadband noise. Add real legally reusable recordings, robust noise quantiles, and held-out targets. |
 | DSP-003 | todo | Add bounded per-channel DSP worker pool | Preserves channel order, sheds lowest-priority work, and passes overload soak tests. |
 | CW-001 | active | Implement explainable adaptive timing baseline | Every detected passband track converts independent raw narrowband SNR to smoothed key probability and evaluates nine bounded 8–60 WPM timing hypotheses. The leader remains provisional during acquisition, one path locks after sufficient evidence, and a bounded silent-gap reset handles speed changes while preserving stable text. Letters/digits, punctuation/prosigns, WPM, SNR, cadence and timing quality, plus bounded per-character confidence/evidence are published; add the full hidden semi-Markov/Viterbi path, closer-spaced speed alternatives where measured, and held-out confidence calibration. |
 | CW-002 | todo | Add compact causal learned likelihood path | Compare tiny causal TCN, CNN-GRU, and compact Conformer models; selected model stays within the published INT8/state/resource budget, has audited training/model provenance, and demonstrates an independent held-out gain while the baseline remains fully usable without it. |

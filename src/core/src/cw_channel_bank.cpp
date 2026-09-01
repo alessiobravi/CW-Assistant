@@ -45,10 +45,28 @@ const char* cwVerificationReasonName(
       return "low-timing-quality";
     case CwVerificationReason::LowCharacterConfidence:
       return "low-character-confidence";
+    case CwVerificationReason::ImplausibleCharacterDistribution:
+      return "implausible-character-distribution";
     case CwVerificationReason::Verified: return "verified";
     case CwVerificationReason::SignalLost: return "signal-lost";
   }
   return "needs-spectral-persistence";
+}
+
+bool isCharacterDistributionImplausible(
+    const std::string& text, const std::uint16_t minimum_characters,
+    const float maximum_simple_character_fraction) noexcept {
+  if (text.size() < minimum_characters) return false;
+  std::size_t letters = 0;
+  std::size_t simple = 0;
+  for (const char character : text) {
+    if (character == ' ') continue;
+    ++letters;
+    if (character == 'E' || character == 'T') ++simple;
+  }
+  return letters > 0 &&
+         static_cast<float>(simple) / static_cast<float>(letters) >
+             maximum_simple_character_fraction;
 }
 
 CwChannelBank::Track::Track(const std::uint64_t track_id,
@@ -122,6 +140,10 @@ void CwChannelBank::sanitizeConfig() noexcept {
       config_.minimum_narrowband_coherence, 0.0F, 100.0F);
   config_.maximum_verification_unknown_fraction = std::clamp(
       config_.maximum_verification_unknown_fraction, 0.0F, 1.0F);
+  config_.minimum_plausibility_check_characters = std::clamp<std::uint16_t>(
+      config_.minimum_plausibility_check_characters, 10, 500);
+  config_.maximum_simple_character_fraction = std::clamp(
+      config_.maximum_simple_character_fraction, 0.0F, 1.0F);
 }
 
 void CwChannelBank::reset() noexcept {
@@ -618,6 +640,17 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
 }
 
 void CwChannelBank::updateVerification(Track& track) {
+  // Checked even for an already-verified track (unlike every gate below):
+  // it can only be judged from accumulated text, not a single instant's
+  // evidence, so it must keep re-evaluating verified tracks too.
+  if (isCharacterDistributionImplausible(
+          track.update.text, config_.minimum_plausibility_check_characters,
+          config_.maximum_simple_character_fraction)) {
+    track.verification_state = CwTrackState::Candidate;
+    track.verification_reason =
+        CwVerificationReason::ImplausibleCharacterDistribution;
+    return;
+  }
   if (track.verification_state == CwTrackState::Verified) return;
   // Re-derive the state from current evidence every call rather than only
   // ever advancing it: a track that reached Morse-likely on transient
