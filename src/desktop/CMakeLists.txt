@@ -7,6 +7,8 @@ qt_add_executable(cw-assistant-desktop
   main.cpp
   replay/replay_controller.cpp
   replay/replay_controller.hpp
+  replay/decoder_channel_model.cpp
+  replay/decoder_channel_model.hpp
   replay/live_audio_worker.cpp
   replay/live_audio_worker.hpp
   radio/cat4om_client.cpp
@@ -82,6 +84,8 @@ if(CWA_BUILD_TESTS)
     ${PROJECT_SOURCE_DIR}/tests/desktop/live_audio_pipeline_test.cpp
     replay/live_audio_worker.cpp
     replay/live_audio_worker.hpp
+    replay/decoder_channel_model.cpp
+    replay/decoder_channel_model.hpp
   )
   target_link_libraries(cwa_live_audio_pipeline_test PRIVATE
     cwa_core Qt6::Core Qt6::Multimedia)
@@ -97,6 +101,8 @@ if(CWA_BUILD_TESTS)
     replay/replay_controller.hpp
     replay/live_audio_worker.cpp
     replay/live_audio_worker.hpp
+    replay/decoder_channel_model.cpp
+    replay/decoder_channel_model.hpp
     visualization/spectrum_frame.hpp
     visualization/spectrum_waterfall_item.cpp
     visualization/spectrum_waterfall_item.hpp

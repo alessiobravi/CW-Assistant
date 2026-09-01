@@ -9,8 +9,10 @@ through a supported integration, save radio/keying/display settings, open the Wi
 frequency-provider configuration, monitor a CAT4OM radio, process a selected
 live sound-card input, and replay a WAV recording through the real spectrum and
 waterfall, and run a receive-only decoder across the complete processed
-passband. Narrowband weak-signal refinement, direct keying output, logging
-connection, SDR capture, and remote-station runtime remain under implementation.
+passband. Each tracked frequency now obtains keying evidence from a narrowband
+filter over the original audio rather than the display spectrum. Multi-speed
+acquisition, weak-signal refinement, direct keying output, logging connection,
+SDR capture, and remote-station runtime remain under implementation.
 A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
@@ -101,15 +103,22 @@ text/elements, adaptive WPM, SNR, confidence, and key-down evidence. A keyed gap
 does not immediately discard the row; decoded tracks are retained for eight
 seconds so normal word and message gaps preserve identity.
 
-This first full-passband implementation uses FFT-bin peak tracking and an
-independent soft-evidence adaptive timing decoder per frequency. It handles
-letters, digits, common punctuation, and selected prosigns, but does not yet
-provide phase-aware narrowband filtering, calibrated confidence, multiple-pass
-weak-signal recovery, or separation of callers occupying the same frequency.
-Signals closer than about 45 Hz may therefore appear as one track, and noise or
-non-CW carriers may produce `?` or incorrect text. Changing the audio source or
-processing bandwidth clears decoder state; changing or hiding the 700 Hz visual
-guide does not. Decoder output cannot arm TX, key a radio, or initiate a QSO.
+The FFT-bin tracker discovers candidate frequencies, but it does not provide
+the key-up/key-down evidence. For both live audio and WAV replay, the DSP worker
+uses the original samples to mix each tracked tone to baseband, runs it through
+a three-stage 120 Hz filter, compares its energy with adjacent reference bands,
+and supplies new soft evidence 500 times per second to that track's adaptive
+timing decoder. This is deliberately independent of spectrum averaging,
+waterfall levels, display gain, and the 700 Hz visual guide.
+
+The baseline handles letters, digits, common punctuation, and selected
+prosigns, but does not yet provide automatic decoder-filter width selection,
+broad multi-speed hypotheses, calibrated confidence, multiple-pass weak-signal
+recovery, or separation of callers occupying the same frequency. Signals
+closer than about 45 Hz may therefore appear as one track, and noise or non-CW
+carriers may produce `?` or incorrect text. Changing the audio source or
+processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
+radio, or initiate a QSO.
 
 ## Replay a receiver recording
 

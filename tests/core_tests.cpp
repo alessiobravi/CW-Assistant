@@ -158,6 +158,9 @@ void test_cw_channel_bank() {
   CwChannelBank bank;
   std::vector<float> bins(101, -100.0F);
   std::uint64_t now = 0;
+  double phase_low = 0.0;
+  double phase_high = 0.0;
+  constexpr double sample_rate = 8'000.0;
   const auto feed = [&](const bool low_tone, const bool high_tone,
                         const int milliseconds) {
     const int steps = milliseconds / 10;
@@ -165,14 +168,29 @@ void test_cw_channel_bank() {
       bins.assign(bins.size(), -100.0F);
       if (low_tone) bins[30] = -80.0F;
       if (high_tone) bins[70] = -78.0F;
+      static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        const float sample =
+            (low_tone ? 0.35F * static_cast<float>(std::sin(phase_low))
+                      : 0.0F) +
+            (high_tone ? 0.35F * static_cast<float>(std::sin(phase_high))
+                       : 0.0F);
+        block.samples[index] = {sample, 0.0F};
+        phase_low += 2.0 * std::numbers::pi * 300.0 / sample_rate;
+        phase_high += 2.0 * std::numbers::pi * 700.0 / sample_rate;
+      }
+      static_cast<void>(bank.processSamples(block));
       now += 10'000'000;
-      static_cast<void>(bank.process(now, 0.0, 1'000.0, bins));
     }
   };
 
   feed(true, true, 60);
   feed(false, true, 120);
-  feed(false, false, 250);
+  feed(false, false, 350);
   const auto& channels = bank.channels();
   expect(channels.size() == 2,
          "full-passband channel bank retains two independent CW signals");
@@ -199,6 +217,30 @@ void test_cw_channel_bank() {
     expect(bank.channels().empty(),
            "silent decoded tracks expire from the full-spectrum model");
   }
+
+  CwChannelBank rejection_bank;
+  bins.assign(bins.size(), -100.0F);
+  bins[70] = -75.0F;
+  static_cast<void>(rejection_bank.updateSpectrum(
+      0, 0.0, 1'000.0, bins));
+  double interference_phase = 0.0;
+  for (int step = 0; step < 30; ++step) {
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = static_cast<std::uint64_t>(step) * 10'000'000;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          0.45F * static_cast<float>(std::sin(interference_phase)), 0.0F};
+      interference_phase +=
+          2.0 * std::numbers::pi * 880.0 / sample_rate;
+    }
+    static_cast<void>(rejection_bank.processSamples(block));
+  }
+  expect(rejection_bank.channels().size() == 1 &&
+             rejection_bank.channels().front().text.empty() &&
+             !rejection_bank.channels().front().key_down,
+         "raw narrowband evidence rejects an adjacent non-tracked tone");
 }
 
 void test_transmit_guard() {

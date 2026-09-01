@@ -1,5 +1,7 @@
 #include "live_audio_worker.hpp"
 
+#include "decoder_channel_model.hpp"
+
 #include <QAudioDevice>
 #include <QAudioSource>
 #include <QByteArray>
@@ -211,6 +213,7 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
 
 void LiveAudioDspWorker::start() {
   analyzer_.reset();
+  decoder_.reset();
   cwassistant::core::RealtimeSampleBlock stale;
   while (pipe_->blocks.try_pop(stale)) {
   }
@@ -220,6 +223,7 @@ void LiveAudioDspWorker::start() {
 void LiveAudioDspWorker::stop() {
   timer_.stop();
   analyzer_.reset();
+  decoder_.reset();
 }
 
 void LiveAudioDspWorker::configure(
@@ -245,6 +249,7 @@ void LiveAudioDspWorker::configure(
       std::clamp(upper_frequency_hz,
                  config.audio_lower_frequency_hz + 1.0, 96'000.0);
   static_cast<void>(analyzer_.configure(config));
+  decoder_.reset();
 }
 
 void LiveAudioDspWorker::drain() {
@@ -252,7 +257,14 @@ void LiveAudioDspWorker::drain() {
   int drained = 0;
   while (drained < 8 && pipe_->blocks.try_pop(block)) {
     ++drained;
-    for (auto& snapshot : analyzer_.process(block)) {
+    auto snapshots = analyzer_.process(block);
+    for (const auto& snapshot : snapshots) {
+      static_cast<void>(decoder_.updateSpectrum(
+          snapshot.timestamp_ns, snapshot.lower_frequency_hz,
+          snapshot.upper_frequency_hz, snapshot.bins_dbfs));
+    }
+    const auto& decoder_channels = decoder_.processSamples(block);
+    for (auto& snapshot : snapshots) {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
       std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
                 bins.begin());
@@ -264,6 +276,7 @@ void LiveAudioDspWorker::drain() {
           .upper_frequency_hz = snapshot.upper_frequency_hz,
       });
     }
+    emit decoderProduced(decoderChannelModel(decoder_channels));
   }
 }
 

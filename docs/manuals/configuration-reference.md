@@ -96,10 +96,13 @@ actual displayed audio or RF frequency.
 The decoder scans the complete processed bandwidth selected under **Signal**.
 It acquires local spectral peaks, assigns each tracked frequency a stable color,
 and maintains separate soft key evidence, timing, provisional text, stable text,
-WPM, SNR, and confidence. Up to 24 tracks are retained; nearby peaks inside the
-initial 45 Hz separation are treated as one track, and decoded tracks currently
-remain visible for eight seconds after their signal disappears. These starting
-limits are not yet exposed as profile controls.
+WPM, SNR, and confidence. Key evidence is calculated from original input samples
+through a phase-continuous 120 Hz narrowband path at 500 updates/second; **Avg**,
+display bounds, waterfall suppression, and the visual guide do not alter it.
+Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
+are treated as one track, and decoded tracks currently remain visible for eight
+seconds after their signal disappears. Decoder filter width/evidence rate and
+these other starting limits are not yet exposed as profile controls.
 
 ## Station page
 

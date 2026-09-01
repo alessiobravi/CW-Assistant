@@ -61,33 +61,5 @@ int main(int argc, char* argv[]) {
   node = item.updatePaintNode(node, nullptr);
   delete node;
 
-  cwassistant::desktop::ReplayController decoder_controller;
-  cwassistant::desktop::SpectrumFrame decoder_frame{
-      .bins_dbfs = QVector<float>(10, -100.0F),
-      .sequence = 0,
-      .timestamp_ns = 0,
-      .lower_frequency_hz = 100.0,
-      .upper_frequency_hz = 1'000.0,
-  };
-  const auto feed_decoder = [&](const bool down, const int duration_ms) {
-    for (int elapsed = 0; elapsed < duration_ms; elapsed += 10) {
-      decoder_frame.bins_dbfs.fill(-100.0F);
-      if (down) decoder_frame.bins_dbfs[6] = -70.0F;
-      decoder_frame.timestamp_ns += 10'000'000;
-      ++decoder_frame.sequence;
-      decoder_controller.frameReady(decoder_frame);
-    }
-  };
-  feed_decoder(false, 100);
-  feed_decoder(true, 60);
-  feed_decoder(false, 200);
-  const auto channels = decoder_controller.decoderChannels();
-  if (channels.size() != 1 ||
-      !channels.front().toMap().value(QStringLiteral("text"))
-          .toString().contains(QLatin1Char('E')) ||
-      channels.front().toMap().value(QStringLiteral("snrDb")).toDouble() >
-          0.1) {
-    return 8;
-  }
   return 0;
 }

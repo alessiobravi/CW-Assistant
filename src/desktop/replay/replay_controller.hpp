@@ -6,8 +6,6 @@
 #include <QUrl>
 #include <QVariantList>
 
-#include "cwassistant/core/cw_channel_bank.hpp"
-
 #include "../visualization/spectrum_frame.hpp"
 
 namespace cwassistant::desktop {
@@ -102,7 +100,7 @@ class ReplayController final : public QObject {
   void setStatus(QString status);
   void beginLiveAudioCapture();
   void publishSpectrumConfiguration();
-  void processDecoderFrame(const cwassistant::desktop::SpectrumFrame& frame);
+  void acceptDecoderChannels(const QVariantList& channels);
   void resetDecoder();
 
   QThread worker_thread_;
@@ -133,7 +131,6 @@ class ReplayController final : public QObject {
   double audio_upper_frequency_hz_{3'000.0};
   int spectrum_frame_rate_hz_{60};
   bool spectrum_processing_configured_{false};
-  cwassistant::core::CwChannelBank cw_channel_bank_;
   QVariantList decoder_channels_;
 };
 

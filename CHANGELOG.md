@@ -8,6 +8,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Per-frequency raw-audio CW evidence in both live-input and WAV DSP workers.
+  Each tracked channel now uses a phase-continuous complex mixer, a three-stage
+  120 Hz narrowband filter, 500 Hz evidence updates, and adjacent-band noise
+  references before timing decode. Spectrum averaging and display gain remain
+  available for visualization/candidate discovery but can no longer directly
+  assert key-down. Deterministic tests cover simultaneous independent tones,
+  adjacent-tone rejection, and the threaded live-audio decoder path.
 - Full-processed-passband CW detection with a bounded 24-track channel bank,
   automatic peak association, independent decoder/timing state per frequency,
   stable track IDs, bounded silent-track expiry, and distinct shared colors for

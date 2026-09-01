@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QVariantList>
 
 #include <array>
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <memory>
 
 #include "cwassistant/core/sample_block.hpp"
+#include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "../visualization/spectrum_frame.hpp"
@@ -86,8 +88,9 @@ class LiveAudioDspWorker final : public QObject {
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
 
- signals:
+signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
+  void decoderProduced(const QVariantList& channels);
 
  private slots:
   void drain();
@@ -96,6 +99,7 @@ class LiveAudioDspWorker final : public QObject {
   std::shared_ptr<LiveAudioPipe> pipe_;
   QTimer timer_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
+  cwassistant::core::CwChannelBank decoder_;
 };
 
 }  // namespace cwassistant::desktop

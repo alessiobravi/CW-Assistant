@@ -5,33 +5,18 @@
 #include <QMetaObject>
 #include <QPermissions>
 #include <QTimer>
-#include <QVariantMap>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
-#include <span>
 #include <utility>
 
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
+#include "decoder_channel_model.hpp"
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
-namespace {
-
-constexpr std::array<const char*, 24> kChannelColors{
-    "#4dd0e1", "#ffb74d", "#ba68c8", "#81c784",
-    "#ff6b8a", "#64b5f6", "#dce775", "#f06292",
-    "#4db6ac", "#9575cd", "#ffd54f", "#90a4ae",
-    "#ff8a65", "#a1887f", "#7986cb", "#aed581",
-    "#4fc3f7", "#e57373", "#fff176", "#ce93d8",
-    "#80cbc4", "#ffcc80", "#9fa8da", "#b0bec5",
-};
-
-}  // namespace
-
 class ReplayWorker final : public QObject {
   Q_OBJECT
 
@@ -47,6 +32,7 @@ class ReplayWorker final : public QObject {
     timer_->stop();
     source_.stop();
     analyzer_.reset();
+    decoder_.reset();
     started_ = false;
     opened_ = source_.open(path.toStdString(), {});
     if (!opened_) {
@@ -69,6 +55,7 @@ class ReplayWorker final : public QObject {
         return;
       }
       analyzer_.reset();
+      decoder_.reset();
       started_ = true;
       emit progress(0.0);
     }
@@ -87,6 +74,7 @@ class ReplayWorker final : public QObject {
     timer_->stop();
     source_.stop();
     analyzer_.reset();
+    decoder_.reset();
     started_ = false;
     emit playbackChanged(false);
     emit progress(0.0);
@@ -122,6 +110,7 @@ class ReplayWorker final : public QObject {
         std::clamp(upper_frequency_hz,
                    config.audio_lower_frequency_hz + 1.0, 96'000.0);
     static_cast<void>(analyzer_.configure(config));
+    decoder_.reset();
   }
 
  signals:
@@ -130,6 +119,7 @@ class ReplayWorker final : public QObject {
   void playbackChanged(bool playing);
   void progress(double seconds);
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
+  void decoderProduced(const QVariantList& channels);
   void ended();
 
  private slots:
@@ -144,7 +134,14 @@ class ReplayWorker final : public QObject {
       return;
     }
 
-    for (auto& snapshot : analyzer_.process(block)) {
+    auto snapshots = analyzer_.process(block);
+    for (const auto& snapshot : snapshots) {
+      static_cast<void>(decoder_.updateSpectrum(
+          snapshot.timestamp_ns, snapshot.lower_frequency_hz,
+          snapshot.upper_frequency_hz, snapshot.bins_dbfs));
+    }
+    const auto& decoder_channels = decoder_.processSamples(block);
+    for (auto& snapshot : snapshots) {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
       std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
                 bins.begin());
@@ -157,6 +154,7 @@ class ReplayWorker final : public QObject {
       };
       emit frameProduced(frame);
     }
+    emit decoderProduced(decoderChannelModel(decoder_channels));
 
     const double sample_rate = source_.stream_descriptor().sample_rate_hz;
     emit progress(static_cast<double>(source_.position_frames()) / sample_rate);
@@ -170,14 +168,13 @@ class ReplayWorker final : public QObject {
   QTimer* timer_;
   cwassistant::core::WavReplaySource source_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
+  cwassistant::core::CwChannelBank decoder_;
   bool opened_{false};
   bool started_{false};
 };
 
 ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   qRegisterMetaType<SpectrumFrame>();
-  connect(this, &ReplayController::frameReady, this,
-          &ReplayController::processDecoderFrame);
   connect(this, &ReplayController::sourceReset, this,
           &ReplayController::resetDecoder);
   auto* worker = new ReplayWorker;
@@ -226,6 +223,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   });
   connect(worker, &ReplayWorker::frameProduced, this,
           &ReplayController::frameReady);
+  connect(worker, &ReplayWorker::decoderProduced, this,
+          &ReplayController::acceptDecoderChannels);
   connect(worker, &ReplayWorker::ended, this, [this] {
     playing_ = false;
     status_text_ = QStringLiteral("Replay complete");
@@ -291,6 +290,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           });
   connect(dsp_worker, &LiveAudioDspWorker::frameProduced, this,
           &ReplayController::frameReady);
+  connect(dsp_worker, &LiveAudioDspWorker::decoderProduced, this,
+          &ReplayController::acceptDecoderChannels);
   audio_capture_thread_.setObjectName(QStringLiteral("Live audio capture"));
   audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
   audio_capture_thread_.start();
@@ -419,44 +420,12 @@ void ReplayController::publishSpectrumConfiguration() {
       audio_upper_frequency_hz_);
 }
 
-void ReplayController::processDecoderFrame(const SpectrumFrame& frame) {
-  if (frame.bins_dbfs.isEmpty() ||
-      frame.upper_frequency_hz <= frame.lower_frequency_hz) return;
-  const std::span<const float> bins(
-      frame.bins_dbfs.constData(),
-      static_cast<std::size_t>(frame.bins_dbfs.size()));
-  const auto& channels = cw_channel_bank_.process(
-      frame.timestamp_ns, frame.lower_frequency_hz,
-      frame.upper_frequency_hz, bins);
-  decoder_channels_.clear();
-  decoder_channels_.reserve(static_cast<qsizetype>(channels.size()));
-  for (const auto& channel : channels) {
-    QVariantMap item;
-    item.insert(QStringLiteral("id"),
-                QVariant::fromValue<qulonglong>(channel.id));
-    item.insert(QStringLiteral("frequencyHz"), channel.frequency_hz);
-    item.insert(QStringLiteral("snrDb"), channel.snr_db);
-    item.insert(QStringLiteral("wpm"), channel.wpm);
-    item.insert(QStringLiteral("confidence"), channel.confidence);
-    item.insert(QStringLiteral("keyProbability"),
-                channel.key_down_probability);
-    item.insert(QStringLiteral("keyDown"), channel.key_down);
-    item.insert(QStringLiteral("active"), channel.active);
-    item.insert(QStringLiteral("text"),
-                QString::fromStdString(channel.text));
-    item.insert(QStringLiteral("provisionalText"),
-                QString::fromStdString(channel.provisional_text));
-    item.insert(QStringLiteral("elements"),
-                QString::fromStdString(channel.pending_elements));
-    item.insert(QStringLiteral("color"), QString::fromLatin1(
-        kChannelColors[channel.color_index % kChannelColors.size()]));
-    decoder_channels_.push_back(item);
-  }
+void ReplayController::acceptDecoderChannels(const QVariantList& channels) {
+  decoder_channels_ = channels;
   emit decoderChanged();
 }
 
 void ReplayController::resetDecoder() {
-  cw_channel_bank_.reset();
   decoder_channels_.clear();
   emit decoderChanged();
 }

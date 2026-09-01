@@ -2,6 +2,7 @@
 #include <QMetaObject>
 #include <QThread>
 #include <QTimer>
+#include <QVariantList>
 
 #include <cmath>
 #include <memory>
@@ -22,10 +23,24 @@ int main(int argc, char* argv[]) {
       worker, &cwassistant::desktop::LiveAudioDspWorker::frameProduced,
       &application,
       [&application](const cwassistant::desktop::SpectrumFrame& frame) {
-        const bool valid = frame.bins_dbfs.size() == 1'025 &&
-                           frame.lower_frequency_hz == 0.0 &&
-                           frame.upper_frequency_hz == 24'000.0;
-        application.exit(valid ? 0 : 1);
+        application.setProperty(
+            "validFrame", frame.bins_dbfs.size() == 1'025 &&
+                              frame.lower_frequency_hz == 0.0 &&
+                              frame.upper_frequency_hz == 24'000.0);
+      });
+  QObject::connect(
+      worker, &cwassistant::desktop::LiveAudioDspWorker::decoderProduced,
+      &application, [&application](const QVariantList& channels) {
+        const auto channel = channels.isEmpty()
+            ? QVariantMap{}
+            : channels.front().toMap();
+        const bool valid_decoder = channels.size() == 1 &&
+            std::abs(channel.value(QStringLiteral("frequencyHz")).toDouble() -
+                     1'000.0) < 30.0 &&
+            channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
+        application.exit(
+            application.property("validFrame").toBool() && valid_decoder
+                ? 0 : 1);
       });
 
   cwassistant::core::RealtimeSampleBlock block;
@@ -39,6 +54,7 @@ int main(int argc, char* argv[]) {
   dsp_thread.start();
   QMetaObject::invokeMethod(
       worker, "configure", Qt::BlockingQueuedConnection, Q_ARG(int, 1),
+      Q_ARG(int, 60),
       Q_ARG(bool, true), Q_ARG(bool, false), Q_ARG(double, 0.0),
       Q_ARG(double, -12.0), Q_ARG(bool, false), Q_ARG(double, 0.0),
       Q_ARG(double, 24'000.0));

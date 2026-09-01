@@ -78,20 +78,24 @@ distinct from acoustic output. See
 [High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
 resource limits, training corpus, and benchmark gates.
 
-The delivered M2 baseline now scans the complete processed FFT passband for
-local peaks, suppresses duplicate nearby candidates, and maintains a bounded
-independent state object for every tracked frequency. Each track converts SNR
-to smoothed key-down probability, adapts dit timing, separates provisional from
-stable text, and publishes letters, digits, punctuation/prosigns, WPM, SNR, and
-an evidence-derived confidence score. Stable track IDs select one of 24 shared
-UI colors, and silent tracks expire after a bounded hold. The 700 Hz guide is a
-rendering reference only and is absent from the decoder data path.
+The delivered M2 baseline scans the complete processed FFT passband for local
+peaks, suppresses duplicate nearby candidates, and maintains a bounded
+independent state object for every tracked frequency. Candidate discovery uses
+the shared display FFT, then each track consumes the original audio block using
+a phase-continuous complex mixer, three cascaded low-pass stages with an initial
+120 Hz width, adjacent-band noise references, and 500 Hz evidence updates. That
+raw narrowband SNR drives smoothed key probability and adaptive timing; display
+averaging, gain, palette, and guide settings cannot assert key-down. This work
+runs inside the live/WAV DSP workers rather than the UI thread.
 
-This magnitude-bin channel bank is the dependency-free measured fallback. It
-does not yet provide sub-bin phase tracking, a narrowband mixer/filter per
-track, calibrated confidence, delayed multi-pass refinement, or co-channel
-source separation; those stages replace or augment its evidence without
-changing the UI track contract.
+Each track separates provisional from stable text and publishes letters,
+digits, punctuation/prosigns, WPM, SNR, and an initial evidence-derived
+confidence score. Stable track IDs select one of 24 shared UI colors, and silent
+tracks expire after a bounded hold. The 700 Hz guide is a rendering reference
+only and is absent from the decoder data path. Sub-bin frequency/drift
+estimation, alternative automatic/configurable filter widths, robust noise
+quantiles, calibrated confidence, delayed multi-pass refinement, a bounded
+worker pool for those heavier passes, and co-channel source separation remain.
 
 ## Graphical rendering
 

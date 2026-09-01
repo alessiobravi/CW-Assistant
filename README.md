@@ -13,10 +13,11 @@ DSP worker. WAV replay remains a separate deterministic source for the real 2D
 spectrum and waterfall. Immediate controls below the spectrum provide signal
 gain/bandwidth, constant-time high-resolution history, a CW frequency guide,
 and stable noise-suppressed display tuning. A receive-only full-passband channel
-bank detects multiple spectral peaks, maintains independent adaptive timing
-state for each frequency, and shows color-linked spectrum markers and decode
-rows. The 700 Hz guide is visual only. Narrowband phase-aware tracking and
-multiple-pass weak-signal decoding remain under active implementation.
+bank detects multiple spectral peaks, then derives independent keying evidence
+from the original samples through a phase-continuous narrowband filter for each
+frequency. It maintains adaptive timing state and shows color-linked spectrum
+markers and decode rows. The 700 Hz guide is visual only. Broader multi-speed
+acquisition and multiple-pass weak-signal decoding remain under implementation.
 
 ## Planned capabilities
 
@@ -27,8 +28,8 @@ multiple-pass weak-signal decoding remain under active implementation.
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
 - Live-source and WAV-replay spectrum with scrolling waterfall
-- Phase-aware narrowband refinement of the implemented stateful full-passband
-  multi-channel decoder
+- Alternative-width/drift refinement of the implemented raw-sample narrowband
+  full-passband multi-channel decoder
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
 - Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,
   palettes, overlays, and delayed callsign detail cards
@@ -50,9 +51,10 @@ multiple-pass weak-signal decoding remain under active implementation.
 ## Architecture
 
 The real-time capture callback only packages samples into a bounded SPSC ring.
-A dispatcher performs shared spectral analysis and submits active channels to a
-fixed-size DSP worker pool. Each channel has its own filter, timing, decoder,
-and confidence state; it does not own an operating-system thread.
+A DSP worker performs shared spectral analysis and bounded per-track raw-sample
+mixing/filtering. Each channel has its own filter, timing, decoder, and
+confidence state; it does not own an operating-system thread. A bounded worker
+pool remains planned for later expensive refinement passes.
 
 See [the architecture](docs/architecture.md), [requirements](docs/requirements.md),
 [prioritized backlog](BACKLOG.md), [changelog](CHANGELOG.md), and
