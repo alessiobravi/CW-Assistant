@@ -215,8 +215,8 @@ void test_cw_channel_bank() {
                held[1].id == high_id && held[0].color_index == low_color &&
                held[1].color_index == high_color,
            "frequency track identity and colors survive keyed gaps");
-    bank.configure({.decoded_track_retention_seconds = 2.0,
-                    .empty_track_retention_seconds = 2.0,
+    bank.configure({.empty_track_retention_seconds = 2.0,
+                    .decoded_track_retention_seconds = 2.0,
                     .minimum_verification_symbols = 0});
     feed(false, false, 2'500);
     expect(bank.channels().empty(),
@@ -372,8 +372,8 @@ void test_cw_channel_bank() {
              slow_diagnostics.verified_transitions == 1,
          "verification diagnostics report the candidate lifecycle transition");
 
-  slow_bank.configure({.decoded_track_retention_seconds = 2.0,
-                       .empty_track_retention_seconds = 2.0});
+  slow_bank.configure({.empty_track_retention_seconds = 2.0,
+                       .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {
     fine_bins.assign(fine_bins.size(), -110.0F);
     const auto timestamp = static_cast<std::uint64_t>(
