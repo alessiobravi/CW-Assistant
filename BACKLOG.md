@@ -6,6 +6,14 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-01 — added DOC-002 (render documentation diagrams,
+e.g. Mermaid, instead of the ASCII art currently in docs/architecture.md,
+docs/decoder-strategy.md, and docs/decisions/0001-qt-quick-spectrum-renderer.md)
+per an operator request; no implementation yet.
+Last reviewed: 2026-09-01 — added PKG-004 (application update checking and
+guided install: periodic/manual update checks against the published release
+manifest, operator-confirmed download/checksum-verify/install/cleanup) per
+an operator request; no implementation yet.
 Last reviewed: 2026-09-01 — swapped which spectrum overlay reads as an
 "area", per an operator request that the two were easy to confuse: the CW
 pitch guide is now a bold line on the frequency axis only rather than a
@@ -247,7 +255,9 @@ translucent band rather than two signal-like lines.
 | PKG-001 | active | Produce signed Win64 installer | Hosted WiX/MSI generation, stable major-upgrade identity, numeric build revisions, branded executable/product icon, `CW Assistant` Start-menu program group, desktop shortcut, and stable download naming are implemented; clean Windows 11 install/upgrade/repair/uninstall tests, Authenticode signing, and signed update metadata remain. |
 | PKG-002 | active | Produce macOS bundle and Debian/Ubuntu package | Hosted builds deploy Qt/QML runtime files and publish portable Sonoma 14+ Apple silicon/Intel artifacts plus a CPack `.deb`; CI verifies the Mach-O 14.0 deployment target and the root binary index points to stable filenames; validate clean Sonoma and supported Debian/Ubuntu installs and add signing before release. |
 | PKG-003 | todo | Publish signed Debian/Ubuntu APT repository | Signed Release/InRelease metadata, protected key rotation, version promotion, retention, and documented repository enrollment pass clean-machine tests. |
+| PKG-004 | todo | Add application update checking and guided install | A periodic, disableable background check compares the running version against the published release manifest (`binaries/latest.json`, respecting `channel`); Settings gains a manual **Check for updates** button showing the current/available version and last-checked time. When an update is available and the operator confirms, the platform-appropriate artifact (MSI on Windows, `.deb` or portable archive on Linux, bundle/archive on macOS) downloads, its checksum is verified against the published `SHA256SUMS` before anything runs, install proceeds via the platform's native mechanism (silent/guided MSI, package manager, or bundle replacement), and the downloaded artifact plus any previous staged download are cleaned up afterward. Never auto-downloads or installs without explicit operator confirmation, and never installs while live capture or a keyed TX session is active without a separate explicit confirmation; failures leave the current install untouched and are clearly reported. |
 | DOC-001 | active | Maintain operator and hardware manuals | A user-manual index plus setup, settings, hosted-build, Debian/Ubuntu, and CAT4OM guides exist; every implementation change is CI-gated on manual/changelog/backlog updates; safe keying, workflows, diagnostics, and compatibility manuals remain. |
+| DOC-002 | todo | Render documentation diagrams instead of ASCII art | `docs/architecture.md`, `docs/decoder-strategy.md`, and `docs/decisions/0001-qt-quick-spectrum-renderer.md` currently draw box/flow diagrams as ASCII art; replace them with rendered diagrams (e.g. Mermaid, kept as reviewable source text in the same Markdown files rather than committed binary images) and establish that convention for new architecture/decision documentation going forward. |
 
 ## P2 — secure remote operation
 
