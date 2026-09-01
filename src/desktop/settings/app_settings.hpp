@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <optional>
 
+#include "cwassistant/core/frequency_plan.hpp"
+
 namespace cwassistant::desktop {
 
 class Cat4OmClient;
@@ -133,6 +135,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] qint64 txTransverterOffsetHz() const noexcept;
   [[nodiscard]] int cwToneSidebandIndex() const noexcept;
   [[nodiscard]] std::optional<std::uint64_t> controlledRxRfHz() const noexcept;
+  [[nodiscard]] std::optional<std::uint64_t> controlledTxRfHz() const noexcept;
+  [[nodiscard]] bool controlledSplitActive() const noexcept;
   [[nodiscard]] const QString& keyingPort() const noexcept;
   [[nodiscard]] int pttLineIndex() const noexcept;
   [[nodiscard]] int keyLineIndex() const noexcept;
@@ -242,6 +246,8 @@ class AppSettings final : public QObject {
   void refreshProfiles();
   void resetInMemorySettings();
   void refreshControlledFrequency();
+  [[nodiscard]] std::optional<cwassistant::core::ResolvedFrequencies>
+  resolvedControlledFrequencies() const noexcept;
 #ifdef Q_OS_WIN
   [[nodiscard]] bool ensureOmniRigAutomation();
 #endif

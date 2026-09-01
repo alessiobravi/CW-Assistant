@@ -611,7 +611,7 @@ ApplicationWindow {
                 anchors.margins: 16
                 RowLayout {
                     Layout.fillWidth: true
-                    Label { text: "Full-spectrum CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                    Label { text: "CW Decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
                     Item { Layout.fillWidth: true }
                     ToolButton {
                         id: diagnosticsToggle
@@ -632,6 +632,24 @@ ApplicationWindow {
                         ToolTip.delay: 300
                         ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Capped at 5 minutes. Review the saved files before sharing them — the audio is whatever the selected input picked up."
                     }
+                }
+                Label {
+                    id: vfoFrequencyLabel
+                    objectName: "vfoFrequencyLabel"
+                    // The VFO readout only means anything with a live,
+                    // connected radio driving the audio (CAT/OmniRig); it is
+                    // hidden entirely for receive-only SWL setups and WAV
+                    // replay, where there is no radio state to show.
+                    visible: replayController.radioFrequencyAvailable
+                             && replayController.sourceMode === 0
+                    text: replayController.radioSplitActive
+                          ? "RX " + window.formatFrequency(replayController.radioRxFrequencyHz)
+                            + "  •  TX " + window.formatFrequency(replayController.radioTxFrequencyHz)
+                          : "VFO " + window.formatFrequency(replayController.radioRxFrequencyHz)
+                    color: "#43c6ac"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    Layout.fillWidth: true
                 }
                 Label {
                     visible: replayController.debugCaptureActive || replayController.debugCapturePath.length > 0

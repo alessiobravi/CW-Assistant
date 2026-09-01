@@ -292,6 +292,13 @@ RX frequency; CAT4OM uses its pushed radio state. The RX transverter offset is
 applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
 unavailable frequency providers deliberately show **AF** rather than guessing.
 
+The **CW Decoder** panel shows the same resolved frequency as a VFO-style
+readout above the signal list — "VFO `<RX frequency>`", or "RX `<RX
+frequency>` • TX `<TX frequency>`" once split is active — under the exact
+same conditions as the marker labels above. It disappears entirely for
+receive-only SWL setups, WAV replay, and whenever no radio is currently
+linked, rather than showing a stale or meaningless value.
+
 Example satellite station:
 
 ```text

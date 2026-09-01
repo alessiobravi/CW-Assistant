@@ -259,7 +259,8 @@ qint64 AppSettings::txTransverterOffsetHz() const noexcept { return tx_transvert
 int AppSettings::cwToneSidebandIndex() const noexcept {
   return cw_tone_sideband_index_;
 }
-std::optional<std::uint64_t> AppSettings::controlledRxRfHz() const noexcept {
+std::optional<cwassistant::core::ResolvedFrequencies>
+AppSettings::resolvedControlledFrequencies() const noexcept {
   if (!radio_enabled_ || !audio_input_radio_linked_) {
     return std::nullopt;
   }
@@ -273,11 +274,26 @@ std::optional<std::uint64_t> AppSettings::controlledRxRfHz() const noexcept {
     plan = cat4om_client_->frequencyPlan();
   }
   if (!plan) return std::nullopt;
-  const auto resolved = cwassistant::core::resolve_frequencies(
+  return cwassistant::core::resolve_frequencies(
       *plan, {.rx_offset_hz = rx_transverter_offset_hz_,
               .tx_offset_hz = tx_transverter_offset_hz_});
+}
+
+std::optional<std::uint64_t> AppSettings::controlledRxRfHz() const noexcept {
+  const auto resolved = resolvedControlledFrequencies();
   return resolved ? std::optional<std::uint64_t>(resolved->rx_rf_hz)
                   : std::nullopt;
+}
+
+std::optional<std::uint64_t> AppSettings::controlledTxRfHz() const noexcept {
+  const auto resolved = resolvedControlledFrequencies();
+  return resolved ? std::optional<std::uint64_t>(resolved->tx_rf_hz)
+                  : std::nullopt;
+}
+
+bool AppSettings::controlledSplitActive() const noexcept {
+  const auto resolved = resolvedControlledFrequencies();
+  return resolved && resolved->split_enabled;
 }
 
 void AppSettings::refreshControlledFrequency() {

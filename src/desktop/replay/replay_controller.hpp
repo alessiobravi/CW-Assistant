@@ -45,6 +45,14 @@ class ReplayController final : public QObject {
                  NOTIFY debugCaptureChanged)
   Q_PROPERTY(QString debugCaptureNote READ debugCaptureNote
                  NOTIFY debugCaptureChanged)
+  Q_PROPERTY(bool radioFrequencyAvailable READ radioFrequencyAvailable
+                 NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(qulonglong radioRxFrequencyHz READ radioRxFrequencyHz
+                 NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(qulonglong radioTxFrequencyHz READ radioTxFrequencyHz
+                 NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(bool radioSplitActive READ radioSplitActive
+                 NOTIFY radioFrequencyChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -71,6 +79,10 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QString& debugCapturePath() const noexcept;
   [[nodiscard]] double debugCaptureElapsedSeconds() const noexcept;
   [[nodiscard]] const QString& debugCaptureNote() const noexcept;
+  [[nodiscard]] bool radioFrequencyAvailable() const noexcept;
+  [[nodiscard]] qulonglong radioRxFrequencyHz() const noexcept;
+  [[nodiscard]] qulonglong radioTxFrequencyHz() const noexcept;
+  [[nodiscard]] bool radioSplitActive() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -83,6 +95,7 @@ class ReplayController final : public QObject {
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
+                                qulonglong tx_rf_hz, bool split_active,
                                 int sideband_index,
                                 double reference_tone_hz);
 
@@ -134,6 +147,7 @@ class ReplayController final : public QObject {
   void decodedSignalTimeoutRequested(int seconds);
   void liveDecodedSignalTimeoutRequested(int seconds);
   void debugCaptureChanged();
+  void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);
   void liveDebugCaptureStopRequested();
 
@@ -184,6 +198,8 @@ class ReplayController final : public QObject {
   QString debug_capture_note_;
   bool radio_frequency_available_{false};
   qulonglong radio_rx_rf_hz_{0};
+  qulonglong radio_tx_rf_hz_{0};
+  bool radio_split_active_{false};
   int cw_sideband_index_{0};
   double cw_reference_tone_hz_{700.0};
 };

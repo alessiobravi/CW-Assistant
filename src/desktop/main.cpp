@@ -58,10 +58,13 @@ int main(int argc, char* argv[]) {
   };
   const auto apply_radio_frequency = [&settings, &replay_controller] {
     const auto rx_rf_hz = settings.controlledRxRfHz();
+    const auto tx_rf_hz = settings.controlledTxRfHz();
     replay_controller.setRadioFrequencyContext(
         rx_rf_hz.has_value(),
         rx_rf_hz ? static_cast<qulonglong>(*rx_rf_hz) : 0,
-        settings.cwToneSidebandIndex(), settings.cwGuideCenterHz());
+        tx_rf_hz ? static_cast<qulonglong>(*tx_rf_hz) : 0,
+        settings.controlledSplitActive(), settings.cwToneSidebandIndex(),
+        settings.cwGuideCenterHz());
   };
   const auto apply_decoded_signal_timeout = [&settings, &replay_controller] {
     replay_controller.setDecodedSignalTimeoutSeconds(

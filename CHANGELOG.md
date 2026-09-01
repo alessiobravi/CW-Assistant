@@ -46,6 +46,20 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A VFO frequency readout in the decoder panel showing the connected radio's
+  actual RX dial frequency, plus TX dial frequency when split is active.
+  Hidden entirely unless a live radio/CAT source is actually driving the
+  audio (radio enabled, linked to the current audio input, and a resolved
+  frequency plan available) and the source is live audio rather than WAV
+  replay — so it stays out of the way for receive-only SWL setups and file
+  playback, which have no radio state to show. `AppSettings` gained
+  `controlledTxRfHz()`/`controlledSplitActive()` alongside the existing
+  `controlledRxRfHz()`, sharing one internal `resolvedControlledFrequencies()`
+  helper; `ReplayController::setRadioFrequencyContext()` now threads TX
+  frequency and split state through to new `radioFrequencyAvailable`/
+  `radioRxFrequencyHz`/`radioTxFrequencyHz`/`radioSplitActive` properties.
+  The decoder panel is also renamed from "Full-spectrum CW decoder" to
+  "CW Decoder".
 - An operator-started, bounded debug capture (initial `OBS-003` slice): a
   "Debug capture" button in the decoder panel records the raw live audio
   feeding the decoder to a WAV file plus a JSON-lines log of every track's

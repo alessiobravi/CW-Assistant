@@ -6,6 +6,15 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-01 — renamed the decoder panel from "Full-spectrum CW
+decoder" to "CW Decoder" and added a VFO frequency readout showing the
+connected radio's actual RX dial frequency (and TX dial frequency when split
+is active), hidden entirely unless a live radio/CAT source is actually
+linked and driving the current audio input in live-audio mode — never shown
+for receive-only SWL setups or WAV replay, which have no radio state to
+show. Reuses the existing `resolve_frequencies` core logic; `AppSettings`
+gained `controlledTxRfHz()`/`controlledSplitActive()` alongside the existing
+RX-only accessor.
 Last reviewed: 2026-09-01 — fixed the root cause of the field-reported
 "visible CW never decodes" case, isolated using a real operator debug
 capture: falsely verified tracks decoded to text overwhelmingly made of the
@@ -197,7 +206,7 @@ translucent band rather than two signal-like lines.
 |---|---|---|---|
 | CAT-001 | todo | Implement Hamlib serial CAT adapter | Enumerates supported models; connects, reads, and sets frequency on both reference rigs. |
 | CAT-002 | active | Implement Windows OmniRig frequency adapter | Settings select Rig 1/2, open native configuration, and poll online RX frequency through COM for evidence-gated live RF labels; frequency set, richer state diagnostics, and both-radio hardware tests remain. |
-| CAT-003 | active | Implement split and transverter frequency domain | Checked integer-Hz RX/TX resolution, signed offsets, profile persistence, and CAT split contract are implemented; adapters, actual-RF UI preview, Doppler/satellite tracking, and hardware tests remain. |
+| CAT-003 | active | Implement split and transverter frequency domain | Checked integer-Hz RX/TX resolution, signed offsets, profile persistence, and CAT split contract are implemented; a decoder-panel VFO readout now shows the resolved RX (and, in split, TX) actual-RF frequency, hidden unless a live radio source is linked, reusing `resolve_frequencies`. Adapters, a setup-wizard preview, Doppler/satellite tracking, and hardware tests remain. |
 | CAT-004 | active | Implement CAT4OM network frequency provider | Native 1.x handshake, observer/control connection, password proof, pushed state, ownership, capability checks, reconnect, Settings fields, and core protocol tests exist; finish operating-panel frequency/split command sequencing and live service integration tests. |
 | RIG-001 | active | Persist multiple named rig profiles | CAT/keying/framing/poll/display settings are isolated by station profile; full device settings and safe live switching remain. |
 | KEY-001 | todo | Implement cross-platform RTS/DTR adapter | Line loopback tests pass on Windows, macOS, and Linux without discovery toggles. |

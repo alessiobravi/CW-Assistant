@@ -422,6 +422,18 @@ double ReplayController::debugCaptureElapsedSeconds() const noexcept {
 const QString& ReplayController::debugCaptureNote() const noexcept {
   return debug_capture_note_;
 }
+bool ReplayController::radioFrequencyAvailable() const noexcept {
+  return radio_frequency_available_;
+}
+qulonglong ReplayController::radioRxFrequencyHz() const noexcept {
+  return radio_rx_rf_hz_;
+}
+qulonglong ReplayController::radioTxFrequencyHz() const noexcept {
+  return radio_tx_rf_hz_;
+}
+bool ReplayController::radioSplitActive() const noexcept {
+  return radio_split_active_;
+}
 
 void ReplayController::setAveragingFrames(const int value) {
   const int clamped = std::clamp(value, 1, 32);
@@ -548,18 +560,23 @@ void ReplayController::rebuildDecoderModels() {
 
 void ReplayController::setRadioFrequencyContext(
     const bool available, const qulonglong rx_rf_hz,
+    const qulonglong tx_rf_hz, const bool split_active,
     const int sideband_index, const double reference_tone_hz) {
   const int sideband = std::clamp(sideband_index, 0, 1);
   const double reference = std::clamp(reference_tone_hz, 0.0, 96'000.0);
   if (radio_frequency_available_ == available &&
-      radio_rx_rf_hz_ == rx_rf_hz && cw_sideband_index_ == sideband &&
-      cw_reference_tone_hz_ == reference) {
+      radio_rx_rf_hz_ == rx_rf_hz && radio_tx_rf_hz_ == tx_rf_hz &&
+      radio_split_active_ == split_active &&
+      cw_sideband_index_ == sideband && cw_reference_tone_hz_ == reference) {
     return;
   }
   radio_frequency_available_ = available;
   radio_rx_rf_hz_ = rx_rf_hz;
+  radio_tx_rf_hz_ = tx_rf_hz;
+  radio_split_active_ = split_active;
   cw_sideband_index_ = sideband;
   cw_reference_tone_hz_ = reference;
+  emit radioFrequencyChanged();
   rebuildDecoderModels();
 }
 
