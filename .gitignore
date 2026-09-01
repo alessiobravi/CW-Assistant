@@ -15,3 +15,7 @@
 /binaries/*
 !/binaries/README.md
 !/binaries/latest.json
+
+# Local-only working notes: not part of the project's shipped documentation,
+# never committed. See docs/development/decoder-timing-redesign-notes.md.
+/docs/development/decoder-timing-redesign-notes.md

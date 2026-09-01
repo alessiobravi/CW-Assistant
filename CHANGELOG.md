@@ -58,6 +58,16 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Fixed `CwChannelBank::shiftTrackedFrequencies()` leaving a nonsensical
+  negative-frequency track behind when a VFO retune (or several small
+  retunes accumulating, e.g. an operator tuning across the band rather than
+  centering on one station) carried a tracked signal's audio-domain
+  frequency past 0 Hz. Such a track is now dropped outright instead of
+  lingering as an invalid candidate; a track shifted too far *positive*
+  already correctly expires through the existing retention timeout once it
+  stops matching spectral peaks, so needed no equivalent change. Found via
+  a real debug capture spanning a live VFO sweep. Covered by a new core
+  test.
 - Fixed `timing_quality` and `mean_character_confidence` being mathematically
   forced identical: `CwTimingDecoder::finishCharacter()` fed the exact same
   per-character `confidence_` value into both accumulators, so the two

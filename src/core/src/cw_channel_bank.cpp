@@ -646,6 +646,16 @@ void CwChannelBank::shiftTrackedFrequencies(
     track.frequency_hz += audio_hz_delta;
     resetFilter(track);
   }
+  // A shift is meant to follow a signal that stays within the processed
+  // audio band as the VFO moves; repeated or large shifts (an operator
+  // tuning across the band, not centering on one station) can carry a
+  // track past 0 Hz, where it no longer corresponds to anything real and
+  // must not linger as a nonsensical negative-frequency candidate. A track
+  // shifted too far *positive* still needs no special handling here: it
+  // simply stops matching spectral peaks and expires through the existing
+  // retention timeout, exactly as an ordinary lost signal would.
+  std::erase_if(tracks_,
+                [](const Track& track) { return track.frequency_hz <= 0.0; });
   rebuildSnapshots();
 }
 

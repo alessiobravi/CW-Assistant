@@ -427,6 +427,63 @@ void test_cw_channel_bank() {
          "decoding continues on the same track identity at the shifted "
          "frequency, growing its text, rather than starting a new track");
 
+  // A large shift (an operator tuning across the band, not centering on one
+  // station -- or several small shifts accumulating the same way) can carry
+  // a track's audio frequency past 0 Hz, where it no longer corresponds to
+  // anything real. It must be dropped outright rather than left behind as a
+  // nonsensical negative-frequency candidate. Uses its own bank so the
+  // retention test just below still has slow_bank's live verified track.
+  {
+    CwChannelBank drop_bank;
+    std::vector<float> drop_bins(1'001, -110.0F);
+    double drop_phase = 0.0;
+    std::vector<bool> drop_keying;
+    const auto append_drop_units = [&drop_keying](const bool keyed,
+                                                   const int units) {
+      drop_keying.insert(drop_keying.end(), units * 10, keyed);
+    };
+    const auto append_drop_letter =
+        [&append_drop_units](const std::string_view elements) {
+          for (std::size_t index = 0; index < elements.size(); ++index) {
+            append_drop_units(true, elements[index] == '.' ? 1 : 3);
+            append_drop_units(false,
+                              index + 1 == elements.size() ? 3 : 1);
+          }
+        };
+    append_drop_letter("...");
+    append_drop_letter("---");
+    append_drop_letter("...");
+    append_drop_units(false, 4);
+    const int drop_steps = static_cast<int>(drop_keying.size()) * 5;
+    for (int step = 0; step < drop_steps; ++step) {
+      const bool keyed = drop_keying[static_cast<std::size_t>(step) %
+                                     drop_keying.size()];
+      drop_bins.assign(drop_bins.size(), -110.0F);
+      if (keyed) drop_bins[500] = -68.0F;
+      const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
+      static_cast<void>(
+          drop_bank.updateSpectrum(timestamp, 0.0, 1'000.0, drop_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = timestamp;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.25F * static_cast<float>(std::sin(drop_phase)) : 0.0F,
+            0.0F};
+        drop_phase += 2.0 * std::numbers::pi * 500.0 / sample_rate;
+      }
+      static_cast<void>(drop_bank.processSamples(block));
+    }
+    expect(!drop_bank.channels().empty(),
+           "the drop-test scenario actually creates a track before "
+           "exercising the shift, so the check below is not vacuous");
+    drop_bank.shiftTrackedFrequencies(-100'000.0);
+    expect(drop_bank.channels().empty(),
+           "a shift that would carry a track past 0 Hz drops it instead of "
+           "leaving a negative-frequency candidate behind");
+  }
+
   slow_bank.configure({.empty_track_retention_seconds = 2.0,
                        .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {
