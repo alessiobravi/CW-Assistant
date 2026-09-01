@@ -162,6 +162,29 @@ carriers may produce `?` or incorrect text. Changing the audio source or
 processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
+## Debug capture
+
+When a visible signal will not decode and the on-demand **Diagnostics**
+readout is not enough to explain why, use **Debug capture** in the decoder
+panel header. It is only available while live RX is running. Selecting it
+starts a bounded recording:
+
+- The exact raw audio feeding the decoder, written to `audio.wav`.
+- A private per-track diagnostic log, `diagnostics.jsonl`, with one line per
+  second listing every currently tracked frequency — including tracks that
+  never become visible — with its SNR, narrowband coherence, filter width,
+  verification state and reason, spectral observations, key transitions,
+  decoded/unknown symbol counts, timing/cadence quality, WPM, and both
+  provisional and stable decoded text.
+
+Both files are written to a timestamped folder under the application's
+standard per-user data location; the panel shows the exact path while
+recording and after it stops. Capture is capped at five minutes and always
+requires an explicit click to start; it is never silent or automatic. Select
+**Stop capture** to end it early. Because the WAV file is exactly what the
+selected audio input picked up, review its contents before sharing the
+capture folder with anyone.
+
 ## Replay a receiver recording
 
 1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.

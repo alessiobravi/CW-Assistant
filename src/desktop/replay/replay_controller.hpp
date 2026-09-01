@@ -37,6 +37,14 @@ class ReplayController final : public QObject {
                  NOTIFY decoderChanged)
   Q_PROPERTY(QVariantMap verificationDiagnostics READ verificationDiagnostics
                  NOTIFY decoderChanged)
+  Q_PROPERTY(bool debugCaptureActive READ debugCaptureActive
+                 NOTIFY debugCaptureChanged)
+  Q_PROPERTY(QString debugCapturePath READ debugCapturePath
+                 NOTIFY debugCaptureChanged)
+  Q_PROPERTY(double debugCaptureElapsedSeconds READ debugCaptureElapsedSeconds
+                 NOTIFY debugCaptureChanged)
+  Q_PROPERTY(QString debugCaptureNote READ debugCaptureNote
+                 NOTIFY debugCaptureChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -59,6 +67,10 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QVariantList& decoderSessions() const noexcept;
   [[nodiscard]] int decoderSessionCount() const noexcept;
   [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
+  [[nodiscard]] bool debugCaptureActive() const noexcept;
+  [[nodiscard]] const QString& debugCapturePath() const noexcept;
+  [[nodiscard]] double debugCaptureElapsedSeconds() const noexcept;
+  [[nodiscard]] const QString& debugCaptureNote() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -83,6 +95,12 @@ class ReplayController final : public QObject {
   Q_INVOKABLE void openDecoderSession(qulonglong channel_id);
   Q_INVOKABLE void closeDecoderSession(qulonglong channel_id);
   Q_INVOKABLE void moveDecoderSession(qulonglong channel_id, int new_index);
+  // Operator-started, bounded diagnostic capture (OBS-003). Only available
+  // while live audio is running; writes raw audio plus periodic per-track
+  // private diagnostic snapshots to a timestamped folder under the app's
+  // standard data location, capped at 5 minutes.
+  Q_INVOKABLE void startDebugCapture();
+  Q_INVOKABLE void stopDebugCapture();
 
  signals:
   void stateChanged();
@@ -115,6 +133,9 @@ class ReplayController final : public QObject {
                                  double upper_frequency_hz);
   void decodedSignalTimeoutRequested(int seconds);
   void liveDecodedSignalTimeoutRequested(int seconds);
+  void debugCaptureChanged();
+  void liveDebugCaptureStartRequested(const QString& directory_path);
+  void liveDebugCaptureStopRequested();
 
  private:
   void setStatus(QString status);
@@ -157,6 +178,10 @@ class ReplayController final : public QObject {
   QVariantList decoder_sessions_;
   QList<qulonglong> decoder_session_order_;
   QVariantMap verification_diagnostics_;
+  bool debug_capture_active_{false};
+  QString debug_capture_path_;
+  double debug_capture_elapsed_seconds_{0.0};
+  QString debug_capture_note_;
   bool radio_frequency_available_{false};
   qulonglong radio_rx_rf_hz_{0};
   int cw_sideband_index_{0};

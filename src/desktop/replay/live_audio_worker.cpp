@@ -5,7 +5,12 @@
 #include <QAudioDevice>
 #include <QAudioSource>
 #include <QByteArray>
+#include <QDateTime>
+#include <QDir>
 #include <QIODevice>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMediaDevices>
 
 #include <algorithm>
@@ -226,6 +231,123 @@ void LiveAudioDspWorker::stop() {
   decoder_.reset();
   emit diagnosticsProduced(
       verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
+  if (capture_active_) {
+    finishDebugCapture(QStringLiteral("Live RX stopped"));
+  }
+}
+
+void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
+  if (capture_active_) {
+    finishDebugCapture(QStringLiteral("Restarted"));
+  }
+  const QString folder_name =
+      QStringLiteral("cwa-debug-capture-%1")
+          .arg(QDateTime::currentDateTimeUtc().toString(
+              QStringLiteral("yyyyMMdd-HHmmss")));
+  QDir base_dir(directory_path);
+  if (!base_dir.exists()) {
+    base_dir.mkpath(QStringLiteral("."));
+  }
+  const QString capture_dir = base_dir.filePath(folder_name);
+  if (!QDir().mkpath(capture_dir)) {
+    emit debugCaptureStateChanged(false, QString(), 0.0,
+                                  QStringLiteral("Could not create capture folder"));
+    return;
+  }
+  const QString log_path =
+      QDir(capture_dir).filePath(QStringLiteral("diagnostics.jsonl"));
+  capture_diagnostics_log_.open(log_path.toStdString(), std::ios::out | std::ios::trunc);
+  if (!capture_diagnostics_log_) {
+    emit debugCaptureStateChanged(
+        false, QString(), 0.0,
+        QStringLiteral("Could not open capture diagnostics file"));
+    return;
+  }
+  // The WAV file is opened lazily on the first block in drain(), once the
+  // input's actual sample rate is known; opening it here with a guessed
+  // rate could write a file that plays back at the wrong pitch/speed.
+  capture_base_path_ = capture_dir;
+  capture_wav_path_ = QDir(capture_dir).filePath(QStringLiteral("audio.wav"));
+  capture_writer_pending_ = true;
+  capture_start_ns_ = 0;
+  capture_last_snapshot_ns_ = 0;
+  capture_have_start_ = false;
+  capture_active_ = true;
+  emit debugCaptureStateChanged(true, capture_base_path_, 0.0,
+                                QStringLiteral("Recording"));
+}
+
+void LiveAudioDspWorker::stopDebugCapture() {
+  if (!capture_active_) return;
+  finishDebugCapture(QStringLiteral("Stopped by operator"));
+}
+
+void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
+  capture_writer_.close();
+  if (capture_diagnostics_log_.is_open()) {
+    capture_diagnostics_log_.flush();
+    capture_diagnostics_log_.close();
+  }
+  const double elapsed_seconds = capture_have_start_
+      ? static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
+            1'000'000'000.0
+      : 0.0;
+  capture_active_ = false;
+  capture_writer_pending_ = false;
+  capture_have_start_ = false;
+  emit debugCaptureStateChanged(false, capture_base_path_, elapsed_seconds, note);
+}
+
+void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
+  QJsonObject root;
+  root.insert(QStringLiteral("elapsedSeconds"),
+              static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
+                  1'000'000'000.0);
+  const auto diagnostics = decoder_.verificationDiagnostics();
+  QJsonObject summary;
+  summary.insert(QStringLiteral("candidateTracks"),
+                 static_cast<qint64>(diagnostics.candidate_tracks));
+  summary.insert(QStringLiteral("morseLikelyTracks"),
+                 static_cast<qint64>(diagnostics.morse_likely_tracks));
+  summary.insert(QStringLiteral("verifiedTracks"),
+                 static_cast<qint64>(diagnostics.verified_tracks));
+  root.insert(QStringLiteral("summary"), summary);
+
+  QJsonArray tracks;
+  for (const auto& track : decoder_.allTrackDiagnostics()) {
+    QJsonObject item;
+    item.insert(QStringLiteral("id"), static_cast<qint64>(track.id));
+    item.insert(QStringLiteral("frequencyHz"), track.frequency_hz);
+    item.insert(QStringLiteral("driftHzPerSecond"), track.drift_hz_per_second);
+    item.insert(QStringLiteral("snrDb"), track.snr_db);
+    item.insert(QStringLiteral("narrowbandCoherence"), track.narrowband_coherence);
+    item.insert(QStringLiteral("filterWidthHz"), track.filter_width_hz);
+    item.insert(QStringLiteral("state"), QString::fromLatin1(
+        cwassistant::core::cwTrackStateName(track.verification_state)));
+    item.insert(QStringLiteral("reason"), QString::fromLatin1(
+        cwassistant::core::cwVerificationReasonName(track.verification_reason)));
+    item.insert(QStringLiteral("spectralObservations"), track.spectral_observations);
+    item.insert(QStringLiteral("keyTransitions"),
+                static_cast<qint64>(track.key_transitions));
+    item.insert(QStringLiteral("decodedSymbols"),
+                static_cast<qint64>(track.decoded_symbols));
+    item.insert(QStringLiteral("unknownSymbols"),
+                static_cast<qint64>(track.unknown_symbols));
+    item.insert(QStringLiteral("timingQuality"), track.timing_quality);
+    item.insert(QStringLiteral("cadenceQuality"), track.cadence_quality);
+    item.insert(QStringLiteral("meanCharacterConfidence"),
+                track.mean_character_confidence);
+    item.insert(QStringLiteral("wpm"), track.wpm);
+    item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
+    item.insert(QStringLiteral("provisionalText"),
+                QString::fromStdString(track.provisional_text));
+    tracks.push_back(item);
+  }
+  root.insert(QStringLiteral("tracks"), tracks);
+
+  capture_diagnostics_log_
+      << QJsonDocument(root).toJson(QJsonDocument::Compact).toStdString()
+      << '\n';
 }
 
 void LiveAudioDspWorker::configure(
@@ -284,6 +406,42 @@ void LiveAudioDspWorker::drain() {
       });
     }
     emit decoderProduced(decoderChannelModel(decoder_channels));
+
+    if (capture_active_ && capture_writer_pending_) {
+      if (capture_writer_.open(capture_wav_path_.toStdString(),
+                               block.stream.sample_rate_hz)) {
+        capture_writer_pending_ = false;
+      } else {
+        finishDebugCapture(QStringLiteral("Could not open capture audio file"));
+      }
+    }
+    if (capture_active_ && !capture_writer_pending_) {
+      if (!capture_have_start_) {
+        capture_start_ns_ = block.timestamp_ns;
+        capture_last_snapshot_ns_ = block.timestamp_ns;
+        capture_have_start_ = true;
+      }
+      if (!capture_writer_.writeBlock(block)) {
+        finishDebugCapture(QStringLiteral("Capture reached its maximum size"));
+      } else {
+        const double elapsed_seconds =
+            static_cast<double>(block.timestamp_ns - capture_start_ns_) /
+            1'000'000'000.0;
+        if (elapsed_seconds >= kMaximumCaptureSeconds) {
+          finishDebugCapture(
+              QStringLiteral("Reached the 5-minute capture limit"));
+        } else if (static_cast<double>(block.timestamp_ns -
+                                       capture_last_snapshot_ns_) /
+                       1'000'000'000.0 >=
+                   kSnapshotIntervalSeconds) {
+          capture_last_snapshot_ns_ = block.timestamp_ns;
+          writeDebugCaptureSnapshot();
+          emit debugCaptureStateChanged(true, capture_base_path_,
+                                        elapsed_seconds,
+                                        QStringLiteral("Recording"));
+        }
+      }
+    }
   }
   if (drained > 0) {
     emit diagnosticsProduced(

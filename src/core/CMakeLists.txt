@@ -12,6 +12,7 @@ add_library(cwa_core
   src/spectrum_analyzer.cpp
   src/transmit_guard.cpp
   src/wav_replay_source.cpp
+  src/wav_writer.cpp
 )
 
 target_include_directories(cwa_core PUBLIC include)

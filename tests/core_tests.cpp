@@ -24,6 +24,7 @@
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
+#include "cwassistant/core/wav_writer.hpp"
 
 namespace {
 
@@ -371,6 +372,13 @@ void test_cw_channel_bank() {
   expect(slow_diagnostics.verified_tracks == 1 &&
              slow_diagnostics.verified_transitions == 1,
          "verification diagnostics report the candidate lifecycle transition");
+  const auto slow_track_diagnostics = slow_bank.allTrackDiagnostics();
+  expect(slow_track_diagnostics.size() == 1 &&
+             slow_track_diagnostics.front().verification_state ==
+                 cwassistant::core::CwTrackState::Verified &&
+             !slow_track_diagnostics.front().text.empty(),
+         "per-track diagnostics for operator-consented debug capture expose "
+         "full private state including decoded text");
 
   slow_bank.configure({.empty_track_retention_seconds = 2.0,
                        .decoded_track_retention_seconds = 2.0});
@@ -593,6 +601,52 @@ void test_wav_replay_source() {
   expect(source.start() && source.read(first, 0ms) && first.sequence == 0,
          "restarting WAV replay is deterministic");
   source.stop();
+  std::error_code removal_error;
+  std::filesystem::remove(path, removal_error);
+}
+
+void test_wav_writer() {
+  using namespace std::chrono_literals;
+  using namespace cwassistant::core;
+  const auto path =
+      std::filesystem::temp_directory_path() / "cwa_wav_writer_test.wav";
+  {
+    WavWriter writer;
+    expect(writer.open(path.string(), 8'000.0),
+           "wav writer opens a capture file");
+    expect(writer.isOpen(), "wav writer reports open after open()");
+    RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = 8'000.0;
+    block.sample_count = 4;
+    block.samples[0] = {0.5F, 0.0F};
+    block.samples[1] = {-0.5F, 0.0F};
+    block.samples[2] = {1.0F, 0.0F};
+    block.samples[3] = {-1.0F, 0.0F};
+    expect(writer.writeBlock(block) && writer.framesWritten() == 4,
+           "wav writer accepts a sample block and counts written frames");
+    writer.close();
+    expect(!writer.isOpen(), "wav writer reports closed after close()");
+  }
+
+  WavReplaySource reader;
+  expect(reader.open(path.string(), {}) &&
+             reader.stream_descriptor().sample_rate_hz == 8'000.0 &&
+             reader.total_frames() == 4,
+         "a captured file round-trips through the WAV reader with exact "
+         "sample rate and frame count");
+  expect(reader.start(), "round-tripped capture starts playback");
+  RealtimeSampleBlock read_block;
+  expect(reader.read(read_block, 0ms) && read_block.sample_count == 4,
+         "round-tripped capture reports the exact frame count written");
+  if (read_block.sample_count == 4) {
+    expect(std::abs(read_block.samples[0].real() - 0.5F) < 0.001F &&
+               std::abs(read_block.samples[1].real() + 0.5F) < 0.001F &&
+               std::abs(read_block.samples[2].real() - 1.0F) < 0.001F &&
+               std::abs(read_block.samples[3].real() + 1.0F) < 0.001F,
+           "round-tripped capture preserves sample values within PCM16 "
+           "quantization precision");
+  }
+  reader.stop();
   std::error_code removal_error;
   std::filesystem::remove(path, removal_error);
 }
@@ -958,6 +1012,7 @@ int main() {
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();
+  test_wav_writer();
   test_spectrum_analyzer();
   test_remote_control_lease();
   test_transmit_guard();

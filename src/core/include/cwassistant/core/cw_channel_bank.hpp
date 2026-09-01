@@ -114,6 +114,31 @@ struct CwChannelSnapshot {
   std::string callsign;
 };
 
+// Full private per-track state, including tracks never shown to the
+// operator UI. Intended only for operator-consented diagnostic capture
+// (OBS-003); never used to drive the normal display/session models.
+struct CwTrackDiagnostic {
+  std::uint64_t id{0};
+  double frequency_hz{0.0};
+  double drift_hz_per_second{0.0};
+  float snr_db{0.0F};
+  float narrowband_coherence{0.0F};
+  double filter_width_hz{120.0};
+  CwTrackState verification_state{CwTrackState::Candidate};
+  CwVerificationReason verification_reason{
+      CwVerificationReason::NeedsSpectralPersistence};
+  std::uint16_t spectral_observations{0};
+  std::uint32_t key_transitions{0};
+  std::uint32_t decoded_symbols{0};
+  std::uint32_t unknown_symbols{0};
+  float timing_quality{0.0F};
+  float cadence_quality{0.0F};
+  float mean_character_confidence{0.0F};
+  double wpm{0.0};
+  std::string text;
+  std::string provisional_text;
+};
+
 class CwChannelBank {
  public:
   explicit CwChannelBank(CwChannelBankConfig config = {});
@@ -128,6 +153,7 @@ class CwChannelBank {
       const RealtimeSampleBlock& block);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& channels() const noexcept;
   [[nodiscard]] CwVerificationDiagnostics verificationDiagnostics() const;
+  [[nodiscard]] std::vector<CwTrackDiagnostic> allTrackDiagnostics() const;
 
  private:
   struct Track {

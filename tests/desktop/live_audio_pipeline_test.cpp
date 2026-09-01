@@ -1,5 +1,7 @@
 #include <QCoreApplication>
+#include <QFile>
 #include <QMetaObject>
+#include <QTemporaryDir>
 #include <QThread>
 #include <QTimer>
 #include <QVariantList>
@@ -31,9 +33,16 @@ int main(int argc, char* argv[]) {
                               frame.lower_frequency_hz == 0.0 &&
                               frame.upper_frequency_hz == 24'000.0);
       });
+  QString capture_base_path;
+  QObject::connect(
+      worker, &cwassistant::desktop::LiveAudioDspWorker::debugCaptureStateChanged,
+      &application,
+      [&capture_base_path](const bool, const QString& path, const double,
+                           const QString&) { capture_base_path = path; });
+
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::decoderProduced,
-      &application, [&application](const QVariantList& channels) {
+      &application, [&application, worker](const QVariantList& channels) {
         const auto channel = channels.isEmpty()
             ? QVariantMap{}
             : channels.front().toMap();
@@ -54,6 +63,8 @@ int main(int argc, char* argv[]) {
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
         if (application.property("validFrame").toBool() && valid_decoder) {
+          QMetaObject::invokeMethod(worker, "stopDebugCapture",
+                                    Qt::BlockingQueuedConnection);
           application.exit(0);
         }
       });
@@ -111,6 +122,11 @@ int main(int argc, char* argv[]) {
       Q_ARG(double, 24'000.0));
   QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
 
+  QTemporaryDir capture_root;
+  QMetaObject::invokeMethod(worker, "startDebugCapture",
+                            Qt::BlockingQueuedConnection,
+                            Q_ARG(QString, capture_root.path()));
+
   std::size_t next_block = 0;
   QTimer feeder;
   feeder.setInterval(1);
@@ -131,5 +147,25 @@ int main(int argc, char* argv[]) {
   QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
   dsp_thread.quit();
   dsp_thread.wait();
-  return result;
+  if (result != 0) {
+    return result;
+  }
+
+  if (capture_base_path.isEmpty()) {
+    return 4;
+  }
+  QFile wav_file(capture_base_path + QStringLiteral("/audio.wav"));
+  QFile log_file(capture_base_path + QStringLiteral("/diagnostics.jsonl"));
+  if (!wav_file.exists() || wav_file.size() <= 44) {
+    return 5;  // Missing or header-only capture audio.
+  }
+  if (!log_file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return 6;
+  }
+  const QByteArray first_line = log_file.readLine();
+  if (!first_line.contains("\"tracks\"") ||
+      !first_line.contains("\"candidateTracks\"")) {
+    return 7;  // Diagnostics log line missing expected structure.
+  }
+  return 0;
 }

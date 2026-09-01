@@ -18,6 +18,29 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- An operator-started, bounded debug capture (initial `OBS-003` slice): a
+  "Debug capture" button in the decoder panel records the raw live audio
+  feeding the decoder to a WAV file plus a JSON-lines log of every track's
+  full private diagnostic state (frequency, SNR, narrowband coherence,
+  filter width, verification state/reason, spectral observations, key
+  transitions, decoded/unknown symbols, timing/cadence quality, WPM,
+  provisional and stable text) once per second, to a timestamped folder
+  under the application's standard data location. Capped at 5 minutes;
+  never starts implicitly; the button and a status line make an active
+  capture clearly visible; the operator is told to review the resulting
+  files before sharing them, since the audio is whatever the selected input
+  picked up. Backed by a new dependency-free `WavWriter` (round-trip tested
+  against the existing `WavReplaySource` reader) and
+  `CwChannelBank::allTrackDiagnostics()`, which exposes full per-track state
+  for every track, verified or not — distinct from the normal display model,
+  which continues to expose only verified tracks. Verified end to end with
+  an extended `cwa_live_audio_pipeline_test` that drives a real decode
+  through the pipeline and confirms both output files are well-formed.
+- A "Diagnostics" toggle in the decoder panel header showing the
+  pre-verification candidate/Morse-likely counts and rejection-reason tally
+  as an opt-in, once-per-second snapshot (off by default) rather than a
+  continuously live-updating label, so it stays available for
+  troubleshooting without the flickering the always-on version had.
 - Pre-verification pipeline diagnostics (private candidate and Morse-likely
   track counts plus a tally of the specific gate each currently failing track
   is blocked on) are now computed and exposed through the desktop model layer

@@ -17,7 +17,10 @@
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
+#include "cwassistant/core/wav_writer.hpp"
 #include "../visualization/spectrum_frame.hpp"
+
+#include <fstream>
 
 class QAudioSource;
 class QIODevice;
@@ -89,20 +92,43 @@ class LiveAudioDspWorker final : public QObject {
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  // Operator-started, bounded diagnostic capture (OBS-003): records the raw
+  // audio feeding the decoder plus periodic per-track private diagnostic
+  // snapshots to help debug why a visible signal is not decoding. Never
+  // starts implicitly; always bounded in duration.
+  void startDebugCapture(const QString& directory_path);
+  void stopDebugCapture();
 
 signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
   void diagnosticsProduced(const QVariantMap& diagnostics);
+  void debugCaptureStateChanged(bool active, const QString& base_path,
+                                double elapsed_seconds, const QString& note);
 
  private slots:
   void drain();
 
  private:
+  void writeDebugCaptureSnapshot();
+  void finishDebugCapture(const QString& note);
+
   std::shared_ptr<LiveAudioPipe> pipe_;
   QTimer timer_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
   cwassistant::core::CwChannelBank decoder_;
+
+  cwassistant::core::WavWriter capture_writer_;
+  std::ofstream capture_diagnostics_log_;
+  QString capture_base_path_;
+  QString capture_wav_path_;
+  std::uint64_t capture_start_ns_{0};
+  std::uint64_t capture_last_snapshot_ns_{0};
+  bool capture_active_{false};
+  bool capture_writer_pending_{false};
+  bool capture_have_start_{false};
+  static constexpr double kMaximumCaptureSeconds = 300.0;
+  static constexpr double kSnapshotIntervalSeconds = 1.0;
 };
 
 }  // namespace cwassistant::desktop

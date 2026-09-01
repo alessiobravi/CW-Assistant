@@ -715,6 +715,34 @@ void CwChannelBank::updateVerification(Track& track) {
   ++verified_transitions_;
 }
 
+std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
+  std::vector<CwTrackDiagnostic> result;
+  result.reserve(tracks_.size());
+  for (const auto& track : tracks_) {
+    result.push_back({
+        .id = track.id,
+        .frequency_hz = track.frequency_hz,
+        .drift_hz_per_second = track.drift_hz_per_second,
+        .snr_db = track.snr_db,
+        .narrowband_coherence = track.narrowband_coherence,
+        .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
+        .verification_state = track.verification_state,
+        .verification_reason = track.verification_reason,
+        .spectral_observations = track.spectral_observations,
+        .key_transitions = track.update.key_transitions,
+        .decoded_symbols = track.update.decoded_symbols,
+        .unknown_symbols = track.update.unknown_symbols,
+        .timing_quality = track.update.timing_quality,
+        .cadence_quality = track.update.cadence_quality,
+        .mean_character_confidence = track.update.mean_character_confidence,
+        .wpm = track.update.wpm,
+        .text = track.update.text,
+        .provisional_text = track.update.provisional_text,
+    });
+  }
+  return result;
+}
+
 void CwChannelBank::rebuildSnapshots() {
   snapshots_.clear();
   snapshots_.reserve(tracks_.size());

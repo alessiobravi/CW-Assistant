@@ -6,6 +6,28 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-01 — implemented an initial OBS-003 slice: an
+operator-started, bounded "Debug capture" that records raw live audio (WAV)
+and a per-track private diagnostic log (JSON lines, once per second) to a
+timestamped folder, capped at 5 minutes, never silent. Added a
+dependency-free WavWriter (round-trip tested against WavReplaySource) and
+CwChannelBank::allTrackDiagnostics() exposing full per-track state for every
+track regardless of verification. Verified end to end with an extended
+cwa_live_audio_pipeline_test driving a real decode and checking both output
+files. This is the requested path to real field data now that synthetic
+reproduction of the reported "visible CW not decoding" case has not
+succeeded (see the entry below).
+Last reviewed: 2026-09-01 — restored the pre-verification diagnostics as an
+opt-in, once-per-second "Diagnostics" toggle in the decoder panel (off by
+default) instead of a continuously live-updating label, after a direct
+instrumented investigation into a still-unresolved field report of visible
+CW streams not decoding. That investigation confirmed the core algorithm
+itself reliably verifies a clean or realistically-noisy single tone within a
+few seconds and creates no spurious tracks against a synthetic bumpy noise
+floor, so the reported field case (many simultaneous candidate/Morse-likely
+tracks saturating the 24-track cap) was not reproduced synthetically; real
+diagnostic data from the operator's environment is needed to isolate it
+further, which the restored toggle is intended to provide.
 Last reviewed: 2026-09-01 — fixed a verification-state/reason inconsistency
 where a track could stay reported as Morse-likely after later failing an
 earlier gate again, confirmed against two operator screenshots showing this
@@ -127,8 +149,8 @@ translucent band rather than two signal-like lines.
 | UI-006 | done | Distinguish the CW guide from detected traces | The two easily confused red guide lines are replaced by one semi-transparent rectangular CW-band overlay centered on the configured pitch; verified signal traces remain independently colored and clickable. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
-| OBS-001 | active | Add pipeline telemetry | Pre-verification candidate/Morse-likely counts and a rejection-reason tally are computed and exposed on the desktop model, but a first always-visible decoder-panel readout of it proved too noisy/flickering in practice and was removed from the default view pending a proper dedicated diagnostics display; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |
-| OBS-003 | todo | Add operator-controlled diagnostic capture bundles | A bounded full-debug mode records timestamped raw and conditioned audio, spectrum frames, private candidate lifecycle/rejection reasons, decoded streams with per-character evidence, frequency/time references, overruns, and relevant profile/radio state. Capture requires explicit operator enablement, duration/size limits, a review step, and credential/private-identifier redaction before exporting a portable analysis bundle. |
+| OBS-001 | active | Add pipeline telemetry | Pre-verification candidate/Morse-likely counts and a rejection-reason tally are exposed as an opt-in, once-per-second "Diagnostics" toggle (off by default) in the decoder panel after an always-visible version proved too flickering; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |
+| OBS-003 | active | Add operator-controlled diagnostic capture bundles | A "Debug capture" control records raw live audio (WAV) and per-track private diagnostics (JSON lines, 1 Hz, every track including unverified) to a timestamped folder, capped at 5 minutes, requiring explicit start and never silent. Conditioned/spectrum frames, overruns, profile/radio state, a review step, and credential/private-identifier redaction before export remain to add. |
 | OBS-002 | todo | Add operator-accessible native crash diagnostics | Windows minidumps and macOS/Linux crash-report guidance identify build/profile/backend without exposing station secrets; diagnostic export is documented and tested. |
 | CFG-001 | active | Implement named station profiles and setup helper | Versioned isolated persistence, UI create/select helper, per-profile wizard, and `--profile` selection exist; audio/logger/remote pages and migrations remain. |
 | CFG-002 | todo | Enforce cross-process hardware ownership | Named OS locks prevent serial/audio/SDR devices from being opened by two active profiles and report the owning profile. |
@@ -178,7 +200,7 @@ translucent band rather than two signal-like lines.
 | LOG-004 | active | Resolve station equipment by actual-RF band | Ordered ADIF-band rules and `MY_RIG`/`MY_ANTENNA` cross-band serialization are tested; profile rule editor, persistence, overlap diagnostics, and logger acceptance remain. |
 | INT-001 | todo | Add read-only DX-cluster spot service | Verified calls can be served with CQ-only filtering, authentication option, bounded clients, and loopback-safe defaults. |
 | INT-002 | todo | Add UDP spectrum export | Versioned timestamped spectrum frames interoperate with a documented logger/contest consumer fixture. |
-| REC-001 | todo | Add interoperable audio/IQ recorder | WAV/RF64 record/replay, metadata, rotation, looping, inspection, and deterministic replay tests pass. |
+| REC-001 | active | Add interoperable audio/IQ recorder | A dependency-free PCM16 WAV writer exists (round-trip tested against the existing WAV reader) and is used by the OBS-003 debug capture; RF64, IQ, metadata, rotation, looping, and a dedicated operator-facing recorder UI (independent of debug capture) remain. |
 | SDR-001 | todo | Add SoapySDR stream adapter | Enumerates modules and produces timestamped IQ blocks with overflow telemetry. |
 | SDR-002 | todo | Validate RTL-SDR | Installation diagnostics and replay/live acceptance test pass. |
 | SDR-003 | todo | Validate SDRplay 3 | External vendor API is detected and live acceptance test passes. |

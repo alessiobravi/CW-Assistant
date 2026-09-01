@@ -2,9 +2,11 @@
 
 #include <QFileInfo>
 #include <QCoreApplication>
+#include <QDir>
 #include <QHash>
 #include <QMetaObject>
 #include <QPermissions>
+#include <QStandardPaths>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -276,6 +278,23 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::configure);
   connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::liveDebugCaptureStartRequested, dsp_worker,
+          &LiveAudioDspWorker::startDebugCapture);
+  connect(this, &ReplayController::liveDebugCaptureStopRequested, dsp_worker,
+          &LiveAudioDspWorker::stopDebugCapture);
+  connect(dsp_worker, &LiveAudioDspWorker::debugCaptureStateChanged, this,
+          [this](const bool active, const QString& path,
+                 const double elapsed_seconds, const QString& note) {
+            debug_capture_active_ = active;
+            debug_capture_path_ = path;
+            debug_capture_elapsed_seconds_ = elapsed_seconds;
+            debug_capture_note_ = note;
+            emit debugCaptureChanged();
+            if (!active) {
+              setStatus(QStringLiteral("Debug capture: %1 (%2)")
+                            .arg(note, path));
+            }
+          });
   connect(capture_worker, &LiveAudioCaptureWorker::started, this,
           [this](const QString& name, const double sample_rate,
                  const int channel_count) {
@@ -390,6 +409,18 @@ int ReplayController::decoderSessionCount() const noexcept {
 }
 const QVariantMap& ReplayController::verificationDiagnostics() const noexcept {
   return verification_diagnostics_;
+}
+bool ReplayController::debugCaptureActive() const noexcept {
+  return debug_capture_active_;
+}
+const QString& ReplayController::debugCapturePath() const noexcept {
+  return debug_capture_path_;
+}
+double ReplayController::debugCaptureElapsedSeconds() const noexcept {
+  return debug_capture_elapsed_seconds_;
+}
+const QString& ReplayController::debugCaptureNote() const noexcept {
+  return debug_capture_note_;
 }
 
 void ReplayController::setAveragingFrames(const int value) {
@@ -658,6 +689,22 @@ void ReplayController::beginLiveAudioCapture() {
   publishSpectrumConfiguration();
   emit liveDspStartRequested();
   emit liveStartRequested(audio_input_id_);
+}
+
+void ReplayController::startDebugCapture() {
+  if (!live_capturing_) {
+    setStatus(QStringLiteral(
+        "Debug capture requires live RX to be running."));
+    return;
+  }
+  const QString base = QStandardPaths::writableLocation(
+      QStandardPaths::AppDataLocation);
+  const QString directory = QDir(base).filePath(QStringLiteral("diagnostics"));
+  emit liveDebugCaptureStartRequested(directory);
+}
+
+void ReplayController::stopDebugCapture() {
+  emit liveDebugCaptureStopRequested();
 }
 
 void ReplayController::stopLiveAudio() {

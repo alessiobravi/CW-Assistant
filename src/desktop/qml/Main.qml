@@ -25,6 +25,29 @@ ApplicationWindow {
         return hz.toFixed(0) + " Hz"
     }
 
+    function verificationDiagnosticsSummary(diagnostics) {
+        if (!diagnostics || typeof diagnostics.candidateTracks === "undefined")
+            return ""
+        var parts = []
+        if (diagnostics.candidateTracks > 0)
+            parts.push(diagnostics.candidateTracks + " candidate")
+        if (diagnostics.morseLikelyTracks > 0)
+            parts.push(diagnostics.morseLikelyTracks + " morse-likely")
+        if (parts.length === 0)
+            return "No pre-verification candidates right now."
+        var reasons = diagnostics.reasonCounts || {}
+        var reasonParts = []
+        for (var key in reasons) {
+            if (key === "verified" || key === "signal-lost")
+                continue
+            reasonParts.push(key + " " + reasons[key])
+        }
+        var text = parts.join(", ") + " not yet verified"
+        if (reasonParts.length > 0)
+            text += "  •  " + reasonParts.join(", ")
+        return text
+    }
+
     header: ToolBar {
         height: 64
         background: Rectangle { color: "#151b23" }
@@ -586,7 +609,40 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 16
-                Label { text: "Full-spectrum CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Label { text: "Full-spectrum CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                    Item { Layout.fillWidth: true }
+                    ToolButton {
+                        id: diagnosticsToggle
+                        objectName: "diagnosticsToggle"
+                        text: checked ? "Hide diagnostics" : "Diagnostics"
+                        checkable: true
+                        font.pixelSize: 10
+                    }
+                    ToolButton {
+                        objectName: "debugCaptureButton"
+                        text: replayController.debugCaptureActive ? "Stop capture" : "Debug capture"
+                        font.pixelSize: 10
+                        enabled: replayController.debugCaptureActive || replayController.liveCapturing
+                        onClicked: replayController.debugCaptureActive
+                                   ? replayController.stopDebugCapture()
+                                   : replayController.startDebugCapture()
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 300
+                        ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Capped at 5 minutes. Review the saved files before sharing them — the audio is whatever the selected input picked up."
+                    }
+                }
+                Label {
+                    visible: replayController.debugCaptureActive || replayController.debugCapturePath.length > 0
+                    text: replayController.debugCaptureActive
+                          ? "Capturing… " + replayController.debugCaptureElapsedSeconds.toFixed(0) + "s / 300s max — " + replayController.debugCapturePath
+                          : "Last capture: " + replayController.debugCaptureNote + " — " + replayController.debugCapturePath
+                    color: replayController.debugCaptureActive ? "#f3bd55" : "#6c7c8e"
+                    font.pixelSize: 10
+                    wrapMode: Text.WrapAnywhere
+                    Layout.fillWidth: true
+                }
                 Label {
                     text: replayController.decoderChannelCount > 0
                           ? replayController.decoderChannelCount
@@ -597,6 +653,28 @@ ApplicationWindow {
                     color: "#8290a0"
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
+                }
+                Label {
+                    id: diagnosticsSummaryLabel
+                    objectName: "diagnosticsSummaryLabel"
+                    property string summary: ""
+                    visible: diagnosticsToggle.checked && summary.length > 0
+                    text: summary
+                    color: "#6c7c8e"
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Timer {
+                        // Sampled at most once per second so this is a
+                        // troubleshooting snapshot, not a flickering readout.
+                        interval: 1000
+                        running: diagnosticsToggle.checked
+                        repeat: true
+                        triggeredOnStart: true
+                        onTriggered: diagnosticsSummaryLabel.summary =
+                            window.verificationDiagnosticsSummary(
+                                replayController.verificationDiagnostics)
+                    }
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
                 Label {
