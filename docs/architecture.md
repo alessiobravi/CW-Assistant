@@ -113,6 +113,13 @@ Corpus-qualified configurable widths, robust noise quantiles, calibrated
 confidence, delayed multi-pass refinement, a bounded worker pool for those
 heavier passes, and co-channel source separation remain.
 
+Candidate state is not presentation state. A local-prominence guard rejects
+broad spectral shoulders, and remaining candidates stay private until repeated
+spectral observations plus known-symbol ratio and timing-quality gates verify
+Morse-like keying. Private candidates have a shorter expiry and cannot consume
+UI colors, detected-signal count, or session rows. Completed stable-word gating
+is applied again before a structurally valid callsign is exposed.
+
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session
 cards. Closing or reordering a card cannot mutate DSP state. Callsign tokens and

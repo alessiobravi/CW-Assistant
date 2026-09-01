@@ -75,7 +75,7 @@ duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subjec
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
 it only when a steadier but less time-sharp display is more useful.
 
-Enable **Visual guide** to draw red boundaries around the desired receive tone. The
+Enable **Visual guide** to draw a translucent red band around the desired receive tone. The
 default is centered at 700 Hz with a 200 Hz width; both values update in real
 time and are stored per profile. The frequency labels along the lower X axis
 show where those boundaries sit in the current audio or SDR view. This guide is
@@ -97,8 +97,12 @@ change the audio level delivered by the sound card; this application does not
 yet control radio AGC through CAT.
 
 The receiver scans every frequency inside the processed audio bandwidth for
-both live audio and WAV replay. Every detected spectral peak receives a stable
-color and vertical spectrum/waterfall marker. Click that marker to open its
+both live audio and WAV replay. Spectral peaks begin as private candidates and
+do not immediately receive a line. A candidate must show local prominence,
+repeat across spectrum observations, and produce at least three known Morse
+symbols with bounded unknown output and adequate timing quality. Only then does
+it receive a stable color and vertical marker or increment **signals detected**.
+Click that verified marker to open its
 decoded session in the right-hand panel. Closing a card with **×** does not stop
 its DSP; click the marker to reopen it. Drag cards over one another to set the
 operator's preferred order. Stable text, amber provisional text/elements,
@@ -106,9 +110,13 @@ adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for eight seconds so normal word and message gaps preserve identity.
 
-As soon as a conservative callsign-shaped token is decoded, it is written
-vertically beside the matching colored line. The marker tooltip exposes the
-same callsign, frequency, audio tone, filter width, and measured drift.
+Frequency text is written vertically beside the matching colored line inside
+the upper spectrum region, never over waterfall history. Callsign text remains
+hidden until the track is verified, the decoder has promoted the text to stable,
+and a word gap confirms that the structurally valid token is complete. This is
+signal/timing confirmation, not external directory validation. The marker
+tooltip exposes the same confirmed call, frequency, audio tone, filter width,
+and measured drift.
 
 The FFT-bin tracker discovers candidate frequencies, but it does not provide
 the key-up/key-down evidence. For both live audio and WAV replay, the DSP worker

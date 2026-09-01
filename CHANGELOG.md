@@ -15,6 +15,18 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Verified-CW publication gate between internal spectral candidates and the
+  operator UI. A candidate now needs local peak prominence, repeated spectral
+  observations, at least three known Morse symbols, bounded unknown-symbol
+  fraction, and adequate timing quality before it receives a colored trace or
+  contributes to the detected-signal count. Unverified candidates expire after
+  750 ms. A deterministic five-second shaped-noise test publishes zero traces.
+- Completed-word callsign confirmation: vertical callsign text is withheld
+  until the track is verified, timing quality passes, the text is stable, and a
+  word gap proves the token is complete. Frequency/callsign annotations now sit
+  inside the upper spectrum region instead of across waterfall history.
+- The configurable CW guide is now one semi-transparent red band overlay rather
+  than two lines that could be mistaken for decoded signal traces.
 - One canonical effective build version across the About pane, Qt application
   identity, `--version`, Windows executable metadata and MSI, macOS bundle,
   Debian package, installed `VERSION` file, CAT4OM handshake, and continuous

@@ -64,6 +64,12 @@ check drive hysteretic selection afterward. Lower and upper noise references
 are smoothed independently so a one-sided adjacent signal does not inflate the
 entire local threshold.
 
+Discovery and publication are separate. Broad shoulders fail a local-prominence
+test; surviving candidates remain internal until repeated spectral observations,
+at least three known decoded symbols, a bounded unknown-symbol fraction, and a
+minimum timing-quality score jointly verify a CW-like trace. These conservative
+defaults favor a delayed real signal over immediate false colored lines.
+
 An explicit hidden semi-Markov timing model tracks dit length, key-down and
 key-up duration distributions, character spacing, word spacing, drift, and
 keying style. Viterbi/beam search produces several Morse-valid hypotheses with

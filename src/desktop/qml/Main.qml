@@ -214,30 +214,36 @@ ApplicationWindow {
                     }
                 }
 
-                Repeater {
-                    model: 2
-                    delegate: Rectangle {
-                        required property int index
-                        property real boundaryHz: appSettings.cwGuideCenterHz
-                                                  + (index === 0 ? -0.5 : 0.5)
-                                                    * appSettings.cwGuideWidthHz
-                        visible: appSettings.showCwGuide
-                                 && boundaryHz >= spectrumDisplay.lowerFrequencyHz
-                                 && boundaryHz <= spectrumDisplay.upperFrequencyHz
-                                 && spectrumDisplay.upperFrequencyHz
-                                    > spectrumDisplay.lowerFrequencyHz
-                        x: spectrumDisplay.x
-                           + (boundaryHz - spectrumDisplay.lowerFrequencyHz)
-                             / (spectrumDisplay.upperFrequencyHz
-                                - spectrumDisplay.lowerFrequencyHz)
-                             * spectrumDisplay.width
-                        y: spectrumDisplay.y
-                        width: 2
-                        height: spectrumDisplay.height
-                        color: "#ff4d5a"
-                        opacity: 0.85
-                        z: 3
-                    }
+                Rectangle {
+                    property real guideLowerHz: appSettings.cwGuideCenterHz
+                                                - 0.5 * appSettings.cwGuideWidthHz
+                    property real guideUpperHz: appSettings.cwGuideCenterHz
+                                                + 0.5 * appSettings.cwGuideWidthHz
+                    property real visibleLowerHz: Math.max(
+                                                     guideLowerHz,
+                                                     spectrumDisplay.lowerFrequencyHz)
+                    property real visibleUpperHz: Math.min(
+                                                     guideUpperHz,
+                                                     spectrumDisplay.upperFrequencyHz)
+                    visible: appSettings.showCwGuide
+                             && visibleUpperHz > visibleLowerHz
+                             && spectrumDisplay.upperFrequencyHz
+                                > spectrumDisplay.lowerFrequencyHz
+                    x: spectrumDisplay.x
+                       + (visibleLowerHz - spectrumDisplay.lowerFrequencyHz)
+                         / (spectrumDisplay.upperFrequencyHz
+                            - spectrumDisplay.lowerFrequencyHz)
+                         * spectrumDisplay.width
+                    y: spectrumDisplay.y
+                    width: (visibleUpperHz - visibleLowerHz)
+                           / (spectrumDisplay.upperFrequencyHz
+                              - spectrumDisplay.lowerFrequencyHz)
+                           * spectrumDisplay.width
+                    height: spectrumDisplay.height
+                    color: "#18ff4d5a"
+                    border.color: "#66ff4d5a"
+                    border.width: 1
+                    z: 3
                 }
                 Repeater {
                     model: replayController.decoderChannels
@@ -245,7 +251,8 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         property real channelHz: modelData.frequencyHz
-                        visible: channelHz >= spectrumDisplay.lowerFrequencyHz
+                        visible: modelData.verifiedCw
+                                 && channelHz >= spectrumDisplay.lowerFrequencyHz
                                  && channelHz <= spectrumDisplay.upperFrequencyHz
                                  && spectrumDisplay.upperFrequencyHz
                                     > spectrumDisplay.lowerFrequencyHz
@@ -275,8 +282,7 @@ ApplicationWindow {
                         Label {
                             anchors.left: parent.horizontalCenter
                             anchors.leftMargin: 7
-                            anchors.bottom: parent.bottom
-                            anchors.bottomMargin: 12
+                            y: spectrumDisplay.height * 0.36 - height - 12
                             transformOrigin: Item.BottomLeft
                             rotation: -90
                             text: (modelData.callsign.length > 0

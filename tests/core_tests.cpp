@@ -155,7 +155,7 @@ void test_cw_timing_decoder() {
 
 void test_cw_channel_bank() {
   using cwassistant::core::CwChannelBank;
-  CwChannelBank bank;
+  CwChannelBank bank({.minimum_verification_symbols = 0});
   std::vector<float> bins(101, -100.0F);
   std::uint64_t now = 0;
   double phase_low = 0.0;
@@ -239,12 +239,39 @@ void test_cw_channel_bank() {
     }
     static_cast<void>(rejection_bank.processSamples(block));
   }
-  expect(rejection_bank.channels().size() == 1 &&
-             rejection_bank.channels().front().text.empty() &&
-             !rejection_bank.channels().front().key_down,
-         "raw narrowband evidence rejects an adjacent non-tracked tone");
+  expect(rejection_bank.channels().empty(),
+         "an adjacent non-tracked carrier is never published as verified CW");
 
-  CwChannelBank drift_bank;
+  CwChannelBank shaped_noise_bank;
+  std::uint32_t noise_state = 0x13579BDFU;
+  double noise_time = 0.0;
+  for (int step = 0; step < 500; ++step) {
+    for (std::size_t bin = 0; bin < bins.size(); ++bin) {
+      bins[bin] = -88.0F +
+          8.0F * static_cast<float>(std::sin(0.08 * bin + noise_time)) +
+          2.0F * static_cast<float>(std::sin(0.91 * bin - noise_time));
+    }
+    const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
+    static_cast<void>(shaped_noise_bank.updateSpectrum(
+        timestamp, 0.0, 1'000.0, bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = timestamp;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      noise_state = noise_state * 1'664'525U + 1'013'904'223U;
+      const float noise = static_cast<float>((noise_state >> 8U) & 0xFFFFU) /
+                              32'767.5F -
+                          1.0F;
+      block.samples[index] = {0.18F * noise, 0.0F};
+    }
+    static_cast<void>(shaped_noise_bank.processSamples(block));
+    noise_time += 0.03;
+  }
+  expect(shaped_noise_bank.channels().empty(),
+         "five seconds of shaped broadband noise publishes no CW traces");
+
+  CwChannelBank drift_bank({.minimum_verification_symbols = 0});
   std::vector<float> fine_bins(1'001, -110.0F);
   double drifting_phase = 0.0;
   constexpr double initial_tone_hz = 500.0;
@@ -338,7 +365,8 @@ void test_cw_channel_bank() {
       .audio_lower_frequency_hz = 0.0,
       .audio_upper_frequency_hz = 24'000.0,
   });
-  CwChannelBank pipeline_bank;
+  CwChannelBank pipeline_bank({.minimum_spectral_observations = 1,
+                               .minimum_verification_symbols = 0});
   cwassistant::core::RealtimeSampleBlock pipeline_block;
   pipeline_block.stream.sample_rate_hz = 48'000.0;
   pipeline_block.sample_count = 2'048;
@@ -399,6 +427,11 @@ void test_callsign_policy() {
          "latest decoded callsign extraction supports portable calls");
   expect(!CallsignPolicy::latest_in_text("CQ TEST 599 ?"),
          "reports and operating words are not mistaken for callsigns");
+  expect(!CallsignPolicy::latest_complete_in_text("CQ IU0LF"),
+         "an unfinished decoded callsign is not presented as confirmed");
+  expect(CallsignPolicy::latest_complete_in_text("CQ IU0LFQ ") ==
+             std::optional<std::string>("IU0LFQ"),
+         "a stable word gap confirms a structurally valid decoded callsign");
 }
 
 void test_spectrum_settings() {

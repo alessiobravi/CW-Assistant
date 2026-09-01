@@ -17,14 +17,20 @@ struct CwChannelBankConfig {
   float acquisition_snr_db{7.0F};
   float retention_snr_db{2.5F};
   float detection_dynamic_range_db{96.0F};
+  float minimum_peak_prominence_db{4.5F};
   double minimum_separation_hz{45.0};
   double tracking_tolerance_hz{70.0};
   double empty_track_retention_seconds{2.0};
   double decoded_track_retention_seconds{8.0};
+  double unverified_track_retention_seconds{0.75};
   double narrowband_width_hz{120.0};
   double noise_reference_offset_hz{300.0};
   double evidence_rate_hz{500.0};
   std::size_t maximum_tracks{24};
+  std::uint16_t minimum_spectral_observations{3};
+  std::uint16_t minimum_verification_symbols{3};
+  float minimum_verification_timing_quality{0.55F};
+  float maximum_verification_unknown_fraction{0.20F};
 };
 
 struct CwChannelSnapshot {
@@ -39,6 +45,7 @@ struct CwChannelSnapshot {
   float key_down_probability{0.0F};
   bool key_down{false};
   bool active{false};
+  bool verified_cw{false};
   std::string text;
   std::string provisional_text;
   std::string pending_elements;
@@ -71,6 +78,8 @@ class CwChannelBank {
     float snr_db{0.0F};
     float spectral_snr_db{0.0F};
     bool matched{false};
+    bool verified_cw{false};
+    std::uint16_t spectral_observations{0};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};
     std::array<std::complex<float>, 3> lower_filter{};

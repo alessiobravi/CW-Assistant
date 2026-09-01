@@ -26,6 +26,10 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   keep these controls separate from visualization range scaling.
 - Accept mono audio and complex IQ through the same timestamped block contract.
 - Detect candidate tones using a shared spectral analysis stage.
+- Keep spectral candidates private until configurable prominence, persistence,
+  Morse-symbol validity, unknown-output, and timing-quality gates verify a CW
+  trace. Unverified candidates must not receive overlays, session rows, or a
+  detected-signal count.
 - Track frequency drift and maintain separate timing/decoder state per channel.
 - Preserve soft tone/envelope/timing evidence and combine an explainable
   adaptive timing decoder with an optional compact causal learned likelihood
@@ -44,6 +48,8 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   selection. Manual selection always has a configurable priority boost.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
+- Display a callsign on a trace only after the CW track is verified and stable
+  text contains a structurally valid complete token terminated by a word gap.
 - Distinguish raw evidence, provisional text, stable text, and context-derived
   suggestions. Store per-character pass/evidence provenance and calibrate
   confidence on held-out recordings.
@@ -67,6 +73,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 ### Display
 
 - Spectrum and waterfall share the same FFT output used by channel detection.
+- Render the configured CW pitch/width as a translucent band that is visually
+  distinct from verified signal traces; keep vertical decoded annotations in
+  the spectrum region rather than over waterfall history.
 - Clicking a trace selects the nearest tracked channel; clicking a callsign
   opens the QSO confirmation panel.
 - Left-clicking the waterfall moves the local CW guide center to the pointed

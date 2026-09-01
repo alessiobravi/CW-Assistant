@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 
 #include "cwassistant/core/callsign_policy.hpp"
@@ -28,6 +29,8 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
       config_.retention_snr_db, 0.0F, config_.acquisition_snr_db);
   config_.detection_dynamic_range_db =
       std::clamp(config_.detection_dynamic_range_db, 40.0F, 140.0F);
+  config_.minimum_peak_prominence_db =
+      std::clamp(config_.minimum_peak_prominence_db, 0.0F, 30.0F);
   config_.minimum_separation_hz =
       std::clamp(config_.minimum_separation_hz, 5.0, 500.0);
   config_.tracking_tolerance_hz = std::clamp(
@@ -37,6 +40,8 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
   config_.decoded_track_retention_seconds = std::clamp(
       config_.decoded_track_retention_seconds,
       config_.empty_track_retention_seconds, 120.0);
+  config_.unverified_track_retention_seconds = std::clamp(
+      config_.unverified_track_retention_seconds, 0.2, 5.0);
   config_.narrowband_width_hz =
       std::clamp(config_.narrowband_width_hz, 40.0, 500.0);
   config_.noise_reference_offset_hz = std::clamp(
@@ -45,6 +50,14 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
       std::clamp(config_.evidence_rate_hz, 100.0, 2'000.0);
   config_.maximum_tracks =
       std::clamp<std::size_t>(config_.maximum_tracks, 1, 64);
+  config_.minimum_spectral_observations =
+      std::clamp<std::uint16_t>(config_.minimum_spectral_observations, 1, 50);
+  config_.minimum_verification_symbols =
+      std::clamp<std::uint16_t>(config_.minimum_verification_symbols, 0, 20);
+  config_.minimum_verification_timing_quality = std::clamp(
+      config_.minimum_verification_timing_quality, 0.0F, 1.0F);
+  config_.maximum_verification_unknown_fraction = std::clamp(
+      config_.maximum_verification_unknown_fraction, 0.0F, 1.0F);
 }
 
 void CwChannelBank::reset() noexcept {
@@ -93,6 +106,24 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         : 0.0;
     const float interpolated_level = level - static_cast<float>(
         0.25 * static_cast<double>(left - right) * fractional_bin);
+    float left_reference = 0.0F;
+    float right_reference = 0.0F;
+    std::size_t reference_count = 0;
+    for (std::size_t offset = 2; offset <= 4; ++offset) {
+      if (bin >= offset && bin + offset < bins_dbfs.size()) {
+        left_reference += bins_dbfs[bin - offset];
+        right_reference += bins_dbfs[bin + offset];
+        ++reference_count;
+      }
+    }
+    if (reference_count == 0) continue;
+    const float local_reference = std::max(
+        left_reference / static_cast<float>(reference_count),
+        right_reference / static_cast<float>(reference_count));
+    if (interpolated_level - local_reference <
+        config_.minimum_peak_prominence_db) {
+      continue;
+    }
     const float snr_db = interpolated_level - noise_dbfs;
     if (snr_db < config_.acquisition_snr_db) continue;
     candidates.push_back({
@@ -144,6 +175,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       nearest = std::prev(tracks_.end());
     }
     nearest->matched = true;
+    if (nearest->spectral_observations <
+        std::numeric_limits<std::uint16_t>::max()) {
+      ++nearest->spectral_observations;
+    }
     const double elapsed_seconds = timestamp_ns > nearest->last_frequency_update_ns
         ? static_cast<double>(timestamp_ns - nearest->last_frequency_update_ns) /
               1'000'000'000.0
@@ -181,9 +216,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         1'000'000'000.0;
     const bool has_decode = !track.update.text.empty() ||
                             !track.update.provisional_text.empty();
-    const double retention = has_decode
-        ? config_.decoded_track_retention_seconds
-        : config_.empty_track_retention_seconds;
+    const double retention = !track.verified_cw
+        ? config_.unverified_track_retention_seconds
+        : has_decode ? config_.decoded_track_retention_seconds
+                     : config_.empty_track_retention_seconds;
     return age_seconds > retention;
   };
   std::erase_if(tracks_, expired);
@@ -365,6 +401,23 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
               static_cast<long double>(index) * 1'000'000'000.0L /
               sample_rate_hz);
       track.update = track.decoder.process(timestamp_ns, track.snr_db);
+      if (!track.verified_cw &&
+          track.spectral_observations >=
+              config_.minimum_spectral_observations) {
+        const auto symbols = track.update.decoded_symbols;
+        const auto unknown = std::min(track.update.unknown_symbols, symbols);
+        const auto known = symbols - unknown;
+        const float unknown_fraction = symbols == 0
+            ? 1.0F
+            : static_cast<float>(unknown) / static_cast<float>(symbols);
+        const bool symbol_gate = config_.minimum_verification_symbols == 0 ||
+            (known >= config_.minimum_verification_symbols &&
+             unknown_fraction <=
+                 config_.maximum_verification_unknown_fraction &&
+             track.update.timing_quality >=
+                 config_.minimum_verification_timing_quality);
+        if (symbol_gate) track.verified_cw = true;
+      }
       track.center_power_sums = {};
       track.lower_power_sum = 0.0F;
       track.upper_power_sum = 0.0F;
@@ -442,6 +495,13 @@ void CwChannelBank::rebuildSnapshots() {
   snapshots_.clear();
   snapshots_.reserve(tracks_.size());
   for (const auto& track : tracks_) {
+    if (!track.verified_cw) continue;
+    const std::string callsign =
+        track.update.timing_quality >=
+                config_.minimum_verification_timing_quality
+            ? CallsignPolicy::latest_complete_in_text(track.update.text)
+                  .value_or(std::string{})
+            : std::string{};
     snapshots_.push_back({
         .id = track.id,
         .color_index = static_cast<std::uint8_t>((track.id - 1) % 24),
@@ -456,13 +516,11 @@ void CwChannelBank::rebuildSnapshots() {
         .key_down = track.update.key_down,
         .active = track.update.key_down ||
                   track.spectral_snr_db >= config_.retention_snr_db,
+        .verified_cw = true,
         .text = track.update.text,
         .provisional_text = track.update.provisional_text,
         .pending_elements = track.update.pending_elements,
-        .callsign = CallsignPolicy::latest_in_text(
-                        track.update.text + " " +
-                        track.update.provisional_text)
-                        .value_or(std::string{}),
+        .callsign = callsign,
     });
   }
   std::sort(snapshots_.begin(), snapshots_.end(),

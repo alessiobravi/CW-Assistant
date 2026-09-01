@@ -37,6 +37,7 @@ QVariantList decoderChannelModel(
                 channel.key_down_probability);
     item.insert(QStringLiteral("keyDown"), channel.key_down);
     item.insert(QStringLiteral("active"), channel.active);
+    item.insert(QStringLiteral("verifiedCw"), channel.verified_cw);
     item.insert(QStringLiteral("text"),
                 QString::fromStdString(channel.text));
     item.insert(QStringLiteral("provisionalText"),

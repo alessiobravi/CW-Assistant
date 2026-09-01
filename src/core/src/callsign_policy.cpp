@@ -64,6 +64,13 @@ std::optional<std::string> CallsignPolicy::latest_in_text(
   return result;
 }
 
+std::optional<std::string> CallsignPolicy::latest_complete_in_text(
+    const std::string_view stable_text) {
+  const auto completed_end = stable_text.find_last_of(" \t\r\n");
+  if (completed_end == std::string_view::npos) return std::nullopt;
+  return latest_in_text(stable_text.substr(0, completed_end + 1));
+}
+
 bool CallsignPolicy::add_ignored(const std::string_view callsign) {
   const auto normalized = normalize(callsign);
   return normalized.has_value() && ignored_.insert(*normalized).second;
