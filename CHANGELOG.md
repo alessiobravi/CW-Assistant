@@ -8,6 +8,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- The hosted live-audio integration fixture now sends actual keyed Morse and
+  waits for a verified channel instead of treating a continuous carrier as a
+  valid decoded station.
 - macOS staged-version verification now reads deterministic bundle metadata
   generated directly from the canonical build value and validates the copy of
   `VERSION` stored inside each self-contained application bundle. Hosted checks

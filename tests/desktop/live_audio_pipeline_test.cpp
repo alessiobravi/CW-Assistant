@@ -4,9 +4,12 @@
 #include <QTimer>
 #include <QVariantList>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <numbers>
+#include <string_view>
+#include <vector>
 
 #include "replay/live_audio_worker.hpp"
 
@@ -35,21 +38,58 @@ int main(int argc, char* argv[]) {
             ? QVariantMap{}
             : channels.front().toMap();
         const bool valid_decoder = channels.size() == 1 &&
+            channel.value(QStringLiteral("verifiedCw")).toBool() &&
             std::abs(channel.value(QStringLiteral("frequencyHz")).toDouble() -
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
-        application.exit(
-            application.property("validFrame").toBool() && valid_decoder
-                ? 0 : 1);
+        if (application.property("validFrame").toBool() && valid_decoder) {
+          application.exit(0);
+        }
       });
 
-  cwassistant::core::RealtimeSampleBlock block;
-  block.stream.sample_rate_hz = 48'000.0;
-  block.sample_count = 2'048;
-  for (std::size_t index = 0; index < block.sample_count; ++index) {
-    const float phase = 2.0F * std::numbers::pi_v<float> * 1'000.0F *
-                        static_cast<float>(index) / 48'000.0F;
-    block.samples[index] = {0.5F * std::sin(phase), 0.0F};
+  constexpr double sample_rate_hz = 48'000.0;
+  constexpr std::size_t block_samples = 2'048;
+  constexpr std::size_t dit_samples = 2'880;  // 20 WPM, 60 ms.
+  std::vector<bool> key_units;
+  const auto append_units = [&key_units](const bool keyed,
+                                          const std::size_t units) {
+    key_units.insert(key_units.end(), units, keyed);
+  };
+  const auto append_letter = [&append_units](const std::string_view elements) {
+    for (std::size_t element = 0; element < elements.size(); ++element) {
+      append_units(true, elements[element] == '.' ? 1U : 3U);
+      append_units(false, element + 1 == elements.size() ? 3U : 1U);
+    }
+  };
+  for (int repetition = 0; repetition < 2; ++repetition) {
+    append_letter("...");
+    append_letter("---");
+    append_letter("...");
+    append_units(false, 4);  // Extend the last character gap to a word gap.
+  }
+
+  const std::size_t total_samples = key_units.size() * dit_samples;
+  const std::size_t block_count =
+      (total_samples + block_samples - 1) / block_samples;
+  std::vector<cwassistant::core::RealtimeSampleBlock> blocks(block_count);
+  double phase = 0.0;
+  for (std::size_t block_index = 0; block_index < blocks.size();
+       ++block_index) {
+    auto& block = blocks[block_index];
+    block.stream.sample_rate_hz = sample_rate_hz;
+    block.sequence = block_index;
+    block.timestamp_ns = static_cast<std::uint64_t>(
+        static_cast<long double>(block_index * block_samples) *
+        1'000'000'000.0L / sample_rate_hz);
+    block.sample_count = std::min(
+        block_samples, total_samples - block_index * block_samples);
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      const std::size_t absolute_sample = block_index * block_samples + index;
+      const bool keyed = key_units[absolute_sample / dit_samples];
+      block.samples[index] = {
+          keyed ? 0.5F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
+      phase += 2.0 * std::numbers::pi * 1'000.0 / sample_rate_hz;
+    }
   }
   dsp_thread.start();
   QMetaObject::invokeMethod(
@@ -59,14 +99,21 @@ int main(int argc, char* argv[]) {
       Q_ARG(double, -12.0), Q_ARG(bool, false), Q_ARG(double, 0.0),
       Q_ARG(double, 24'000.0));
   QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
-  if (!pipe->blocks.try_push(block)) {
-    QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
-    dsp_thread.quit();
-    dsp_thread.wait();
-    return 2;
-  }
 
-  QTimer::singleShot(2'000, &application, [&application] {
+  std::size_t next_block = 0;
+  QTimer feeder;
+  feeder.setInterval(1);
+  QObject::connect(&feeder, &QTimer::timeout, &application,
+                   [&blocks, &next_block, &pipe, &feeder] {
+    if (next_block < blocks.size() &&
+        pipe->blocks.try_push(blocks[next_block])) {
+      ++next_block;
+    }
+    if (next_block == blocks.size()) feeder.stop();
+  });
+  feeder.start();
+
+  QTimer::singleShot(5'000, &application, [&application] {
     application.exit(3);
   });
   const int result = application.exec();
