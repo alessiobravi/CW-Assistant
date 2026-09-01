@@ -153,9 +153,19 @@ install(FILES ${PROJECT_SOURCE_DIR}/LICENSE
   RENAME copyright)
 install(FILES ${PROJECT_SOURCE_DIR}/docs/licensing.md
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant)
-install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant
-  RENAME VERSION)
+if(APPLE)
+  # Keep the canonical record inside the self-contained application bundle.
+  # The custom Info.plist reads the same CWA_BUILD_VERSION directly so bundle
+  # metadata and this machine-readable record cannot diverge through target
+  # property/template expansion.
+  install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
+    DESTINATION "cw-assistant-desktop.app/Contents/Resources"
+    RENAME VERSION)
+else()
+  install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant
+    RENAME VERSION)
+endif()
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/docs/manuals/
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/manuals
   FILES_MATCHING PATTERN "*.md")

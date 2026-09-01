@@ -116,27 +116,41 @@ jobs:
         id: verify_stage
         shell: bash
         run: |
+          set -euo pipefail
           test -s build/cw-assistant-version.txt
-          test -s stage/share/doc/cw-assistant/VERSION
-          cmp build/cw-assistant-version.txt stage/share/doc/cw-assistant/VERSION
           build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
+          echo "Expected canonical version: ${build_version}"
           case "${RUNNER_OS}" in
             Windows)
+              installed_version_file=stage/share/doc/cw-assistant/VERSION
+              test -s "${installed_version_file}"
+              cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -f stage/bin/cw-assistant-desktop.exe
               executable_version="$(powershell.exe -NoProfile -Command \
                 "(Get-Item 'stage/bin/cw-assistant-desktop.exe').VersionInfo.ProductVersion" \
                 | tr -d '\r\n')"
+              echo "Windows executable ProductVersion: ${executable_version}"
               test "${executable_version}" = "${build_version}"
               ;;
             macOS)
               app_binary=stage/cw-assistant-desktop.app/Contents/MacOS/cw-assistant-desktop
+              installed_version_file=stage/cw-assistant-desktop.app/Contents/Resources/VERSION
+              test -s "${installed_version_file}"
+              cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -x "${app_binary}"
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
               plist=stage/cw-assistant-desktop.app/Contents/Info.plist
-              test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")" = "${build_version}"
-              test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")" = "${build_version}"
+              short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")"
+              bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")"
+              echo "macOS CFBundleShortVersionString: ${short_version}"
+              echo "macOS CFBundleVersion: ${bundle_version}"
+              test "${short_version}" = "${build_version}"
+              test "${bundle_version}" = "${build_version}"
               ;;
             Linux)
+              installed_version_file=stage/share/doc/cw-assistant/VERSION
+              test -s "${installed_version_file}"
+              cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -x stage/bin/cw-assistant-desktop
               ;;
           esac

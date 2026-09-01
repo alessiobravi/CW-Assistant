@@ -104,6 +104,12 @@ bundle, Debian package, installed `share/doc/cw-assistant/VERSION` file, and the
 `version` field injected into `latest.json`. A default local configuration uses
 revision `0`.
 
+On macOS, the self-contained application stores the same machine-readable
+record at `CW Assistant.app/Contents/Resources/VERSION`; Windows and Linux use
+`share/doc/cw-assistant/VERSION` inside the staged installation. The hosted
+build checks these records and the native executable/bundle metadata before it
+publishes any package.
+
 ## macOS Sonoma and newer
 
 Both macOS archives contain a self-contained `.app` bundle with the native

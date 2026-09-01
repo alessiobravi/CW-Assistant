@@ -6,6 +6,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- macOS staged-version verification now reads deterministic bundle metadata
+  generated directly from the canonical build value and validates the copy of
+  `VERSION` stored inside each self-contained application bundle. Hosted checks
+  print the expected and native metadata values when diagnosing a mismatch.
+
 ### Added
 
 - One canonical effective build version across the About pane, Qt application
