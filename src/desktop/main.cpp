@@ -63,8 +63,13 @@ int main(int argc, char* argv[]) {
         rx_rf_hz ? static_cast<qulonglong>(*rx_rf_hz) : 0,
         settings.cwToneSidebandIndex(), settings.cwGuideCenterHz());
   };
+  const auto apply_decoded_signal_timeout = [&settings, &replay_controller] {
+    replay_controller.setDecodedSignalTimeoutSeconds(
+        settings.decodedSignalTimeoutSeconds());
+  };
   apply_spectrum_processing();
   apply_radio_frequency();
+  apply_decoded_signal_timeout();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   QObject::connect(
@@ -73,6 +78,9 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_radio_frequency);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_decoded_signal_timeout);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
       &replay_controller, apply_radio_frequency);

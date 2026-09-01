@@ -254,6 +254,11 @@ void LiveAudioDspWorker::configure(
   decoder_.reset();
 }
 
+void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
+  decoder_.configure({.decoded_track_retention_seconds =
+                          static_cast<double>(std::clamp(seconds, 5, 120))});
+}
+
 void LiveAudioDspWorker::drain() {
   cwassistant::core::RealtimeSampleBlock block;
   int drained = 0;

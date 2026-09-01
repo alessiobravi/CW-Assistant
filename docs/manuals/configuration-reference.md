@@ -118,9 +118,10 @@ then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
 are treated as one track, numerical peaks more than 96 dB below the strongest
-current bin are excluded, and decoded tracks currently remain visible for eight
-seconds after their signal disappears. Decoder filter width/evidence rate and
-these other starting limits are not yet exposed as profile controls. Click a
+current bin are excluded, and decoded tracks remain visible for the
+Display-page **Decoded signal timeout** (default 30 seconds) after their
+signal disappears. Decoder filter width/evidence rate and these other
+starting limits are not yet exposed as profile controls. Click a
 colored marker to open only that decoded session, close it with **×** without
 stopping decode, reopen it from the marker, and drag open cards to reorder them.
 Unverified candidates expire after 750 ms and never appear in the signal count.
@@ -244,6 +245,10 @@ can transmit through this path in the current build.
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
 - **Lower/upper dB:** manual bounds; at least 10 dB of span is enforced.
+- **Decoded signal timeout:** from 5 to 120 seconds, default 30. Controls how
+  long a verified track's marker and session stay visible after its signal
+  disappears before being removed. Applies immediately to a running decoder
+  session on both the live-audio and WAV-replay paths, without restarting RX.
 
 The current receiver canvas is an honest empty state and does not draw simulated
 radio data.

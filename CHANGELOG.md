@@ -18,13 +18,34 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
-- A decoder-panel diagnostics readout exposing pre-verification pipeline
-  state: private candidate and Morse-likely track counts plus a tally of the
-  specific gate each currently failing track is blocked on. This is computed
+- Pre-verification pipeline diagnostics (private candidate and Morse-likely
+  track counts plus a tally of the specific gate each currently failing track
+  is blocked on) are now computed and exposed through the desktop model layer
   from `CwChannelBank::verificationDiagnostics()`, which already tracked this
-  internally; unverified candidates still receive no spectrum overlay,
-  session row, or detected-signal count. Intended for troubleshooting a
-  visible spectral feature that is not decoding.
+  internally. An initial always-visible decoder-panel readout of this data
+  proved to be constantly flickering and not useful in practice, since
+  `narrowband_coherence` is a naturally noisy per-instant metric even for a
+  clean tracked tone; the readout was removed from the default view. The data
+  remains available on the model for a future dedicated diagnostics view.
+  Unverified candidates still receive no spectrum overlay, session row, or
+  detected-signal count.
+- Fixed a verification-state/reason inconsistency: a track that reached
+  Morse-likely could later fail an earlier gate again (for example
+  `narrowband_coherence` dropping back under threshold) and stay stuck
+  reporting a Morse-likely state alongside a reason that gate no longer
+  supports, because `verification_state` only ever advanced and never
+  re-derived from current evidence. `CwChannelBank::updateVerification()` now
+  re-derives state from current evidence on every call. A deterministic core
+  test asserts state/reason consistency is maintained throughout a naturally
+  flickering scenario. This was confirmed against two operator screenshots of
+  the initial (flickering) diagnostics readout showing Morse-likely tracks
+  reporting `low-narrowband-coherence`, which the old gate ordering could
+  never produce correctly.
+- A configurable decoded-signal timeout (default 30 seconds, replacing the
+  previous fixed 8-second value): `CwChannelBank` gained a `configure()`
+  method to apply a new configuration to an existing bank without discarding
+  current tracks, exposed end to end as Settings → Display → "Decoded signal
+  timeout" and applied to both the live-audio and WAV-replay decoder workers.
 - A deterministic broad-spectral-hump hard-negative case in the verification
   benchmark. A raised-cosine spectral feature far wider than the near/far
   prominence reference windows (matching adjacent SSB audio, AGC pumping, or

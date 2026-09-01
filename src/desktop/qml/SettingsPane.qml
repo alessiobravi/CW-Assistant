@@ -331,8 +331,19 @@ Pane {
                     SpinBox { from: 1; to: 32; value: appSettings.averagingFrames; onValueModified: appSettings.averagingFrames = value }
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
+                    Label { text: "Decoded signal timeout" }
+                    RowLayout {
+                        SpinBox {
+                            editable: true
+                            from: 5
+                            to: 120
+                            value: appSettings.decodedSignalTimeoutSeconds
+                            onValueModified: appSettings.decodedSignalTimeoutSeconds = value
+                        }
+                        Label { text: "seconds"; color: "#8290a0" }
+                    }
                     Label { text: "" }
-                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Waterfall history is a constant time window: resizing, startup fill, and line density do not stretch or collapse Morse timing. Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum." }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Waterfall history is a constant time window: resizing, startup fill, and line density do not stretch or collapse Morse timing. Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum. A decoded signal's marker and session remain available for the configured timeout after it goes silent, then are removed." }
                 }
             }
 

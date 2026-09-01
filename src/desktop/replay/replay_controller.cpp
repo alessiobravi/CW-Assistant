@@ -118,6 +118,11 @@ class ReplayWorker final : public QObject {
     decoder_.reset();
   }
 
+  void setDecodedSignalTimeoutSeconds(const int seconds) {
+    decoder_.configure({.decoded_track_retention_seconds =
+                            static_cast<double>(std::clamp(seconds, 5, 120))});
+  }
+
  signals:
   void opened(const QString& name, double sample_rate, double duration);
   void failed(const QString& message);
@@ -197,6 +202,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   connect(this, &ReplayController::stopRequested, worker, &ReplayWorker::stop);
   connect(this, &ReplayController::configureRequested, worker,
           &ReplayWorker::configure);
+  connect(this, &ReplayController::decodedSignalTimeoutRequested, worker,
+          &ReplayWorker::setDecodedSignalTimeoutSeconds);
   connect(worker, &ReplayWorker::opened, this,
           [this](const QString& name, const double sample_rate,
                  const double duration) {
@@ -267,6 +274,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::stop);
   connect(this, &ReplayController::liveDspConfigureRequested, dsp_worker,
           &LiveAudioDspWorker::configure);
+  connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
+          dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
   connect(capture_worker, &LiveAudioCaptureWorker::started, this,
           [this](const QString& name, const double sample_rate,
                  const int channel_count) {
@@ -575,6 +584,11 @@ void ReplayController::setSourceMode(const int value) {
   rebuildDecoderModels();
   emit sourceReset();
   emit stateChanged();
+}
+
+void ReplayController::setDecodedSignalTimeoutSeconds(const int seconds) {
+  emit decodedSignalTimeoutRequested(seconds);
+  emit liveDecodedSignalTimeoutRequested(seconds);
 }
 
 void ReplayController::setAudioInputSelection(QString encoded_id,

@@ -52,7 +52,7 @@ struct CwChannelBankConfig {
   double minimum_separation_hz{45.0};
   double tracking_tolerance_hz{70.0};
   double empty_track_retention_seconds{2.0};
-  double decoded_track_retention_seconds{8.0};
+  double decoded_track_retention_seconds{30.0};
   double unverified_track_retention_seconds{0.75};
   double narrowband_width_hz{120.0};
   double noise_reference_offset_hz{300.0};
@@ -117,6 +117,9 @@ struct CwChannelSnapshot {
 class CwChannelBank {
  public:
   explicit CwChannelBank(CwChannelBankConfig config = {});
+  // Applies a new configuration to future evaluation without discarding
+  // existing tracks; every field is sanitized exactly as at construction.
+  void configure(CwChannelBankConfig config) noexcept;
   void reset() noexcept;
   [[nodiscard]] const std::vector<CwChannelSnapshot>& updateSpectrum(
       std::uint64_t timestamp_ns, double lower_frequency_hz,
@@ -182,6 +185,7 @@ class CwChannelBank {
                                   double bin_width_hz,
                                   std::span<const float> bins_dbfs,
                                   float noise_dbfs) const;
+  void sanitizeConfig() noexcept;
   void resetFilter(Track& track) noexcept;
   void updateVerification(Track& track);
   void rebuildSnapshots();

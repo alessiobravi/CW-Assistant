@@ -79,6 +79,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(double cwGuideWidthHz READ cwGuideWidthHz WRITE setCwGuideWidthHz NOTIFY settingsChanged)
   Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames NOTIFY settingsChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
+  Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
  public:
@@ -151,6 +152,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] double cwGuideWidthHz() const noexcept;
   [[nodiscard]] int averagingFrames() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
+  [[nodiscard]] int decodedSignalTimeoutSeconds() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -199,6 +201,7 @@ class AppSettings final : public QObject {
   void setCwGuideWidthHz(double value);
   void setAveragingFrames(int value);
   void setShowGrid(bool value);
+  void setDecodedSignalTimeoutSeconds(int value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -302,6 +305,7 @@ class AppSettings final : public QObject {
   double cw_guide_width_hz_{200.0};
   int averaging_frames_{3};
   bool show_grid_{true};
+  int decoded_signal_timeout_seconds_{30};
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

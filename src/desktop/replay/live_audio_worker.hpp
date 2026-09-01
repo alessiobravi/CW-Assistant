@@ -88,6 +88,7 @@ class LiveAudioDspWorker final : public QObject {
                  double automatic_gain_target_dbfs,
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
+  void setDecodedSignalTimeoutSeconds(int seconds);
 
 signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);

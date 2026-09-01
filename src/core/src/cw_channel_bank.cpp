@@ -60,6 +60,15 @@ CwChannelBank::Track::Track(const std::uint64_t track_id,
       last_frequency_update_ns(timestamp_ns) {}
 
 CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
+  sanitizeConfig();
+}
+
+void CwChannelBank::configure(CwChannelBankConfig config) noexcept {
+  config_ = config;
+  sanitizeConfig();
+}
+
+void CwChannelBank::sanitizeConfig() noexcept {
   config_.acquisition_snr_db =
       std::clamp(config_.acquisition_snr_db, 3.0F, 30.0F);
   config_.retention_snr_db = std::clamp(
@@ -610,6 +619,13 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
 
 void CwChannelBank::updateVerification(Track& track) {
   if (track.verification_state == CwTrackState::Verified) return;
+  // Re-derive the state from current evidence every call rather than only
+  // ever advancing it: a track that reached Morse-likely on transient
+  // coherence/cadence can fail an earlier gate again afterward (e.g. a
+  // marginal noise-driven candidate hovering near the coherence floor), and
+  // must be reported as Candidate again, not left stuck showing a
+  // "Morse-likely" state alongside a reason that gate no longer supports.
+  track.verification_state = CwTrackState::Candidate;
 
   const auto observations = track.spectral_observations;
   const auto symbols = track.update.decoded_symbols;

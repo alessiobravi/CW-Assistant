@@ -348,6 +348,9 @@ double AppSettings::cwGuideWidthHz() const noexcept {
 }
 int AppSettings::averagingFrames() const noexcept { return averaging_frames_; }
 bool AppSettings::showGrid() const noexcept { return show_grid_; }
+int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
+  return decoded_signal_timeout_seconds_;
+}
 const QString& AppSettings::statusMessage() const noexcept { return status_message_; }
 
 #define CWA_SETTER(Method, Member, Type)            \
@@ -403,6 +406,7 @@ CWA_SETTER(setCwGuideCenterHz, cw_guide_center_hz_, double)
 CWA_SETTER(setCwGuideWidthHz, cw_guide_width_hz_, double)
 CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
+CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 
 #undef CWA_SETTER
 
@@ -639,6 +643,8 @@ bool AppSettings::apply() {
       std::clamp(waterfall_noise_margin_db_, 0.0, 30.0);
   cw_guide_center_hz_ = std::clamp(cw_guide_center_hz_, 0.0, 96'000.0);
   cw_guide_width_hz_ = std::clamp(cw_guide_width_hz_, 10.0, 5'000.0);
+  decoded_signal_timeout_seconds_ =
+      std::clamp(decoded_signal_timeout_seconds_, 5, 120);
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -700,6 +706,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("display/cwGuideWidthHz")), cw_guide_width_hz_);
   settings.setValue(storageKey(QStringLiteral("display/averagingFrames")), averaging_frames_);
   settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
+  settings.setValue(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
+                    decoded_signal_timeout_seconds_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -797,6 +805,8 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("display/cwGuideWidthHz")), 200.0).toDouble();
   averaging_frames_ = settings.value(storageKey(QStringLiteral("display/averagingFrames")), 3).toInt();
   show_grid_ = settings.value(storageKey(QStringLiteral("display/showGrid")), true).toBool();
+  decoded_signal_timeout_seconds_ =
+      settings.value(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")), 30).toInt();
 }
 
 bool AppSettings::completeSetup() {
@@ -956,6 +966,7 @@ void AppSettings::resetInMemorySettings() {
   cw_guide_width_hz_ = 200.0;
   averaging_frames_ = 3;
   show_grid_ = true;
+  decoded_signal_timeout_seconds_ = 30;
   applyReferenceDefaults(0);
 }
 

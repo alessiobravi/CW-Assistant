@@ -6,6 +6,23 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-01 — fixed a verification-state/reason inconsistency
+where a track could stay reported as Morse-likely after later failing an
+earlier gate again, confirmed against two operator screenshots showing this
+exact contradiction; added `CwChannelBank::configure()` and a Settings →
+Display "Decoded signal timeout" control (default 30 s, replacing a fixed
+8 s) so an already-running decoder session can have its retention changed
+without restarting; and removed the initial always-visible decoder-panel
+diagnostics readout after confirming it was constantly flickering and not
+useful in practice (`narrowband_coherence` is naturally noisy per-instant
+evidence even for a clean tone), while keeping the underlying diagnostics
+data on the model for a future dedicated view. Also reverted a first attempt
+at bank-capacity eviction (letting a stronger candidate replace the weakest
+unverified track when full) after a deterministic test showed it could evict
+a genuine intermittent CW signal's own track during its normal key-up gaps;
+that starvation theory (the bank saturating at its 24-track cap with
+marginal candidates) remains plausible and worth a more careful design, but
+is not fixed yet.
 Last reviewed: 2026-09-01 — added a decoder-panel diagnostics readout exposing
 pre-verification candidate/Morse-likely counts and a rejection-reason tally
 without overlaying unverified candidates, and a deterministic
@@ -110,7 +127,7 @@ translucent band rather than two signal-like lines.
 | UI-006 | done | Distinguish the CW guide from detected traces | The two easily confused red guide lines are replaced by one semi-transparent rectangular CW-band overlay centered on the configured pitch; verified signal traces remain independently colored and clickable. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
-| OBS-001 | active | Add pipeline telemetry | A decoder-panel readout exposes pre-verification candidate/Morse-likely counts and a rejection-reason tally without overlaying unverified candidates; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |
+| OBS-001 | active | Add pipeline telemetry | Pre-verification candidate/Morse-likely counts and a rejection-reason tally are computed and exposed on the desktop model, but a first always-visible decoder-panel readout of it proved too noisy/flickering in practice and was removed from the default view pending a proper dedicated diagnostics display; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |
 | OBS-003 | todo | Add operator-controlled diagnostic capture bundles | A bounded full-debug mode records timestamped raw and conditioned audio, spectrum frames, private candidate lifecycle/rejection reasons, decoded streams with per-character evidence, frequency/time references, overruns, and relevant profile/radio state. Capture requires explicit operator enablement, duration/size limits, a review step, and credential/private-identifier redaction before exporting a portable analysis bundle. |
 | OBS-002 | todo | Add operator-accessible native crash diagnostics | Windows minidumps and macOS/Linux crash-report guidance identify build/profile/backend without exposing station secrets; diagnostic export is documented and tested. |
 | CFG-001 | active | Implement named station profiles and setup helper | Versioned isolated persistence, UI create/select helper, per-profile wizard, and `--profile` selection exist; audio/logger/remote pages and migrations remain. |
@@ -131,7 +148,7 @@ translucent band rather than two signal-like lines.
 | CW-005 | todo | Add optional coherent receive diversity | Synchronized receiver/antenna inputs can contribute spatial or confidence diversity, but bad alignment or a weak source must never degrade the best single-input held-out result. |
 | PERF-001 | active | Build decoder accuracy/resource benchmark gate | Deterministic gates cover 0/49 baseline character edits across 8–55 WPM, speed acquisition/change, no-CW false characters, clean/30 WPM/weak verified-track acquisition, five interference hard negatives (including a broad-spectral-hump case distinguishing wide non-CW energy from a narrowband CW carrier), a maximum 0.20 real-time resource factor, and a conservative decoder-state estimate capped at 256 KiB across the timing corpus. Raw-bank tests cover simultaneous tones and adjacent rejection; the threaded live fixture requires keyed Morse. Extend with WER, call precision/recall, calibrated SNR curves, co-channel separation, provisional/stable latency/revisions, true platform peak memory, real recordings, and per-platform overload behavior. |
 | CALL-001 | active | Extract and rank callsign candidates | A conservative normalized letter+digit token is exposed only after its track is verified and a stable word gap confirms the complete token; provisional or partial calls remain hidden. Add ranked alternatives, optional external validation, and measured precision/recall targets including portable calls. |
-| CALL-006 | active | Maintain frequency-anchored decoded observation lifecycle | Tracks retain stable IDs/colors through keyed gaps, update overlays and operator-selected sessions in place, and expire after a bounded hold. Linked live radio audio can show checked actual RF using provider state, transverter offset, CW pitch, and sideband direction; add a visible/configurable lost state, viewport-independent RF reacquisition, callsign-level identity, and profile-configurable retention. |
+| CALL-006 | active | Maintain frequency-anchored decoded observation lifecycle | Tracks retain stable IDs/colors through keyed gaps, update overlays and operator-selected sessions in place, and expire after a profile-configurable hold (Settings → Display, default 30 s). Linked live radio audio can show checked actual RF using provider state, transverter offset, CW pitch, and sideband direction; add a visible/configurable lost state, viewport-independent RF reacquisition, and callsign-level identity. |
 | DSP-004 | todo | Add operational DSP conditioning | Configurable noise blanker, AGC, key-click suppression, mute, and 20–700 Hz monitor filter have replay tests and bypass paths. |
 | DSP-005 | todo | Add frequency and I/Q calibration | Manual/automatic correction, reset, diagnostics, and deterministic imbalance fixtures pass. |
 | CALL-004 | todo | Add validation, watch, and band-plan policies | Configurable validation levels, allocation/pattern checks, master-call data, watch list, and CW-segment filtering are independently testable. |

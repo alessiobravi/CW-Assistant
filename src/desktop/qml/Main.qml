@@ -25,29 +25,6 @@ ApplicationWindow {
         return hz.toFixed(0) + " Hz"
     }
 
-    function verificationDiagnosticsSummary(diagnostics) {
-        if (!diagnostics || typeof diagnostics.candidateTracks === "undefined")
-            return ""
-        var parts = []
-        if (diagnostics.candidateTracks > 0)
-            parts.push(diagnostics.candidateTracks + " candidate")
-        if (diagnostics.morseLikelyTracks > 0)
-            parts.push(diagnostics.morseLikelyTracks + " morse-likely")
-        if (parts.length === 0)
-            return ""
-        var reasons = diagnostics.reasonCounts || {}
-        var reasonParts = []
-        for (var key in reasons) {
-            if (key === "verified" || key === "signal-lost")
-                continue
-            reasonParts.push(key + " " + reasons[key])
-        }
-        var text = parts.join(", ") + " not yet verified"
-        if (reasonParts.length > 0)
-            text += "  •  " + reasonParts.join(", ")
-        return text
-    }
-
     header: ToolBar {
         height: 64
         background: Rectangle { color: "#151b23" }
@@ -620,22 +597,6 @@ ApplicationWindow {
                     color: "#8290a0"
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
-                }
-                Label {
-                    id: verificationDiagnosticsLabel
-                    objectName: "verificationDiagnosticsLabel"
-                    property string summary: window.verificationDiagnosticsSummary(
-                                                  replayController.verificationDiagnostics)
-                    visible: summary.length > 0
-                    text: summary
-                    color: "#6c7c8e"
-                    font.pixelSize: 11
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                    ToolTip.visible: diagnosticsHover.containsMouse
-                    ToolTip.delay: 300
-                    ToolTip.text: "Pre-verification pipeline state: peaks that exist in the passband but have not yet passed every CW-verification gate (persistence, keyed edges, cadence, narrowband coherence, decoded symbols, timing/character confidence). Not shown as spectrum overlays or in the signal count until verified."
-                    MouseArea { id: diagnosticsHover; anchors.fill: parent; hoverEnabled: true }
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
                 Label {

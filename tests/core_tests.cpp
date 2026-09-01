@@ -215,7 +215,10 @@ void test_cw_channel_bank() {
                held[1].id == high_id && held[0].color_index == low_color &&
                held[1].color_index == high_color,
            "frequency track identity and colors survive keyed gaps");
-    feed(false, false, 7'200);
+    bank.configure({.decoded_track_retention_seconds = 2.0,
+                    .empty_track_retention_seconds = 2.0,
+                    .minimum_verification_symbols = 0});
+    feed(false, false, 2'500);
     expect(bank.channels().empty(),
            "silent decoded tracks expire from the full-spectrum model");
   }
@@ -369,6 +372,24 @@ void test_cw_channel_bank() {
              slow_diagnostics.verified_transitions == 1,
          "verification diagnostics report the candidate lifecycle transition");
 
+  slow_bank.configure({.decoded_track_retention_seconds = 2.0,
+                       .empty_track_retention_seconds = 2.0});
+  for (int silence_step = 0; silence_step < 250; ++silence_step) {
+    fine_bins.assign(fine_bins.size(), -110.0F);
+    const auto timestamp = static_cast<std::uint64_t>(
+        static_cast<std::int64_t>(slow_steps) + silence_step) * 10'000'000;
+    static_cast<void>(slow_bank.updateSpectrum(
+        timestamp, 0.0, 1'000.0, fine_bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = timestamp;
+    block.sample_count = 80;
+    static_cast<void>(slow_bank.processSamples(block));
+  }
+  expect(slow_bank.channels().empty(),
+         "configure() applies a shorter decoded-signal timeout immediately "
+         "to an already-verified track rather than only at construction");
+
   cwassistant::core::SpectrumAnalyzer pipeline_analyzer({
       .fft_size = 2'048,
       .averaging_frames = 1,
@@ -403,6 +424,82 @@ void test_cw_channel_bank() {
                       1'000.0) < 30.0 &&
              pipeline_bank.channels().front().snr_db > 6.0F,
          "shared FFT discovery feeds raw narrowband channel evidence");
+}
+
+void test_cw_channel_bank_state_reason_consistency() {
+  using cwassistant::core::CwChannelBank;
+  using cwassistant::core::CwVerificationReason;
+  constexpr double sample_rate = 8'000.0;
+  // An impossible symbol requirement guarantees tracks can reach
+  // Morse-likely but never Verified, and default coherence/cadence
+  // thresholds against a plain tone naturally flicker (confirmed by direct
+  // measurement: even a clean single tone's narrowband_coherence oscillates
+  // above and below its threshold from one keying edge to the next). That
+  // flicker is exactly what must never leave a track reporting an
+  // inconsistent state/reason pair.
+  CwChannelBank bank({.minimum_verification_symbols = 1'000});
+  std::vector<float> bins(1'001, -100.0F);
+  double phase = 0.0;
+  std::uint64_t now = 0;
+  bool observed_any_morse_likely = false;
+
+  std::vector<bool> keying;
+  const auto append_units = [&keying](const bool keyed, const int units) {
+    keying.insert(keying.end(), units * 10, keyed);
+  };
+  const auto append_letter = [&append_units](const std::string_view elements) {
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+      append_units(true, elements[index] == '.' ? 1 : 3);
+      append_units(false, index + 1 == elements.size() ? 3 : 1);
+    }
+  };
+  append_letter("...");
+  append_letter("---");
+  append_letter("...");
+  append_units(false, 4);
+  const int steps = static_cast<int>(keying.size()) * 40;
+  for (int step = 0; step < steps; ++step) {
+    const bool keyed = keying[static_cast<std::size_t>(step) % keying.size()];
+    bins.assign(bins.size(), -100.0F);
+    if (keyed) bins[700] = -68.0F;
+    static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = now;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.32F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
+      phase += 2.0 * std::numbers::pi * 700.0 / sample_rate;
+    }
+    static_cast<void>(bank.processSamples(block));
+    now += 10'000'000;
+
+    const auto diagnostics = bank.verificationDiagnostics();
+    if (diagnostics.morse_likely_tracks > 0) observed_any_morse_likely = true;
+    std::size_t pre_morse_likely_reasons = 0;
+    std::size_t post_morse_likely_reasons = 0;
+    for (std::size_t reason = 0;
+         reason < diagnostics.current_reason_counts.size(); ++reason) {
+      const auto count = diagnostics.current_reason_counts[reason];
+      if (reason <= static_cast<std::size_t>(
+                        CwVerificationReason::LowCadenceQuality)) {
+        pre_morse_likely_reasons += count;
+      } else if (reason <= static_cast<std::size_t>(
+                                CwVerificationReason::LowCharacterConfidence)) {
+        post_morse_likely_reasons += count;
+      }
+    }
+    expect(pre_morse_likely_reasons == diagnostics.candidate_tracks,
+           "every candidate-state track reports a pre-Morse-likely gate "
+           "reason, and no other track does, at every measured instant");
+    expect(post_morse_likely_reasons == diagnostics.morse_likely_tracks,
+           "every Morse-likely track reports a post-Morse-likely gate "
+           "reason, and no other track does, at every measured instant");
+  }
+  expect(observed_any_morse_likely,
+         "the test scenario actually exercises the Morse-likely state at "
+         "least once, so the consistency checks above are not vacuous");
 }
 
 void test_transmit_guard() {
@@ -857,6 +954,7 @@ int main() {
   test_scheduler();
   test_cw_timing_decoder();
   test_cw_channel_bank();
+  test_cw_channel_bank_state_reason_consistency();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

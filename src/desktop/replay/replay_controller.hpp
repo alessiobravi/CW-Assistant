@@ -68,6 +68,7 @@ class ReplayController final : public QObject {
                              double upper_frequency_hz,
                              int frame_rate_hz);
   void setSourceMode(int value);
+  void setDecodedSignalTimeoutSeconds(int seconds);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 int sideband_index,
@@ -112,6 +113,8 @@ class ReplayController final : public QObject {
                                  bool automatic_bandwidth,
                                  double lower_frequency_hz,
                                  double upper_frequency_hz);
+  void decodedSignalTimeoutRequested(int seconds);
+  void liveDecodedSignalTimeoutRequested(int seconds);
 
  private:
   void setStatus(QString status);
