@@ -526,8 +526,8 @@ void ReplayController::moveDecoderSession(const qulonglong channel_id,
                                           const int new_index) {
   const int old_index = decoder_session_order_.indexOf(channel_id);
   if (old_index < 0 || decoder_session_order_.size() < 2) return;
-  const int target = std::clamp(new_index, 0,
-                                decoder_session_order_.size() - 1);
+  const int target = std::clamp(
+      new_index, 0, static_cast<int>(decoder_session_order_.size()) - 1);
   if (old_index == target) return;
   decoder_session_order_.move(old_index, target);
   rebuildDecoderModels();

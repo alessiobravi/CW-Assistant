@@ -13,6 +13,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   session card. Cards can be closed without stopping DSP, reopened from the
   marker, and reordered by dragging. Conservative decoded callsign candidates
   and frequency labels run vertically beside the matching colored trace.
+  Session reordering uses an explicitly bounded cross-platform index type.
 - Checked actual-RF labels for linked live radio audio. Profiles explicitly
   confirm that the selected input belongs to the configured radio and choose
   CW-U/USB or CW-L/LSB tone direction. Live OmniRig frequency polling on Windows

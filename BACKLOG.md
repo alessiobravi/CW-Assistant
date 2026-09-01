@@ -59,6 +59,8 @@ tokens appear vertically on their trace. Explicit profile audio/radio pairing,
 CW-U/CW-L mapping, RX transverter resolution, live Windows OmniRig polling, and
 CAT4OM state now produce RF labels only when the complete evidence chain is
 valid; every other source remains explicitly AF.
+The first hosted build correction normalized Qt's platform-sized session-list
+index before clamping so GCC, Apple Clang, and MSVC share the same bound.
 
 ## P0 — project decisions and safety
 
