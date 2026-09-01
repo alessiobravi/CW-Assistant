@@ -75,12 +75,14 @@ duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subjec
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
 it only when a steadier but less time-sharp display is more useful.
 
-Enable **Visual guide** to draw a translucent red band around the desired receive tone. The
-default is centered at 700 Hz with a 200 Hz width; both values update in real
-time and are stored per profile. The frequency labels along the lower X axis
-show where those boundaries sit in the current audio or SDR view. This guide is
-visual only: it does not select a decoder, limit decoding, change receiver
-tuning, or change decoder bandwidth.
+Enable **Visual guide** to draw a bold red line on the frequency (X) axis
+marking the desired receive tone. The default is centered at 700 Hz with a
+200 Hz width; both values update in real time and are stored per profile.
+It is deliberately kept to the axis rather than drawn as a vertical band, so
+it can never be mistaken for an identified signal — that treatment is
+reserved for verified CW tracks (see below). This guide is visual only: it
+does not select a decoder, limit decoding, change receiver tuning, or
+change decoder bandwidth.
 
 Pointer tuning is planned, not active in this build. The defined behavior is:
 left-click a waterfall trace to move the local CW guide to it; right-click to
@@ -104,8 +106,10 @@ narrowband energy and keyed edges, and progress through a Morse-likely state. It
 then must
 produce at least three known Morse symbols with bounded unknown output plus
 adequate spacing cadence, timing, and character confidence. Only then does
-it receive a stable color and vertical marker or increment **signals detected**.
-Click that verified marker to open its
+it receive a stable color and a colored vertical area, sized to the
+decoder's actual narrowband filter width rather than a fixed pixel width,
+or increment **signals detected**. A thinner line inside that area flashes
+with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Closing a card with **×** does not stop
 its DSP; click the marker to reopen it. Drag cards over one another to set the
 operator's preferred order. Stable text, amber provisional text/elements,
@@ -124,7 +128,7 @@ be presented as a decoded station. A genuinely broad spectral feature
 never appear as a candidate at all, because its shape fails the
 local-prominence check before any track is created.
 
-Frequency text is written vertically beside the matching colored line inside
+Frequency text is written vertically beside the matching colored area inside
 the upper spectrum region, never over waterfall history. Callsign text remains
 hidden until the track is verified, the decoder has promoted the text to stable,
 and a word gap confirms that the structurally valid token is complete. This is

@@ -44,6 +44,17 @@ All notable changes to CW Assistant are recorded here. The format follows
   `VERSION` stored inside each self-contained application bundle. Hosted checks
   print the expected and native metadata values when diagnosing a mismatch.
 
+### Changed
+
+- Swapped which of the two spectrum overlays reads as an "area": the CW
+  pitch guide is now a bold line on the frequency axis only (no longer a
+  vertical band spanning the spectrum height), while a verified CW track is
+  now identified primarily by a colored vertical area sized to the
+  decoder's actual narrowband filter width (60/120/240 Hz mapped to pixels)
+  rather than a fixed-width sliver, with a thinner keying-state line drawn
+  on top. The two were easy to confuse with each other when both were
+  drawn as bands; only the identified-signal highlight is now an area.
+
 ### Added
 
 - A VFO frequency readout in the decoder panel showing the connected radio's

@@ -25,6 +25,17 @@ ApplicationWindow {
         return hz.toFixed(0) + " Hz"
     }
 
+    // Maps a spectrum frequency to its horizontal pixel position within the
+    // spectrumDisplay item, shared by the CW guide axis marker and the
+    // verified-signal area highlights so both stay pixel-aligned.
+    function hzToX(hz) {
+        return spectrumDisplay.x
+               + (hz - spectrumDisplay.lowerFrequencyHz)
+                 / (spectrumDisplay.upperFrequencyHz
+                    - spectrumDisplay.lowerFrequencyHz)
+                 * spectrumDisplay.width
+    }
+
     function verificationDiagnosticsSummary(diagnostics) {
         if (!diagnostics || typeof diagnostics.candidateTracks === "undefined")
             return ""
@@ -238,6 +249,10 @@ ApplicationWindow {
                 }
 
                 Rectangle {
+                    // A reference pitch marker, not a detected signal: kept
+                    // to the X axis as a bold line rather than a vertical
+                    // band, so it never reads as an identified CW area and
+                    // compete with the verified-signal highlights below.
                     property real guideLowerHz: appSettings.cwGuideCenterHz
                                                 - 0.5 * appSettings.cwGuideWidthHz
                     property real guideUpperHz: appSettings.cwGuideCenterHz
@@ -252,20 +267,11 @@ ApplicationWindow {
                              && visibleUpperHz > visibleLowerHz
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
-                    x: spectrumDisplay.x
-                       + (visibleLowerHz - spectrumDisplay.lowerFrequencyHz)
-                         / (spectrumDisplay.upperFrequencyHz
-                            - spectrumDisplay.lowerFrequencyHz)
-                         * spectrumDisplay.width
-                    y: spectrumDisplay.y
-                    width: (visibleUpperHz - visibleLowerHz)
-                           / (spectrumDisplay.upperFrequencyHz
-                              - spectrumDisplay.lowerFrequencyHz)
-                           * spectrumDisplay.width
-                    height: spectrumDisplay.height
-                    color: "#18ff4d5a"
-                    border.color: "#66ff4d5a"
-                    border.width: 1
+                    x: window.hzToX(visibleLowerHz)
+                    y: spectrumDisplay.y + spectrumDisplay.height - 3
+                    width: window.hzToX(visibleUpperHz) - window.hzToX(visibleLowerHz)
+                    height: 3
+                    color: "#ff7b84"
                     z: 3
                 }
                 Repeater {
@@ -274,26 +280,30 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         property real channelHz: modelData.frequencyHz
+                        // The colored area is the primary identification cue
+                        // for a verified CW stream, sized to the decoder's
+                        // actual narrowband filter width so its footprint on
+                        // the spectrum matches what was really tracked;
+                        // never narrower than a comfortable click target.
+                        property real areaWidthPx: Math.max(28,
+                            window.hzToX(channelHz + modelData.filterWidthHz / 2)
+                            - window.hzToX(channelHz - modelData.filterWidthHz / 2))
                         visible: modelData.verifiedCw
                                  && channelHz >= spectrumDisplay.lowerFrequencyHz
                                  && channelHz <= spectrumDisplay.upperFrequencyHz
                                  && spectrumDisplay.upperFrequencyHz
                                     > spectrumDisplay.lowerFrequencyHz
-                        x: spectrumDisplay.x
-                           + (channelHz - spectrumDisplay.lowerFrequencyHz)
-                             / (spectrumDisplay.upperFrequencyHz
-                                - spectrumDisplay.lowerFrequencyHz)
-                             * spectrumDisplay.width - width / 2
+                        x: window.hzToX(channelHz) - width / 2
                         y: spectrumDisplay.y
-                        width: 28
+                        width: areaWidthPx
                         height: spectrumDisplay.height
                         z: 5
                         Rectangle {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            width: 8
-                            height: parent.height
+                            anchors.fill: parent
                             color: modelData.color
-                            opacity: modelData.active ? 0.12 : 0.05
+                            opacity: modelData.active ? 0.28 : 0.12
+                            border.color: modelData.color
+                            border.width: 1
                         }
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
