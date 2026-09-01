@@ -4,8 +4,9 @@
 #include <QString>
 #include <QThread>
 #include <QUrl>
+#include <QVariantList>
 
-#include "cwassistant/core/cw_decoder.hpp"
+#include "cwassistant/core/cw_channel_bank.hpp"
 
 #include "../visualization/spectrum_frame.hpp"
 
@@ -26,12 +27,10 @@ class ReplayController final : public QObject {
   Q_PROPERTY(double positionSeconds READ positionSeconds NOTIFY stateChanged)
   Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames
                  NOTIFY averagingFramesChanged)
-  Q_PROPERTY(QString decodedText READ decodedText NOTIFY decoderChanged)
-  Q_PROPERTY(double decoderWpm READ decoderWpm NOTIFY decoderChanged)
-  Q_PROPERTY(double decoderSnrDb READ decoderSnrDb NOTIFY decoderChanged)
-  Q_PROPERTY(double decoderToneHz READ decoderToneHz NOTIFY decoderChanged)
-  Q_PROPERTY(double decoderConfidence READ decoderConfidence NOTIFY decoderChanged)
-  Q_PROPERTY(bool decoderKeyDown READ decoderKeyDown NOTIFY decoderChanged)
+  Q_PROPERTY(QVariantList decoderChannels READ decoderChannels
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(int decoderChannelCount READ decoderChannelCount
+                 NOTIFY decoderChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -49,12 +48,8 @@ class ReplayController final : public QObject {
   [[nodiscard]] double durationSeconds() const noexcept;
   [[nodiscard]] double positionSeconds() const noexcept;
   [[nodiscard]] int averagingFrames() const noexcept;
-  [[nodiscard]] const QString& decodedText() const noexcept;
-  [[nodiscard]] double decoderWpm() const noexcept;
-  [[nodiscard]] double decoderSnrDb() const noexcept;
-  [[nodiscard]] double decoderToneHz() const noexcept;
-  [[nodiscard]] double decoderConfidence() const noexcept;
-  [[nodiscard]] bool decoderKeyDown() const noexcept;
+  [[nodiscard]] const QVariantList& decoderChannels() const noexcept;
+  [[nodiscard]] int decoderChannelCount() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -65,7 +60,6 @@ class ReplayController final : public QObject {
                              int frame_rate_hz);
   void setSourceMode(int value);
   void setAudioInputSelection(QString encoded_id, QString display_name);
-  void setCwDecoderSlice(double center_hz, double width_hz);
 
   Q_INVOKABLE void openFile(const QUrl& url);
   Q_INVOKABLE void play();
@@ -139,15 +133,8 @@ class ReplayController final : public QObject {
   double audio_upper_frequency_hz_{3'000.0};
   int spectrum_frame_rate_hz_{60};
   bool spectrum_processing_configured_{false};
-  cwassistant::core::CwTimingDecoder cw_decoder_;
-  QString decoded_text_;
-  double decoder_center_hz_{700.0};
-  double decoder_width_hz_{200.0};
-  double decoder_wpm_{20.0};
-  double decoder_snr_db_{0.0};
-  double decoder_tone_hz_{700.0};
-  double decoder_confidence_{0.0};
-  bool decoder_key_down_{false};
+  cwassistant::core::CwChannelBank cw_channel_bank_;
+  QVariantList decoder_channels_;
 };
 
 }  // namespace cwassistant::desktop

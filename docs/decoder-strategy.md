@@ -3,8 +3,10 @@
 ## Status and objective
 
 This document is the implementation proposal for the complete M2 decoder. A
-first receive-only selected-slice SNR-hysteresis/adaptive-dit baseline is now
-implemented; multichannel detection, soft evidence, calibrated confidence, and
+receive-only full-processed-passband peak tracker and bounded channel bank are
+now implemented. Every frequency track owns an independent soft SNR likelihood,
+adaptive timing decoder, provisional/stable text contract, stable color, and
+expiry lifecycle. Phase-aware narrowband evidence, confidence calibration, and
 multiple-pass weak-signal recovery remain planned. The complete decoder's goal
 is high weak-signal accuracy with bounded CPU, memory, and latency on ordinary
 desktop hardware.
@@ -175,6 +177,13 @@ test set must not gain an unfair advantage from the callsign list used by a
 context pass.
 
 ## Benchmarks and acceptance gates
+
+The first deterministic executable gate (`cwa_decoder_benchmark`) now reports
+character edits/CER, false characters during a fixed no-CW minute, processed
+updates, simulated duration, wall time, real-time factor, and decoder object
+size. Its initial cases cover 12, 20, and 25 WPM with fixed weak-SNR and timing-
+jitter sequences. This is a regression floor, not the final corpus or a claim
+of calibrated over-the-air performance.
 
 Each experiment publishes:
 

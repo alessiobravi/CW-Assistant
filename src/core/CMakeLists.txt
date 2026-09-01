@@ -3,6 +3,7 @@ add_library(cwa_core
   src/callsign_policy.cpp
   src/cat4om_protocol.cpp
   src/channel_scheduler.cpp
+  src/cw_channel_bank.cpp
   src/cw_decoder.cpp
   src/frequency_plan.cpp
   src/reference_rig_profiles.cpp

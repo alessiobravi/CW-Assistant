@@ -13,6 +13,7 @@
 #include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
+#include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/remote_control.hpp"
@@ -128,6 +129,76 @@ void test_cw_timing_decoder() {
          "adaptive CW timing decodes deterministic dit sequences");
   expect(result.wpm > 18.0 && result.wpm < 22.0,
          "adaptive CW timing reports the keyed speed");
+  expect(result.provisional_text.empty(),
+         "flush promotes every provisional character to stable text");
+  expect(result.key_down_probability < 0.1F,
+         "soft key evidence returns near zero after a completed signal");
+
+  CwTimingDecoder staged_decoder({.initial_wpm = 20.0});
+  std::uint64_t staged_now = 0;
+  cwassistant::core::CwDecoderUpdate staged;
+  const auto staged_feed = [&](const bool down, const int milliseconds) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 10) {
+      staged_now += 10'000'000;
+      staged = staged_decoder.process(staged_now, down ? 12.0F : 0.0F);
+    }
+  };
+  staged_feed(false, 100);
+  staged_feed(true, 60);
+  staged_feed(false, 150);
+  expect(staged.text.empty() && staged.provisional_text == "E",
+         "completed character is exposed provisionally before confirmation");
+  staged_feed(false, 60);
+  expect(staged.text == "E" && staged.provisional_text.empty(),
+         "confirmation delay promotes provisional text to append-only stable text");
+}
+
+void test_cw_channel_bank() {
+  using cwassistant::core::CwChannelBank;
+  CwChannelBank bank;
+  std::vector<float> bins(101, -100.0F);
+  std::uint64_t now = 0;
+  const auto feed = [&](const bool low_tone, const bool high_tone,
+                        const int milliseconds) {
+    const int steps = milliseconds / 10;
+    for (int step = 0; step < steps; ++step) {
+      bins.assign(bins.size(), -100.0F);
+      if (low_tone) bins[30] = -80.0F;
+      if (high_tone) bins[70] = -78.0F;
+      now += 10'000'000;
+      static_cast<void>(bank.process(now, 0.0, 1'000.0, bins));
+    }
+  };
+
+  feed(true, true, 60);
+  feed(false, true, 120);
+  feed(false, false, 250);
+  const auto& channels = bank.channels();
+  expect(channels.size() == 2,
+         "full-passband channel bank retains two independent CW signals");
+  if (channels.size() == 2) {
+    const auto low_id = channels[0].id;
+    const auto high_id = channels[1].id;
+    const auto low_color = channels[0].color_index;
+    const auto high_color = channels[1].color_index;
+    expect(std::abs(channels[0].frequency_hz - 300.0) < 5.0 &&
+               channels[0].text.find('E') != std::string::npos,
+           "lower-frequency slice decodes its own dit");
+    expect(std::abs(channels[1].frequency_hz - 700.0) < 5.0 &&
+               channels[1].text.find('T') != std::string::npos,
+           "upper-frequency slice decodes its own dah");
+    expect(channels[0].color_index != channels[1].color_index,
+           "simultaneous tracks receive stable distinct colors");
+    feed(false, false, 1'000);
+    const auto& held = bank.channels();
+    expect(held.size() == 2 && held[0].id == low_id &&
+               held[1].id == high_id && held[0].color_index == low_color &&
+               held[1].color_index == high_color,
+           "frequency track identity and colors survive keyed gaps");
+    feed(false, false, 7'200);
+    expect(bank.channels().empty(),
+           "silent decoded tracks expire from the full-spectrum model");
+  }
 }
 
 void test_transmit_guard() {
@@ -563,6 +634,7 @@ int main() {
   test_ring_buffer();
   test_scheduler();
   test_cw_timing_decoder();
+  test_cw_channel_bank();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

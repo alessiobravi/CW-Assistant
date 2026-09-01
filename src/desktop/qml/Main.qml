@@ -239,6 +239,49 @@ ApplicationWindow {
                         z: 3
                     }
                 }
+                Repeater {
+                    model: replayController.decoderChannels
+                    delegate: Item {
+                        required property var modelData
+                        required property int index
+                        property real channelHz: modelData.frequencyHz
+                        visible: channelHz >= spectrumDisplay.lowerFrequencyHz
+                                 && channelHz <= spectrumDisplay.upperFrequencyHz
+                                 && spectrumDisplay.upperFrequencyHz
+                                    > spectrumDisplay.lowerFrequencyHz
+                        x: spectrumDisplay.x
+                           + (channelHz - spectrumDisplay.lowerFrequencyHz)
+                             / (spectrumDisplay.upperFrequencyHz
+                                - spectrumDisplay.lowerFrequencyHz)
+                             * spectrumDisplay.width
+                        y: spectrumDisplay.y
+                        width: 2
+                        height: spectrumDisplay.height
+                        z: 5
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: 8
+                            height: parent.height
+                            color: modelData.color
+                            opacity: modelData.active ? 0.12 : 0.05
+                        }
+                        Rectangle {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            width: modelData.keyDown ? 3 : 1
+                            height: parent.height
+                            color: modelData.color
+                            opacity: modelData.active ? 0.9 : 0.45
+                        }
+                        Label {
+                            x: 5
+                            y: 8 + (index % 4) * 19
+                            text: channelHz.toFixed(0) + " Hz"
+                            color: modelData.color
+                            font.pixelSize: 10
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
                 Label {
                     visible: appSettings.showCwGuide
                              && spectrumDisplay.upperFrequencyHz
@@ -246,7 +289,7 @@ ApplicationWindow {
                     anchors.top: parent.top
                     anchors.right: parent.right
                     anchors.margins: 14
-                    text: "CW guide  " + appSettings.cwGuideCenterHz.toFixed(0)
+                    text: "Visual guide  " + appSettings.cwGuideCenterHz.toFixed(0)
                           + " Hz  •  " + appSettings.cwGuideWidthHz.toFixed(0)
                           + " Hz wide"
                     color: "#ff7b84"
@@ -297,14 +340,6 @@ ApplicationWindow {
                             TabButton { text: "Display" }
                         }
                         Item { Layout.fillWidth: true }
-                        Label {
-                            objectName: "decoderStatusLabel"
-                            text: replayController.decoderKeyDown
-                                  ? "Decoder • KEY DOWN" : "Decoder listening"
-                            color: replayController.decoderKeyDown
-                                   ? "#ff7b84" : "#64e6d2"
-                            font.pixelSize: 11
-                        }
                         Button { text: "Save profile"; onClicked: appSettings.apply() }
                     }
                     StackLayout {
@@ -447,7 +482,7 @@ ApplicationWindow {
                             Label { text: "seconds"; color: "#8290a0" }
                             CheckBox {
                                 objectName: "liveCwGuideCheck"
-                                text: "CW guide"
+                                text: "Visual guide"
                                 checked: appSettings.showCwGuide
                                 onToggled: appSettings.showCwGuide = checked
                             }
@@ -514,35 +549,121 @@ ApplicationWindow {
         }
 
         Rectangle {
-            Layout.preferredWidth: 330
+            Layout.preferredWidth: 390
             Layout.fillHeight: true
             color: "#111720"
             border.color: "#263241"
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 16
-                Label { text: "Selected CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
-                Label { text: "Receive-only baseline • strongest tone inside the red guide"; color: "#8290a0"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                Label { text: "Full-spectrum CW decoder"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                Label {
+                    text: replayController.decoderChannelCount > 0
+                          ? replayController.decoderChannelCount
+                            + " frequency slice(s) • colors match the spectrum"
+                          : "Scanning the complete processed passband"
+                    color: "#8290a0"
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
                 Label {
+                    visible: replayController.decoderChannelCount === 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    text: replayController.decodedText.length > 0
-                          ? replayController.decodedText
-                          : "Listening inside the CW guide…"
-                    color: replayController.decodedText.length > 0 ? "#e7edf4" : "#667789"
-                    font.pixelSize: 18
+                    text: "Listening for CW signals across the spectrum…\n\nThe red 700 Hz boundaries are a visual reference only and do not limit decoding."
+                    color: "#667789"
+                    font.pixelSize: 15
                     wrapMode: Text.Wrap
                     verticalAlignment: Text.AlignTop
                 }
-                Label {
+                ListView {
+                    id: decoderChannelList
+                    objectName: "decoderChannelList"
+                    visible: replayController.decoderChannelCount > 0
                     Layout.fillWidth: true
-                    text: replayController.decoderToneHz.toFixed(0) + " Hz  •  "
-                          + replayController.decoderWpm.toFixed(1) + " WPM  •  "
-                          + replayController.decoderSnrDb.toFixed(1) + " dB SNR  •  "
-                          + (replayController.decoderConfidence * 100).toFixed(0) + "%"
-                    color: "#8290a0"
-                    wrapMode: Text.WordWrap
+                    Layout.fillHeight: true
+                    clip: true
+                    spacing: 8
+                    model: replayController.decoderChannels
+                    delegate: Rectangle {
+                        required property var modelData
+                        width: decoderChannelList.width
+                        height: 116
+                        radius: 7
+                        color: "#151d27"
+                        border.width: modelData.keyDown ? 2 : 1
+                        border.color: modelData.color
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 4
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Rectangle {
+                                    width: 10
+                                    height: 10
+                                    radius: 5
+                                    color: modelData.color
+                                }
+                                Label {
+                                    text: modelData.frequencyHz.toFixed(0) + " Hz"
+                                    color: modelData.color
+                                    font.weight: Font.Bold
+                                }
+                                Item { Layout.fillWidth: true }
+                                Label {
+                                    text: modelData.active ? "ACTIVE" : "HOLD"
+                                    color: modelData.active ? modelData.color : "#718091"
+                                    font.pixelSize: 10
+                                }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Label {
+                                    visible: modelData.text.length > 0
+                                    Layout.fillWidth: true
+                                    text: modelData.text
+                                    color: "#edf3f8"
+                                    font.pixelSize: 17
+                                    elide: Text.ElideLeft
+                                }
+                                Label {
+                                    visible: modelData.provisionalText.length > 0
+                                             || modelData.elements.length > 0
+                                    text: modelData.provisionalText.length > 0
+                                          ? modelData.provisionalText
+                                          : modelData.elements
+                                    color: "#e3ad55"
+                                    font.pixelSize: 17
+                                    font.italic: true
+                                }
+                                Label {
+                                    visible: modelData.text.length === 0
+                                             && modelData.provisionalText.length === 0
+                                             && modelData.elements.length === 0
+                                    Layout.fillWidth: true
+                                    text: "Listening…"
+                                    color: "#8290a0"
+                                    font.pixelSize: 15
+                                    font.italic: true
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: modelData.wpm.toFixed(1) + " WPM  •  "
+                                      + modelData.snrDb.toFixed(1) + " dB SNR  •  "
+                                      + (modelData.confidence * 100).toFixed(0)
+                                        + "% confidence  •  "
+                                      + (modelData.keyProbability * 100).toFixed(0)
+                                        + "% key"
+                                color: "#8290a0"
+                                font.pixelSize: 10
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
                 }
             }
         }

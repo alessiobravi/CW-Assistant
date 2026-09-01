@@ -8,8 +8,8 @@ SWL mode, discover serial ports without opening them, identify online radios
 through a supported integration, save radio/keying/display settings, open the Windows
 frequency-provider configuration, monitor a CAT4OM radio, process a selected
 live sound-card input, and replay a WAV recording through the real spectrum and
-waterfall, and run a first receive-only adaptive decoder on the selected CW
-guide slice. Multichannel/weak-signal decoding, direct keying output, logging
+waterfall, and run a receive-only decoder across the complete processed
+passband. Narrowband weak-signal refinement, direct keying output, logging
 connection, SDR capture, and remote-station runtime remain under implementation.
 A saved profile does not arm or key a transmitter.
 
@@ -72,11 +72,12 @@ duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subjec
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
 it only when a steadier but less time-sharp display is more useful.
 
-Enable **CW guide** to draw red boundaries around the desired receive tone. The
+Enable **Visual guide** to draw red boundaries around the desired receive tone. The
 default is centered at 700 Hz with a 200 Hz width; both values update in real
 time and are stored per profile. The frequency labels along the lower X axis
 show where those boundaries sit in the current audio or SDR view. This guide is
-visual only and does not change receiver tuning or decoder bandwidth.
+visual only: it does not select a decoder, limit decoding, change receiver
+tuning, or change decoder bandwidth.
 
 Pointer tuning is planned, not active in this build. The defined behavior is:
 left-click a waterfall trace to move the local CW guide to it; right-click to
@@ -92,16 +93,23 @@ changes from repeatedly driving the palette yellow. A radio's own AGC may still
 change the audio level delivered by the sound card; this application does not
 yet control radio AGC through CAT.
 
-The right-hand panel now decodes the strongest tone inside the red CW guide for
-both live audio and WAV replay. It shows text, tracked tone, adaptive WPM, SNR,
-and preliminary confidence. Start with a 700 Hz center and 200 Hz width, then
-narrow the guide around the desired trace. This first receive-only decoder uses
-SNR hysteresis and adaptive dit timing; it handles letters and digits but does
-not yet provide prosigns, multichannel tracking, calibrated confidence,
-multiple-pass weak-signal recovery, or same-frequency pileup separation. Noise
-or multiple callers inside one guide may therefore produce `?` or incorrect
-text. Changing source, center, or width clears decoder state. Decoder output
-cannot arm TX, key a radio, or initiate a QSO.
+The right-hand panel scans all frequencies inside the processed audio bandwidth
+for both live audio and WAV replay. Every detected spectral peak receives a
+stable color used by both its vertical spectrum/waterfall marker and its decode
+row. Rows are ordered by audio frequency and show stable text, amber provisional
+text/elements, adaptive WPM, SNR, confidence, and key-down evidence. A keyed gap
+does not immediately discard the row; decoded tracks are retained for eight
+seconds so normal word and message gaps preserve identity.
+
+This first full-passband implementation uses FFT-bin peak tracking and an
+independent soft-evidence adaptive timing decoder per frequency. It handles
+letters, digits, common punctuation, and selected prosigns, but does not yet
+provide phase-aware narrowband filtering, calibrated confidence, multiple-pass
+weak-signal recovery, or separation of callers occupying the same frequency.
+Signals closer than about 45 Hz may therefore appear as one track, and noise or
+non-CW carriers may produce `?` or incorrect text. Changing the audio source or
+processing bandwidth clears decoder state; changing or hiding the 700 Hz visual
+guide does not. Decoder output cannot arm TX, key a radio, or initiate a QSO.
 
 ## Replay a receiver recording
 

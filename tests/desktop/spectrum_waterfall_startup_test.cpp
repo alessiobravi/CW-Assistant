@@ -62,7 +62,6 @@ int main(int argc, char* argv[]) {
   delete node;
 
   cwassistant::desktop::ReplayController decoder_controller;
-  decoder_controller.setCwDecoderSlice(700.0, 200.0);
   cwassistant::desktop::SpectrumFrame decoder_frame{
       .bins_dbfs = QVector<float>(10, -100.0F),
       .sequence = 0,
@@ -82,8 +81,12 @@ int main(int argc, char* argv[]) {
   feed_decoder(false, 100);
   feed_decoder(true, 60);
   feed_decoder(false, 200);
-  if (!decoder_controller.decodedText().contains(QLatin1Char('E')) ||
-      decoder_controller.decoderSnrDb() > 0.1) {
+  const auto channels = decoder_controller.decoderChannels();
+  if (channels.size() != 1 ||
+      !channels.front().toMap().value(QStringLiteral("text"))
+          .toString().contains(QLatin1Char('E')) ||
+      channels.front().toMap().value(QStringLiteral("snrDb")).toDouble() >
+          0.1) {
     return 8;
   }
   return 0;

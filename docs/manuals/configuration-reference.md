@@ -87,16 +87,19 @@ cost. Resizing and initial fill retain the chosen duration. Capture timestamp
 gaps are rendered as dark rows instead of being compressed. Set **Avg** to 1–2
 for the sharpest element boundaries; higher averaging deliberately smooths time.
 
-**CW guide** draws red boundaries around the selected audio slice over both the
-spectrum and history. It defaults to a 700 Hz center and 200 Hz width. Change
-the tone and width immediately below the graph to match the receiver pitch and
-filter. The first receive-only decoder uses this same center/width slice but the
-guide's visibility switch changes only the red overlay. It does not retune the
-radio. Seven X-axis labels show the actual displayed audio or RF frequency.
+**Visual guide** draws red boundaries over the spectrum and history. It defaults
+to a 700 Hz center and 200 Hz width and can be adjusted to match the receiver's
+preferred sidetone. It does not select a decoder, limit channel detection,
+change decoder bandwidth, or retune the radio. Seven X-axis labels show the
+actual displayed audio or RF frequency.
 
-The decoder currently uses fixed 6 dB key-on and 3 dB key-off SNR hysteresis,
-starts timing at 20 WPM, and adapts from measured elements. These thresholds
-will become profile controls after replay benchmarks establish safe ranges.
+The decoder scans the complete processed bandwidth selected under **Signal**.
+It acquires local spectral peaks, assigns each tracked frequency a stable color,
+and maintains separate soft key evidence, timing, provisional text, stable text,
+WPM, SNR, and confidence. Up to 24 tracks are retained; nearby peaks inside the
+initial 45 Hz separation are treated as one track, and decoded tracks currently
+remain visible for eight seconds after their signal disappears. These starting
+limits are not yet exposed as profile controls.
 
 ## Station page
 

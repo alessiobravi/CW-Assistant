@@ -295,11 +295,11 @@ Pane {
                     SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
                     Label { text: "Waterfall history (seconds)" }
                     SpinBox { from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onValueModified: appSettings.waterfallTimeSpanSeconds = value }
-                    Label { text: "CW frequency guide" }
-                    CheckBox { text: "Show red passband boundaries"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
-                    Label { text: "CW guide center tone (Hz)" }
+                    Label { text: "Visual CW reference" }
+                    CheckBox { text: "Show red visual boundaries"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
+                    Label { text: "Visual center tone (Hz)" }
                     SpinBox { editable: true; from: 0; to: 96000; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideCenterHz = value }
-                    Label { text: "CW guide width (Hz)" }
+                    Label { text: "Visual width (Hz)" }
                     SpinBox { editable: true; from: 10; to: 5000; value: appSettings.cwGuideWidthHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideWidthHz = value }
                     Label { text: "Display level range" }
                     CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }

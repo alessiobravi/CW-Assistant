@@ -12,8 +12,10 @@ native live audio-input discovery/capture through a bounded queue and dedicated
 DSP worker. WAV replay remains a separate deterministic source for the real 2D
 spectrum and waterfall. Immediate controls below the spectrum provide signal
 gain/bandwidth, constant-time high-resolution history, a CW frequency guide,
-and stable noise-suppressed display tuning. A first receive-only adaptive timing
-decoder shows live text for the configured CW guide slice; multichannel and
+and stable noise-suppressed display tuning. A receive-only full-passband channel
+bank detects multiple spectral peaks, maintains independent adaptive timing
+state for each frequency, and shows color-linked spectrum markers and decode
+rows. The 700 Hz guide is visual only. Narrowband phase-aware tracking and
 multiple-pass weak-signal decoding remain under active implementation.
 
 ## Planned capabilities
@@ -25,7 +27,8 @@ multiple-pass weak-signal decoding remain under active implementation.
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
 - Live-source and WAV-replay spectrum with scrolling waterfall
-- Detection and stateful decoding of multiple simultaneous CW channels
+- Phase-aware narrowband refinement of the implemented stateful full-passband
+  multi-channel decoder
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
 - Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,
   palettes, overlays, and delayed callsign detail cards
@@ -73,8 +76,8 @@ matrix and core tests pass:
 - [macOS Sonoma 14+ Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
 
 See the repository [binary index](binaries/README.md) for checksums, the
-machine-readable manifest, and installation notes. GitHub authentication is
-required while this repository is private.
+machine-readable manifest, and installation notes. The public release assets
+can be downloaded without GitHub authentication.
 
 ## Build the current core
 

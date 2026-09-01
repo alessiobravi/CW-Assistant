@@ -78,12 +78,20 @@ distinct from acoustic output. See
 [High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
 resource limits, training corpus, and benchmark gates.
 
-The first delivered M2 increment is intentionally smaller: the desktop selects
-the strongest spectrum bin inside the configured CW guide, estimates noise from
-outside that slice, and feeds SNR observations into a dependency-free
-hysteretic adaptive-dit decoder. It publishes letters/digits, WPM, tone, SNR,
-and preliminary confidence. This receive-only baseline is the measured fallback
-that the soft-evidence and multiple-pass stages will replace or augment.
+The delivered M2 baseline now scans the complete processed FFT passband for
+local peaks, suppresses duplicate nearby candidates, and maintains a bounded
+independent state object for every tracked frequency. Each track converts SNR
+to smoothed key-down probability, adapts dit timing, separates provisional from
+stable text, and publishes letters, digits, punctuation/prosigns, WPM, SNR, and
+an evidence-derived confidence score. Stable track IDs select one of 24 shared
+UI colors, and silent tracks expire after a bounded hold. The 700 Hz guide is a
+rendering reference only and is absent from the decoder data path.
+
+This magnitude-bin channel bank is the dependency-free measured fallback. It
+does not yet provide sub-bin phase tracking, a narrowband mixer/filter per
+track, calibrated confidence, delayed multi-pass refinement, or co-channel
+source separation; those stages replace or augment its evidence without
+changing the UI track contract.
 
 ## Graphical rendering
 

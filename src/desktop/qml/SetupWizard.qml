@@ -261,7 +261,7 @@ Dialog {
                 SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
                 Label { text: "Waterfall history (seconds)" }
                 SpinBox { from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onValueModified: appSettings.waterfallTimeSpanSeconds = value }
-                Label { text: "CW tone guide" }
+                Label { text: "Visual CW reference" }
                 RowLayout {
                     CheckBox { text: "Show"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
                     SpinBox { editable: true; from: 0; to: 96000; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideCenterHz = value }

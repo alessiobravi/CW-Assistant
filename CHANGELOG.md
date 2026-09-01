@@ -8,10 +8,19 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
-- A first receive-only live CW decoder for the configured guide slice, with
-  SNR hysteresis, adaptive dit timing/WPM, Morse letters and digits, live text,
-  tracked tone/SNR/confidence, deterministic timing tests, and automatic reset
-  on source or slice changes. Decoder output cannot initiate transmission.
+- Full-processed-passband CW detection with a bounded 24-track channel bank,
+  automatic peak association, independent decoder/timing state per frequency,
+  stable track IDs, bounded silent-track expiry, and distinct shared colors for
+  spectrum/waterfall markers and frequency-sliced decode rows. The configurable
+  700 Hz boundaries are now explicitly visual-only and absent from decoding;
+  the redundant aggregate listening/key-down label was removed from the live
+  control bar.
+- Soft SNR-to-key probability, smoothed hysteretic transitions, likelihood-
+  weighted timing adaptation, common punctuation/prosigns, and separate amber
+  provisional versus append-only stable decoder text.
+- A deterministic decoder accuracy/resource benchmark reporting CER, no-CW
+  false output, processed duration, throughput/real-time factor, and fixed state
+  size across slow, weak, jittered, and faster replay cases.
 - Backlog/requirements for left-click local CW-slice selection, distinct
   right-click RX CAT centering, actual-RF anchored decoded tracks, in-place
   callsign refinement, loss/reacquisition, and synchronized overlay/list expiry.

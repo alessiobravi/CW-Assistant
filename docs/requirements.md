@@ -89,7 +89,8 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Generate genuine waterfall timing frames with bounded overlapping analysis;
   never duplicate a spectrum row merely to satisfy a requested line rate.
 - Provide a toggleable, configurable CW center/passband guide and labeled
-  frequency ticks on the X axis.
+  frequency ticks on the X axis. The guide is a visual reference only and must
+  never select, constrain, reset, or otherwise drive decoding.
   Configure automatic/manual range, lower and upper dB bounds, averaging, peak
   hold/decay, palette, color gain, black level, contrast/gamma, grid, label
   density/font, spectrum height, zoom, and pan. Invalid combinations are
@@ -103,8 +104,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   explicit non-goals; rendering features must improve operation, diagnostics,
   accessibility, or performance.
 - Provide an expandable operator workspace rather than a fixed decoder layout:
-  spectrum, waterfall, band map, active calls, selected decoder, watch list,
-  QSO workflow, logging, and diagnostics are independent dockable panels.
+  spectrum, waterfall, band map, active calls, frequency-sliced decoder list,
+  watch list, QSO workflow, logging, and diagnostics are independent dockable
+  panels.
 - Track calls across frequency changes and inactivity, show CQ/running/searching
   state, and color decoded tokens by semantic type and confidence using an
   accessible palette.
