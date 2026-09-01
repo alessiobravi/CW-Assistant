@@ -95,6 +95,15 @@ download/install is intentionally not enabled until the MSI, update manifest,
 and channel metadata are cryptographically signed. For now, update by
 downloading and running the newer MSI from the same continuous release page.
 
+### Build version identity
+
+Every artifact from one workflow uses the same `major.minor.revision` value.
+For continuous builds, `revision` is the GitHub Actions run number. The value in
+**Settings → About** therefore matches the Windows executable and MSI, macOS
+bundle, Debian package, installed `share/doc/cw-assistant/VERSION` file, and the
+`version` field injected into `latest.json`. A default local configuration uses
+revision `0`.
+
 ## macOS Sonoma and newer
 
 Both macOS archives contain a self-contained `.app` bundle with the native
@@ -117,7 +126,7 @@ artifact, extract the artifact archive if necessary, then install with APT so
 dependency errors are reported clearly:
 
 ```sh
-sudo apt install ./cw-assistant_0.1.0-1_amd64.deb
+sudo apt install ./cw-assistant_0.1.245-1_amd64.deb
 ```
 
 The stable continuous-release filename is

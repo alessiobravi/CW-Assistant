@@ -168,6 +168,11 @@ the **Author Website** button opens [https://iu0lfq.it/](https://iu0lfq.it/) in
 the system browser. The application, taskbar/dock entry, and installed shortcuts
 use the same Morse-key dot/dash mark.
 
+The displayed version is the same `major.minor.revision` value embedded in the
+native installer/package and application metadata. Continuous builds use the
+GitHub workflow run number as the revision, so a hosted build may show, for
+example, `0.1.245`; a default local development build shows `0.1.0`.
+
 ## First launch
 
 1. Start `cw-assistant-desktop`.

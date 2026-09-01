@@ -377,7 +377,11 @@ Pane {
                     anchors.margins: 22
                     spacing: 14
                     Label { text: "About CW Assistant"; font.pixelSize: 22; font.weight: Font.DemiBold }
-                    Label { text: "Version " + Qt.application.version; color: "#91a0b1" }
+                    Label {
+                        objectName: "aboutVersionLabel"
+                        text: "Version " + Qt.application.version
+                        color: "#91a0b1"
+                    }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#2b3541" }
                     Label { text: "Author"; color: "#8290a0" }
                     Label { text: "Alessio Bravi (IU0LFQ / AD2FC)"; font.pixelSize: 17; font.weight: Font.Medium }

@@ -24,8 +24,8 @@ set_target_properties(cw-assistant-desktop PROPERTIES
   MACOSX_BUNDLE TRUE
   MACOSX_BUNDLE_BUNDLE_NAME "CW Assistant"
   MACOSX_BUNDLE_GUI_IDENTIFIER "it.iu0lfq.CWAssistant"
-  MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
-  MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+  MACOSX_BUNDLE_BUNDLE_VERSION "${CWA_BUILD_VERSION}"
+  MACOSX_BUNDLE_SHORT_VERSION_STRING "${CWA_BUILD_VERSION}"
   MACOSX_BUNDLE_ICON_FILE "cw-assistant.icns"
   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in"
   WIN32_EXECUTABLE TRUE
@@ -38,8 +38,10 @@ qt_add_resources(cw-assistant-desktop "cwa_application_icons"
   FILES packaging/cw-assistant.png)
 
 if(WIN32)
+  configure_file(packaging/cw-assistant.rc.in
+    "${CMAKE_CURRENT_BINARY_DIR}/cw-assistant.rc" @ONLY)
   target_sources(cw-assistant-desktop PRIVATE
-    packaging/cw-assistant.rc
+    "${CMAKE_CURRENT_BINARY_DIR}/cw-assistant.rc"
     packaging/cw-assistant.ico)
 endif()
 
@@ -77,7 +79,7 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::WebSockets
 )
 target_compile_definitions(cw-assistant-desktop PRIVATE
-  CWA_VERSION="${PROJECT_VERSION}")
+  CWA_VERSION="${CWA_BUILD_VERSION}")
 
 if(CWA_BUILD_TESTS)
   qt_add_executable(cwa_live_audio_pipeline_test
@@ -151,6 +153,9 @@ install(FILES ${PROJECT_SOURCE_DIR}/LICENSE
   RENAME copyright)
 install(FILES ${PROJECT_SOURCE_DIR}/docs/licensing.md
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant)
+install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant
+  RENAME VERSION)
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/docs/manuals/
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/manuals
   FILES_MATCHING PATTERN "*.md")

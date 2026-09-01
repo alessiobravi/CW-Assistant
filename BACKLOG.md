@@ -61,6 +61,9 @@ CAT4OM state now produce RF labels only when the complete evidence chain is
 valid; every other source remains explicitly AF.
 The first hosted build correction normalized Qt's platform-sized session-list
 index before clamping so GCC, Apple Clang, and MSVC share the same bound.
+Versioning now derives application, About, native package/bundle metadata,
+network identity, installed version record, and release manifest from one
+effective CMake value; the hosted workflow revision is the patch component.
 
 ## P0 — project decisions and safety
 
@@ -81,6 +84,7 @@ index before clamping so GCC, Apple Clang, and MSVC share the same bound.
 | PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. |
 | CI-001 | done | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests pass on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish artifacts, stable continuous-release assets/checksums, and a verified-commit tag. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
+| VER-001 | done | Keep application and package versions consistent | One effective `major.minor.revision` value drives About, Qt identity, Windows executable/MSI metadata, macOS bundle metadata, Debian package, installed VERSION, CAT4OM identity, and the continuous manifest; hosted QML smoke verifies the rendered value. |
 | AUDIO-001 | active | Add native audio device discovery and capture | Qt Multimedia discovery, hot-plug/default/unavailable state, per-profile selection, permission-gated live capture, PCM conversion/downmix, allocation-free bounded capture queue, DSP worker, overrun count, DC rejection, bounded manual/automatic gain, selectable/automatic bandwidth, and deterministic pipeline tests are implemented; add operator channel/rate/block controls, level meter, signal-driven bandwidth recommendation, disconnect/reconnect soak tests, and clean-machine hardware validation. |
 | REPLAY-001 | active | Add WAV replay source and deterministic clock | Dependency-free PCM/float parsing, deterministic timestamps/restart, downmix, paced UI selection/play/pause/stop, and core tests pass; hash manifests, seek, looping, and repeat-run integration remain. |
 | DSP-001 | active | Implement windowing, FFT, and spectral averaging | Hann-windowed radix-2 audio/IQ analysis, dBFS normalization, averaging, frequency mapping, and deterministic tone tests pass; golden fixtures, overlap, calibration, and performance benchmarks remain. |

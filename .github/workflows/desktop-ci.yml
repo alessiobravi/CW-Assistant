@@ -116,14 +116,25 @@ jobs:
         id: verify_stage
         shell: bash
         run: |
+          test -s build/cw-assistant-version.txt
+          test -s stage/share/doc/cw-assistant/VERSION
+          cmp build/cw-assistant-version.txt stage/share/doc/cw-assistant/VERSION
+          build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
           case "${RUNNER_OS}" in
             Windows)
               test -f stage/bin/cw-assistant-desktop.exe
+              executable_version="$(powershell.exe -NoProfile -Command \
+                "(Get-Item 'stage/bin/cw-assistant-desktop.exe').VersionInfo.ProductVersion" \
+                | tr -d '\r\n')"
+              test "${executable_version}" = "${build_version}"
               ;;
             macOS)
               app_binary=stage/cw-assistant-desktop.app/Contents/MacOS/cw-assistant-desktop
               test -x "${app_binary}"
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
+              plist=stage/cw-assistant-desktop.app/Contents/Info.plist
+              test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")" = "${build_version}"
+              test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")" = "${build_version}"
               ;;
             Linux)
               test -x stage/bin/cw-assistant-desktop
@@ -175,14 +186,22 @@ jobs:
       - name: Build Debian/Ubuntu package
         id: build_deb
         if: matrix.debian_package
-        run: cpack --config build/CPackConfig.cmake -G DEB -B packages
+        run: |
+          cpack --config build/CPackConfig.cmake -G DEB -B packages
+          build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
+          deb_packages=(packages/*.deb)
+          test "${#deb_packages[@]}" -eq 1
+          test "$(dpkg-deb -f "${deb_packages[0]}" Version)" = "${build_version}-1"
+          cmake -E copy build/cw-assistant-version.txt packages/cw-assistant-version.txt
       - name: Publish Debian/Ubuntu package
         id: upload_deb
         if: matrix.debian_package
         uses: actions/upload-artifact@v7
         with:
           name: cw-assistant-debian-ubuntu-x64
-          path: packages/*.deb
+          path: |
+            packages/*.deb
+            packages/cw-assistant-version.txt
           if-no-files-found: error
           retention-days: 14
       - name: Publish SSH-queryable job result
@@ -265,7 +284,19 @@ jobs:
             exit 1
           fi
           mv "${windows_installers[0]}" release-assets/cw-assistant-windows11-x64.msi
-          cp binaries/latest.json release-assets/latest.json
+          if [[ ! -f release-assets/cw-assistant-version.txt ]]; then
+            echo "The canonical build-version file is missing." >&2
+            exit 1
+          fi
+          build_version="$(tr -d '\r\n' < release-assets/cw-assistant-version.txt)"
+          if [[ ! "${build_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Invalid canonical build version: ${build_version}" >&2
+            exit 1
+          fi
+          jq --arg version "${build_version}" \
+            '.version = $version' binaries/latest.json \
+            > release-assets/latest.json
+          rm release-assets/cw-assistant-version.txt
           (
             cd release-assets
             sha256sum cw-assistant-* | sort -k2 > SHA256SUMS

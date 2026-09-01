@@ -8,6 +8,12 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- One canonical effective build version across the About pane, Qt application
+  identity, `--version`, Windows executable metadata and MSI, macOS bundle,
+  Debian package, installed `VERSION` file, CAT4OM handshake, and continuous
+  release manifest. Hosted builds use `major.minor.workflow-run`; local builds
+  retain revision `0`. The QML startup smoke test now verifies the rendered
+  About value against the application identity.
 - Operator-selected decoded sessions: every detected signal keeps decoding in
   the background, while clicking its colored spectrum/waterfall marker opens a
   session card. Cards can be closed without stopping DSP, reopened from the

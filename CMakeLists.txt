@@ -8,8 +8,19 @@ endif()
 project(CWAssistant VERSION 0.1.0 LANGUAGES CXX
   HOMEPAGE_URL "https://github.com/alessiobravi/CW-Assistant")
 
-set(CWA_PACKAGE_REVISION "0" CACHE STRING
+set(CWA_PACKAGE_REVISION "${PROJECT_VERSION_PATCH}" CACHE STRING
   "Numeric hosted-build revision used by upgrade-capable packages")
+if(NOT CWA_PACKAGE_REVISION MATCHES "^[0-9]+$")
+  message(FATAL_ERROR "CWA_PACKAGE_REVISION must contain only digits")
+endif()
+if(CWA_PACKAGE_REVISION GREATER 65535)
+  message(FATAL_ERROR "CWA_PACKAGE_REVISION exceeds the MSI build limit")
+endif()
+set(CWA_BUILD_VERSION
+  "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${CWA_PACKAGE_REVISION}")
+file(WRITE "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
+  "${CWA_BUILD_VERSION}\n")
+message(STATUS "CW Assistant effective build version: ${CWA_BUILD_VERSION}")
 
 option(CWA_BUILD_APP "Build the command-line development host" ON)
 option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
@@ -39,6 +50,7 @@ endif()
 
 if(CWA_BUILD_DESKTOP)
   set(CPACK_PACKAGE_NAME "cw-assistant")
+  set(CPACK_PACKAGE_VERSION "${CWA_BUILD_VERSION}")
   set(CPACK_PACKAGE_VENDOR "Alessio Bravi (IU0LFQ / AD2FC)")
   set(CPACK_PACKAGE_CONTACT "Alessio Bravi <alessio@bravi.org>")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
@@ -62,14 +74,6 @@ if(CWA_BUILD_DESKTOP)
     configure_file("${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
       "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt" COPYONLY)
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_BINARY_DIR}/LICENSE.txt")
-    if(NOT CWA_PACKAGE_REVISION MATCHES "^[0-9]+$")
-      message(FATAL_ERROR "CWA_PACKAGE_REVISION must contain only digits")
-    endif()
-    if(CWA_PACKAGE_REVISION GREATER 65535)
-      message(FATAL_ERROR "CWA_PACKAGE_REVISION exceeds the MSI build limit")
-    endif()
-    set(CPACK_PACKAGE_VERSION
-        "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${CWA_PACKAGE_REVISION}")
     set(CPACK_WIX_VERSION 3)
     set(CPACK_WIX_ARCHITECTURE x64)
     set(CPACK_WIX_INSTALL_SCOPE perMachine)

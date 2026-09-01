@@ -133,6 +133,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("liveCwGuideCheck"));
       auto* decoder_channel_list = root_object->findChild<QQuickItem*>(
           QStringLiteral("decoderChannelList"));
+      auto* about_version_label = root_object->findChild<QQuickItem*>(
+          QStringLiteral("aboutVersionLabel"));
       if (next_button == nullptr || !next_button->isVisible() ||
           next_button->width() < 1.0 || next_button->height() < 1.0 ||
           next_button->window() == nullptr ||
@@ -147,6 +149,10 @@ int main(int argc, char* argv[]) {
           live_levels_check == nullptr || live_noise_check == nullptr ||
           live_cw_guide_check == nullptr ||
           decoder_channel_list == nullptr ||
+          about_version_label == nullptr ||
+          about_version_label->property("text").toString() !=
+              QStringLiteral("Version %1").arg(
+                  QCoreApplication::applicationVersion()) ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {
         QCoreApplication::exit(EXIT_FAILURE);
