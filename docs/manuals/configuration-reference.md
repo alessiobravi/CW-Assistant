@@ -100,7 +100,8 @@ WPM, SNR, and confidence. Key evidence is calculated from original input samples
 through a phase-continuous 120 Hz narrowband path at 500 updates/second; **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
-are treated as one track, and decoded tracks currently remain visible for eight
+are treated as one track, numerical peaks more than 96 dB below the strongest
+current bin are excluded, and decoded tracks currently remain visible for eight
 seconds after their signal disappears. Decoder filter width/evidence rate and
 these other starting limits are not yet exposed as profile controls.
 

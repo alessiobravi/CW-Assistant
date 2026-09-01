@@ -14,7 +14,8 @@ All notable changes to CW Assistant are recorded here. The format follows
   references before timing decode. Spectrum averaging and display gain remain
   available for visualization/candidate discovery but can no longer directly
   assert key-down. Deterministic tests cover simultaneous independent tones,
-  adjacent-tone rejection, and the threaded live-audio decoder path.
+  adjacent-tone rejection, the threaded live-audio decoder path, and suppression
+  of numerical FFT-floor peaks outside the initial 96 dB acquisition range.
 - Full-processed-passband CW detection with a bounded 24-track channel bank,
   automatic peak association, independent decoder/timing state per frequency,
   stable track IDs, bounded silent-track expiry, and distinct shared colors for

@@ -16,6 +16,7 @@ namespace cwassistant::core {
 struct CwChannelBankConfig {
   float acquisition_snr_db{7.0F};
   float retention_snr_db{2.5F};
+  float detection_dynamic_range_db{96.0F};
   double minimum_separation_hz{45.0};
   double tracking_tolerance_hz{70.0};
   double empty_track_retention_seconds{2.0};

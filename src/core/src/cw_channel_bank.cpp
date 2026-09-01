@@ -18,6 +18,8 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
       std::clamp(config_.acquisition_snr_db, 3.0F, 30.0F);
   config_.retention_snr_db = std::clamp(
       config_.retention_snr_db, 0.0F, config_.acquisition_snr_db);
+  config_.detection_dynamic_range_db =
+      std::clamp(config_.detection_dynamic_range_db, 40.0F, 140.0F);
   config_.minimum_separation_hz =
       std::clamp(config_.minimum_separation_hz, 5.0, 500.0);
   config_.tracking_tolerance_hz = std::clamp(
@@ -60,7 +62,12 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   const double bin_width_hz =
       (upper_frequency_hz - lower_frequency_hz) /
       static_cast<double>(bins_dbfs.size() - 1);
-  const float noise_dbfs = estimateNoise(bins_dbfs);
+  const float measured_noise_dbfs = estimateNoise(bins_dbfs);
+  const float strongest_dbfs = *std::max_element(
+      bins_dbfs.begin(), bins_dbfs.end());
+  const float noise_dbfs = std::max(
+      measured_noise_dbfs,
+      strongest_dbfs - config_.detection_dynamic_range_db);
   std::vector<Candidate> candidates;
   candidates.reserve(std::min<std::size_t>(bins_dbfs.size(), 64));
   for (std::size_t bin = 1; bin + 1 < bins_dbfs.size(); ++bin) {

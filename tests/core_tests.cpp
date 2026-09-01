@@ -241,6 +241,40 @@ void test_cw_channel_bank() {
              rejection_bank.channels().front().text.empty() &&
              !rejection_bank.channels().front().key_down,
          "raw narrowband evidence rejects an adjacent non-tracked tone");
+
+  cwassistant::core::SpectrumAnalyzer pipeline_analyzer({
+      .fft_size = 2'048,
+      .averaging_frames = 1,
+      .frame_rate_hz = 60,
+      .audio_dc_rejection = true,
+      .audio_automatic_gain = false,
+      .audio_gain_db = 0.0F,
+      .audio_automatic_gain_target_dbfs = -12.0F,
+      .audio_automatic_bandwidth = false,
+      .audio_lower_frequency_hz = 0.0,
+      .audio_upper_frequency_hz = 24'000.0,
+  });
+  CwChannelBank pipeline_bank;
+  cwassistant::core::RealtimeSampleBlock pipeline_block;
+  pipeline_block.stream.sample_rate_hz = 48'000.0;
+  pipeline_block.sample_count = 2'048;
+  for (std::size_t index = 0; index < pipeline_block.sample_count; ++index) {
+    const float phase = 2.0F * std::numbers::pi_v<float> * 1'000.0F *
+                        static_cast<float>(index) / 48'000.0F;
+    pipeline_block.samples[index] = {0.5F * std::sin(phase), 0.0F};
+  }
+  const auto pipeline_frames = pipeline_analyzer.process(pipeline_block);
+  for (const auto& frame : pipeline_frames) {
+    static_cast<void>(pipeline_bank.updateSpectrum(
+        frame.timestamp_ns, frame.lower_frequency_hz,
+        frame.upper_frequency_hz, frame.bins_dbfs));
+  }
+  static_cast<void>(pipeline_bank.processSamples(pipeline_block));
+  expect(pipeline_frames.size() == 1 && pipeline_bank.channels().size() == 1 &&
+             std::abs(pipeline_bank.channels().front().frequency_hz -
+                      1'000.0) < 30.0 &&
+             pipeline_bank.channels().front().snr_db > 6.0F,
+         "shared FFT discovery feeds raw narrowband channel evidence");
 }
 
 void test_transmit_guard() {

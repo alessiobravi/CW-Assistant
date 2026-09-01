@@ -29,6 +29,9 @@ These rules apply to every contributor and coding agent working in this tree.
   failure or cancellation, correct it, push the fix, and repeat until all jobs
   pass. If Actions cannot be queried, report that verification gap explicitly
   and do not claim the work is fully verified.
+- When a workflow run fails, keep the exact same implementation title on every
+  corrective rerun and continue correcting/re-running it until all required
+  jobs and the publication stage are green.
 - Do not weaken, skip, or conditionally bypass a platform failure merely to make
   CI green. Record genuine platform exclusions in the requirements and backlog.
 

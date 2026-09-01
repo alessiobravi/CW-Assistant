@@ -81,7 +81,8 @@ resource limits, training corpus, and benchmark gates.
 The delivered M2 baseline scans the complete processed FFT passband for local
 peaks, suppresses duplicate nearby candidates, and maintains a bounded
 independent state object for every tracked frequency. Candidate discovery uses
-the shared display FFT, then each track consumes the original audio block using
+the shared display FFT and rejects numerical-floor peaks outside an initial
+96 dB range below its strongest bin, then each track consumes the original audio block using
 a phase-continuous complex mixer, three cascaded low-pass stages with an initial
 120 Hz width, adjacent-band noise references, and 500 Hz evidence updates. That
 raw narrowband SNR drives smoothed key probability and adaptive timing; display
