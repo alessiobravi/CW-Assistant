@@ -27,6 +27,9 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("id"),
                 QVariant::fromValue<qulonglong>(channel.id));
     item.insert(QStringLiteral("frequencyHz"), channel.frequency_hz);
+    item.insert(QStringLiteral("driftHzPerSecond"),
+                channel.drift_hz_per_second);
+    item.insert(QStringLiteral("filterWidthHz"), channel.filter_width_hz);
     item.insert(QStringLiteral("snrDb"), channel.snr_db);
     item.insert(QStringLiteral("wpm"), channel.wpm);
     item.insert(QStringLiteral("confidence"), channel.confidence);
@@ -40,6 +43,8 @@ QVariantList decoderChannelModel(
                 QString::fromStdString(channel.provisional_text));
     item.insert(QStringLiteral("elements"),
                 QString::fromStdString(channel.pending_elements));
+    item.insert(QStringLiteral("callsign"),
+                QString::fromStdString(channel.callsign));
     item.insert(QStringLiteral("color"), QString::fromLatin1(
         kChannelColors[channel.color_index % kChannelColors.size()]));
     model.push_back(item);

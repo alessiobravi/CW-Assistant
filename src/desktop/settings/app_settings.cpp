@@ -8,6 +8,7 @@
 #include <QtGlobal>
 
 #include <algorithm>
+#include <cmath>
 
 #ifdef Q_OS_WIN
 #include <Windows.h>
@@ -16,6 +17,7 @@
 
 #include "cwassistant/core/reference_rig_profiles.hpp"
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/frequency_plan.hpp"
 #include "../radio/cat4om_client.hpp"
 
 namespace cwassistant::desktop {
@@ -39,6 +41,32 @@ bool automation_property(IDispatch* object, const wchar_t* name,
   return SUCCEEDED(object->Invoke(property_id, IID_NULL, LOCALE_USER_DEFAULT,
                                   DISPATCH_PROPERTYGET, &parameters, value,
                                   nullptr, nullptr));
+}
+
+std::optional<std::uint64_t> automation_frequency(const VARIANT& value) {
+  switch (value.vt) {
+    case VT_I4:
+    case VT_INT:
+      return value.lVal > 0
+          ? std::optional<std::uint64_t>(value.lVal) : std::nullopt;
+    case VT_UI4:
+    case VT_UINT:
+      return value.ulVal > 0
+          ? std::optional<std::uint64_t>(value.ulVal) : std::nullopt;
+    case VT_I8:
+      return value.llVal > 0
+          ? std::optional<std::uint64_t>(value.llVal) : std::nullopt;
+    case VT_UI8:
+      return value.ullVal > 0
+          ? std::optional<std::uint64_t>(value.ullVal) : std::nullopt;
+    case VT_R8:
+      return value.dblVal > 0.0 && std::isfinite(value.dblVal)
+          ? std::optional<std::uint64_t>(
+                static_cast<std::uint64_t>(std::llround(value.dblVal)))
+          : std::nullopt;
+    default:
+      return std::nullopt;
+  }
 }
 #endif
 
@@ -79,6 +107,13 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   });
   connect(cat4om_client_.get(), &Cat4OmClient::radioStateChanged, this,
           &AppSettings::cat4omChanged);
+  radio_frequency_timer_.setInterval(200);
+  connect(&radio_frequency_timer_, &QTimer::timeout, this,
+          &AppSettings::refreshControlledFrequency);
+  connect(this, &AppSettings::settingsChanged, this,
+          &AppSettings::refreshControlledFrequency);
+  radio_frequency_timer_.start();
+  refreshControlledFrequency();
 }
 
 AppSettings::~AppSettings() {
@@ -142,6 +177,9 @@ double AppSettings::audioLowerFrequencyHz() const noexcept {
 }
 double AppSettings::audioUpperFrequencyHz() const noexcept {
   return audio_upper_frequency_hz_;
+}
+bool AppSettings::audioInputRadioLinked() const noexcept {
+  return audio_input_radio_linked_;
 }
 
 const QString& AppSettings::ownCallsign() const noexcept {
@@ -218,6 +256,67 @@ int AppSettings::timeoutMs() const noexcept { return timeout_ms_; }
 bool AppSettings::splitEnabled() const noexcept { return split_enabled_; }
 qint64 AppSettings::rxTransverterOffsetHz() const noexcept { return rx_transverter_offset_hz_; }
 qint64 AppSettings::txTransverterOffsetHz() const noexcept { return tx_transverter_offset_hz_; }
+int AppSettings::cwToneSidebandIndex() const noexcept {
+  return cw_tone_sideband_index_;
+}
+std::optional<std::uint64_t> AppSettings::controlledRxRfHz() const noexcept {
+  if (!radio_enabled_ || !audio_input_radio_linked_) {
+    return std::nullopt;
+  }
+  std::optional<cwassistant::core::VfoFrequencyPlan> plan;
+  if (frequency_backend_index_ == 0 && omnirig_rx_dial_hz_) {
+    plan = cwassistant::core::VfoFrequencyPlan{
+        .rx_dial_hz = *omnirig_rx_dial_hz_,
+        .tx_dial_hz = *omnirig_rx_dial_hz_,
+        .split_enabled = false};
+  } else if (frequency_backend_index_ == 2 && cat4om_client_) {
+    plan = cat4om_client_->frequencyPlan();
+  }
+  if (!plan) return std::nullopt;
+  const auto resolved = cwassistant::core::resolve_frequencies(
+      *plan, {.rx_offset_hz = rx_transverter_offset_hz_,
+              .tx_offset_hz = tx_transverter_offset_hz_});
+  return resolved ? std::optional<std::uint64_t>(resolved->rx_rf_hz)
+                  : std::nullopt;
+}
+
+void AppSettings::refreshControlledFrequency() {
+  std::optional<std::uint64_t> frequency;
+#ifdef Q_OS_WIN
+  if (radio_enabled_ && audio_input_radio_linked_ &&
+      frequency_backend_index_ == 0 && ensureOmniRigAutomation()) {
+    auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+    VARIANT rig_value;
+    const auto property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
+    if (automation_property(automation, property, &rig_value)) {
+      IDispatch* rig = rig_value.vt == VT_DISPATCH
+          ? rig_value.pdispVal : nullptr;
+      if (rig != nullptr) {
+        VARIANT status_value;
+        VARIANT frequency_value;
+        const bool has_status =
+            automation_property(rig, L"Status", &status_value);
+        const bool has_frequency =
+            automation_property(rig, L"Freq", &frequency_value);
+        const long status = has_status &&
+                                 (status_value.vt == VT_I4 ||
+                                  status_value.vt == VT_INT)
+            ? status_value.lVal : -1;
+        if (status == kOmniRigOnlineStatus && has_frequency) {
+          frequency = automation_frequency(frequency_value);
+        }
+        if (has_status) VariantClear(&status_value);
+        if (has_frequency) VariantClear(&frequency_value);
+      }
+      VariantClear(&rig_value);
+    }
+  }
+#endif
+  if (frequency != omnirig_rx_dial_hz_) {
+    omnirig_rx_dial_hz_ = frequency;
+    emit radioFrequencyChanged();
+  }
+}
 const QString& AppSettings::keyingPort() const noexcept { return keying_port_; }
 int AppSettings::pttLineIndex() const noexcept { return ptt_line_index_; }
 int AppSettings::keyLineIndex() const noexcept { return key_line_index_; }
@@ -267,6 +366,7 @@ CWA_SETTER(setAudioAutomaticGainTargetDbfs,
 CWA_SETTER(setAudioAutomaticBandwidth, audio_automatic_bandwidth_, bool)
 CWA_SETTER(setAudioLowerFrequencyHz, audio_lower_frequency_hz_, double)
 CWA_SETTER(setAudioUpperFrequencyHz, audio_upper_frequency_hz_, double)
+CWA_SETTER(setAudioInputRadioLinked, audio_input_radio_linked_, bool)
 CWA_SETTER(setRadioEnabled, radio_enabled_, bool)
 CWA_SETTER(setOmniRigSlot, omnirig_slot_, int)
 CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
@@ -283,6 +383,7 @@ CWA_SETTER(setTimeoutMs, timeout_ms_, int)
 CWA_SETTER(setSplitEnabled, split_enabled_, bool)
 CWA_SETTER(setRxTransverterOffsetHz, rx_transverter_offset_hz_, qint64)
 CWA_SETTER(setTxTransverterOffsetHz, tx_transverter_offset_hz_, qint64)
+CWA_SETTER(setCwToneSidebandIndex, cw_tone_sideband_index_, int)
 CWA_SETTER(setKeyingPort, keying_port_, const QString&)
 CWA_SETTER(setPttLineIndex, ptt_line_index_, int)
 CWA_SETTER(setKeyLineIndex, key_line_index_, int)
@@ -560,6 +661,7 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("audio/automaticBandwidth")), audio_automatic_bandwidth_);
   settings.setValue(storageKey(QStringLiteral("audio/lowerFrequencyHz")), audio_lower_frequency_hz_);
   settings.setValue(storageKey(QStringLiteral("audio/upperFrequencyHz")), audio_upper_frequency_hz_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputRadioLinked")), audio_input_radio_linked_);
   settings.setValue(storageKey(QStringLiteral("station/ownCallsign")), own_callsign_);
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
@@ -578,6 +680,7 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/splitEnabled")), split_enabled_);
   settings.setValue(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")), rx_transverter_offset_hz_);
   settings.setValue(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), tx_transverter_offset_hz_);
+  settings.setValue(storageKey(QStringLiteral("radio/cwToneSidebandIndex")), cw_tone_sideband_index_);
   settings.setValue(storageKey(QStringLiteral("keying/port")), keying_port_.trimmed());
   settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_);
@@ -631,6 +734,9 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("audio/lowerFrequencyHz")), 100.0).toDouble();
   audio_upper_frequency_hz_ =
       settings.value(storageKey(QStringLiteral("audio/upperFrequencyHz")), 3'000.0).toDouble();
+  audio_input_radio_linked_ = settings
+      .value(storageKey(QStringLiteral("audio/inputRadioLinked")), false)
+      .toBool();
   own_callsign_ =
       settings.value(storageKey(QStringLiteral("station/ownCallsign"))).toString();
   radio_enabled_ = settings
@@ -661,6 +767,10 @@ void AppSettings::load() {
   split_enabled_ = settings.value(storageKey(QStringLiteral("radio/splitEnabled")), false).toBool();
   rx_transverter_offset_hz_ = settings.value(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")), 0).toLongLong();
   tx_transverter_offset_hz_ = settings.value(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), 0).toLongLong();
+  cw_tone_sideband_index_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("radio/cwToneSidebandIndex")), 0)
+          .toInt(),
+      0, 1);
   keying_port_ = settings.value(storageKey(QStringLiteral("keying/port"))).toString();
   ptt_line_index_ = settings.value(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_).toInt();
   key_line_index_ = settings.value(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_).toInt();
@@ -817,6 +927,7 @@ void AppSettings::resetInMemorySettings() {
   audio_automatic_bandwidth_ = true;
   audio_lower_frequency_hz_ = 100.0;
   audio_upper_frequency_hz_ = 3'000.0;
+  audio_input_radio_linked_ = false;
   own_callsign_.clear();
   radio_enabled_ = false;
   reference_rig_index_ = 0;
@@ -830,6 +941,7 @@ void AppSettings::resetInMemorySettings() {
   split_enabled_ = false;
   rx_transverter_offset_hz_ = 0;
   tx_transverter_offset_hz_ = 0;
+  cw_tone_sideband_index_ = 0;
   target_fps_ = 60;
   waterfall_rate_ = 60;
   waterfall_time_span_seconds_ = 10;

@@ -22,6 +22,13 @@ The application requests 48 kHz mono float when supported and otherwise uses
 the device's preferred PCM format, converts it, and downmixes it to mono. Live
 audio and WAV replay are explicit, separate receiver modes.
 
+Enable **This input carries RX audio from the configured radio** only when that
+physical association is true. This per-profile confirmation is required before
+the receiver may combine live audio tones with a controlled radio frequency;
+leaving it disabled keeps every marker explicitly labeled **AF**. It is disabled
+by default so a system microphone or another receiver is never assigned a
+guessed RF frequency.
+
 The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under
 implementation.
@@ -94,16 +101,20 @@ change decoder bandwidth, or retune the radio. Seven X-axis labels show the
 actual displayed audio or RF frequency.
 
 The decoder scans the complete processed bandwidth selected under **Signal**.
-It acquires local spectral peaks, assigns each tracked frequency a stable color,
+It acquires sub-bin local spectral peaks, assigns each tracked frequency a stable color,
 and maintains separate soft key evidence, timing, provisional text, stable text,
 WPM, SNR, and confidence. Key evidence is calculated from original input samples
-through a phase-continuous 120 Hz narrowband path at 500 updates/second; **Avg**,
+through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
+updates/second. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
+then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
 are treated as one track, numerical peaks more than 96 dB below the strongest
 current bin are excluded, and decoded tracks currently remain visible for eight
 seconds after their signal disappears. Decoder filter width/evidence rate and
-these other starting limits are not yet exposed as profile controls.
+these other starting limits are not yet exposed as profile controls. Click a
+colored marker to open only that decoded session, close it with **×** without
+stopping decode, reopen it from the marker, and drag open cards to reorder them.
 
 Timing acquisition evaluates nine fixed starting hypotheses at 8, 12, 16, 20,
 25, 32, 40, 50, and 60 WPM. The current leader is provisional for at least 2.5
@@ -187,6 +198,13 @@ Up-converter:    RX offset +116000000
 Down-converter:  RX offset -116000000
 Cross-band SAT:  independent RX and TX offsets, split enabled
 ```
+
+**CW audio-to-RF mapping** chooses whether an audio tone above the configured
+CW pitch lies above (**CW-U / USB**) or below (**CW-L / LSB**) the radio's
+actual RX reference. Actual-RF marker labels require live capture, the explicit
+Audio-page radio association, and valid live state from Windows OmniRig or
+CAT4OM. RX transverter offset is applied first. WAV, SWL, unlinked, and unknown
+states remain labeled **AF**.
 
 ## Keying page
 

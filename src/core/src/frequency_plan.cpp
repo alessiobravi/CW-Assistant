@@ -1,6 +1,7 @@
 #include "cwassistant/core/frequency_plan.hpp"
 
 #include <array>
+#include <cmath>
 #include <iomanip>
 #include <limits>
 #include <sstream>
@@ -92,6 +93,25 @@ std::optional<ResolvedFrequencies> resolve_frequencies(
       .tx_rf_hz = *tx_rf,
       .split_enabled = plan.split_enabled,
   };
+}
+
+std::optional<std::uint64_t> resolve_audio_tone_rf(
+    const std::uint64_t reference_rf_hz, const double audio_tone_hz,
+    const double reference_tone_hz, const bool upper_sideband) noexcept {
+  if (reference_rf_hz == 0 || !std::isfinite(audio_tone_hz) ||
+      !std::isfinite(reference_tone_hz)) {
+    return std::nullopt;
+  }
+  const double difference = audio_tone_hz - reference_tone_hz;
+  if (difference <=
+          static_cast<double>(std::numeric_limits<std::int64_t>::min()) ||
+      difference >=
+          static_cast<double>(std::numeric_limits<std::int64_t>::max())) {
+    return std::nullopt;
+  }
+  const auto audio_offset = static_cast<std::int64_t>(std::llround(difference));
+  return add_signed_offset(reference_rf_hz,
+                           upper_sideband ? audio_offset : -audio_offset);
 }
 
 std::string_view adif_band_from_frequency(

@@ -8,6 +8,23 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Operator-selected decoded sessions: every detected signal keeps decoding in
+  the background, while clicking its colored spectrum/waterfall marker opens a
+  session card. Cards can be closed without stopping DSP, reopened from the
+  marker, and reordered by dragging. Conservative decoded callsign candidates
+  and frequency labels run vertically beside the matching colored trace.
+- Checked actual-RF labels for linked live radio audio. Profiles explicitly
+  confirm that the selected input belongs to the configured radio and choose
+  CW-U/USB or CW-L/LSB tone direction. Live OmniRig frequency polling on Windows
+  and pushed CAT4OM frequency state are combined with the RX transverter offset,
+  selected CW reference pitch, and decoded audio tone; WAV, SWL, unlinked, and
+  unavailable-radio states remain labeled in audio hertz.
+- Sub-bin carrier interpolation, bounded frequency/drift prediction, robust
+  two-sided local noise tracking, centered-tone rejection, and automatically
+  selected 60/120/240 Hz per-track filters. Filter selection holds the stable
+  120 Hz acquisition path before adapting, and deterministic tests cover a
+  40 Hz/s drifting tone, automatic widening, exact CW-U/CW-L RF mapping, and
+  adjacent-signal rejection.
 - Bounded multi-speed timing acquisition per frequency. Nine deterministic
   hypotheses spanning 8–60 WPM compete on accumulated timing quality and a
   conservative speed prior; the leader remains explicitly provisional during

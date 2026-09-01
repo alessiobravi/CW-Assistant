@@ -2,9 +2,11 @@
 
 #include <QFileInfo>
 #include <QCoreApplication>
+#include <QHash>
 #include <QMetaObject>
 #include <QPermissions>
 #include <QTimer>
+#include <QVariantMap>
 
 #include <algorithm>
 #include <chrono>
@@ -12,6 +14,7 @@
 #include <utility>
 
 #include "cwassistant/core/spectrum_analyzer.hpp"
+#include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
 #include "live_audio_worker.hpp"
@@ -263,6 +266,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             position_seconds_ = 0.0;
             input_overruns_ = 0;
             live_capturing_ = true;
+            rebuildDecoderModels();
             status_text_ =
                 QStringLiteral("Live RX: %1 • %2 Hz • %3 channel(s)")
                     .arg(name)
@@ -273,6 +277,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   connect(capture_worker, &LiveAudioCaptureWorker::stopped, this, [this] {
     if (live_capturing_) {
       live_capturing_ = false;
+      rebuildDecoderModels();
       status_text_ = QStringLiteral("Live audio stopped");
       emit stateChanged();
     }
@@ -280,6 +285,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   connect(capture_worker, &LiveAudioCaptureWorker::failed, this,
           [this](const QString& message) {
             live_capturing_ = false;
+            rebuildDecoderModels();
             emit liveDspStopRequested();
             setStatus(QStringLiteral("Live audio error: %1").arg(message));
           });
@@ -352,6 +358,12 @@ const QVariantList& ReplayController::decoderChannels() const noexcept {
 int ReplayController::decoderChannelCount() const noexcept {
   return static_cast<int>(decoder_channels_.size());
 }
+const QVariantList& ReplayController::decoderSessions() const noexcept {
+  return decoder_sessions_;
+}
+int ReplayController::decoderSessionCount() const noexcept {
+  return static_cast<int>(decoder_sessions_.size());
+}
 
 void ReplayController::setAveragingFrames(const int value) {
   const int clamped = std::clamp(value, 1, 32);
@@ -421,12 +433,111 @@ void ReplayController::publishSpectrumConfiguration() {
 }
 
 void ReplayController::acceptDecoderChannels(const QVariantList& channels) {
-  decoder_channels_ = channels;
+  raw_decoder_channels_ = channels;
+  rebuildDecoderModels();
+}
+
+void ReplayController::rebuildDecoderModels() {
+  decoder_channels_.clear();
+  QHash<qulonglong, QVariantMap> by_id;
+  const bool show_rf = radio_frequency_available_ && source_mode_ == 0 &&
+                       live_capturing_;
+  for (const QVariant& value : raw_decoder_channels_) {
+    QVariantMap item = value.toMap();
+    const auto id = item.value(QStringLiteral("id")).toULongLong();
+    const double audio_hz = item.value(QStringLiteral("frequencyHz")).toDouble();
+    item.insert(QStringLiteral("audioFrequencyHz"), audio_hz);
+    if (show_rf) {
+      const auto resolved_rf = cwassistant::core::resolve_audio_tone_rf(
+          radio_rx_rf_hz_, audio_hz, cw_reference_tone_hz_,
+          cw_sideband_index_ == 0);
+      if (resolved_rf) {
+        const auto rf_hz = static_cast<qulonglong>(*resolved_rf);
+        item.insert(QStringLiteral("displayFrequencyHz"),
+                    QVariant::fromValue<qulonglong>(rf_hz));
+        item.insert(QStringLiteral("frequencyKind"), QStringLiteral("RF"));
+        item.insert(QStringLiteral("frequencyLabel"),
+                    QStringLiteral("%1 Hz RF").arg(rf_hz));
+      }
+    }
+    if (!item.contains(QStringLiteral("frequencyLabel"))) {
+      item.insert(QStringLiteral("displayFrequencyHz"), audio_hz);
+      item.insert(QStringLiteral("frequencyKind"), QStringLiteral("AF"));
+      item.insert(QStringLiteral("frequencyLabel"),
+                  QStringLiteral("%1 Hz AF").arg(audio_hz, 0, 'f', 0));
+    }
+    item.insert(QStringLiteral("sessionOpen"),
+                decoder_session_order_.contains(id));
+    decoder_channels_.push_back(item);
+    by_id.insert(id, item);
+  }
+  for (auto iterator = decoder_session_order_.begin();
+       iterator != decoder_session_order_.end();) {
+    if (!by_id.contains(*iterator)) {
+      iterator = decoder_session_order_.erase(iterator);
+    } else {
+      ++iterator;
+    }
+  }
+  decoder_sessions_.clear();
+  for (const auto id : decoder_session_order_) {
+    auto item = by_id.value(id);
+    item.insert(QStringLiteral("sessionOpen"), true);
+    decoder_sessions_.push_back(item);
+  }
   emit decoderChanged();
 }
 
+void ReplayController::setRadioFrequencyContext(
+    const bool available, const qulonglong rx_rf_hz,
+    const int sideband_index, const double reference_tone_hz) {
+  const int sideband = std::clamp(sideband_index, 0, 1);
+  const double reference = std::clamp(reference_tone_hz, 0.0, 96'000.0);
+  if (radio_frequency_available_ == available &&
+      radio_rx_rf_hz_ == rx_rf_hz && cw_sideband_index_ == sideband &&
+      cw_reference_tone_hz_ == reference) {
+    return;
+  }
+  radio_frequency_available_ = available;
+  radio_rx_rf_hz_ = rx_rf_hz;
+  cw_sideband_index_ = sideband;
+  cw_reference_tone_hz_ = reference;
+  rebuildDecoderModels();
+}
+
+void ReplayController::openDecoderSession(const qulonglong channel_id) {
+  if (decoder_session_order_.contains(channel_id)) return;
+  const bool exists = std::any_of(
+      decoder_channels_.cbegin(), decoder_channels_.cend(),
+      [channel_id](const QVariant& value) {
+        return value.toMap().value(QStringLiteral("id")).toULongLong() ==
+               channel_id;
+      });
+  if (!exists) return;
+  decoder_session_order_.push_back(channel_id);
+  rebuildDecoderModels();
+}
+
+void ReplayController::closeDecoderSession(const qulonglong channel_id) {
+  if (decoder_session_order_.removeAll(channel_id) > 0) rebuildDecoderModels();
+}
+
+void ReplayController::moveDecoderSession(const qulonglong channel_id,
+                                          const int new_index) {
+  const int old_index = decoder_session_order_.indexOf(channel_id);
+  if (old_index < 0 || decoder_session_order_.size() < 2) return;
+  const int target = std::clamp(new_index, 0,
+                                decoder_session_order_.size() - 1);
+  if (old_index == target) return;
+  decoder_session_order_.move(old_index, target);
+  rebuildDecoderModels();
+}
+
 void ReplayController::resetDecoder() {
+  raw_decoder_channels_.clear();
   decoder_channels_.clear();
+  decoder_sessions_.clear();
+  decoder_session_order_.clear();
   emit decoderChanged();
 }
 
@@ -442,6 +553,7 @@ void ReplayController::setSourceMode(const int value) {
     stopLiveAudio();
   }
   source_mode_ = clamped;
+  rebuildDecoderModels();
   emit sourceReset();
   emit stateChanged();
 }
@@ -520,6 +632,7 @@ void ReplayController::stopLiveAudio() {
   emit liveDspStopRequested();
   if (live_capturing_) {
     live_capturing_ = false;
+    rebuildDecoderModels();
     setStatus(QStringLiteral("Live audio stopped"));
     emit sourceReset();
   }

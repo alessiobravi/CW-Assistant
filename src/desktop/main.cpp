@@ -56,12 +56,29 @@ int main(int argc, char* argv[]) {
         settings.audioAutomaticBandwidth(), settings.audioLowerFrequencyHz(),
         settings.audioUpperFrequencyHz(), settings.waterfallRate());
   };
+  const auto apply_radio_frequency = [&settings, &replay_controller] {
+    const auto rx_rf_hz = settings.controlledRxRfHz();
+    replay_controller.setRadioFrequencyContext(
+        rx_rf_hz.has_value(),
+        rx_rf_hz ? static_cast<qulonglong>(*rx_rf_hz) : 0,
+        settings.cwToneSidebandIndex(), settings.cwGuideCenterHz());
+  };
   apply_spectrum_processing();
+  apply_radio_frequency();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_spectrum_processing);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_radio_frequency);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
+      &replay_controller, apply_radio_frequency);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::radioFrequencyChanged,
+      &replay_controller, apply_radio_frequency);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::audioInputsChanged,
       &replay_controller, [&settings, &replay_controller] {

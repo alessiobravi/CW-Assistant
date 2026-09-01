@@ -253,9 +253,9 @@ ApplicationWindow {
                            + (channelHz - spectrumDisplay.lowerFrequencyHz)
                              / (spectrumDisplay.upperFrequencyHz
                                 - spectrumDisplay.lowerFrequencyHz)
-                             * spectrumDisplay.width
+                             * spectrumDisplay.width - width / 2
                         y: spectrumDisplay.y
-                        width: 2
+                        width: 28
                         height: spectrumDisplay.height
                         z: 5
                         Rectangle {
@@ -273,12 +273,36 @@ ApplicationWindow {
                             opacity: modelData.active ? 0.9 : 0.45
                         }
                         Label {
-                            x: 5
-                            y: 8 + (index % 4) * 19
-                            text: channelHz.toFixed(0) + " Hz"
+                            anchors.left: parent.horizontalCenter
+                            anchors.leftMargin: 7
+                            anchors.bottom: parent.bottom
+                            anchors.bottomMargin: 12
+                            transformOrigin: Item.BottomLeft
+                            rotation: -90
+                            text: (modelData.callsign.length > 0
+                                   ? modelData.callsign + "  •  " : "")
+                                  + modelData.frequencyLabel
                             color: modelData.color
                             font.pixelSize: 10
                             font.weight: Font.DemiBold
+                        }
+                        MouseArea {
+                            id: channelHitArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: replayController.openDecoderSession(modelData.id)
+                            ToolTip.visible: containsMouse
+                            ToolTip.delay: 450
+                            ToolTip.text: (modelData.callsign.length > 0
+                                           ? modelData.callsign + "\n" : "")
+                                          + modelData.frequencyLabel + "\n"
+                                          + modelData.audioFrequencyHz.toFixed(1)
+                                            + " Hz audio • "
+                                          + modelData.filterWidthHz.toFixed(0)
+                                            + " Hz filter • "
+                                          + modelData.driftHzPerSecond.toFixed(1)
+                                            + " Hz/s drift"
                         }
                     }
                 }
@@ -560,7 +584,9 @@ ApplicationWindow {
                 Label {
                     text: replayController.decoderChannelCount > 0
                           ? replayController.decoderChannelCount
-                            + " frequency slice(s) • colors match the spectrum"
+                            + " signal(s) detected • "
+                            + replayController.decoderSessionCount
+                            + " session(s) open"
                           : "Scanning the complete processed passband"
                     color: "#8290a0"
                     wrapMode: Text.WordWrap
@@ -568,10 +594,12 @@ ApplicationWindow {
                 }
                 Rectangle { Layout.fillWidth: true; height: 1; color: "#263241" }
                 Label {
-                    visible: replayController.decoderChannelCount === 0
+                    visible: replayController.decoderSessionCount === 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    text: "Listening for CW signals across the spectrum…\n\nThe red 700 Hz boundaries are a visual reference only and do not limit decoding."
+                    text: replayController.decoderChannelCount > 0
+                          ? "Click a colored signal marker in the spectrum or waterfall to open its decoded session here. Closed sessions continue decoding and can be reopened."
+                          : "Listening for CW signals across the spectrum…\n\nThe red CW boundaries are a visual reference only and do not limit decoding."
                     color: "#667789"
                     font.pixelSize: 15
                     wrapMode: Text.Wrap
@@ -580,20 +608,38 @@ ApplicationWindow {
                 ListView {
                     id: decoderChannelList
                     objectName: "decoderChannelList"
-                    visible: replayController.decoderChannelCount > 0
+                    visible: replayController.decoderSessionCount > 0
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
                     spacing: 8
-                    model: replayController.decoderChannels
+                    model: replayController.decoderSessions
                     delegate: Rectangle {
+                        id: sessionCard
                         required property var modelData
+                        required property int index
                         width: decoderChannelList.width
                         height: 116
                         radius: 7
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
                         border.color: modelData.color
+                        Drag.active: sessionDrag.active
+                        Drag.source: sessionCard
+                        Drag.hotSpot.x: width / 2
+                        Drag.hotSpot.y: height / 2
+                        z: sessionDrag.active ? 20 : 1
+                        opacity: sessionDrag.active ? 0.78 : 1.0
+                        DragHandler { id: sessionDrag }
+                        DropArea {
+                            anchors.fill: parent
+                            onEntered: function(drag) {
+                                if (drag.source && drag.source !== sessionCard)
+                                    replayController.moveDecoderSession(
+                                                drag.source.modelData.id,
+                                                sessionCard.index)
+                            }
+                        }
                         ColumnLayout {
                             anchors.fill: parent
                             anchors.margins: 10
@@ -607,7 +653,7 @@ ApplicationWindow {
                                     color: modelData.color
                                 }
                                 Label {
-                                    text: modelData.frequencyHz.toFixed(0) + " Hz"
+                                    text: modelData.frequencyLabel
                                     color: modelData.color
                                     font.weight: Font.Bold
                                 }
@@ -616,6 +662,12 @@ ApplicationWindow {
                                     text: modelData.active ? "ACTIVE" : "HOLD"
                                     color: modelData.active ? modelData.color : "#718091"
                                     font.pixelSize: 10
+                                }
+                                ToolButton {
+                                    text: "×"
+                                    Accessible.name: "Close decoded session"
+                                    onClicked: replayController.closeDecoderSession(
+                                                   modelData.id)
                                 }
                             }
                             RowLayout {
@@ -654,6 +706,8 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 text: modelData.wpm.toFixed(1) + " WPM  •  "
                                       + modelData.snrDb.toFixed(1) + " dB SNR  •  "
+                                      + modelData.filterWidthHz.toFixed(0)
+                                        + " Hz filter  •  "
                                       + (modelData.confidence * 100).toFixed(0)
                                         + "% confidence  •  "
                                       + (modelData.keyProbability * 100).toFixed(0)

@@ -5,8 +5,11 @@
 #include <QMediaDevices>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 
 #include <memory>
+#include <cstdint>
+#include <optional>
 
 namespace cwassistant::desktop {
 
@@ -29,6 +32,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool audioAutomaticBandwidth READ audioAutomaticBandwidth WRITE setAudioAutomaticBandwidth NOTIFY settingsChanged)
   Q_PROPERTY(double audioLowerFrequencyHz READ audioLowerFrequencyHz WRITE setAudioLowerFrequencyHz NOTIFY settingsChanged)
   Q_PROPERTY(double audioUpperFrequencyHz READ audioUpperFrequencyHz WRITE setAudioUpperFrequencyHz NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioInputRadioLinked READ audioInputRadioLinked WRITE setAudioInputRadioLinked NOTIFY settingsChanged)
   Q_PROPERTY(QString ownCallsign READ ownCallsign WRITE setOwnCallsign NOTIFY settingsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
   Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
@@ -55,6 +59,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(bool splitEnabled READ splitEnabled WRITE setSplitEnabled NOTIFY settingsChanged)
   Q_PROPERTY(qint64 rxTransverterOffsetHz READ rxTransverterOffsetHz WRITE setRxTransverterOffsetHz NOTIFY settingsChanged)
   Q_PROPERTY(qint64 txTransverterOffsetHz READ txTransverterOffsetHz WRITE setTxTransverterOffsetHz NOTIFY settingsChanged)
+  Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE setCwToneSidebandIndex NOTIFY settingsChanged)
   Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY settingsChanged)
   Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY settingsChanged)
@@ -98,6 +103,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool audioAutomaticBandwidth() const noexcept;
   [[nodiscard]] double audioLowerFrequencyHz() const noexcept;
   [[nodiscard]] double audioUpperFrequencyHz() const noexcept;
+  [[nodiscard]] bool audioInputRadioLinked() const noexcept;
   [[nodiscard]] const QString& ownCallsign() const noexcept;
   [[nodiscard]] bool omniRigAvailable() const noexcept;
   [[nodiscard]] bool radioEnabled() const noexcept;
@@ -124,6 +130,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool splitEnabled() const noexcept;
   [[nodiscard]] qint64 rxTransverterOffsetHz() const noexcept;
   [[nodiscard]] qint64 txTransverterOffsetHz() const noexcept;
+  [[nodiscard]] int cwToneSidebandIndex() const noexcept;
+  [[nodiscard]] std::optional<std::uint64_t> controlledRxRfHz() const noexcept;
   [[nodiscard]] const QString& keyingPort() const noexcept;
   [[nodiscard]] int pttLineIndex() const noexcept;
   [[nodiscard]] int keyLineIndex() const noexcept;
@@ -153,6 +161,7 @@ class AppSettings final : public QObject {
   void setAudioAutomaticBandwidth(bool value);
   void setAudioLowerFrequencyHz(double value);
   void setAudioUpperFrequencyHz(double value);
+  void setAudioInputRadioLinked(bool value);
   void setOwnCallsign(const QString& value);
   void setRadioEnabled(bool value);
   void setOmniRigSlot(int value);
@@ -170,6 +179,7 @@ class AppSettings final : public QObject {
   void setSplitEnabled(bool value);
   void setRxTransverterOffsetHz(qint64 value);
   void setTxTransverterOffsetHz(qint64 value);
+  void setCwToneSidebandIndex(int value);
   void setKeyingPort(const QString& value);
   void setPttLineIndex(int value);
   void setKeyLineIndex(int value);
@@ -217,6 +227,7 @@ class AppSettings final : public QObject {
   void profilesChanged();
   void profileSelectionRequiredChanged();
   void cat4omChanged();
+  void radioFrequencyChanged();
   void detectedRadiosChanged();
 
  private:
@@ -227,6 +238,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] static QString normalizeProfileKey(const QString& name);
   void refreshProfiles();
   void resetInMemorySettings();
+  void refreshControlledFrequency();
 #ifdef Q_OS_WIN
   [[nodiscard]] bool ensureOmniRigAutomation();
 #endif
@@ -248,6 +260,7 @@ class AppSettings final : public QObject {
   bool audio_automatic_bandwidth_{true};
   double audio_lower_frequency_hz_{100.0};
   double audio_upper_frequency_hz_{3'000.0};
+  bool audio_input_radio_linked_{false};
   QString own_callsign_;
   bool radio_enabled_{false};
   QStringList detected_radio_names_;
@@ -269,6 +282,7 @@ class AppSettings final : public QObject {
   bool split_enabled_{false};
   qint64 rx_transverter_offset_hz_{0};
   qint64 tx_transverter_offset_hz_{0};
+  int cw_tone_sideband_index_{0};
   QString keying_port_;
   int ptt_line_index_{0};
   int key_line_index_{1};
@@ -294,6 +308,8 @@ class AppSettings final : public QObject {
   bool com_initialization_attempted_{false};
   std::unique_ptr<Cat4OmClient> cat4om_client_;
   std::unique_ptr<QMediaDevices> media_devices_;
+  QTimer radio_frequency_timer_;
+  std::optional<std::uint64_t> omnirig_rx_dial_hz_;
 };
 
 }  // namespace cwassistant::desktop

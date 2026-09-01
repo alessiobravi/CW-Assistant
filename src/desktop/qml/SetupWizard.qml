@@ -183,6 +183,13 @@ Dialog {
                     text: appSettings.audioInputDisplayName
                     color: "#43c6ac"
                 }
+                Label { text: "Radio audio association" }
+                CheckBox {
+                    text: "This input carries RX audio from this radio"
+                    checked: appSettings.audioInputRadioLinked
+                    enabled: appSettings.radioEnabled
+                    onToggled: appSettings.audioInputRadioLinked = checked
+                }
                 Label { text: "" }
                 Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
                 Label {
@@ -224,6 +231,13 @@ Dialog {
                 TextField { Layout.fillWidth: true; text: appSettings.rxTransverterOffsetHz.toString(); onEditingFinished: appSettings.rxTransverterOffsetHz = Number(text) }
                 Label { text: "TX transverter offset (Hz)" }
                 TextField { Layout.fillWidth: true; text: appSettings.txTransverterOffsetHz.toString(); onEditingFinished: appSettings.txTransverterOffsetHz = Number(text) }
+                Label { text: "CW audio-to-RF mapping" }
+                ComboBox {
+                    Layout.fillWidth: true
+                    model: ["CW-U / USB (+)", "CW-L / LSB (-)"]
+                    currentIndex: appSettings.cwToneSidebandIndex
+                    onActivated: appSettings.cwToneSidebandIndex = currentIndex
+                }
                 Label { text: "" }
                 RowLayout {
                     Button { text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts() }

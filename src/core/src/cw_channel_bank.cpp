@@ -4,14 +4,22 @@
 #include <cmath>
 #include <numbers>
 
+#include "cwassistant/core/callsign_policy.hpp"
+
 namespace cwassistant::core {
+namespace {
+
+constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
+
+}  // namespace
 
 CwChannelBank::Track::Track(const std::uint64_t track_id,
                             const double frequency,
                             const std::uint64_t timestamp_ns)
     : id(track_id),
       frequency_hz(frequency),
-      last_detected_ns(timestamp_ns) {}
+      last_detected_ns(timestamp_ns),
+      last_frequency_update_ns(timestamp_ns) {}
 
 CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
   config_.acquisition_snr_db =
@@ -32,8 +40,7 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
   config_.narrowband_width_hz =
       std::clamp(config_.narrowband_width_hz, 40.0, 500.0);
   config_.noise_reference_offset_hz = std::clamp(
-      config_.noise_reference_offset_hz,
-      config_.narrowband_width_hz, 2'000.0);
+      config_.noise_reference_offset_hz, kNarrowbandWidthsHz.back(), 2'000.0);
   config_.evidence_rate_hz =
       std::clamp(config_.evidence_rate_hz, 100.0, 2'000.0);
   config_.maximum_tracks =
@@ -76,11 +83,22 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         level < bins_dbfs[bin + 1]) {
       continue;
     }
-    const float snr_db = level - noise_dbfs;
+    const float left = bins_dbfs[bin - 1];
+    const float right = bins_dbfs[bin + 1];
+    const float denominator = left - 2.0F * level + right;
+    const double fractional_bin = std::abs(denominator) > 1.0e-6F
+        ? std::clamp(0.5 * static_cast<double>(left - right) /
+                         static_cast<double>(denominator),
+                     -0.5, 0.5)
+        : 0.0;
+    const float interpolated_level = level - static_cast<float>(
+        0.25 * static_cast<double>(left - right) * fractional_bin);
+    const float snr_db = interpolated_level - noise_dbfs;
     if (snr_db < config_.acquisition_snr_db) continue;
     candidates.push_back({
         .frequency_hz = lower_frequency_hz +
-                        static_cast<double>(bin) * bin_width_hz,
+                        (static_cast<double>(bin) + fractional_bin) *
+                            bin_width_hz,
         .snr_db = snr_db,
     });
   }
@@ -106,8 +124,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     double nearest_distance = config_.tracking_tolerance_hz;
     for (auto track = tracks_.begin(); track != tracks_.end(); ++track) {
       if (track->matched) continue;
+      const double elapsed_seconds = timestamp_ns > track->last_frequency_update_ns
+          ? static_cast<double>(timestamp_ns - track->last_frequency_update_ns) /
+                1'000'000'000.0
+          : 0.0;
+      const double predicted_frequency = track->frequency_hz +
+          track->drift_hz_per_second * elapsed_seconds;
       const double distance =
-          std::abs(track->frequency_hz - candidate.frequency_hz);
+          std::abs(predicted_frequency - candidate.frequency_hz);
       if (distance <= nearest_distance) {
         nearest = track;
         nearest_distance = distance;
@@ -120,8 +144,25 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       nearest = std::prev(tracks_.end());
     }
     nearest->matched = true;
-    nearest->frequency_hz +=
-        0.25 * (candidate.frequency_hz - nearest->frequency_hz);
+    const double elapsed_seconds = timestamp_ns > nearest->last_frequency_update_ns
+        ? static_cast<double>(timestamp_ns - nearest->last_frequency_update_ns) /
+              1'000'000'000.0
+        : 0.0;
+    if (elapsed_seconds > 0.0 && elapsed_seconds <= 1.0) {
+      const double predicted_frequency = nearest->frequency_hz +
+          nearest->drift_hz_per_second * elapsed_seconds;
+      const double innovation = candidate.frequency_hz - predicted_frequency;
+      nearest->frequency_hz = predicted_frequency + 0.45 * innovation;
+      nearest->drift_hz_per_second = std::clamp(
+          nearest->drift_hz_per_second +
+              0.08 * innovation / elapsed_seconds,
+          -200.0, 200.0);
+    } else {
+      nearest->frequency_hz +=
+          0.45 * (candidate.frequency_hz - nearest->frequency_hz);
+      nearest->drift_hz_per_second = 0.0;
+    }
+    nearest->last_frequency_update_ns = timestamp_ns;
     nearest->last_detected_ns = timestamp_ns;
   }
 
@@ -188,11 +229,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
   const double sample_rate_hz = block.stream.sample_rate_hz;
   const std::size_t evidence_samples = static_cast<std::size_t>(
       std::max(1.0, std::round(sample_rate_hz / config_.evidence_rate_hz)));
-  const float cutoff_hz = static_cast<float>(
-      std::min(config_.narrowband_width_hz * 0.5, sample_rate_hz * 0.2));
-  const float filter_alpha = static_cast<float>(1.0 - std::exp(
-      -2.0 * std::numbers::pi * static_cast<double>(cutoff_hz) /
-      sample_rate_hz));
+  std::array<float, kNarrowbandWidthsHz.size()> filter_alphas{};
+  for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
+    const double cutoff_hz =
+        std::min(kNarrowbandWidthsHz[width] * 0.5, sample_rate_hz * 0.2);
+    filter_alphas[width] = static_cast<float>(1.0 - std::exp(
+        -2.0 * std::numbers::pi * cutoff_hz / sample_rate_hz));
+  }
+  const float reference_alpha = filter_alphas[1];
 
   for (auto& track : tracks_) {
     const double center_hz = block.stream.kind == StreamKind::Audio
@@ -213,25 +257,29 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.filter_initialized = true;
     }
 
-    const auto filtered = [filter_alpha](
+    const auto filtered = [](
         const std::complex<float> input,
+        const float alpha,
         std::array<std::complex<float>, 3>& stages) {
-      stages[0] += filter_alpha * (input - stages[0]);
-      stages[1] += filter_alpha * (stages[0] - stages[1]);
-      stages[2] += filter_alpha * (stages[1] - stages[2]);
+      stages[0] += alpha * (input - stages[0]);
+      stages[1] += alpha * (stages[0] - stages[1]);
+      stages[2] += alpha * (stages[1] - stages[2]);
       return stages[2];
     };
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       const auto sample = block.stream.kind == StreamKind::Audio
           ? std::complex<float>(block.samples[index].real(), 0.0F)
           : block.samples[index];
-      const auto center = filtered(sample * track.center_oscillator,
-                                   track.center_filter);
+      const auto center_mixed = sample * track.center_oscillator;
+      for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
+        const auto center = filtered(center_mixed, filter_alphas[width],
+                                     track.center_filters[width]);
+        track.center_power_sums[width] += std::norm(center);
+      }
       const auto lower = filtered(sample * track.lower_oscillator,
-                                  track.lower_filter);
+                                  reference_alpha, track.lower_filter);
       const auto upper = filtered(sample * track.upper_oscillator,
-                                  track.upper_filter);
-      track.center_power_sum += std::norm(center);
+                                  reference_alpha, track.upper_filter);
       track.lower_power_sum += std::norm(lower);
       track.upper_power_sum += std::norm(upper);
       ++track.accumulated_samples;
@@ -252,19 +300,72 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       if (track.accumulated_samples < evidence_samples) continue;
       const float scale = 1.0F /
           static_cast<float>(track.accumulated_samples);
-      const float center_power = track.center_power_sum * scale;
-      const float reference_power =
-          0.5F * (track.lower_power_sum + track.upper_power_sum) * scale;
       constexpr float kPowerFloor = 1.0e-12F;
-      track.snr_db = 10.0F * std::log10(
-          std::max(center_power, kPowerFloor) /
-          std::max(reference_power, kPowerFloor));
+      const float observed_lower = track.lower_power_sum * scale;
+      const float observed_upper = track.upper_power_sum * scale;
+      if (!track.noise_initialized) {
+        track.lower_noise_power = observed_lower;
+        track.upper_noise_power = observed_upper;
+        track.noise_initialized = true;
+      } else {
+        const auto update_noise = [](float& estimate, const float observed) {
+          const float smoothing = observed < estimate ? 0.20F : 0.025F;
+          estimate += smoothing * (observed - estimate);
+        };
+        update_noise(track.lower_noise_power, observed_lower);
+        update_noise(track.upper_noise_power, observed_upper);
+      }
+      const float reference_power = std::max(
+          std::min(track.lower_noise_power, track.upper_noise_power),
+          kPowerFloor);
+      std::array<float, kNarrowbandWidthsHz.size()> width_snr{};
+      for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
+        const float center_power = track.center_power_sums[width] * scale;
+        const float noise_scale = static_cast<float>(
+            kNarrowbandWidthsHz[width] / kNarrowbandWidthsHz[1]);
+        width_snr[width] = 10.0F * std::log10(
+            std::max(center_power, kPowerFloor) /
+            std::max(reference_power * noise_scale, kPowerFloor));
+      }
+      const float center_localization =
+          track.center_power_sums[2] > kPowerFloor
+              ? track.center_power_sums[0] / track.center_power_sums[2]
+              : 1.0F;
+      std::size_t preferred = 1;
+      if (std::abs(track.drift_hz_per_second) >= 30.0 ||
+          (track.update.wpm >= 40.0 &&
+           width_snr[2] >= width_snr[1] - 1.0F)) {
+        preferred = 2;
+      } else if (track.update.wpm > 0.0 && track.update.wpm <= 16.0 &&
+                 std::abs(track.drift_hz_per_second) < 8.0 &&
+                 width_snr[0] >= width_snr[1] - 1.0F) {
+        preferred = 0;
+      } else if (width_snr[0] > width_snr[1] + 4.0F) {
+        preferred = 0;
+      } else if (width_snr[2] > width_snr[1] + 6.0F &&
+                 center_localization >= 0.02F) {
+        preferred = 2;
+      }
+      if (track.total_width_observations < 250) {
+        ++track.total_width_observations;
+      } else if (preferred == track.pending_width_index) {
+        if (++track.pending_width_observations >= 20) {
+          track.selected_width_index =
+              static_cast<std::uint8_t>(preferred);
+          track.pending_width_observations = 0;
+        }
+      } else {
+        track.pending_width_index = static_cast<std::uint8_t>(preferred);
+        track.pending_width_observations = 1;
+      }
+      track.snr_db = width_snr[track.selected_width_index];
+      if (center_localization < 0.02F) track.snr_db = 0.0F;
       const auto timestamp_ns = block.timestamp_ns +
           static_cast<std::uint64_t>(
               static_cast<long double>(index) * 1'000'000'000.0L /
               sample_rate_hz);
       track.update = track.decoder.process(timestamp_ns, track.snr_db);
-      track.center_power_sum = 0.0F;
+      track.center_power_sums = {};
       track.lower_power_sum = 0.0F;
       track.upper_power_sum = 0.0F;
       track.accumulated_samples = 0;
@@ -317,16 +418,23 @@ float CwChannelBank::spectralSnr(const Track& track,
 }
 
 void CwChannelBank::resetFilter(Track& track) noexcept {
-  track.center_filter = {};
+  track.center_filters = {};
   track.lower_filter = {};
   track.upper_filter = {};
   track.center_oscillator = {1.0F, 0.0F};
   track.lower_oscillator = {1.0F, 0.0F};
   track.upper_oscillator = {1.0F, 0.0F};
-  track.center_power_sum = 0.0F;
+  track.center_power_sums = {};
   track.lower_power_sum = 0.0F;
   track.upper_power_sum = 0.0F;
   track.accumulated_samples = 0;
+  track.lower_noise_power = 0.0F;
+  track.upper_noise_power = 0.0F;
+  track.selected_width_index = 1;
+  track.pending_width_index = 1;
+  track.pending_width_observations = 0;
+  track.total_width_observations = 0;
+  track.noise_initialized = false;
   track.filter_initialized = false;
 }
 
@@ -338,6 +446,9 @@ void CwChannelBank::rebuildSnapshots() {
         .id = track.id,
         .color_index = static_cast<std::uint8_t>((track.id - 1) % 24),
         .frequency_hz = track.frequency_hz,
+        .drift_hz_per_second = track.drift_hz_per_second,
+        .filter_width_hz =
+            kNarrowbandWidthsHz[track.selected_width_index],
         .snr_db = track.snr_db,
         .wpm = track.update.wpm,
         .confidence = track.update.confidence,
@@ -348,6 +459,10 @@ void CwChannelBank::rebuildSnapshots() {
         .text = track.update.text,
         .provisional_text = track.update.provisional_text,
         .pending_elements = track.update.pending_elements,
+        .callsign = CallsignPolicy::latest_in_text(
+                        track.update.text + " " +
+                        track.update.provisional_text)
+                        .value_or(std::string{}),
     });
   }
   std::sort(snapshots_.begin(), snapshots_.end(),

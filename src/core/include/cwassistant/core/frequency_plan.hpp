@@ -33,6 +33,13 @@ struct ResolvedFrequencies {
     const VfoFrequencyPlan& plan,
     const TransverterOffsets& offsets) noexcept;
 
+// Maps a decoded audio tone to actual RF around the configured receiver CW
+// pitch. Upper-sideband mapping raises RF as the audio tone rises; CW-L/LSB
+// mapping does the opposite. All arithmetic is checked in integer hertz.
+[[nodiscard]] std::optional<std::uint64_t> resolve_audio_tone_rf(
+    std::uint64_t reference_rf_hz, double audio_tone_hz,
+    double reference_tone_hz, bool upper_sideband) noexcept;
+
 [[nodiscard]] std::string_view adif_band_from_frequency(
     std::uint64_t frequency_hz) noexcept;
 

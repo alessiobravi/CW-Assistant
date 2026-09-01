@@ -96,20 +96,28 @@ changes from repeatedly driving the palette yellow. A radio's own AGC may still
 change the audio level delivered by the sound card; this application does not
 yet control radio AGC through CAT.
 
-The right-hand panel scans all frequencies inside the processed audio bandwidth
-for both live audio and WAV replay. Every detected spectral peak receives a
-stable color used by both its vertical spectrum/waterfall marker and its decode
-row. Rows are ordered by audio frequency and show stable text, amber provisional
-text/elements, adaptive WPM, SNR, confidence, and key-down evidence. A keyed gap
-does not immediately discard the row; decoded tracks are retained for eight
-seconds so normal word and message gaps preserve identity.
+The receiver scans every frequency inside the processed audio bandwidth for
+both live audio and WAV replay. Every detected spectral peak receives a stable
+color and vertical spectrum/waterfall marker. Click that marker to open its
+decoded session in the right-hand panel. Closing a card with **×** does not stop
+its DSP; click the marker to reopen it. Drag cards over one another to set the
+operator's preferred order. Stable text, amber provisional text/elements,
+adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
+A keyed gap does not immediately discard a track; decoded tracks are retained
+for eight seconds so normal word and message gaps preserve identity.
+
+As soon as a conservative callsign-shaped token is decoded, it is written
+vertically beside the matching colored line. The marker tooltip exposes the
+same callsign, frequency, audio tone, filter width, and measured drift.
 
 The FFT-bin tracker discovers candidate frequencies, but it does not provide
 the key-up/key-down evidence. For both live audio and WAV replay, the DSP worker
-uses the original samples to mix each tracked tone to baseband, runs it through
-a three-stage 120 Hz filter, compares its energy with adjacent reference bands,
-and supplies new soft evidence 500 times per second to that track's adaptive
-timing decoder. This is deliberately independent of spectrum averaging,
+uses the original samples to mix each tracked tone to baseband, evaluates
+three-stage 60, 120, and 240 Hz paths, compares their energy with independently
+smoothed references on both sides, and supplies new soft evidence 500 times per
+second to that track's adaptive timing decoder. The 120 Hz path remains fixed
+during initial acquisition; the decoder can then narrow a clean slow signal or
+widen a fast/drifting signal. This is deliberately independent of spectrum averaging,
 waterfall levels, display gain, and the 700 Hz visual guide.
 
 Each new track evaluates nine timing starts from 8 through 60 WPM. During at
@@ -123,9 +131,9 @@ so another transmission on that frequency can use a substantially different
 speed. Short or ambiguous fragments may remain provisional rather than being
 presented as certain.
 
-The baseline handles letters, digits, common punctuation, and selected
-prosigns, but does not yet provide automatic decoder-filter width selection,
-calibrated confidence, multiple-pass weak-signal recovery, or separation of
+The baseline handles letters, digits, common punctuation, selected prosigns,
+sub-bin drift tracking, and automatic filter width selection, but does not yet
+provide calibrated confidence, multiple-pass weak-signal recovery, or separation of
 callers occupying the same frequency. Signals closer than about 45 Hz may
 therefore appear as one track, and noise or non-CW
 carriers may produce `?` or incorrect text. Changing the audio source or
@@ -176,7 +184,9 @@ use the same Morse-key dot/dash mark.
    cable.
 6. On **Audio**, select the sound-card input carrying receiver audio. **System
    default input** follows the operating-system default when devices change.
-   This step is always present for radio and SWL profiles.
+   This step is always present for radio and SWL profiles. For a controlled
+   radio, also confirm **This input carries RX audio from this radio** if the
+   selected device is physically connected to that receiver.
 7. Select a physically separate direct-COM key/PTT interface. Port enumeration
    never toggles RTS or DTR.
 8. Review the display defaults and finish the wizard.
@@ -221,6 +231,16 @@ prevent both processes from opening the same serial, audio, or SDR device.
 - **RX/TX transverter offset** is a signed integer in hertz. It is used to
   calculate actual RF for display and logging; the offset is never sent to a
   direct CAT radio by accident.
+- **CW audio-to-RF mapping** selects CW-U/USB or CW-L/LSB direction. For a live
+  linked input, each signal is calculated as `actual RX RF + direction ×
+  (decoded audio tone − configured CW pitch)`.
+
+Actual-RF marker labels are enabled only while live capture is running, the
+profile explicitly links that audio input to the radio, and the selected
+frequency provider has a valid state. Windows OmniRig is polled for its online
+RX frequency; CAT4OM uses its pushed radio state. The RX transverter offset is
+applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
+unavailable frequency providers deliberately show **AF** rather than guessing.
 
 Example satellite station:
 

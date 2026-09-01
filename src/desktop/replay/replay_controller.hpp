@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QList>
 #include <QString>
 #include <QThread>
 #include <QUrl>
@@ -29,6 +30,10 @@ class ReplayController final : public QObject {
                  NOTIFY decoderChanged)
   Q_PROPERTY(int decoderChannelCount READ decoderChannelCount
                  NOTIFY decoderChanged)
+  Q_PROPERTY(QVariantList decoderSessions READ decoderSessions
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(int decoderSessionCount READ decoderSessionCount
+                 NOTIFY decoderChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -48,6 +53,8 @@ class ReplayController final : public QObject {
   [[nodiscard]] int averagingFrames() const noexcept;
   [[nodiscard]] const QVariantList& decoderChannels() const noexcept;
   [[nodiscard]] int decoderChannelCount() const noexcept;
+  [[nodiscard]] const QVariantList& decoderSessions() const noexcept;
+  [[nodiscard]] int decoderSessionCount() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -58,6 +65,9 @@ class ReplayController final : public QObject {
                              int frame_rate_hz);
   void setSourceMode(int value);
   void setAudioInputSelection(QString encoded_id, QString display_name);
+  void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
+                                int sideband_index,
+                                double reference_tone_hz);
 
   Q_INVOKABLE void openFile(const QUrl& url);
   Q_INVOKABLE void play();
@@ -65,6 +75,9 @@ class ReplayController final : public QObject {
   Q_INVOKABLE void stop();
   Q_INVOKABLE void startLiveAudio();
   Q_INVOKABLE void stopLiveAudio();
+  Q_INVOKABLE void openDecoderSession(qulonglong channel_id);
+  Q_INVOKABLE void closeDecoderSession(qulonglong channel_id);
+  Q_INVOKABLE void moveDecoderSession(qulonglong channel_id, int new_index);
 
  signals:
   void stateChanged();
@@ -101,6 +114,7 @@ class ReplayController final : public QObject {
   void beginLiveAudioCapture();
   void publishSpectrumConfiguration();
   void acceptDecoderChannels(const QVariantList& channels);
+  void rebuildDecoderModels();
   void resetDecoder();
 
   QThread worker_thread_;
@@ -132,6 +146,13 @@ class ReplayController final : public QObject {
   int spectrum_frame_rate_hz_{60};
   bool spectrum_processing_configured_{false};
   QVariantList decoder_channels_;
+  QVariantList raw_decoder_channels_;
+  QVariantList decoder_sessions_;
+  QList<qulonglong> decoder_session_order_;
+  bool radio_frequency_available_{false};
+  qulonglong radio_rx_rf_hz_{0};
+  int cw_sideband_index_{0};
+  double cw_reference_tone_hz_{700.0};
 };
 
 }  // namespace cwassistant::desktop

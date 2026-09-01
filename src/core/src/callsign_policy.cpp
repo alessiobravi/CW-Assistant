@@ -45,6 +45,25 @@ std::optional<std::string> CallsignPolicy::normalize(
   return normalized;
 }
 
+std::optional<std::string> CallsignPolicy::latest_in_text(
+    const std::string_view decoded_text) {
+  std::string token;
+  std::optional<std::string> result;
+  const auto consider = [&result](const std::string& candidate) {
+    if (const auto normalized = normalize(candidate)) result = *normalized;
+  };
+  for (const unsigned char character : decoded_text) {
+    if (std::isalnum(character) != 0 || character == '/') {
+      token.push_back(static_cast<char>(character));
+    } else if (!token.empty()) {
+      consider(token);
+      token.clear();
+    }
+  }
+  if (!token.empty()) consider(token);
+  return result;
+}
+
 bool CallsignPolicy::add_ignored(const std::string_view callsign) {
   const auto normalized = normalize(callsign);
   return normalized.has_value() && ignored_.insert(*normalized).second;

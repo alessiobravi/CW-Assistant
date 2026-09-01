@@ -57,6 +57,13 @@ weak, drifting, and slightly mistuned signals without repeatedly computing a
 wide FFT. Phase/frequency continuity, robust noise quantiles, and a CFAR-like
 threshold produce a probability of key-down rather than a hard on/off decision.
 
+The current measured baseline implements parabolic sub-bin peak interpolation,
+a bounded carrier/drift predictor, and parallel 60/120/240 Hz three-stage paths.
+Initial acquisition stays at 120 Hz; WPM, drift, local SNR, and a centered-tone
+check drive hysteretic selection afterward. Lower and upper noise references
+are smoothed independently so a one-sided adjacent signal does not inflate the
+entire local threshold.
+
 An explicit hidden semi-Markov timing model tracks dit length, key-down and
 key-up duration distributions, character spacing, word spacing, drift, and
 keying style. Viterbi/beam search produces several Morse-valid hypotheses with

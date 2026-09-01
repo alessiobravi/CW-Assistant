@@ -19,6 +19,8 @@ class CallsignPolicy {
 
   [[nodiscard]] static std::optional<std::string> normalize(
       std::string_view callsign);
+  [[nodiscard]] static std::optional<std::string> latest_in_text(
+      std::string_view decoded_text);
 
  private:
   std::unordered_set<std::string> ignored_;

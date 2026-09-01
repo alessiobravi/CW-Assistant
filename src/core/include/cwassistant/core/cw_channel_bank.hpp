@@ -22,7 +22,7 @@ struct CwChannelBankConfig {
   double empty_track_retention_seconds{2.0};
   double decoded_track_retention_seconds{8.0};
   double narrowband_width_hz{120.0};
-  double noise_reference_offset_hz{180.0};
+  double noise_reference_offset_hz{300.0};
   double evidence_rate_hz{500.0};
   std::size_t maximum_tracks{24};
 };
@@ -31,6 +31,8 @@ struct CwChannelSnapshot {
   std::uint64_t id{0};
   std::uint8_t color_index{0};
   double frequency_hz{0.0};
+  double drift_hz_per_second{0.0};
+  double filter_width_hz{120.0};
   float snr_db{0.0F};
   double wpm{0.0};
   float confidence{0.0F};
@@ -40,6 +42,7 @@ struct CwChannelSnapshot {
   std::string text;
   std::string provisional_text;
   std::string pending_elements;
+  std::string callsign;
 };
 
 class CwChannelBank {
@@ -60,23 +63,32 @@ class CwChannelBank {
 
     std::uint64_t id;
     double frequency_hz;
+    double drift_hz_per_second{0.0};
     std::uint64_t last_detected_ns;
+    std::uint64_t last_frequency_update_ns;
     CwMultiSpeedDecoder decoder;
     CwDecoderUpdate update;
     float snr_db{0.0F};
     float spectral_snr_db{0.0F};
     bool matched{false};
 
-    std::array<std::complex<float>, 3> center_filter{};
+    std::array<std::array<std::complex<float>, 3>, 3> center_filters{};
     std::array<std::complex<float>, 3> lower_filter{};
     std::array<std::complex<float>, 3> upper_filter{};
     std::complex<float> center_oscillator{1.0F, 0.0F};
     std::complex<float> lower_oscillator{1.0F, 0.0F};
     std::complex<float> upper_oscillator{1.0F, 0.0F};
-    float center_power_sum{0.0F};
+    std::array<float, 3> center_power_sums{};
     float lower_power_sum{0.0F};
     float upper_power_sum{0.0F};
     std::size_t accumulated_samples{0};
+    float lower_noise_power{0.0F};
+    float upper_noise_power{0.0F};
+    std::uint8_t selected_width_index{1};
+    std::uint8_t pending_width_index{1};
+    std::uint16_t pending_width_observations{0};
+    std::uint16_t total_width_observations{0};
+    bool noise_initialized{false};
     bool filter_initialized{false};
   };
 

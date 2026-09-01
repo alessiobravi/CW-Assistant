@@ -83,9 +83,11 @@ peaks, suppresses duplicate nearby candidates, and maintains a bounded
 independent state object for every tracked frequency. Candidate discovery uses
 the shared display FFT and rejects numerical-floor peaks outside an initial
 96 dB range below its strongest bin, then each track consumes the original
-audio block using a phase-continuous complex mixer, three cascaded low-pass
-stages with an initial 120 Hz width, adjacent-band noise references, and 500 Hz
-evidence updates. That
+audio block using a phase-continuous complex mixer, parallel three-stage 60,
+120, and 240 Hz filters, separately smoothed lower/upper noise references, and
+500 Hz evidence updates. Acquisition holds the 120 Hz path before measured WPM,
+drift, and SNR select another width. A center-localization ratio rejects strong
+adjacent energy. That
 raw narrowband SNR drives smoothed key probability and adaptive timing; display
 averaging, gain, palette, and guide settings cannot assert key-down. This work
 runs inside the live/WAV DSP workers rather than the UI thread.
@@ -105,10 +107,22 @@ or score separation, only the winning adaptive path continues processing. A
 fresh bounded acquisition for a different sender/speed. Current allocated state
 is about 3.2 KiB per active track in the deterministic benchmark.
 
-Sub-bin frequency/drift estimation, alternative automatic/configurable filter
-widths, robust noise
-quantiles, calibrated confidence, delayed multi-pass refinement, a bounded
-worker pool for those heavier passes, and co-channel source separation remain.
+Candidate peaks use parabolic sub-bin interpolation, and a bounded predictor
+maintains carrier frequency plus drift while preserving track identity.
+Corpus-qualified configurable widths, robust noise quantiles, calibrated
+confidence, delayed multi-pass refinement, a bounded worker pool for those
+heavier passes, and co-channel source separation remain.
+
+The presentation model is separate from the decoder bank. All tracks continue
+processing, while an ordered list of operator-opened IDs controls the session
+cards. Closing or reordering a card cannot mutate DSP state. Callsign tokens and
+frequency labels are derived views of each stable track ID.
+
+Actual-RF presentation is evidence-gated. A profile must explicitly associate
+its selected live input with the configured radio, and a supported provider
+must report valid RX state. Checked transverter resolution is followed by the
+profile-selected CW-U/CW-L tone offset around the configured CW pitch. Missing
+evidence produces an explicit audio-frequency label; RF is never guessed.
 
 ## Graphical rendering
 

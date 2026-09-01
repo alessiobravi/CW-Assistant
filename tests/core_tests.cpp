@@ -244,6 +244,88 @@ void test_cw_channel_bank() {
              !rejection_bank.channels().front().key_down,
          "raw narrowband evidence rejects an adjacent non-tracked tone");
 
+  CwChannelBank drift_bank;
+  std::vector<float> fine_bins(1'001, -110.0F);
+  double drifting_phase = 0.0;
+  constexpr double initial_tone_hz = 500.0;
+  constexpr double requested_drift_hz_per_second = 40.0;
+  for (int step = 0; step < 120; ++step) {
+    const double elapsed = static_cast<double>(step) * 0.01;
+    const double tone_hz = initial_tone_hz +
+                           requested_drift_hz_per_second * elapsed;
+    fine_bins.assign(fine_bins.size(), -110.0F);
+    fine_bins[static_cast<std::size_t>(std::llround(tone_hz))] = -68.0F;
+    const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
+    static_cast<void>(drift_bank.updateSpectrum(
+        timestamp, 0.0, 1'000.0, fine_bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = timestamp;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          0.32F * static_cast<float>(std::sin(drifting_phase)), 0.0F};
+      drifting_phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
+    }
+    static_cast<void>(drift_bank.processSamples(block));
+  }
+  expect(drift_bank.channels().size() == 1,
+         "a steadily drifting signal retains one channel identity");
+  if (!drift_bank.channels().empty()) {
+    const auto& drifting = drift_bank.channels().front();
+    expect(std::abs(drifting.frequency_hz - 547.6) < 4.0,
+           "sub-bin tracker follows the current drifting tone frequency");
+    expect(drifting.drift_hz_per_second > 20.0 &&
+               drifting.drift_hz_per_second < 65.0,
+           "frequency tracker reports a bounded tone drift estimate");
+    expect(drifting.filter_width_hz == 240.0,
+           "automatic narrowband selection widens for a fast drifting tone");
+  }
+
+  CwChannelBank slow_bank;
+  double slow_phase = 0.0;
+  std::vector<bool> slow_keying;
+  const auto append_units = [&slow_keying](const bool keyed, const int units) {
+    slow_keying.insert(slow_keying.end(), units * 10, keyed);
+  };
+  const auto append_letter = [&append_units](const std::string_view elements) {
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+      append_units(true, elements[index] == '.' ? 1 : 3);
+      append_units(false, index + 1 == elements.size() ? 3 : 1);
+    }
+  };
+  append_letter("...");
+  append_letter("---");
+  append_letter("...");
+  append_units(false, 4);  // Complete the seven-unit word gap.
+  const int slow_steps = static_cast<int>(slow_keying.size()) * 5;
+  for (int step = 0; step < slow_steps; ++step) {
+    const bool keyed = slow_keying[static_cast<std::size_t>(step) %
+                                    slow_keying.size()];
+    fine_bins.assign(fine_bins.size(), -110.0F);
+    if (keyed) fine_bins[400] = -68.0F;
+    const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
+    static_cast<void>(slow_bank.updateSpectrum(
+        timestamp, 0.0, 1'000.0, fine_bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = timestamp;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.25F * static_cast<float>(std::sin(slow_phase)) : 0.0F,
+          0.0F};
+      slow_phase += 2.0 * std::numbers::pi * 400.0 / sample_rate;
+    }
+    static_cast<void>(slow_bank.processSamples(block));
+  }
+  expect(!slow_bank.channels().empty(),
+         "clean slow keyed signal retains a tracked channel");
+  if (!slow_bank.channels().empty()) {
+    expect(slow_bank.channels().front().filter_width_hz == 60.0,
+           "automatic narrowband selection narrows a clean slow signal");
+  }
+
   cwassistant::core::SpectrumAnalyzer pipeline_analyzer({
       .fft_size = 2'048,
       .averaging_frames = 1,
@@ -312,6 +394,11 @@ void test_callsign_policy() {
   expect(!policy.add_ignored("NOT A CALL"), "ignore list rejects invalid text");
   expect(policy.remove_ignored("i1abc/p"), "ignored callsign can be restored");
   expect(!policy.is_ignored("I1ABC/P"), "removed call is no longer ignored");
+  expect(CallsignPolicy::latest_in_text("CQ TEST DE iu0lfq/p K") ==
+             std::optional<std::string>("IU0LFQ/P"),
+         "latest decoded callsign extraction supports portable calls");
+  expect(!CallsignPolicy::latest_in_text("CQ TEST 599 ?"),
+         "reports and operating words are not mistaken for callsigns");
 }
 
 void test_spectrum_settings() {
@@ -588,6 +675,14 @@ void test_negative_transverter_offset_and_invalid_frequency() {
               {.rx_dial_hz = 10'000'000, .split_enabled = false},
               {.rx_offset_hz = -10'000'000, .tx_offset_hz = 0}),
          "offset calculation rejects zero or underflowed actual RF");
+  expect(resolve_audio_tone_rf(14'074'700, 725.0, 700.0, true) ==
+             std::optional<std::uint64_t>(14'074'725),
+         "CW-U audio offset maps upward from the actual-RF reference");
+  expect(resolve_audio_tone_rf(14'074'700, 725.0, 700.0, false) ==
+             std::optional<std::uint64_t>(14'074'675),
+         "CW-L audio offset maps downward from the actual-RF reference");
+  expect(!resolve_audio_tone_rf(10, 800.0, 700.0, false),
+         "audio-to-RF mapping rejects an underflow below zero hertz");
 }
 
 void test_band_selected_station_equipment_adif() {
