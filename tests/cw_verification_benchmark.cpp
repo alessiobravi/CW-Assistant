@@ -21,6 +21,7 @@ enum class Scenario {
   SpeechLikeAm,
   IrregularImpulses,
   PumpingBroadbandNoise,
+  BroadSpectralHump,
 };
 
 struct ScenarioResult {
@@ -115,6 +116,7 @@ ScenarioResult runScenario(const Scenario scenario,
         amplitude = keyed ? 0.28F : 0.0F;
         break;
       case Scenario::PumpingBroadbandNoise:
+      case Scenario::BroadSpectralHump:
         break;
     }
 
@@ -126,6 +128,25 @@ ScenarioResult runScenario(const Scenario scenario,
         bins[bin] = -88.0F + pump +
             5.0F * static_cast<float>(std::sin(0.07 * bin + seconds)) +
             2.0F * static_cast<float>(std::sin(0.73 * bin - seconds));
+      }
+    } else if (scenario == Scenario::BroadSpectralHump) {
+      // A genuinely wide spectral feature (adjacent strong SSB audio, AGC
+      // pumping, or a receiver-filter skirt) rather than a narrowband CW
+      // carrier. Its raised-cosine shoulders are far wider than the
+      // near/far prominence reference windows, so both the near-shape and
+      // hertz-scaled far-reference prominence checks should reject it
+      // before any track is ever created.
+      constexpr double hump_center_hz = 500.0;
+      constexpr double hump_half_width_hz = 175.0;
+      constexpr float hump_peak_dbfs = -68.0F;
+      constexpr float hump_floor_dbfs = -105.0F;
+      for (std::size_t bin = 0; bin < bins.size(); ++bin) {
+        const double offset = static_cast<double>(bin) - hump_center_hz;
+        if (std::abs(offset) > hump_half_width_hz) continue;
+        const double raised_cosine = 0.5 * (1.0 + std::cos(
+            std::numbers::pi * offset / hump_half_width_hz));
+        bins[bin] = hump_floor_dbfs + static_cast<float>(raised_cosine) *
+            (hump_peak_dbfs - hump_floor_dbfs);
       }
     } else if (keyed) {
       const auto tone_bin = static_cast<std::size_t>(std::llround(tone_hz));
@@ -146,6 +167,7 @@ ScenarioResult runScenario(const Scenario scenario,
                               32'767.5F - 1.0F;
       const float noise_amplitude = scenario == Scenario::PumpingBroadbandNoise
           ? 0.16F
+          : scenario == Scenario::BroadSpectralHump ? 0.02F
           : scenario == Scenario::WeakFadingDriftCw ? 0.002F : 0.001F;
       block.samples[sample] = {
           amplitude * static_cast<float>(std::sin(phase)) +
@@ -172,6 +194,7 @@ const char* scenarioName(const Scenario scenario) {
     case Scenario::SpeechLikeAm: return "speech-like-am";
     case Scenario::IrregularImpulses: return "irregular-impulses";
     case Scenario::PumpingBroadbandNoise: return "pumping-broadband-noise";
+    case Scenario::BroadSpectralHump: return "broad-spectral-hump";
   }
   return "unknown";
 }
@@ -184,7 +207,8 @@ int main() {
       Scenario::WeakFadingDriftCw};
   constexpr std::array negative_scenarios{
       Scenario::SteadyCarrier, Scenario::SpeechLikeAm,
-      Scenario::IrregularImpulses, Scenario::PumpingBroadbandNoise};
+      Scenario::IrregularImpulses, Scenario::PumpingBroadbandNoise,
+      Scenario::BroadSpectralHump};
   constexpr double acquisition_target_seconds = 6.0;
   constexpr double maximum_realtime_factor = 0.20;
 
@@ -231,7 +255,7 @@ int main() {
               << result.diagnostics.best_narrowband_coherence << '\n';
   }
   const auto wall_end = std::chrono::steady_clock::now();
-  constexpr double simulated_seconds = 88.0;
+  constexpr double simulated_seconds = 98.0;
   const double wall_seconds =
       std::chrono::duration<double>(wall_end - wall_start).count();
   const double realtime_factor = wall_seconds / simulated_seconds;

@@ -7,6 +7,7 @@
 *.flac
 *.sigmf-data
 *.sigmf-meta
+*.log
 .DS_Store
 /errors/*
 !/errors/README.md

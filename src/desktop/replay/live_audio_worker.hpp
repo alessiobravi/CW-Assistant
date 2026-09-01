@@ -5,6 +5,7 @@
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <array>
 #include <atomic>
@@ -91,6 +92,7 @@ class LiveAudioDspWorker final : public QObject {
 signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
+  void diagnosticsProduced(const QVariantMap& diagnostics);
 
  private slots:
   void drain();

@@ -224,6 +224,8 @@ void LiveAudioDspWorker::stop() {
   timer_.stop();
   analyzer_.reset();
   decoder_.reset();
+  emit diagnosticsProduced(
+      verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
 }
 
 void LiveAudioDspWorker::configure(
@@ -277,6 +279,10 @@ void LiveAudioDspWorker::drain() {
       });
     }
     emit decoderProduced(decoderChannelModel(decoder_channels));
+  }
+  if (drained > 0) {
+    emit diagnosticsProduced(
+        verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   }
 }
 

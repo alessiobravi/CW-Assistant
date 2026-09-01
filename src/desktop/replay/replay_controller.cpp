@@ -81,6 +81,8 @@ class ReplayWorker final : public QObject {
     started_ = false;
     emit playbackChanged(false);
     emit progress(0.0);
+    emit diagnosticsProduced(
+        verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   }
 
   void shutdown() {
@@ -123,6 +125,7 @@ class ReplayWorker final : public QObject {
   void progress(double seconds);
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
+  void diagnosticsProduced(const QVariantMap& diagnostics);
   void ended();
 
  private slots:
@@ -158,6 +161,8 @@ class ReplayWorker final : public QObject {
       emit frameProduced(frame);
     }
     emit decoderProduced(decoderChannelModel(decoder_channels));
+    emit diagnosticsProduced(
+        verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
 
     const double sample_rate = source_.stream_descriptor().sample_rate_hz;
     emit progress(static_cast<double>(source_.position_frames()) / sample_rate);
@@ -228,6 +233,11 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayController::frameReady);
   connect(worker, &ReplayWorker::decoderProduced, this,
           &ReplayController::acceptDecoderChannels);
+  connect(worker, &ReplayWorker::diagnosticsProduced, this,
+          [this](const QVariantMap& diagnostics) {
+            verification_diagnostics_ = diagnostics;
+            emit decoderChanged();
+          });
   connect(worker, &ReplayWorker::ended, this, [this] {
     playing_ = false;
     status_text_ = QStringLiteral("Replay complete");
@@ -298,6 +308,11 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayController::frameReady);
   connect(dsp_worker, &LiveAudioDspWorker::decoderProduced, this,
           &ReplayController::acceptDecoderChannels);
+  connect(dsp_worker, &LiveAudioDspWorker::diagnosticsProduced, this,
+          [this](const QVariantMap& diagnostics) {
+            verification_diagnostics_ = diagnostics;
+            emit decoderChanged();
+          });
   audio_capture_thread_.setObjectName(QStringLiteral("Live audio capture"));
   audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
   audio_capture_thread_.start();
@@ -363,6 +378,9 @@ const QVariantList& ReplayController::decoderSessions() const noexcept {
 }
 int ReplayController::decoderSessionCount() const noexcept {
   return static_cast<int>(decoder_sessions_.size());
+}
+const QVariantMap& ReplayController::verificationDiagnostics() const noexcept {
+  return verification_diagnostics_;
 }
 
 void ReplayController::setAveragingFrames(const int value) {
@@ -538,6 +556,7 @@ void ReplayController::resetDecoder() {
   decoder_channels_.clear();
   decoder_sessions_.clear();
   decoder_session_order_.clear();
+  verification_diagnostics_.clear();
   emit decoderChanged();
 }
 

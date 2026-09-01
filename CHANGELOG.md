@@ -18,6 +18,21 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A decoder-panel diagnostics readout exposing pre-verification pipeline
+  state: private candidate and Morse-likely track counts plus a tally of the
+  specific gate each currently failing track is blocked on. This is computed
+  from `CwChannelBank::verificationDiagnostics()`, which already tracked this
+  internally; unverified candidates still receive no spectrum overlay,
+  session row, or detected-signal count. Intended for troubleshooting a
+  visible spectral feature that is not decoding.
+- A deterministic broad-spectral-hump hard-negative case in the verification
+  benchmark. A raised-cosine spectral feature far wider than the near/far
+  prominence reference windows (matching adjacent SSB audio, AGC pumping, or
+  a receiver-filter skirt rather than a narrowband CW carrier) now has a
+  permanent regression test confirming it is rejected before any track is
+  created, closing a coverage gap the existing steady-carrier and
+  speech-like-AM cases did not exercise (those reject on keying pattern
+  rather than peak shape).
 - A model-neutral development-session handoff covering the product safety
   boundaries, implemented receive/decoder architecture, dated implementation
   checkpoint, source map, required reading, local verification commands, and

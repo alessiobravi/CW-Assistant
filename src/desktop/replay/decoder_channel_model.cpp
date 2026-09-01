@@ -87,4 +87,43 @@ QVariantList decoderChannelModel(
   return model;
 }
 
+QVariantMap verificationDiagnosticsModel(
+    const cwassistant::core::CwVerificationDiagnostics& diagnostics) {
+  QVariantMap model;
+  model.insert(QStringLiteral("candidateTracks"),
+               static_cast<qulonglong>(diagnostics.candidate_tracks));
+  model.insert(QStringLiteral("morseLikelyTracks"),
+               static_cast<qulonglong>(diagnostics.morse_likely_tracks));
+  model.insert(QStringLiteral("verifiedTracks"),
+               static_cast<qulonglong>(diagnostics.verified_tracks));
+  model.insert(QStringLiteral("verifiedTransitions"),
+               static_cast<qulonglong>(diagnostics.verified_transitions));
+  model.insert(QStringLiteral("expiredUnverifiedTracks"),
+               static_cast<qulonglong>(diagnostics.expired_unverified_tracks));
+  model.insert(QStringLiteral("maxDecodedSymbols"),
+               diagnostics.maximum_decoded_symbols);
+  model.insert(QStringLiteral("maxKeyTransitions"),
+               diagnostics.maximum_key_transitions);
+  model.insert(QStringLiteral("bestTimingQuality"),
+               diagnostics.best_timing_quality);
+  model.insert(QStringLiteral("bestCadenceQuality"),
+               diagnostics.best_cadence_quality);
+  model.insert(QStringLiteral("bestNarrowbandCoherence"),
+               diagnostics.best_narrowband_coherence);
+  QVariantMap reason_counts;
+  for (std::size_t reason = 0; reason < diagnostics.current_reason_counts.size();
+       ++reason) {
+    const auto count = diagnostics.current_reason_counts[reason];
+    if (count == 0) {
+      continue;
+    }
+    reason_counts.insert(
+        QString::fromLatin1(cwassistant::core::cwVerificationReasonName(
+            static_cast<cwassistant::core::CwVerificationReason>(reason))),
+        static_cast<qulonglong>(count));
+  }
+  model.insert(QStringLiteral("reasonCounts"), reason_counts);
+  return model;
+}
+
 }  // namespace cwassistant::desktop

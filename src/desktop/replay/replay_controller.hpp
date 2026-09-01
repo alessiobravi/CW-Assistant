@@ -6,6 +6,7 @@
 #include <QThread>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include "../visualization/spectrum_frame.hpp"
 
@@ -34,6 +35,8 @@ class ReplayController final : public QObject {
                  NOTIFY decoderChanged)
   Q_PROPERTY(int decoderSessionCount READ decoderSessionCount
                  NOTIFY decoderChanged)
+  Q_PROPERTY(QVariantMap verificationDiagnostics READ verificationDiagnostics
+                 NOTIFY decoderChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -55,6 +58,7 @@ class ReplayController final : public QObject {
   [[nodiscard]] int decoderChannelCount() const noexcept;
   [[nodiscard]] const QVariantList& decoderSessions() const noexcept;
   [[nodiscard]] int decoderSessionCount() const noexcept;
+  [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -149,6 +153,7 @@ class ReplayController final : public QObject {
   QVariantList raw_decoder_channels_;
   QVariantList decoder_sessions_;
   QList<qulonglong> decoder_session_order_;
+  QVariantMap verification_diagnostics_;
   bool radio_frequency_available_{false};
   qulonglong radio_rx_rf_hz_{0};
   int cw_sideband_index_{0};

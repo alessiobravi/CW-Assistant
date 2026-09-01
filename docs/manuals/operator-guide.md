@@ -120,6 +120,18 @@ tracking. Therefore a visible narrow trace may take several characters before
 its marker appears, but a steady carrier or broadband level change should not
 be presented as a decoded station.
 
+A small diagnostics line beneath the signal count appears whenever any track
+exists that has not yet passed every verification gate: the number of
+private candidate and Morse-likely tracks, followed by a tally of the
+specific gate each is currently blocked on (for example `needs-keying-edges`
+or `low-narrowband-coherence`). Hover it for a description of every gate.
+This never adds a spectrum overlay, session row, or detected-signal count for
+an unverified track — it is aggregate troubleshooting information only,
+useful when a visible spectral feature is not decoding. A genuinely broad
+spectral feature (adjacent SSB audio, AGC pumping, a receiver-filter skirt)
+is expected to never appear as a candidate at all, because its shape fails
+the local-prominence check before any track is created.
+
 Frequency text is written vertically beside the matching colored line inside
 the upper spectrum region, never over waterfall history. Callsign text remains
 hidden until the track is verified, the decoder has promoted the text to stable,
