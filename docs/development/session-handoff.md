@@ -30,50 +30,123 @@ second unrelated repository, copy authentication material into this tree, or
 record credential paths in documentation. If authenticated Git metadata is not
 available, continue with safe local work and report the publication gap.
 
-## Implementation checkpoint — 2026-09-01
+## Implementation checkpoint — 2026-09-01 (later session)
 
-The published baseline immediately before this decoder-verification slice was
-commit `b1949aa` (`Publish only verified CW traces`). The current source after
-that baseline contains the lifecycle and diagnostics work below. A fresh
-session must inspect Git status and history to determine whether it is looking
-at the completed commit, a corrective commit, or preserved local changes. Never
-discard a dirty working tree or begin the same implementation again.
+Published baseline as of this checkpoint: commit `fd15f6a` (`Drop tracks a
+VFO shift carries past 0 Hz instead of leaving them invalid`), confirmed
+fully green on the hosted matrix (`continuous` tag resolved to it). A fresh
+session must inspect Git status and history to determine whether it is
+looking at this commit, a later one, a corrective commit, or preserved
+local changes. Never discard a dirty working tree or begin the same
+implementation again.
 
-The slice includes:
+This checkpoint followed an extended investigation into a persistent field
+report ("visible CW signals never get identified, or only the
+strongest/cleanest ones do"), driven throughout by real operator debug
+captures (`OBS-003`, now implemented — see below) rather than synthetic
+reproduction alone, which had already been tried and failed to reproduce the
+field case. In order, this investigation produced:
 
-- per-track `candidate -> Morse-likely -> verified -> lost` state and explicit
-  rejection reasons in `cw_channel_bank`;
-- hertz-scaled peak references intended to avoid FFT-bin-dependent rejection
-  of the strong live trace visible near 1.55 kHz in the operator screenshot;
-- cadence, transition, timing, and bounded per-character confidence evidence
-  in `cw_decoder`;
-- verification state/evidence exposed through the desktop decoder model;
-- a deterministic verification corpus covering clean, 30 WPM, and
-  weak/fading/drifting CW plus four non-CW interference cases;
-- documentation of the lifecycle, thresholds, measurable acceptance targets,
-  and planned bounded diagnostic capture (`OBS-003`).
+1. `OBS-003` implemented end to end: an operator-started, bounded ("Debug
+   capture" control) recording of raw live audio (`audio.wav`) plus a
+   per-track private diagnostic log (`diagnostics.jsonl`, 1 Hz, every track
+   including unverified ones), now also carrying RX/TX radio frequency and
+   split state on every line so a capture shows whether the VFO moved
+   during it. Capped at 5 minutes, never silent, requires explicit start.
+2. A character-distribution plausibility gate
+   (`CwVerificationReason::ImplausibleCharacterDistribution`): real capture
+   data showed the opposite of the original complaint — noise was being
+   *over*-verified, decoding to text overwhelmingly made of the two
+   single-element characters E/T, which the existing unknown-symbol-fraction
+   gate did not catch. This gate re-checks even an already-verified track
+   once enough text has accumulated, since implausibility can only be
+   judged from accumulated text. Validated against two independent real
+   captures (12 of 14 false positives caught directly; the remaining 2 were
+   already caught by the existing unknown-fraction gate once it was made to
+   re-evaluate continuously).
+3. A verification-state/reason consistency fix (`updateVerification()`
+   re-derives state from current evidence every call instead of only ever
+   advancing it).
+4. A VFO/on-air operator display: a large VFO readout (RX green, TX yellow
+   with a SPLIT badge, rig-display decimal precision) replacing a small
+   single-line label; a styled but intentionally unwired "ON AIR"
+   indicator (no radio backend currently reports live transmit/PTT state);
+   the CW pitch guide moved to a bold line on the spectrum/waterfall
+   boundary instead of a vertical band, so it can't be confused with an
+   identified signal (verified tracks are the ones shown as a colored
+   area, sized to their actual filter width).
+5. `CwChannelBank::shiftTrackedFrequencies()`: retuning the linked radio's
+   RX VFO during live audio now re-centers every currently tracked signal
+   (accounting for CW-U/CW-L sideband direction) instead of losing its
+   identity, and drops a track outright if a shift carries it past 0 Hz
+   (found via a real capture spanning a live VFO sweep) rather than leaving
+   an invalid negative-frequency candidate.
+6. Application update checking (`PKG-004`, partial): background + manual
+   checks against the published release manifest, checksum-verified
+   download, handoff to the OS's own installer — no silent self-install
+   yet (deliberately deferred pending code signing, `PKG-001`/`PKG-002`).
+7. **The most significant finding, found via real contest-capture data
+   containing a legible `TEST` mid-stream that never verified**:
+   `timing_quality` and `mean_character_confidence` were mathematically
+   forced identical (same accumulator fed by both in
+   `CwTimingDecoder::finishCharacter()`), so two separately configured
+   verification thresholds were really checking one blended signal twice.
+   Fixed: `timing_quality` now accumulates a genuinely independent pure
+   element-duration-ratio signal; `CwMultiSpeedDecoder::score()` was
+   updated to keep scoring WPM-hypothesis selection on the blended
+   `mean_character_confidence` to preserve its original tuned behavor (an
+   initial attempt to leave it on the new independent `timing_quality`
+   destabilized WPM lock on the existing deterministic test — an 8 WPM
+   signal started reporting ~31 WPM with the filter width oscillating
+   every step — caught with an instrumented before/after trace before
+   shipping, not just eyeballing the diff).
+8. That fix exposed, rather than fully resolved, a **bigger architectural
+   weakness in `CW-001`**, confirmed against real capture data and agreed
+   with the operator to fix properly rather than patch further:
+   `CwMultiSpeedDecoder` currently locks irrevocably onto one of nine WPM
+   hypotheses once ~2.5s has elapsed and the leader has decoded as few as
+   2 symbols (`considerLock()`); once locked, the other eight hypotheses
+   are never evaluated again, and the only recovery path is a full 2.5s
+   silence gap that contest/QSK traffic often never provides. This can be
+   self-reinforcing-wrong (a miscalibrated lock suppresses the very
+   confidence signal the per-element adaptation gates on). **This is the
+   next priority.** Full investigation notes, a detailed options
+   comparison, and the agreed design direction are written to
+   `docs/development/decoder-timing-redesign-notes.md` — a local-only file,
+   listed in `.gitignore`, never committed; read it directly from disk
+   (gitignore does not hide it from a filesystem read) before starting this
+   work. It is deliberately not duplicated into this git-tracked file.
 
-Before changing this slice further, the next session must:
+Standing rule for every session and every agent working in this repository:
+never name any external reference project, product, or repository anywhere
+in this repository (not in code, commits, or any doc — git-tracked or not,
+committed or not). Describe any resulting design decision purely on its own
+technical merits.
 
-1. Confirm the implemented spectral persistence tolerates normal key-up gaps
+Before changing decoder verification/timing behavior further, the next
+session must:
+
+1. Read `docs/development/decoder-timing-redesign-notes.md` in full before
+   starting the `CW-001` redesign.
+2. Confirm the implemented spectral persistence tolerates normal key-up gaps
    while cadence/coherence provide the stronger qualification; do not restore
    a consecutive-FFT-frame gate that rejects short high-speed marks.
-2. Confirm decoder state/resource reporting continues to include bounded
+3. Confirm decoder state/resource reporting continues to include bounded
    dynamic character-evidence storage when that structure changes.
-3. Retain desktop integration assertions for the exposed verification state,
+4. Retain desktop integration assertions for the exposed verification state,
    reason, confidence, and character evidence.
-4. Run all three dependency-free commands below, `git diff --check`, and the
+5. Run all three dependency-free commands below, `git diff --check`, and the
    relevant secret/private-data scan. Review the complete result, not only the
-   final exit code.
-5. Update all affected records if implementation details change, then commit
-   with the owner identity, push it, and monitor every hosted build and
+   final exit code. Also verify with a real (non-Apple-Clang) GCC compile
+   when touching designated-initializer struct literals — Apple Clang has
+   silently accepted out-of-declaration-order initializers that GCC and
+   MSVC correctly reject, more than once in this project's history.
+6. Update all affected records if implementation details change, then commit
+   with the owner identity, push only after the operator explicitly
+   confirms (do not push automatically after committing — the operator has
+   asked to control when each commit ships, sometimes aggregating several
+   local commits into one push), and monitor every hosted build and
    continuous publication asset until all are green.
-
-The real-radio screenshot is not a reusable signal fixture. Even if synthetic
-tests pass, retain the limitation that the 1.55 kHz hardware case needs a new
-binary and the same receiver/audio setup for confirmation. `OBS-003` is the
-planned path to collecting a bounded, consented, reproducible diagnostic bundle
-for cases like this.
 
 ## Product objective and non-negotiable scope
 
@@ -137,21 +210,41 @@ track is state, not an operating-system thread. Original samples are mixed to
 each tracked carrier and processed through phase-continuous 60, 120, and 240 Hz
 paths with two side noise references. Nine deterministic timing hypotheses
 cover 8–60 WPM. The winning path publishes provisional/stable text, adaptive
-WPM, SNR, key probability, confidence, and character evidence.
+WPM, SNR, key probability, confidence, and character evidence. **This
+hypothesis-selection mechanism currently locks irrevocably once one hypothesis
+is chosen — see the implementation checkpoint above and
+`docs/development/decoder-timing-redesign-notes.md`; a redesign is the current
+top decoder priority.**
 
 The spectrum and constant-time waterfall use the same FFT output. Visualization
 controls beneath the spectrum apply live. The configurable 700 Hz/200 Hz CW
-guide is a translucent visual overlay only; it never limits decoding or chooses
-a channel. Verified tracks use stable colors. Clicking a marker opens or
-reopens its decoder session, closing a session leaves DSP active, and cards can
-be reordered. Pointer-based guide centering and separately confirmed CAT RX
-retuning are explicitly not implemented yet (`UI-003`).
+guide is a bold line on the boundary between the spectrum plot and the
+waterfall history (not a vertical band or translucent overlay — that
+treatment was deliberately moved to verified-signal identification instead,
+so the two can't be confused); it never limits decoding or chooses a
+channel. Verified tracks are shown as a colored vertical area sized to their
+actual narrowband filter width, with a thinner keying-state line on top,
+using stable colors. Clicking a marker is *supposed to* open or reopen its
+decoder session, closing a session leaves DSP active, and cards can be
+reordered — **the operator has reported at least twice this session that
+clicking a verified marker does not open a session; static code review found
+nothing conclusively wrong (the click handler, `id` typing, and hit-area
+geometry all look correct), and the specific diagnostic needed (does the
+cursor change to a pointing hand on hover?) was never answered. Still open,
+low priority relative to `CW-001` above but worth revisiting.** Pointer-based
+guide centering and separately confirmed CAT RX retuning are explicitly not
+implemented yet (`UI-003`).
 
 Actual RF labels are shown only when a live audio input is explicitly linked to
 a configured radio and a control provider reports valid state. Sideband,
 configured pitch, split state, and checked transverter offsets participate in
 the mapping. Otherwise the UI must label the value as audio frequency rather
-than guessing RF.
+than guessing RF. The decoder panel (now titled "CW Decoder") also shows a
+large VFO-style readout under the same gating conditions — RX in green, TX in
+yellow when split is active, rig-display decimal precision — and retuning the
+linked radio's RX VFO during live audio re-centers every currently tracked
+signal to follow the retune rather than losing it (dropping a track outright
+if the shift carries it past 0 Hz).
 
 ## Decoder verification lifecycle
 
@@ -167,7 +260,13 @@ repeated spectral persistence across normal key-up gaps, keyed edges, spacing
 observations, and narrowband coherence before becoming Morse-likely.
 Verification additionally requires at least three known symbols, at most 20%
 unknown output, adequate spacing cadence, mark timing, and mean character
-confidence. Only verified tracks receive UI colors, rows, counts, or sessions.
+confidence. A character-distribution plausibility check
+(`ImplausibleCharacterDistribution`) re-evaluates even an already-verified
+track once at least 40 characters have accumulated, rejecting text whose
+E/T fraction exceeds 0.35 (calibrated against real captured noise false
+positives) — the one gate that can retroactively un-verify a track, since
+plausibility can only be judged from accumulated text, not one instant's
+evidence. Only verified tracks receive UI colors, rows, counts, or sessions.
 
 Every private track carries an inspectable rejection reason. Verification-time
 cadence, timing, character confidence, and a combined score are frozen for
@@ -188,26 +287,47 @@ targets:
   8–55 WPM matrix, no speed failures, and no false characters in noise.
 
 These are corpus limits, not universal RF performance claims. Real receiver
-recordings are still required. A September 2026 operator screenshot showed a
-strong approximately 1.55 kHz audio trace visible in the waterfall but absent
-from decoding in the prior build. The hertz-scaled prominence qualification
-and rejection diagnostics were added in response. Do not claim that hardware
-case is resolved until a new continuous binary is tested with the same setup.
+recordings are still required. An early September 2026 operator screenshot
+showed a strong approximately 1.55 kHz audio trace visible in the waterfall
+but absent from decoding; the hertz-scaled prominence qualification and
+rejection diagnostics were added in response, but synthetic reproduction of
+the underlying field report failed repeatedly. Real operator debug captures
+(`OBS-003`, see below) later showed the actual defects: noise was being
+*over*-verified (fixed by the character-distribution plausibility gate), a
+verification-gate metric-conflation bug (fixed, see the implementation
+checkpoint above), and — the currently open item — an irrevocable
+WPM-hypothesis lock in `CW-001` that a real contest capture confirmed can
+leave a track stuck decoding plausible-but-wrong text indefinitely. Do not
+claim signal identification is fully resolved until the `CW-001` redesign
+described in the checkpoint above and in
+`docs/development/decoder-timing-redesign-notes.md` is implemented and
+validated against real capture data.
 
 ## Diagnostic capture requirement
 
-`OBS-003` specifies a future operator-controlled full-debug mode. It must create
-a bounded, portable analysis bundle that can correlate:
+`OBS-003` is implemented: an operator-started "Debug capture" control (in the
+decoder panel header; a move into the Settings pane remains) records, to a
+timestamped folder under the app's standard data location:
 
-- timestamped raw and conditioned audio;
-- spectrum frames and time/frequency references;
-- private candidate lifecycle, rejection reasons, and verification evidence;
-- provisional/stable decoder streams and per-character evidence;
-- overruns, sequence gaps, queue/latency data, and relevant profile/radio state.
+- the exact raw audio feeding the decoder (`audio.wav`);
+- a private per-track diagnostic log (`diagnostics.jsonl`, 1 Hz), covering
+  every currently tracked frequency — including tracks that never become
+  visible — with SNR, narrowband coherence, filter width, verification
+  state/reason, spectral observations, key transitions, decoded/unknown
+  symbol counts, timing/cadence quality, WPM, provisional/stable text, and
+  (as of this checkpoint) the linked radio's RX/TX frequency and split state
+  so a VFO move during the capture is visible after the fact.
 
-Capture must require explicit enablement, enforce duration and size limits,
-allow review before export, and redact credentials and private identifiers. Do
-not add silent background recording or commit captured station audio/data.
+Capture requires explicit enablement, is capped at 5 minutes, allows review
+before sharing, and is never silent or automatic. This has been the primary,
+effective path for root-causing every real decoder defect found and fixed
+this session — prefer it over synthetic reproduction attempts, which failed
+to reproduce the original field report. Remaining scope (tracked as
+`OBS-003`): move the control into the Settings pane, add a button to open
+the capture folder directly, make the 5-minute auto-stop duration
+configurable, plus conditioned/spectrum frames, overruns, a review step, and
+credential/private-identifier redaction before export. Do not commit
+captured station audio/data to the repository.
 
 ## Source map
 
@@ -283,16 +403,26 @@ archive, both macOS archives, `SHA256SUMS`, and `latest.json` must be reachable.
 Do not report completion while a job is queued, failed, skipped unexpectedly,
 or cancelled.
 
-## Recommended next decoder work after this lifecycle slice
+## Recommended next decoder work after this checkpoint
 
-1. Validate the new continuous build against the operator's same live audio
-   setup and record which private gate rejects the approximately 1.55 kHz trace
-   if it still does not publish.
-2. Implement `OBS-003` diagnostic capture so future RF cases can be reproduced
-   deterministically without screenshots alone.
-3. Add consented, legally reusable real receiver recordings and annotations to
+1. **Top priority**: the `CW-001` redesign — remove `CwMultiSpeedDecoder`'s
+   irrevocable hypothesis lock, replacing it with continuous hysteresis-gated
+   re-evaluation and prefix-freezing on leader switch, per the design agreed
+   with the operator. Read `docs/development/decoder-timing-redesign-notes.md`
+   in full before starting; validate with the full existing test/benchmark
+   suite, the real debug captures already gathered this session, and a
+   CPU/state-budget check against `PERF-001`'s existing limits (running more
+   hypotheses for longer increases cost).
+2. Add consented, legally reusable real receiver recordings and annotations to
    the corpus; tune thresholds from measured false-publication, acquisition,
    and character-error results rather than visual intuition.
+3. Recognize well-known CW/contest patterns (`CQ`, `TEST`, `599`, `5NN`,
+   `TU`, `UP`, and similarly distinctive ones) in accumulated text as
+   additional, independent verification evidence (`CW-006`) — motivated by
+   a real capture where a track's text visibly contained a legible `TEST`
+   but never verified. Calibrate/test against real noise captures so it
+   cannot reopen the noise-verification problem the plausibility gate
+   closed.
 4. Implement pointer guide centering and the separate guarded CAT RX-retune
    action (`UI-003`).
 5. Only after the causal baseline is measured on real data, implement rolling
