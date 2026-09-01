@@ -146,6 +146,10 @@ class ReplayController final : public QObject {
                                  double upper_frequency_hz);
   void decodedSignalTimeoutRequested(int seconds);
   void liveDecodedSignalTimeoutRequested(int seconds);
+  void liveFrequencyShiftRequested(double audio_hz_delta);
+  void liveRadioFrequencyContextRequested(bool available, qulonglong rx_rf_hz,
+                                          qulonglong tx_rf_hz,
+                                          bool split_active);
   void debugCaptureChanged();
   void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);

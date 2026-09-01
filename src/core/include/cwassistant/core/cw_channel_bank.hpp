@@ -171,6 +171,15 @@ class CwChannelBank {
   // existing tracks; every field is sanitized exactly as at construction.
   void configure(CwChannelBankConfig config) noexcept;
   void reset() noexcept;
+  // Re-centers every current track by a known audio-domain frequency shift
+  // (for example, the shift implied by an operator retuning the linked
+  // radio's RX VFO) and resynchronizes each track's narrowband mixer/filter
+  // at its new position, without discarding decoded text, verification
+  // state/history, or spectral-observation evidence — unlike a track that
+  // drifts or jumps far enough to be lost and re-acquired from scratch, a
+  // known, deliberate retune should not interrupt an already-identified
+  // signal's identity.
+  void shiftTrackedFrequencies(double audio_hz_delta) noexcept;
   [[nodiscard]] const std::vector<CwChannelSnapshot>& updateSpectrum(
       std::uint64_t timestamp_ns, double lower_frequency_hz,
       double upper_frequency_hz, std::span<const float> bins_dbfs);

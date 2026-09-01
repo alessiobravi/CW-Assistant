@@ -278,6 +278,10 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::configure);
   connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::liveFrequencyShiftRequested, dsp_worker,
+          &LiveAudioDspWorker::shiftTrackedFrequencies);
+  connect(this, &ReplayController::liveRadioFrequencyContextRequested,
+          dsp_worker, &LiveAudioDspWorker::setRadioFrequencyContext);
   connect(this, &ReplayController::liveDebugCaptureStartRequested, dsp_worker,
           &LiveAudioDspWorker::startDebugCapture);
   connect(this, &ReplayController::liveDebugCaptureStopRequested, dsp_worker,
@@ -570,12 +574,26 @@ void ReplayController::setRadioFrequencyContext(
       cw_sideband_index_ == sideband && cw_reference_tone_hz_ == reference) {
     return;
   }
+  // A retune while already linked (not the initial link-up, and not a live
+  // audio source) shifts every currently tracked signal's audio frequency
+  // by the same amount the RX dial moved, so identified signals keep their
+  // identity across the retune instead of being lost and re-acquired.
+  if (source_mode_ == 0 && radio_frequency_available_ && available &&
+      radio_rx_rf_hz_ != rx_rf_hz) {
+    const double delta_rf_hz =
+        static_cast<double>(rx_rf_hz) - static_cast<double>(radio_rx_rf_hz_);
+    const double delta_audio_hz = sideband == 0 ? -delta_rf_hz : delta_rf_hz;
+    emit liveFrequencyShiftRequested(delta_audio_hz);
+  }
   radio_frequency_available_ = available;
   radio_rx_rf_hz_ = rx_rf_hz;
   radio_tx_rf_hz_ = tx_rf_hz;
   radio_split_active_ = split_active;
   cw_sideband_index_ = sideband;
   cw_reference_tone_hz_ = reference;
+  emit liveRadioFrequencyContextRequested(radio_frequency_available_,
+                                          radio_rx_rf_hz_, radio_tx_rf_hz_,
+                                          radio_split_active_);
   emit radioFrequencyChanged();
   rebuildDecoderModels();
 }

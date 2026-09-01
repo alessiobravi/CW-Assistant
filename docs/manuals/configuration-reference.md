@@ -94,13 +94,14 @@ cost. Resizing and initial fill retain the chosen duration. Capture timestamp
 gaps are rendered as dark rows instead of being compressed. Set **Avg** to 1–2
 for the sharpest element boundaries; higher averaging deliberately smooths time.
 
-**Visual guide** draws a bold red line on the frequency (X) axis only, not a
-band over the spectrum and history, so it is never mistaken for an
-identified signal (verified CW tracks are the ones shown as a colored
-area). It defaults to a 700 Hz center and 200 Hz width and can be adjusted
-to match the receiver's preferred sidetone. It does not select a decoder,
-limit channel detection, change decoder bandwidth, or retune the radio.
-Seven X-axis labels show the actual displayed audio or RF frequency.
+**Visual guide** draws a bold red line on the boundary between the spectrum
+plot and the waterfall history, not a band over the spectrum and history,
+so it is never mistaken for an identified signal (verified CW tracks are
+the ones shown as a colored area). It defaults to a 700 Hz center and
+200 Hz width and can be adjusted to match the receiver's preferred sidetone.
+It does not select a decoder, limit channel detection, change decoder
+bandwidth, or retune the radio. Seven X-axis labels show the actual
+displayed audio or RF frequency.
 
 The decoder scans the complete processed bandwidth selected under **Signal**.
 It acquires sub-bin local spectral peaks privately. A peak must exceed its local

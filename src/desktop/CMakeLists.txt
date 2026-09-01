@@ -1,5 +1,5 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS
-  Core Gui Multimedia Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
+  Core Gui Multimedia Network Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
 
 qt_standard_project_setup(REQUIRES 6.5)
 
@@ -15,6 +15,8 @@ qt_add_executable(cw-assistant-desktop
   radio/cat4om_client.hpp
   settings/app_settings.cpp
   settings/app_settings.hpp
+  updates/update_checker.cpp
+  updates/update_checker.hpp
   visualization/spectrum_frame.hpp
   visualization/spectrum_waterfall_item.cpp
   visualization/spectrum_waterfall_item.hpp
@@ -71,6 +73,7 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::Core
   Qt6::Gui
   Qt6::Multimedia
+  Qt6::Network
   Qt6::Qml
   Qt6::Quick
   Qt6::QuickControls2

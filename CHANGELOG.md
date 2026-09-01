@@ -6,8 +6,79 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `CwChannelBank::shiftTrackedFrequencies()`: retuning the linked radio's RX
+  VFO while live audio is running now re-centers every currently tracked
+  signal by the exact audio-domain shift the retune implies (accounting for
+  CW-U/CW-L sideband direction), resynchronizing each track's narrowband
+  mixer/filter at its new position without discarding decoded text or
+  verification state — a deliberate retune no longer loses an
+  already-identified signal's identity the way an unexplained jump would.
+  Covered by a dedicated core test asserting the shift preserves state and
+  text, then continues decoding correctly at the new frequency.
+- The VFO readout now shows decimal/centesimal precision matching a real
+  rig's display (e.g. `7016.45 kHz` on 40 m) via a dedicated formatter,
+  instead of the coarser rounding used for spectrum axis labels.
+- Debug capture (`OBS-003`) diagnostics snapshots now include a `radio`
+  object (availability, RX/TX frequency, split state) on every line, so a
+  capture can show whether/when the operator's VFO moved during the
+  recording — a common, easily overlooked explanation for a signal that
+  stops decoding partway through a capture. Covered by an extension to the
+  existing `cwa_live_audio_pipeline_test`.
+
+- Application update checking (initial `PKG-004` slice): a background check
+  runs a few seconds after startup (disableable in Settings), and Settings →
+  About gains a manual **Check for updates** button, comparing this build's
+  version against the `version` field of the published continuous-release
+  manifest. When an update is available, **Download update** fetches this
+  platform's artifact, verifies its SHA-256 against the published
+  `SHA256SUMS` before saving it, and discards anything that fails
+  verification. Nothing is installed automatically: **Open installer** hands
+  the verified download to the OS's own installer/package handler, and
+  **Show in folder** reveals it as a fallback. New `Qt6::Network`-based
+  `UpdateChecker` class; no silent self-install yet (tracked as the
+  remaining scope of `PKG-004`).
+
+### Changed
+
+- The VFO frequency readout is now a large, prominent display (RX in green,
+  TX in yellow when split is active) with a distinct SPLIT badge, instead of
+  a small single-line label — matching the visual weight of the decoder
+  panel it sits beside. Added a placeholder "ON AIR" indicator next to it,
+  styled and ready but intentionally not wired to live state: neither the
+  CAT4OM protocol nor the OmniRig properties this app currently polls
+  expose an actual transmit/PTT signal, and local keying/PTT hardware
+  control isn't implemented yet (`KEY-001`, `SAFE-001`).
+- The CW pitch guide's axis line now sits exactly on the boundary between
+  the spectrum plot and the waterfall history (matching the same 0.36
+  height split the renderer already uses), rather than at the very bottom
+  of the waterfall — that boundary is where an operator actually reads
+  frequency against traces.
+
 ### Fixed
 
+- Fixed `timing_quality` and `mean_character_confidence` being mathematically
+  forced identical: `CwTimingDecoder::finishCharacter()` fed the exact same
+  per-character `confidence_` value into both accumulators, so the two
+  separately configured verification-gate thresholds
+  (`minimum_verification_timing_quality`, `minimum_character_confidence`)
+  were really gating on one blended signal, not independent evidence —
+  found via real contest debug-capture data: a track whose text visibly
+  contained a legible `TEST` never verified because the combined metric sat
+  at 0.338 for its entire life. `timing_quality` now accumulates a genuinely
+  separate pure element-duration-ratio precision signal, excluding the
+  amplitude/keying-probability component that stays part of
+  `mean_character_confidence`. `CwMultiSpeedDecoder::score()` (WPM-hypothesis
+  selection) was updated to keep scoring on `mean_character_confidence`,
+  preserving its original, already-tuned behavior — an initial attempt to
+  leave it pointed at `timing_quality` destabilized WPM lock on the existing
+  deterministic test, caught by an instrumented before/after trace before
+  shipping. Covered by a new core-test assertion that the two fields
+  diverge. The remaining known issue — both are lifetime-cumulative
+  averages since track creation rather than windowed, so early garbled
+  history can still drag down a currently-clean track's confidence — is
+  deferred to its own change (tracked in `BACKLOG.md` under `CW-001`).
 - Fixed the root cause behind reports of CW visibly present in the spectrum
   never being identified: analysis of an operator-provided debug capture
   (using the new `OBS-003` capture tool) showed every falsely verified track

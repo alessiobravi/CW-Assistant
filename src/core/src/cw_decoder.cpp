@@ -226,6 +226,7 @@ void CwTimingDecoder::finishElement(const double duration_ms) {
   const float timing_confidence = static_cast<float>(std::exp(
       -1.25 * std::min(dot_distance, dash_distance)));
   element_confidence_sum_ += mark_confidence * timing_confidence;
+  timing_confidence_sum_ += timing_confidence;
   if (element_count_ < 255) ++element_count_;
 
   const double estimate = dash ? duration_ms / 3.0 : duration_ms;
@@ -245,8 +246,22 @@ void CwTimingDecoder::finishCharacter() {
       : std::clamp(element_confidence_sum_ /
                        static_cast<float>(element_count_),
                    0.0F, 1.0F);
-  if (provisional_text_ == "?") confidence_ *= 0.35F;
-  timing_quality_sum_ += confidence_;
+  // Pure duration-ratio precision, independent of confidence_'s blended
+  // amplitude/keying-probability component: two tracks with identical
+  // cadence precision but different SNR must not report identical
+  // "timing quality" just because they report identical character
+  // confidence -- that collapses two lines of verification evidence into
+  // one (see BACKLOG.md CW-001's known-defect note).
+  float character_timing_quality = element_count_ == 0
+      ? 0.0F
+      : std::clamp(timing_confidence_sum_ /
+                       static_cast<float>(element_count_),
+                   0.0F, 1.0F);
+  if (provisional_text_ == "?") {
+    confidence_ *= 0.35F;
+    character_timing_quality *= 0.35F;
+  }
+  timing_quality_sum_ += character_timing_quality;
   character_confidence_sum_ += confidence_;
   if (decoded_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
     ++decoded_symbol_count_;
@@ -256,11 +271,12 @@ void CwTimingDecoder::finishCharacter() {
   provisional_character_ = {
       .symbol = provisional_text_,
       .confidence = confidence_,
-      .timing_quality = confidence_,
+      .timing_quality = character_timing_quality,
       .known = provisional_text_ != "?",
   };
   elements_.clear(); character_finished_ = true;
   element_confidence_sum_ = 0.0F;
+  timing_confidence_sum_ = 0.0F;
   element_count_ = 0;
 }
 
@@ -443,7 +459,14 @@ float CwMultiSpeedDecoder::score(
   const float known_fraction = 1.0F -
       static_cast<float>(update.unknown_symbols) /
           static_cast<float>(update.decoded_symbols);
-  return 2.5F * update.timing_quality + 0.4F * known_fraction -
+  // Hypothesis selection deliberately scores on mean_character_confidence
+  // (the blended amplitude/keying-probability and timing signal), not the
+  // now-independent pure-cadence timing_quality: this preserves the
+  // original, already-tuned hypothesis-selection behavior, since
+  // timing_quality's separation (see BACKLOG.md CW-001) was made only to
+  // stop it duplicating mean_character_confidence for the verification
+  // gate, not to change which WPM hypothesis wins here.
+  return 2.5F * update.mean_character_confidence + 0.4F * known_fraction -
          0.15F * (1.0F - update.confidence) -
          0.20F * prior_distance;
 }

@@ -639,6 +639,16 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.filter_initialized = false;
 }
 
+void CwChannelBank::shiftTrackedFrequencies(
+    const double audio_hz_delta) noexcept {
+  if (audio_hz_delta == 0.0 || !std::isfinite(audio_hz_delta)) return;
+  for (Track& track : tracks_) {
+    track.frequency_hz += audio_hz_delta;
+    resetFilter(track);
+  }
+  rebuildSnapshots();
+}
+
 void CwChannelBank::updateVerification(Track& track) {
   // Checked even for an already-verified track (unlike every gate below):
   // it can only be judged from accumulated text, not a single instant's

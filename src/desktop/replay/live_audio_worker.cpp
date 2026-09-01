@@ -313,6 +313,19 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
                  static_cast<qint64>(diagnostics.verified_tracks));
   root.insert(QStringLiteral("summary"), summary);
 
+  // Recorded every snapshot (not just once) specifically so a reviewer can
+  // tell, after the fact, whether/when the operator's RX VFO moved during
+  // the capture window -- a VFO move is a common, easily overlooked
+  // explanation for a signal that stops decoding partway through a capture.
+  QJsonObject radio;
+  radio.insert(QStringLiteral("available"), radio_frequency_available_);
+  radio.insert(QStringLiteral("rxFrequencyHz"),
+              static_cast<double>(radio_rx_rf_hz_));
+  radio.insert(QStringLiteral("txFrequencyHz"),
+              static_cast<double>(radio_tx_rf_hz_));
+  radio.insert(QStringLiteral("splitActive"), radio_split_active_);
+  root.insert(QStringLiteral("radio"), radio);
+
   QJsonArray tracks;
   for (const auto& track : decoder_.allTrackDiagnostics()) {
     QJsonObject item;
@@ -379,6 +392,19 @@ void LiveAudioDspWorker::configure(
 void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
   decoder_.configure({.decoded_track_retention_seconds =
                           static_cast<double>(std::clamp(seconds, 5, 120))});
+}
+
+void LiveAudioDspWorker::shiftTrackedFrequencies(const double audio_hz_delta) {
+  decoder_.shiftTrackedFrequencies(audio_hz_delta);
+}
+
+void LiveAudioDspWorker::setRadioFrequencyContext(
+    const bool available, const qulonglong rx_rf_hz,
+    const qulonglong tx_rf_hz, const bool split_active) {
+  radio_frequency_available_ = available;
+  radio_rx_rf_hz_ = rx_rf_hz;
+  radio_tx_rf_hz_ = tx_rf_hz;
+  radio_split_active_ = split_active;
 }
 
 void LiveAudioDspWorker::drain() {

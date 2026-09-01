@@ -14,6 +14,7 @@
 
 #include "replay/replay_controller.hpp"
 #include "settings/app_settings.hpp"
+#include "updates/update_checker.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
 
 int main(int argc, char* argv[]) {
@@ -48,6 +49,7 @@ int main(int argc, char* argv[]) {
     settings.setOwnCallsign(QStringLiteral(" iu0lfq/p "));
   }
   cwassistant::desktop::ReplayController replay_controller;
+  cwassistant::desktop::UpdateChecker update_checker;
   const auto apply_spectrum_processing = [&settings, &replay_controller] {
     replay_controller.setAveragingFrames(settings.averagingFrames());
     replay_controller.setSpectrumProcessing(
@@ -103,6 +105,15 @@ int main(int argc, char* argv[]) {
                                            &settings);
   engine.rootContext()->setContextProperty(QStringLiteral("replayController"),
                                            &replay_controller);
+  engine.rootContext()->setContextProperty(QStringLiteral("updateChecker"),
+                                           &update_checker);
+  if (!parser.isSet(smoke_test_option) && update_checker.autoCheckEnabled()) {
+    // A short delay so the background check never competes with startup
+    // rendering/audio work; never runs during the smoke test, which must
+    // stay hermetic (no real network access).
+    QTimer::singleShot(4'000, &update_checker,
+                       [&update_checker] { update_checker.checkForUpdates(); });
+  }
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
       [] { QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);

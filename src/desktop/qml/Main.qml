@@ -25,6 +25,16 @@ ApplicationWindow {
         return hz.toFixed(0) + " Hz"
     }
 
+    // A VFO-style readout deserves the same decimal/centesimal precision a
+    // real rig's display has (e.g. 7016.45 kHz on 40 m), which the coarser
+    // formatFrequency() above deliberately does not provide for spectrum
+    // axis labels.
+    function formatVfoFrequency(hz) {
+        if (Math.abs(hz) >= 30000000)
+            return (hz / 1000000).toFixed(5) + " MHz"
+        return (hz / 1000).toFixed(2) + " kHz"
+    }
+
     // Maps a spectrum frequency to its horizontal pixel position within the
     // spectrumDisplay item, shared by the CW guide axis marker and the
     // verified-signal area highlights so both stay pixel-aligned.
@@ -268,7 +278,12 @@ ApplicationWindow {
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
                     x: window.hzToX(visibleLowerHz)
-                    y: spectrumDisplay.y + spectrumDisplay.height - 3
+                    // Sits on the boundary between the spectrum plot and the
+                    // waterfall history (the same 0.36 split the renderer
+                    // uses, see spectrum_waterfall_item.cpp), not at the very
+                    // bottom of the waterfall — that boundary line is where
+                    // the operator actually reads frequency against traces.
+                    y: spectrumDisplay.y + spectrumDisplay.height * 0.36 - 1
                     width: window.hzToX(visibleUpperHz) - window.hzToX(visibleLowerHz)
                     height: 3
                     color: "#ff7b84"
@@ -643,23 +658,102 @@ ApplicationWindow {
                         ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Capped at 5 minutes. Review the saved files before sharing them — the audio is whatever the selected input picked up."
                     }
                 }
-                Label {
-                    id: vfoFrequencyLabel
-                    objectName: "vfoFrequencyLabel"
+                ColumnLayout {
+                    id: vfoDisplay
+                    objectName: "vfoDisplay"
                     // The VFO readout only means anything with a live,
                     // connected radio driving the audio (CAT/OmniRig); it is
                     // hidden entirely for receive-only SWL setups and WAV
                     // replay, where there is no radio state to show.
                     visible: replayController.radioFrequencyAvailable
                              && replayController.sourceMode === 0
-                    text: replayController.radioSplitActive
-                          ? "RX " + window.formatFrequency(replayController.radioRxFrequencyHz)
-                            + "  •  TX " + window.formatFrequency(replayController.radioTxFrequencyHz)
-                          : "VFO " + window.formatFrequency(replayController.radioRxFrequencyHz)
-                    color: "#43c6ac"
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
                     Layout.fillWidth: true
+                    spacing: 2
+                    RowLayout {
+                        spacing: 10
+                        Label {
+                            objectName: "vfoRxLabel"
+                            text: "RX  " + window.formatVfoFrequency(replayController.radioRxFrequencyHz)
+                            color: "#4dff88"
+                            font.pixelSize: 28
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1
+                        }
+                        Rectangle {
+                            objectName: "vfoSplitBadge"
+                            visible: replayController.radioSplitActive
+                            radius: 4
+                            color: "#3a2f10"
+                            border.color: "#ffe14d"
+                            border.width: 1
+                            implicitWidth: splitBadgeLabel.implicitWidth + 12
+                            implicitHeight: splitBadgeLabel.implicitHeight + 6
+                            Label {
+                                id: splitBadgeLabel
+                                anchors.centerIn: parent
+                                text: "SPLIT"
+                                color: "#ffe14d"
+                                font.pixelSize: 12
+                                font.weight: Font.Bold
+                            }
+                        }
+                        Rectangle {
+                            id: onAirIndicator
+                            objectName: "onAirIndicator"
+                            // Placeholder only: no backend currently reports
+                            // live PTT/transmit state (neither the CAT4OM
+                            // protocol nor the OmniRig properties this app
+                            // polls expose it, and local keying/PTT hardware
+                            // control is not implemented yet — see KEY-001,
+                            // SAFE-001 in BACKLOG.md). "active" is wired up
+                            // for real once that telemetry exists; until
+                            // then this always renders unlit.
+                            property bool active: false
+                            radius: 6
+                            implicitWidth: onAirRow.implicitWidth + 16
+                            implicitHeight: onAirRow.implicitHeight + 8
+                            color: active ? "#4d0d0d" : "#1c2229"
+                            border.color: active ? "#ff3b30" : "#3a4552"
+                            border.width: 1
+                            RowLayout {
+                                id: onAirRow
+                                anchors.centerIn: parent
+                                spacing: 6
+                                Rectangle {
+                                    width: 10
+                                    height: 10
+                                    radius: 5
+                                    color: onAirIndicator.active ? "#ff3b30" : "#4a1414"
+                                    border.color: onAirIndicator.active ? "#ff8a80" : "#5c2020"
+                                    border.width: 1
+                                }
+                                Label {
+                                    text: "ON AIR"
+                                    color: onAirIndicator.active ? "#ff8a80" : "#5c6a78"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                    font.letterSpacing: 1
+                                }
+                            }
+                            ToolTip.visible: onAirMouse.containsMouse
+                            ToolTip.delay: 300
+                            ToolTip.text: "Placeholder — not wired to live transmit state yet; no radio backend currently reports it."
+                            MouseArea {
+                                id: onAirMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                            }
+                        }
+                    }
+                    Label {
+                        objectName: "vfoTxLabel"
+                        visible: replayController.radioSplitActive
+                        text: "TX  " + window.formatVfoFrequency(replayController.radioTxFrequencyHz)
+                        color: "#ffe14d"
+                        font.pixelSize: 28
+                        font.weight: Font.Bold
+                        font.letterSpacing: 1
+                    }
                 }
                 Label {
                     visible: replayController.debugCaptureActive || replayController.debugCapturePath.length > 0

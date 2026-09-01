@@ -92,6 +92,16 @@ class LiveAudioDspWorker final : public QObject {
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  // Re-centers every currently tracked signal by a known audio-domain shift
+  // (the shift implied by an operator retuning the linked radio's RX VFO),
+  // so an already-identified signal's tracking follows the retune instead
+  // of being lost and re-acquired from scratch.
+  void shiftTrackedFrequencies(double audio_hz_delta);
+  // Mirrors the radio frequency context ReplayController tracks, purely so
+  // a debug capture snapshot can record whether/how the RX (and TX, if
+  // split) dial frequency moved during the capture window.
+  void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
+                                qulonglong tx_rf_hz, bool split_active);
   // Operator-started, bounded diagnostic capture (OBS-003): records the raw
   // audio feeding the decoder plus periodic per-track private diagnostic
   // snapshots to help debug why a visible signal is not decoding. Never
@@ -127,6 +137,10 @@ signals:
   bool capture_active_{false};
   bool capture_writer_pending_{false};
   bool capture_have_start_{false};
+  bool radio_frequency_available_{false};
+  qulonglong radio_rx_rf_hz_{0};
+  qulonglong radio_tx_rf_hz_{0};
+  bool radio_split_active_{false};
   static constexpr double kMaximumCaptureSeconds = 300.0;
   static constexpr double kSnapshotIntervalSeconds = 1.0;
 };

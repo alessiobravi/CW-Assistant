@@ -121,6 +121,10 @@ int main(int argc, char* argv[]) {
       Q_ARG(double, -12.0), Q_ARG(bool, false), Q_ARG(double, 0.0),
       Q_ARG(double, 24'000.0));
   QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
+  QMetaObject::invokeMethod(
+      worker, "setRadioFrequencyContext", Qt::BlockingQueuedConnection,
+      Q_ARG(bool, true), Q_ARG(qulonglong, 7'016'450ULL),
+      Q_ARG(qulonglong, 0ULL), Q_ARG(bool, false));
 
   QTemporaryDir capture_root;
   QMetaObject::invokeMethod(worker, "startDebugCapture",
@@ -166,6 +170,11 @@ int main(int argc, char* argv[]) {
   if (!first_line.contains("\"tracks\"") ||
       !first_line.contains("\"candidateTracks\"")) {
     return 7;  // Diagnostics log line missing expected structure.
+  }
+  if (!first_line.contains("\"radio\"") ||
+      !first_line.contains("7016450") ||
+      !first_line.contains("\"available\":true")) {
+    return 8;  // Radio frequency context missing from the diagnostics log.
   }
   return 0;
 }

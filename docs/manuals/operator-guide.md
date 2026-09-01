@@ -75,13 +75,15 @@ duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subjec
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
 it only when a steadier but less time-sharp display is more useful.
 
-Enable **Visual guide** to draw a bold red line on the frequency (X) axis
-marking the desired receive tone. The default is centered at 700 Hz with a
-200 Hz width; both values update in real time and are stored per profile.
-It is deliberately kept to the axis rather than drawn as a vertical band, so
-it can never be mistaken for an identified signal — that treatment is
-reserved for verified CW tracks (see below). This guide is visual only: it
-does not select a decoder, limit decoding, change receiver tuning, or
+Enable **Visual guide** to draw a bold red line marking the desired receive
+tone, sitting exactly on the boundary between the spectrum plot and the
+waterfall history — where frequency is actually read against traces. The
+default is centered at 700 Hz with a 200 Hz width; both values update in
+real time and are stored per profile. It is deliberately kept to that
+boundary line rather than drawn as a vertical band, so it can never be
+mistaken for an identified signal — that treatment is reserved for verified
+CW tracks (see below). This guide is visual only: it does not select a
+decoder, limit decoding, change receiver tuning, or
 change decoder bandwidth.
 
 Pointer tuning is planned, not active in this build. The defined behavior is:
@@ -179,7 +181,10 @@ starts a bounded recording:
   never become visible — with its SNR, narrowband coherence, filter width,
   verification state and reason, spectral observations, key transitions,
   decoded/unknown symbol counts, timing/cadence quality, WPM, and both
-  provisional and stable decoded text.
+  provisional and stable decoded text. Each line also records the linked
+  radio's RX/TX frequency and split state at that instant, so reviewing the
+  file shows whether (and exactly when) the VFO moved during the capture —
+  a common explanation for a signal that stops decoding partway through.
 
 Both files are written to a timestamped folder under the application's
 standard per-user data location; the panel shows the exact path while
@@ -221,6 +226,24 @@ The displayed version is the same `major.minor.revision` value embedded in the
 native installer/package and application metadata. Continuous builds use the
 GitHub workflow run number as the revision, so a hosted build may show, for
 example, `0.1.245`; a default local development build shows `0.1.0`.
+
+## Checking for updates
+
+The same **Settings → About** page checks for updates. A background check
+runs a few seconds after every launch (uncheck **Automatically check for
+updates** to disable it), and **Check for updates** runs one on demand,
+showing when it last ran and whether a newer version is published.
+
+When an update is available, **Download update** fetches this platform's
+installer/package to your Downloads folder and verifies its checksum against
+the published `SHA256SUMS` before keeping it — a failed or mismatched
+download is discarded automatically, never silently kept. Once verified,
+**Open installer** hands it to the OS's own installer or package manager
+(the Windows MSI installer, the Linux package tool, or an archive tool on
+the portable builds) so you complete the install the normal way; **Show in
+folder** reveals it instead if you would rather run it yourself. The
+application never downloads or installs anything without you clicking
+these buttons, and never silently replaces itself while running.
 
 ## First launch
 
@@ -296,12 +319,28 @@ RX frequency; CAT4OM uses its pushed radio state. The RX transverter offset is
 applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
 unavailable frequency providers deliberately show **AF** rather than guessing.
 
-The **CW Decoder** panel shows the same resolved frequency as a VFO-style
-readout above the signal list — "VFO `<RX frequency>`", or "RX `<RX
-frequency>` • TX `<TX frequency>`" once split is active — under the exact
-same conditions as the marker labels above. It disappears entirely for
-receive-only SWL setups, WAV replay, and whenever no radio is currently
-linked, rather than showing a stale or meaningless value.
+The **CW Decoder** panel shows the same resolved frequency as a large
+VFO-style readout above the signal list, sized to match the panel around
+it: RX in green, and — once split is active — TX in yellow alongside a
+SPLIT badge, both shown with the same decimal/centesimal precision a real
+rig's display has (for example `7016.45 kHz` on 40 m). It disappears
+entirely for receive-only SWL setups, WAV replay, and whenever no radio is
+currently linked, rather than showing a stale or meaningless value. Note
+that showing this readout at all requires **both** Settings → Radio
+**Radio enabled** and the **audio input linked to radio** toggle — enabling
+the radio alone is not enough.
+
+Retuning the linked radio's RX VFO while live audio is running follows any
+already-identified signal rather than losing it: every tracked signal is
+re-centered by the exact amount the RX dial moved (translated to audio Hz
+using the configured CW-U/CW-L sideband direction), so its decoded text and
+verification carry over across the retune instead of restarting.
+
+Next to the VFO readout is an **ON AIR** indicator. It is a placeholder
+only: it never lights, because no currently supported radio backend
+reports live transmit/PTT state (OmniRig's own status property is not yet
+polled for it, and CAT4OM's protocol has no such field). It will start
+reflecting real state once that telemetry is added.
 
 Example satellite station:
 

@@ -367,6 +367,10 @@ void test_cw_channel_bank() {
     expect(verified.characters.size() >= 3 &&
                verified.characters.back().known,
            "stable decoded characters retain bounded per-character evidence");
+    expect(std::abs(verified.verification_timing_quality -
+                    verified.verification_character_confidence) > 0.01F,
+           "timing quality and character confidence are genuinely "
+           "independent signals, not the same value reported twice");
   }
   const auto slow_diagnostics = slow_bank.verificationDiagnostics();
   expect(slow_diagnostics.verified_tracks == 1 &&
@@ -380,12 +384,55 @@ void test_cw_channel_bank() {
          "per-track diagnostics for operator-consented debug capture expose "
          "full private state including decoded text");
 
+  // A VFO retune (a known, deliberate audio-domain shift) must preserve the
+  // track's identity and decoded history, unlike an unexplained jump that
+  // exceeds normal tracking tolerance and would be treated as a lost track.
+  const auto text_before_shift = slow_track_diagnostics.front().text;
+  const auto frequency_before_shift = slow_bank.channels().front().frequency_hz;
+  slow_bank.shiftTrackedFrequencies(300.0);
+  expect(!slow_bank.channels().empty() &&
+             std::abs(slow_bank.channels().front().frequency_hz -
+                      (frequency_before_shift + 300.0)) < 0.01 &&
+             slow_bank.channels().front().verification_state ==
+                 cwassistant::core::CwTrackState::Verified &&
+             slow_bank.channels().front().text == text_before_shift,
+         "shiftTrackedFrequencies re-centers a track by exactly the given "
+         "delta while preserving its verification state and decoded text");
+  for (int step = 0; step < slow_steps; ++step) {
+    const bool keyed = slow_keying[static_cast<std::size_t>(step) %
+                                    slow_keying.size()];
+    fine_bins.assign(fine_bins.size(), -110.0F);
+    if (keyed) fine_bins[700] = -68.0F;
+    const auto timestamp =
+        static_cast<std::uint64_t>(slow_steps + step) * 10'000'000;
+    static_cast<void>(slow_bank.updateSpectrum(
+        timestamp, 0.0, 1'000.0, fine_bins));
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = timestamp;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.25F * static_cast<float>(std::sin(slow_phase)) : 0.0F,
+          0.0F};
+      slow_phase += 2.0 * std::numbers::pi * 700.0 / sample_rate;
+    }
+    static_cast<void>(slow_bank.processSamples(block));
+  }
+  expect(slow_bank.channels().size() == 1 &&
+             slow_bank.channels().front().verification_state ==
+                 cwassistant::core::CwTrackState::Verified &&
+             slow_bank.channels().front().text.size() >
+                 text_before_shift.size(),
+         "decoding continues on the same track identity at the shifted "
+         "frequency, growing its text, rather than starting a new track");
+
   slow_bank.configure({.empty_track_retention_seconds = 2.0,
                        .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {
     fine_bins.assign(fine_bins.size(), -110.0F);
     const auto timestamp = static_cast<std::uint64_t>(
-        static_cast<std::int64_t>(slow_steps) + silence_step) * 10'000'000;
+        static_cast<std::int64_t>(2 * slow_steps) + silence_step) * 10'000'000;
     static_cast<void>(slow_bank.updateSpectrum(
         timestamp, 0.0, 1'000.0, fine_bins));
     cwassistant::core::RealtimeSampleBlock block;

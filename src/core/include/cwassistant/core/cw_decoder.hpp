@@ -72,6 +72,12 @@ class CwTimingDecoder {
   float key_down_probability_{0.0F};
   float confidence_{0.0F};
   float element_confidence_sum_{0.0F};
+  // Pure element-duration-ratio precision, deliberately excluding the
+  // amplitude/keying-probability (mark_confidence) component folded into
+  // element_confidence_sum_/confidence_ above -- feeds timing_quality_sum_
+  // so it measures cadence precision independently of SNR-driven
+  // character confidence, rather than duplicating it.
+  float timing_confidence_sum_{0.0F};
   float mark_probability_sum_{0.0F};
   double mark_probability_duration_ms_{0.0};
   float timing_quality_sum_{0.0F};

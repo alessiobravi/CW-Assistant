@@ -394,6 +394,70 @@ Pane {
                         color: "#91a0b1"
                     }
                     Rectangle { Layout.fillWidth: true; height: 1; color: "#2b3541" }
+                    Label { text: "Updates"; font.pixelSize: 17; font.weight: Font.DemiBold }
+                    CheckBox {
+                        objectName: "autoUpdateCheckToggle"
+                        text: "Automatically check for updates"
+                        checked: updateChecker.autoCheckEnabled
+                        onToggled: updateChecker.autoCheckEnabled = checked
+                    }
+                    RowLayout {
+                        spacing: 10
+                        Button {
+                            objectName: "checkForUpdatesButton"
+                            text: updateChecker.checking ? "Checking…" : "Check for updates"
+                            enabled: !updateChecker.checking
+                            onClicked: updateChecker.checkForUpdates()
+                        }
+                        Label {
+                            text: "Last checked: " + updateChecker.lastCheckedText
+                            color: "#6c7c8e"
+                            font.pixelSize: 11
+                        }
+                    }
+                    Label {
+                        objectName: "updateStatusLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: updateChecker.statusMessage
+                        color: updateChecker.updateAvailable ? "#4dff88" : "#91a0b1"
+                    }
+                    RowLayout {
+                        visible: updateChecker.updateAvailable && updateChecker.platformSupported
+                        spacing: 10
+                        Button {
+                            objectName: "downloadUpdateButton"
+                            text: updateChecker.downloading
+                                  ? "Downloading… " + Math.round(updateChecker.downloadProgress * 100) + "%"
+                                  : "Download update"
+                            enabled: !updateChecker.downloading
+                            onClicked: updateChecker.downloadUpdate()
+                        }
+                    }
+                    RowLayout {
+                        visible: updateChecker.downloadVerified
+                        spacing: 10
+                        Button {
+                            objectName: "openUpdateButton"
+                            text: "Open installer"
+                            onClicked: updateChecker.openDownloadedFile()
+                        }
+                        Button {
+                            objectName: "revealUpdateButton"
+                            text: "Show in folder"
+                            flat: true
+                            onClicked: updateChecker.revealDownloadFolder()
+                        }
+                    }
+                    Label {
+                        visible: updateChecker.updateAvailable && !updateChecker.platformSupported
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#f3bd55"
+                        text: "Guided downloads are not available for this platform yet; visit the release page instead."
+                        font.pixelSize: 11
+                    }
+                    Rectangle { Layout.fillWidth: true; height: 1; color: "#2b3541" }
                     Label { text: "Author"; color: "#8290a0" }
                     Label { text: "Alessio Bravi (IU0LFQ / AD2FC)"; font.pixelSize: 17; font.weight: Font.Medium }
                     Label { text: "Author Website"; color: "#8290a0" }
