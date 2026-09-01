@@ -105,7 +105,10 @@ provisional. After at least 2.5 seconds of keyed evidence and sufficient symbol
 or score separation, only the winning adaptive path continues processing. A
 2.5-second post-transmission silence commits its stable prefix and permits a
 fresh bounded acquisition for a different sender/speed. Current allocated state
-is about 3.2 KiB per active track in the deterministic benchmark.
+is reported conservatively, including dynamic evidence buffers; the timing
+corpus enforces a 256 KiB per-decoder ceiling and currently remains far below
+it. This estimate is a regression guard, not a replacement for platform peak
+memory measurement.
 
 Candidate peaks use parabolic sub-bin interpolation, and a bounded predictor
 maintains carrier frequency plus drift while preserving track identity.
@@ -114,11 +117,16 @@ confidence, delayed multi-pass refinement, a bounded worker pool for those
 heavier passes, and co-channel source separation remain.
 
 Candidate state is not presentation state. A local-prominence guard rejects
-broad spectral shoulders, and remaining candidates stay private until repeated
-spectral observations plus known-symbol ratio and timing-quality gates verify
-Morse-like keying. Private candidates have a shorter expiry and cannot consume
-UI colors, detected-signal count, or session rows. Completed stable-word gating
-is applied again before a structurally valid callsign is exposed.
+broad spectral shoulders using a near check and FFT-resolution-independent
+hertz-scaled references. Remaining tracks progress through candidate,
+Morse-likely, verified, and lost states. Repeated spectral persistence across
+normal key-up gaps, keyed edges, narrowband coherence, spacing cadence,
+known-symbol ratio, mark
+timing, and character confidence supply inspectable rejection reasons and one
+frozen verification-time score. Private states cannot consume UI colors,
+detected-signal count, or session rows. Stable characters carry bounded
+per-character evidence; completed-word gating is applied again before a
+structurally valid callsign is exposed.
 
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session

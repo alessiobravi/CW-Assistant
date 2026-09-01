@@ -5,3 +5,7 @@ add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 add_executable(cwa_decoder_benchmark cw_decoder_benchmark.cpp)
 target_link_libraries(cwa_decoder_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_decoder_benchmark COMMAND cwa_decoder_benchmark)
+
+add_executable(cwa_verification_benchmark cw_verification_benchmark.cpp)
+target_link_libraries(cwa_verification_benchmark PRIVATE cwa_core)
+add_test(NAME cwa_verification_benchmark COMMAND cwa_verification_benchmark)

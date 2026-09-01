@@ -68,6 +68,7 @@ struct ReplayResult {
   double wpm{0.0};
   std::uint64_t updates{0};
   double simulated_seconds{0.0};
+  std::size_t state_bytes{0};
 };
 
 ReplayResult replayMessage(const std::string_view message, const double wpm,
@@ -114,7 +115,8 @@ ReplayResult replayMessage(const std::string_view message, const double wpm,
   return {.text = trimSpaces(latest.text),
           .wpm = latest.wpm,
           .updates = updates,
-          .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0};
+          .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0,
+          .state_bytes = decoder.stateBytes()};
 }
 
 ReplayResult replaySpeedChange() {
@@ -151,7 +153,8 @@ ReplayResult replaySpeedChange() {
   latest = decoder.flush(now_ns + 1'000'000'000);
   return {.text = trimSpaces(latest.text), .wpm = latest.wpm,
           .updates = updates,
-          .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0};
+          .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0,
+          .state_bytes = decoder.stateBytes()};
 }
 
 }  // namespace
@@ -179,6 +182,7 @@ int main() {
   std::size_t speed_failures = 0;
   std::uint64_t updates = 0;
   double simulated_seconds = 0.0;
+  std::size_t maximum_state_bytes = 0;
   for (const auto& benchmark : cases) {
     const ReplayResult result = replayMessage(
         benchmark.message, benchmark.wpm, benchmark.snr_db,
@@ -192,6 +196,7 @@ int main() {
     edits += case_edits;
     updates += result.updates;
     simulated_seconds += result.simulated_seconds;
+    maximum_state_bytes = std::max(maximum_state_bytes, result.state_bytes);
     std::cout << "case=" << benchmark.name
               << " wpm=" << benchmark.wpm
               << " snr_db=" << benchmark.snr_db
@@ -209,6 +214,8 @@ int main() {
   expected_characters += std::string_view("CQ TEST").size();
   updates += speed_change.updates;
   simulated_seconds += speed_change.simulated_seconds;
+  maximum_state_bytes = std::max(
+      maximum_state_bytes, speed_change.state_bytes);
   if (std::abs(speed_change.wpm - 40.0) / 40.0 > 0.25) ++speed_failures;
   std::cout << "case=midstream-speed-change wpm=12_to_40"
             << " acquired_wpm=" << speed_change.wpm
@@ -231,6 +238,8 @@ int main() {
   }
   silence = silence_decoder.flush(silence_time_ns + 500'000'000);
   const std::size_t false_characters = trimSpaces(silence.text).size();
+  maximum_state_bytes = std::max(
+      maximum_state_bytes, silence_decoder.stateBytes());
 
   const auto wall_end = std::chrono::steady_clock::now();
   const double wall_seconds =
@@ -243,6 +252,7 @@ int main() {
   const double real_time_factor = total_simulated_seconds > 0.0
       ? wall_seconds / total_simulated_seconds
       : 0.0;
+  constexpr std::size_t maximum_decoder_state_bytes = 256U * 1'024U;
   std::cout << "summary expected_characters=" << expected_characters
             << " edits=" << edits
             << " speed_failures=" << speed_failures
@@ -253,9 +263,11 @@ int main() {
             << " wall_seconds=" << wall_seconds
             << " real_time_factor=" << real_time_factor
             << " timing_hypotheses=" << silence_decoder.hypothesisCount()
-            << " decoder_state_bytes=" << silence_decoder.stateBytes()
+            << " maximum_decoder_state_bytes=" << maximum_state_bytes
+            << " state_limit_bytes=" << maximum_decoder_state_bytes
             << '\n';
 
-  return edits == 0 && speed_failures == 0 && false_characters == 0
+  return edits == 0 && speed_failures == 0 && false_characters == 0 &&
+      maximum_state_bytes <= maximum_decoder_state_bytes
       ? EXIT_SUCCESS : EXIT_FAILURE;
 }

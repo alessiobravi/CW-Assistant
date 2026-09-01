@@ -27,9 +27,11 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Accept mono audio and complex IQ through the same timestamped block contract.
 - Detect candidate tones using a shared spectral analysis stage.
 - Keep spectral candidates private until configurable prominence, persistence,
-  Morse-symbol validity, unknown-output, and timing-quality gates verify a CW
-  trace. Unverified candidates must not receive overlays, session rows, or a
-  detected-signal count.
+  narrowband coherence, keyed-edge/spacing cadence, Morse-symbol validity,
+  unknown-output, timing-quality, and character-confidence gates verify a CW
+  trace. Track candidate, Morse-likely, verified, and lost states with
+  inspectable rejection reasons. Unverified candidates must not receive
+  overlays, session rows, or a detected-signal count.
 - Track frequency drift and maintain separate timing/decoder state per channel.
 - Preserve soft tone/envelope/timing evidence and combine an explainable
   adaptive timing decoder with an optional compact causal learned likelihood
@@ -53,6 +55,11 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Distinguish raw evidence, provisional text, stable text, and context-derived
   suggestions. Store per-character pass/evidence provenance and calibrate
   confidence on held-out recordings.
+- Provide an explicitly enabled, bounded diagnostic capture mode that can
+  correlate raw/conditioned audio, spectra, private candidate decisions,
+  decoded character evidence, timing/frequency references, and pipeline
+  overruns. Require review and redact credentials/private identifiers before
+  export.
 - Optionally predict and validate partial decoded callsigns against a pinned,
   checksummed list. The main decoding workspace controls this in real time;
   suggestions must remain visibly separate from raw decoder output and expose

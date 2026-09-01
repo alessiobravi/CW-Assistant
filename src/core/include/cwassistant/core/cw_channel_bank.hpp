@@ -13,11 +13,42 @@
 
 namespace cwassistant::core {
 
+enum class CwTrackState : std::uint8_t {
+  Candidate,
+  MorseLikely,
+  Verified,
+  Lost,
+};
+
+enum class CwVerificationReason : std::uint8_t {
+  NeedsSpectralPersistence,
+  NeedsKeyingEdges,
+  NeedsCadenceEvidence,
+  LowNarrowbandCoherence,
+  LowCadenceQuality,
+  NeedsDecodedSymbols,
+  TooManyUnknownSymbols,
+  LowTimingQuality,
+  LowCharacterConfidence,
+  Verified,
+  SignalLost,
+};
+
+inline constexpr std::size_t kCwVerificationReasonCount =
+    static_cast<std::size_t>(CwVerificationReason::SignalLost) + 1U;
+
+[[nodiscard]] const char* cwTrackStateName(CwTrackState state) noexcept;
+[[nodiscard]] const char* cwVerificationReasonName(
+    CwVerificationReason reason) noexcept;
+
 struct CwChannelBankConfig {
   float acquisition_snr_db{7.0F};
   float retention_snr_db{2.5F};
   float detection_dynamic_range_db{96.0F};
   float minimum_peak_prominence_db{4.5F};
+  float minimum_near_peak_prominence_db{0.8F};
+  double prominence_reference_offset_hz{160.0};
+  double prominence_reference_width_hz{100.0};
   double minimum_separation_hz{45.0};
   double tracking_tolerance_hz{70.0};
   double empty_track_retention_seconds{2.0};
@@ -29,8 +60,27 @@ struct CwChannelBankConfig {
   std::size_t maximum_tracks{24};
   std::uint16_t minimum_spectral_observations{3};
   std::uint16_t minimum_verification_symbols{3};
-  float minimum_verification_timing_quality{0.55F};
+  std::uint16_t minimum_key_transitions{6};
+  std::uint16_t minimum_cadence_observations{3};
+  float minimum_verification_timing_quality{0.45F};
+  float minimum_verification_cadence_quality{0.48F};
+  float minimum_character_confidence{0.50F};
+  float minimum_narrowband_coherence{2.0F};
   float maximum_verification_unknown_fraction{0.20F};
+};
+
+struct CwVerificationDiagnostics {
+  std::size_t candidate_tracks{0};
+  std::size_t morse_likely_tracks{0};
+  std::size_t verified_tracks{0};
+  std::uint64_t verified_transitions{0};
+  std::uint64_t expired_unverified_tracks{0};
+  std::uint32_t maximum_decoded_symbols{0};
+  std::uint32_t maximum_key_transitions{0};
+  float best_timing_quality{0.0F};
+  float best_cadence_quality{0.0F};
+  float best_narrowband_coherence{0.0F};
+  std::array<std::size_t, kCwVerificationReasonCount> current_reason_counts{};
 };
 
 struct CwChannelSnapshot {
@@ -46,6 +96,18 @@ struct CwChannelSnapshot {
   bool key_down{false};
   bool active{false};
   bool verified_cw{false};
+  CwTrackState verification_state{CwTrackState::Candidate};
+  CwVerificationReason verification_reason{
+      CwVerificationReason::NeedsSpectralPersistence};
+  float verification_confidence{0.0F};
+  float verification_cadence_quality{0.0F};
+  float verification_timing_quality{0.0F};
+  float verification_character_confidence{0.0F};
+  float cadence_quality{0.0F};
+  float mean_character_confidence{0.0F};
+  float narrowband_coherence{0.0F};
+  std::uint32_t key_transitions{0};
+  std::vector<CwCharacterEvidence> characters;
   std::string text;
   std::string provisional_text;
   std::string pending_elements;
@@ -62,6 +124,7 @@ class CwChannelBank {
   [[nodiscard]] const std::vector<CwChannelSnapshot>& processSamples(
       const RealtimeSampleBlock& block);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& channels() const noexcept;
+  [[nodiscard]] CwVerificationDiagnostics verificationDiagnostics() const;
 
  private:
   struct Track {
@@ -78,7 +141,14 @@ class CwChannelBank {
     float snr_db{0.0F};
     float spectral_snr_db{0.0F};
     bool matched{false};
-    bool verified_cw{false};
+    CwTrackState verification_state{CwTrackState::Candidate};
+    CwVerificationReason verification_reason{
+        CwVerificationReason::NeedsSpectralPersistence};
+    float verification_confidence{0.0F};
+    float verification_cadence_quality{0.0F};
+    float verification_timing_quality{0.0F};
+    float verification_character_confidence{0.0F};
+    float narrowband_coherence{0.0F};
     std::uint16_t spectral_observations{0};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};
@@ -113,6 +183,7 @@ class CwChannelBank {
                                   std::span<const float> bins_dbfs,
                                   float noise_dbfs) const;
   void resetFilter(Track& track) noexcept;
+  void updateVerification(Track& track);
   void rebuildSnapshots();
 
   CwChannelBankConfig config_;
@@ -123,6 +194,8 @@ class CwChannelBank {
   std::uint64_t expected_sample_timestamp_ns_{0};
   bool stream_initialized_{false};
   bool sample_timing_initialized_{false};
+  std::uint64_t verified_transitions_{0};
+  std::uint64_t expired_unverified_tracks_{0};
 };
 
 }  // namespace cwassistant::core

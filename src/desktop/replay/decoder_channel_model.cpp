@@ -38,6 +38,40 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("keyDown"), channel.key_down);
     item.insert(QStringLiteral("active"), channel.active);
     item.insert(QStringLiteral("verifiedCw"), channel.verified_cw);
+    item.insert(QStringLiteral("verificationState"), QString::fromLatin1(
+        cwassistant::core::cwTrackStateName(channel.verification_state)));
+    item.insert(QStringLiteral("verificationReason"), QString::fromLatin1(
+        cwassistant::core::cwVerificationReasonName(
+            channel.verification_reason)));
+    item.insert(QStringLiteral("verificationConfidence"),
+                channel.verification_confidence);
+    item.insert(QStringLiteral("verificationCadenceQuality"),
+                channel.verification_cadence_quality);
+    item.insert(QStringLiteral("verificationTimingQuality"),
+                channel.verification_timing_quality);
+    item.insert(QStringLiteral("verificationCharacterConfidence"),
+                channel.verification_character_confidence);
+    item.insert(QStringLiteral("cadenceQuality"), channel.cadence_quality);
+    item.insert(QStringLiteral("meanCharacterConfidence"),
+                channel.mean_character_confidence);
+    item.insert(QStringLiteral("narrowbandCoherence"),
+                channel.narrowband_coherence);
+    item.insert(QStringLiteral("keyTransitions"),
+                QVariant::fromValue<qulonglong>(channel.key_transitions));
+    QVariantList character_evidence;
+    character_evidence.reserve(
+        static_cast<qsizetype>(channel.characters.size()));
+    for (const auto& character : channel.characters) {
+      QVariantMap evidence;
+      evidence.insert(QStringLiteral("symbol"),
+                      QString::fromStdString(character.symbol));
+      evidence.insert(QStringLiteral("confidence"), character.confidence);
+      evidence.insert(QStringLiteral("timingQuality"),
+                      character.timing_quality);
+      evidence.insert(QStringLiteral("known"), character.known);
+      character_evidence.push_back(evidence);
+    }
+    item.insert(QStringLiteral("characterEvidence"), character_evidence);
     item.insert(QStringLiteral("text"),
                 QString::fromStdString(channel.text));
     item.insert(QStringLiteral("provisionalText"),

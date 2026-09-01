@@ -7,6 +7,13 @@
 
 namespace cwassistant::core {
 
+struct CwCharacterEvidence {
+  std::string symbol;
+  float confidence{0.0F};
+  float timing_quality{0.0F};
+  bool known{false};
+};
+
 struct CwDecoderConfig {
   float key_on_snr_db{6.0F};
   float key_off_snr_db{3.0F};
@@ -29,8 +36,13 @@ struct CwDecoderUpdate {
   std::string provisional_text;
   std::string pending_elements;
   float timing_quality{0.0F};
+  float cadence_quality{0.0F};
+  float mean_character_confidence{0.0F};
   std::uint32_t decoded_symbols{0};
   std::uint32_t unknown_symbols{0};
+  std::uint32_t key_transitions{0};
+  std::uint32_t cadence_observations{0};
+  std::vector<CwCharacterEvidence> characters;
 };
 
 class CwTimingDecoder {
@@ -39,7 +51,8 @@ class CwTimingDecoder {
   void reset() noexcept;
   [[nodiscard]] CwDecoderUpdate process(std::uint64_t timestamp_ns,
                                         float snr_db);
- [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
+  [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
+  [[nodiscard]] std::size_t stateBytes() const noexcept;
 
  private:
   void finishElement(double duration_ms);
@@ -62,9 +75,15 @@ class CwTimingDecoder {
   float mark_probability_sum_{0.0F};
   double mark_probability_duration_ms_{0.0};
   float timing_quality_sum_{0.0F};
+  float cadence_quality_sum_{0.0F};
+  float character_confidence_sum_{0.0F};
   std::uint32_t decoded_symbol_count_{0};
   std::uint32_t unknown_symbol_count_{0};
+  std::uint32_t key_transition_count_{0};
+  std::uint32_t cadence_observation_count_{0};
   std::uint8_t element_count_{0};
+  std::vector<CwCharacterEvidence> characters_;
+  CwCharacterEvidence provisional_character_;
   bool initialized_{false};
   bool key_down_{false};
   bool character_finished_{false};

@@ -65,10 +65,14 @@ are smoothed independently so a one-sided adjacent signal does not inflate the
 entire local threshold.
 
 Discovery and publication are separate. Broad shoulders fail a local-prominence
-test; surviving candidates remain internal until repeated spectral observations,
-at least three known decoded symbols, a bounded unknown-symbol fraction, and a
-minimum timing-quality score jointly verify a CW-like trace. These conservative
-defaults favor a delayed real signal over immediate false colored lines.
+test combining a permissive near check with hertz-scaled far references;
+surviving tracks move from candidate to Morse-likely only after repeated
+spectral persistence, keyed edges, narrowband coherence, and spacing cadence.
+At least three known symbols, a bounded unknown fraction, mark-timing quality,
+and mean character confidence then verify the trace. Every pending track has an
+inspectable rejection reason, and the evidence values that caused verification
+are frozen even while live evidence continues to update. These defaults favor
+a delayed real signal over immediate false colored lines.
 
 An explicit hidden semi-Markov timing model tracks dit length, key-down and
 key-up duration distributions, character spacing, word spacing, drift, and
@@ -199,11 +203,13 @@ context pass.
 The deterministic executable gate (`cwa_decoder_benchmark`) reports character
 edits/CER, acquired-WPM error, false characters during a fixed no-CW minute,
 processed updates, simulated duration, wall time, real-time factor, bounded
-hypothesis count, and allocated decoder state. Its cases cover 8, 12, 20, 25,
-40, and 55 WPM with fixed weak-SNR and timing-jitter sequences, plus a 12→40 WPM
-change across a transmission gap. The current deterministic baseline has 0/49
-edits, no speed-limit failures, and no false characters in the synthetic noise
-minute. This is a regression floor, not the final corpus or a claim of
+hypothesis count, and a conservative allocated-state estimate. Its cases cover
+8, 12, 20, 25, 40, and 55 WPM with fixed weak-SNR and timing-jitter sequences,
+plus a 12→40 WPM change across a transmission gap. The state estimate includes
+bounded character-evidence buffers and must stay below 256 KiB across this
+corpus. The current deterministic baseline has 0/49 edits, no speed-limit
+failures, and no false characters in the synthetic noise minute. This is a
+regression floor, not the final corpus or a claim of
 calibrated over-the-air performance. Separate core regressions drive two
 simultaneous original-sample tones through the channel bank, verify independent
 decodes and stable identity, and reject an adjacent non-tracked tone. The Qt

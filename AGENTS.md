@@ -2,6 +2,11 @@
 
 These rules apply to every contributor and coding agent working in this tree.
 
+Before starting or resuming implementation, read
+`docs/development/session-handoff.md` for the current architecture, decoder
+state, validation commands, and ordered continuation checklist. Source, tests,
+this file, and the current backlog remain authoritative if the handoff is stale.
+
 ## Required project records
 
 - Add every user-visible, architectural, build, dependency, security, or notable

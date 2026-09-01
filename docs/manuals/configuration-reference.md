@@ -102,11 +102,16 @@ actual displayed audio or RF frequency.
 
 The decoder scans the complete processed bandwidth selected under **Signal**.
 It acquires sub-bin local spectral peaks privately. A peak must exceed its local
-shoulders, repeat in at least three spectral observations, decode at least three
-known symbols with no more than 20% unknown output, and meet the timing-quality
-floor before it becomes a published CW track with a stable color. Each track
+near shoulder and hertz-scaled far references, repeat in at least three
+spectral observations across normal key-up gaps, and exhibit at least six keyed
+transitions,
+three spacing observations, and narrowband coherence. It must then decode at
+least three known symbols with no more than 20% unknown output and meet the
+cadence, timing, and mean-character-confidence floors before it becomes a
+published CW track with a stable color. Each track
 maintains separate soft key evidence, timing, provisional text, stable text,
-WPM, SNR, and confidence. Key evidence is calculated from original input samples
+WPM, SNR, verification/rejection reason, and bounded per-character evidence.
+Key evidence is calculated from original input samples
 through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
 updates/second. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
 then select a narrower or wider path without changing the visual guide. **Avg**,
@@ -129,6 +134,14 @@ separation. After a locked track has been silent for 2.5 seconds, its stable
 text is retained and timing acquisition restarts for the next transmission.
 These acquisition thresholds are internal measured defaults in this build;
 profile controls will be added only with benchmark-backed safe ranges.
+
+The current deterministic qualification target is acquisition within six
+simulated seconds for clean, 30 WPM, and weak/fading/drifting CW, zero published
+tracks for steady carriers, speech-like amplitude modulation, irregular
+impulses, and pumping broadband noise, and less than 0.20 processing seconds
+per simulated second. The timing corpus also caps its conservative decoder
+state estimate at 256 KiB. These are regression limits for the included corpus,
+not universal RF accuracy claims; real recording coverage remains backlog work.
 
 ## Station page
 

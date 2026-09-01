@@ -349,9 +349,25 @@ void test_cw_channel_bank() {
   expect(!slow_bank.channels().empty(),
          "clean slow keyed signal retains a tracked channel");
   if (!slow_bank.channels().empty()) {
-    expect(slow_bank.channels().front().filter_width_hz == 60.0,
+    const auto& verified = slow_bank.channels().front();
+    expect(verified.filter_width_hz == 60.0,
            "automatic narrowband selection narrows a clean slow signal");
+    expect(verified.verification_state ==
+               cwassistant::core::CwTrackState::Verified &&
+               verified.verification_confidence >= 0.55F &&
+               verified.verification_cadence_quality >= 0.55F &&
+               verified.verification_timing_quality >= 0.55F &&
+               verified.verification_character_confidence >= 0.55F &&
+               verified.key_transitions >= 6,
+           "published CW exposes the evidence that verified its cadence");
+    expect(verified.characters.size() >= 3 &&
+               verified.characters.back().known,
+           "stable decoded characters retain bounded per-character evidence");
   }
+  const auto slow_diagnostics = slow_bank.verificationDiagnostics();
+  expect(slow_diagnostics.verified_tracks == 1 &&
+             slow_diagnostics.verified_transitions == 1,
+         "verification diagnostics report the candidate lifecycle transition");
 
   cwassistant::core::SpectrumAnalyzer pipeline_analyzer({
       .fft_size = 2'048,

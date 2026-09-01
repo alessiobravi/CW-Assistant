@@ -99,8 +99,11 @@ yet control radio AGC through CAT.
 The receiver scans every frequency inside the processed audio bandwidth for
 both live audio and WAV replay. Spectral peaks begin as private candidates and
 do not immediately receive a line. A candidate must show local prominence,
-repeat across spectrum observations, and produce at least three known Morse
-symbols with bounded unknown output and adequate timing quality. Only then does
+repeat across spectrum observations within the retained track, contain coherent
+narrowband energy and keyed edges, and progress through a Morse-likely state. It
+then must
+produce at least three known Morse symbols with bounded unknown output plus
+adequate spacing cadence, timing, and character confidence. Only then does
 it receive a stable color and vertical marker or increment **signals detected**.
 Click that verified marker to open its
 decoded session in the right-hand panel. Closing a card with **×** does not stop
@@ -109,6 +112,13 @@ operator's preferred order. Stable text, amber provisional text/elements,
 adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for eight seconds so normal word and message gaps preserve identity.
+
+Peak shape is measured in hertz rather than a fixed number of FFT bins. A small
+near-shape requirement rejects broad shoulders, while farther references allow
+the wider peak produced by a real receiver/audio path to enter private
+tracking. Therefore a visible narrow trace may take several characters before
+its marker appears, but a steady carrier or broadband level change should not
+be presented as a decoded station.
 
 Frequency text is written vertically beside the matching colored line inside
 the upper spectrum region, never over waterfall history. Callsign text remains

@@ -18,12 +18,36 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A model-neutral development-session handoff covering the product safety
+  boundaries, implemented receive/decoder architecture, dated implementation
+  checkpoint, source map, required reading, local verification commands, and
+  hosted all-green completion procedure for reliable continuation by a fresh
+  development session.
+- An explicit candidate → Morse-likely → verified → lost lifecycle with
+  inspectable rejection reasons and frozen verification-time confidence. The
+  gate now combines repeated spectral persistence, keyed edges, narrowband
+  coherence, spacing cadence, known/unknown symbols, mark timing, and mean
+  character confidence. Persistence tolerates ordinary key-up gaps instead of
+  requiring adjacent FFT frames, preserving short high-speed marks. Bounded
+  per-character evidence is carried with stable decoder output, exposed to the
+  desktop model, and included in conservative decoder-state resource reporting.
+- A deterministic verification benchmark with enforceable targets: clean,
+  30 WPM, and weak/fading/drifting CW must acquire within six simulated
+  seconds; steady carriers, speech-like amplitude modulation, irregular
+  impulses, and pumping broadband noise must publish no tracks; processing
+  must remain below a 0.20 real-time factor.
+- Backlog specification for an explicitly enabled, bounded and redactable full
+  diagnostic capture bundle containing audio, spectra, decoder evidence,
+  time/frequency references, overruns, and relevant station context.
 - Verified-CW publication gate between internal spectral candidates and the
   operator UI. A candidate now needs local peak prominence, repeated spectral
   observations, at least three known Morse symbols, bounded unknown-symbol
   fraction, and adequate timing quality before it receives a colored trace or
   contributes to the detected-signal count. Unverified candidates expire after
   750 ms. A deterministic five-second shaped-noise test publishes zero traces.
+- FFT-resolution-aware peak qualification now uses a permissive near-shape
+  check plus Hz-scaled far references. This admits real narrowband traces wider
+  than a few FFT bins while rejecting broad spectral pumping before decoding.
 - Completed-word callsign confirmation: vertical callsign text is withheld
   until the track is verified, timing quality passes, the text is stable, and a
   word gap proves the token is complete. Frequency/callsign annotations now sit
@@ -82,8 +106,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   weighted timing adaptation, common punctuation/prosigns, and separate amber
   provisional versus append-only stable decoder text.
 - A deterministic decoder accuracy/resource benchmark reporting CER, no-CW
-  false output, processed duration, throughput/real-time factor, and fixed state
-  size across slow, weak, jittered, and faster replay cases.
+  false output, processed duration, throughput/real-time factor, and a
+  conservative bounded-state estimate with a 256 KiB corpus ceiling across
+  slow, weak, jittered, and faster replay cases.
 - Backlog/requirements for left-click local CW-slice selection, distinct
   right-click RX CAT centering, actual-RF anchored decoded tracks, in-place
   callsign refinement, loss/reacquisition, and synchronized overlay/list expiry.

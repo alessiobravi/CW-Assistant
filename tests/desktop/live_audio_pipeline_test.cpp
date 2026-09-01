@@ -37,8 +37,19 @@ int main(int argc, char* argv[]) {
         const auto channel = channels.isEmpty()
             ? QVariantMap{}
             : channels.front().toMap();
+        const auto character_evidence =
+            channel.value(QStringLiteral("characterEvidence")).toList();
         const bool valid_decoder = channels.size() == 1 &&
             channel.value(QStringLiteral("verifiedCw")).toBool() &&
+            channel.value(QStringLiteral("verificationState")).toString() ==
+                QStringLiteral("verified") &&
+            channel.value(QStringLiteral("verificationReason")).toString() ==
+                QStringLiteral("verified") &&
+            channel.value(QStringLiteral("verificationConfidence")).toDouble() >
+                0.5 &&
+            !character_evidence.isEmpty() &&
+            character_evidence.front().toMap()
+                .value(QStringLiteral("known")).toBool() &&
             std::abs(channel.value(QStringLiteral("frequencyHz")).toDouble() -
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;

@@ -38,6 +38,20 @@ double milliseconds(const std::uint64_t value) {
   return static_cast<double>(value) / 1'000'000.0;
 }
 
+std::size_t characterEvidenceBytes(
+    const std::vector<CwCharacterEvidence>& characters) noexcept {
+  std::size_t result = characters.capacity() * sizeof(CwCharacterEvidence);
+  for (const auto& character : characters)
+    result += character.symbol.capacity();
+  return result;
+}
+
+std::size_t updateDynamicBytes(const CwDecoderUpdate& update) noexcept {
+  return update.text.capacity() + update.provisional_text.capacity() +
+         update.pending_elements.capacity() +
+         characterEvidenceBytes(update.characters);
+}
+
 }  // namespace
 
 CwTimingDecoder::CwTimingDecoder(CwDecoderConfig config) : config_(config) {
@@ -67,9 +81,15 @@ void CwTimingDecoder::reset() noexcept {
   confidence_ = 0.0F; element_confidence_sum_ = 0.0F;
   mark_probability_sum_ = 0.0F; mark_probability_duration_ms_ = 0.0;
   timing_quality_sum_ = 0.0F;
+  cadence_quality_sum_ = 0.0F;
+  character_confidence_sum_ = 0.0F;
   decoded_symbol_count_ = 0;
   unknown_symbol_count_ = 0;
+  key_transition_count_ = 0;
+  cadence_observation_count_ = 0;
   element_count_ = 0;
+  characters_.clear();
+  provisional_character_ = {};
   initialized_ = false; key_down_ = false; character_finished_ = false;
   word_space_emitted_ = false;
 }
@@ -114,9 +134,25 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   bool changed = false;
   if (observed_down != key_down_) {
     const double duration_ms = milliseconds(timestamp_ns - state_started_ns_);
+    if (key_transition_count_ < std::numeric_limits<std::uint32_t>::max())
+      ++key_transition_count_;
     if (key_down_) {
       finishElement(duration_ms); changed = true;
     } else {
+      if (!elements_.empty() || character_finished_ ||
+          decoded_symbol_count_ > 0) {
+        const double ratio = duration_ms / dot_ms_;
+        const double distance = !elements_.empty()
+            ? std::abs(ratio - 1.0)
+            : std::min(std::abs(ratio - 3.0) / 1.5,
+                       std::abs(ratio - 7.0) / 3.0);
+        cadence_quality_sum_ += static_cast<float>(
+            std::exp(-1.2 * std::min(distance, 8.0)));
+        if (cadence_observation_count_ <
+            std::numeric_limits<std::uint32_t>::max()) {
+          ++cadence_observation_count_;
+        }
+      }
       if (!character_finished_ &&
           duration_ms >= config_.character_gap_dots * dot_ms_) {
         finishCharacter(); changed = true;
@@ -167,6 +203,13 @@ CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
   return result;
 }
 
+std::size_t CwTimingDecoder::stateBytes() const noexcept {
+  return sizeof(*this) + stable_text_.capacity() +
+         provisional_text_.capacity() + elements_.capacity() +
+         characterEvidenceBytes(characters_) +
+         provisional_character_.symbol.capacity();
+}
+
 void CwTimingDecoder::finishElement(const double duration_ms) {
   const double ratio = duration_ms / dot_ms_;
   const double dot_distance = std::abs(ratio - 1.0);
@@ -204,11 +247,18 @@ void CwTimingDecoder::finishCharacter() {
                    0.0F, 1.0F);
   if (provisional_text_ == "?") confidence_ *= 0.35F;
   timing_quality_sum_ += confidence_;
+  character_confidence_sum_ += confidence_;
   if (decoded_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
     ++decoded_symbol_count_;
   if (provisional_text_ == "?" &&
       unknown_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
     ++unknown_symbol_count_;
+  provisional_character_ = {
+      .symbol = provisional_text_,
+      .confidence = confidence_,
+      .timing_quality = confidence_,
+      .known = provisional_text_ != "?",
+  };
   elements_.clear(); character_finished_ = true;
   element_confidence_sum_ = 0.0F;
   element_count_ = 0;
@@ -217,9 +267,12 @@ void CwTimingDecoder::finishCharacter() {
 void CwTimingDecoder::promoteProvisional() {
   if (provisional_text_.empty()) return;
   stable_text_ += provisional_text_;
+  if (characters_.size() >= 256) characters_.erase(characters_.begin());
+  characters_.push_back(provisional_character_);
   if (stable_text_.size() > 4'096)
     stable_text_.erase(0, stable_text_.size() - 4'096);
   provisional_text_.clear();
+  provisional_character_ = {};
 }
 
 float CwTimingDecoder::probabilityForSnr(const float snr_db) const noexcept {
@@ -236,13 +289,26 @@ CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
   const float timing_quality = decoded_symbol_count_ == 0
       ? 0.0F
       : timing_quality_sum_ / static_cast<float>(decoded_symbol_count_);
+  const float cadence_quality = cadence_observation_count_ == 0
+      ? 0.0F
+      : cadence_quality_sum_ /
+            static_cast<float>(cadence_observation_count_);
+  const float mean_character_confidence = decoded_symbol_count_ == 0
+      ? 0.0F
+      : character_confidence_sum_ /
+            static_cast<float>(decoded_symbol_count_);
   return {.changed = changed, .key_down = key_down_,
           .key_down_probability = key_down_probability_,
           .wpm = 1'200.0 / dot_ms_, .confidence = confidence_,
           .text = stable_text_, .provisional_text = provisional_text_,
           .pending_elements = elements_, .timing_quality = timing_quality,
+          .cadence_quality = cadence_quality,
+          .mean_character_confidence = mean_character_confidence,
           .decoded_symbols = decoded_symbol_count_,
-          .unknown_symbols = unknown_symbol_count_};
+          .unknown_symbols = unknown_symbol_count_,
+          .key_transitions = key_transition_count_,
+          .cadence_observations = cadence_observation_count_,
+          .characters = characters_};
 }
 
 CwMultiSpeedDecoder::Hypothesis::Hypothesis(
@@ -357,8 +423,14 @@ std::size_t CwMultiSpeedDecoder::hypothesisCount() const noexcept {
 }
 
 std::size_t CwMultiSpeedDecoder::stateBytes() const noexcept {
-  return sizeof(*this) + hypotheses_.capacity() * sizeof(Hypothesis) +
-         committed_prefix_.capacity();
+  std::size_t result = sizeof(*this) +
+      hypotheses_.capacity() * sizeof(Hypothesis) +
+      committed_prefix_.capacity();
+  for (const auto& hypothesis : hypotheses_) {
+    result += hypothesis.decoder.stateBytes() - sizeof(CwTimingDecoder);
+    result += updateDynamicBytes(hypothesis.update);
+  }
+  return result;
 }
 
 float CwMultiSpeedDecoder::score(
