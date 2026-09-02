@@ -280,11 +280,20 @@ SpectrumSnapshot SpectrumAnalyzer::transform(const std::uint64_t timestamp_ns) {
                 : stream_.center_frequency_hz + stream_.sample_rate_hz / 2.0,
       .bin_width_hz = bin_width_hz,
       .bins_dbfs = std::vector<float>(last_bin - first_bin + 1U),
+      .instantaneous_bins_dbfs =
+          std::vector<float>(last_bin - first_bin + 1U),
   };
   std::transform(averaged_power_.begin() + static_cast<std::ptrdiff_t>(first_bin),
                  averaged_power_.begin() +
                      static_cast<std::ptrdiff_t>(last_bin + 1U),
                  snapshot.bins_dbfs.begin(), [](const float power) {
+                   return 10.0F * std::log10(std::max(power, 1.0e-24F));
+                 });
+  std::transform(current_power.begin() + static_cast<std::ptrdiff_t>(first_bin),
+                 current_power.begin() +
+                     static_cast<std::ptrdiff_t>(last_bin + 1U),
+                 snapshot.instantaneous_bins_dbfs.begin(),
+                 [](const float power) {
                    return 10.0F * std::log10(std::max(power, 1.0e-24F));
                  });
   return snapshot;

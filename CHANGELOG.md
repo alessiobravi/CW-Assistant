@@ -8,6 +8,16 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- The spectrum panel now offers two profile-persisted live views: **Audio
+  spectrum** keeps the smoothed FFT waterfall, while **CW symbols** renders
+  unaveraged acoustic FFT rows with a hard noise-floor knee and nearest-neighbor
+  texture sampling so dit, dah, and gap edges remain visible. Both views use
+  the same live/replay stream and can be switched without resetting decoder
+  state; the symbols view is raw keying evidence, not reconstructed text.
+- Added the native `cwa_capture_replay` audit executable. It replays one or
+  more operator-provided `audio.wav` captures through the production spectrum,
+  tracking, and decoding path and reports every publication plus bounded-bank
+  summary metrics; private captures remain local and are not CI fixtures.
 - `CwChannelBank::shiftTrackedFrequencies()`: retuning the linked radio's RX
   VFO while live audio is running now re-centers every currently tracked
   signal by the exact audio-domain shift the retune implies (accounting for
@@ -42,6 +52,18 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- CW verification and WPM selection now use bounded recent character/cadence
+  evidence instead of lifetime averages. All nine fixed 8–60 WPM hypotheses
+  continue processing after the initial presentation choice, and the best
+  complete path is selected again at a safe silence/flush boundary, so an
+  early speed decision no longer permanently disables every alternative.
+- Candidate verification now requires a sustained passing interval and
+  verified tracks use a separate failure hold before demotion. Narrowband
+  coherence is a bounded 0–1 concentration measure, and keying evidence uses
+  a per-track adaptive floor/peak envelope derived from robust two-sided
+  noise references. The bounded recent unknown-symbol allowance is 30%,
+  calibrated so two uncertain characters in a short otherwise-valid segment
+  do not erase a verified signal; the hard-negative corpus remains the guard.
 - The VFO frequency readout is now a large, prominent display (RX in green,
   TX in yellow when split is active) with a distinct SPLIT badge, instead of
   a small single-line label — matching the visual weight of the decoder
@@ -58,6 +80,16 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Fixed the bounded 24-track bank silently discarding every later carrier once
+  full. Strong new candidates can now replace the weakest unmatched
+  unverified occupancy, evidence decays while unmatched, and decoded or
+  Morse-likely candidates survive normal word gaps. Established tracks reject
+  identity-breaking frequency innovations, preventing an old decoder/text
+  history from walking onto a different nearby peak. Deterministic regressions
+  cover both saturated admission and identity preservation.
+- Fixed verification latching forever after a transient pass: every acoustic
+  and timing gate is continuously re-evaluated, with hysteresis preventing
+  ordinary short fades from making a valid marker flap.
 - Fixed `CwChannelBank::shiftTrackedFrequencies()` leaving a nonsensical
   negative-frequency track behind when a VFO retune (or several small
   retunes accumulating, e.g. an operator tuning across the band rather than

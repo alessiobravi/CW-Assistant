@@ -61,18 +61,33 @@ The current measured baseline implements parabolic sub-bin peak interpolation,
 a bounded carrier/drift predictor, and parallel 60/120/240 Hz three-stage paths.
 Initial acquisition stays at 120 Hz; WPM, drift, local SNR, and a centered-tone
 check drive hysteretic selection afterward. Lower and upper noise references
-are smoothed independently so a one-sided adjacent signal does not inflate the
-entire local threshold.
+are smoothed independently and combined geometrically so neither one quiet
+side nor one adjacent interferer dominates the local threshold. A per-track
+adaptive floor/peak envelope normalizes the keying evidence, while a bounded
+0–1 narrow/wide concentration metric replaces the former unbounded ratio.
+
+The bounded track bank uses explicit admission control: a strong new carrier
+may replace only the weakest unmatched unverified occupancy, never a verified
+track. Once a track has enough persistence, an identity-breaking frequency
+innovation starts a fresh track rather than transferring decoder history.
 
 Discovery and publication are separate. Broad shoulders fail a local-prominence
 test combining a permissive near check with hertz-scaled far references;
 surviving tracks move from candidate to Morse-likely only after repeated
 spectral persistence, keyed edges, narrowband coherence, and spacing cadence.
-At least three known symbols, a bounded unknown fraction, mark-timing quality,
-and mean character confidence then verify the trace. Every pending track has an
-inspectable rejection reason, and the evidence values that caused verification
-are frozen even while live evidence continues to update. These defaults favor
-a delayed real signal over immediate false colored lines.
+At least three known symbols, a bounded recent unknown fraction (30% default), recent
+mark-timing quality, and recent mean character confidence then verify the
+trace. Passing evidence must remain valid for an entry interval; a longer
+failure hold demotes a verified trace, with every gate continuously
+re-evaluated. Every pending track has an inspectable rejection reason. These
+defaults favor a delayed real signal over immediate false colored lines.
+
+Nine fixed 8–60 WPM timing anchors remain active for the entire segment. The
+initial leader remains stable for presentation, but every alternative keeps
+processing and the best complete path is selected again at silence or flush.
+This avoids irrevocable early speed lock without rewriting stable text in the
+middle of a transmission. Mid-segment switching remains future work and must
+first define an append-only consensus boundary.
 
 An explicit hidden semi-Markov timing model tracks dit length, key-down and
 key-up duration distributions, character spacing, word spacing, drift, and
@@ -241,7 +256,9 @@ gain is repeatable and its resource cost is within the published budget.
 2. Implement tone tracking, initial raw-sample narrowband evidence, and the
    explainable timing baseline. (Initial path and bounded multi-speed delivered.)
 3. Add provisional/stable text and calibrated confidence contracts.
-4. Add bounded rolling refinement and multi-hypothesis passes.
+4. Extend the delivered bounded recent evidence and continuous fixed-anchor
+   evaluation with safe mid-segment consensus switching and multi-pass
+   refinement.
 5. Train and evaluate compact learned likelihood models; ship one only after
    license, provenance, checksum, fallback, and resource checks pass.
 6. Add conservative strongest-track cancellation and optional diversity input.

@@ -2,6 +2,21 @@
 
 These rules apply to every contributor and coding agent working in this tree.
 
+## Canonical Git coordinates
+
+- The canonical repository is `git@github.com:alessiobravi/CW-Assistant.git`
+  (web URL: `https://github.com/alessiobravi/CW-Assistant`) and its default
+  development branch is `main`.
+- Use this tree's own `.git` metadata when present. If the environment cannot
+  create a `.git` entry and the recovered `.cwa-git` store is present, run Git
+  as `git --git-dir=.cwa-git --work-tree=.` from the repository root.
+- Before fetching, committing, tagging, or pushing, verify that
+  `remote.origin.url` is the canonical SSH URL above. Never borrow, move, or
+  modify Git metadata from a neighboring project to operate on this tree.
+- Keep the recovered `.cwa-git` store local and untracked. It must contain
+  `core.worktree=..`, the canonical `origin`, and the repository owner's Git
+  identity so normal fetch/commit/push operations remain available.
+
 Before starting or resuming implementation, read
 `docs/development/session-handoff.md` for the current architecture, decoder
 state, validation commands, and ordered continuation checklist. Source, tests,

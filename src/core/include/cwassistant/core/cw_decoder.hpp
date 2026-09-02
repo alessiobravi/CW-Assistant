@@ -43,6 +43,13 @@ struct CwDecoderUpdate {
   std::uint32_t key_transitions{0};
   std::uint32_t cadence_observations{0};
   std::vector<CwCharacterEvidence> characters;
+  // Verification and hypothesis selection use this bounded recent window so
+  // a track can recover from an earlier bad acquisition instead of carrying
+  // lifetime-average evidence forever. The lifetime counters above remain
+  // available for diagnostics.
+  std::uint32_t recent_decoded_symbols{0};
+  std::uint32_t recent_unknown_symbols{0};
+  std::uint32_t recent_cadence_observations{0};
 };
 
 class CwTimingDecoder {
@@ -74,21 +81,19 @@ class CwTimingDecoder {
   float element_confidence_sum_{0.0F};
   // Pure element-duration-ratio precision, deliberately excluding the
   // amplitude/keying-probability (mark_confidence) component folded into
-  // element_confidence_sum_/confidence_ above -- feeds timing_quality_sum_
-  // so it measures cadence precision independently of SNR-driven
+  // element_confidence_sum_/confidence_ above, so it measures cadence
+  // precision independently of SNR-driven
   // character confidence, rather than duplicating it.
   float timing_confidence_sum_{0.0F};
   float mark_probability_sum_{0.0F};
   double mark_probability_duration_ms_{0.0};
-  float timing_quality_sum_{0.0F};
-  float cadence_quality_sum_{0.0F};
-  float character_confidence_sum_{0.0F};
   std::uint32_t decoded_symbol_count_{0};
   std::uint32_t unknown_symbol_count_{0};
   std::uint32_t key_transition_count_{0};
   std::uint32_t cadence_observation_count_{0};
   std::uint8_t element_count_{0};
   std::vector<CwCharacterEvidence> characters_;
+  std::vector<float> recent_cadence_quality_;
   CwCharacterEvidence provisional_character_;
   bool initialized_{false};
   bool key_down_{false};

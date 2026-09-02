@@ -22,6 +22,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY displayChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY displayChanged)
   Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY displayChanged)
+  Q_PROPERTY(int displayMode READ displayMode WRITE setDisplayMode NOTIFY displayChanged)
   Q_PROPERTY(int waterfallRowCapacity READ waterfallRowCapacity NOTIFY displayChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY displayChanged)
   Q_PROPERTY(double effectiveLowerBoundDb READ effectiveLowerBoundDb NOTIFY rangeChanged)
@@ -54,6 +55,8 @@ class SpectrumWaterfallItem : public QQuickItem {
   void setWaterfallRate(int value);
   [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
   void setWaterfallTimeSpanSeconds(int value);
+  [[nodiscard]] int displayMode() const noexcept;
+  void setDisplayMode(int value);
   [[nodiscard]] int waterfallRowCapacity() const noexcept;
   [[nodiscard]] int storedWaterfallRows() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
@@ -112,6 +115,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   int target_fps_{60};
   int waterfall_rate_{60};
   int waterfall_time_span_seconds_{10};
+  int display_mode_{0};
   std::uint64_t last_row_timestamp_ns_{0};
   bool has_row_timestamp_{false};
   std::uint64_t last_sequence_{0};

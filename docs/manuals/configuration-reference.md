@@ -75,9 +75,9 @@ settings that need adjustment while listening:
 
 - **Signal**: DC rejection, automatic/manual software gain, gain target, and
   automatic/manual bandwidth.
-- **Display**: automatic/manual dBFS levels, automatic span, waterfall noise
+- **Display**: Audio spectrum/CW symbols view, automatic/manual dBFS levels, automatic span, waterfall noise
   suppression, suppression margin, measured noise floor, FPS, line density,
-  constant history seconds, and the CW frequency guide.
+constant history seconds, and the CW frequency guide.
 
 Changes are applied immediately to active live audio and WAV replay. Select
 **Save profile** to persist them. The default 60 dB automatic span anchors the
@@ -94,6 +94,13 @@ cost. Resizing and initial fill retain the chosen duration. Capture timestamp
 gaps are rendered as dark rows instead of being compressed. Set **Avg** to 1–2
 for the sharpest element boundaries; higher averaging deliberately smooths time.
 
+**View** selects **Audio spectrum** or **CW symbols** and is saved per profile.
+Audio spectrum uses the configured FFT power averaging. CW symbols uses the
+same FFT timestamps but draws unaveraged, noise-gated rows with crisp pixels so
+carrier-on intervals appear as dits/dahs and carrier-off intervals as gaps.
+It is acoustic evidence rather than decoded characters. Switching is immediate
+and does not clear tracking, timing hypotheses, or decoded sessions.
+
 **Visual guide** draws a bold red line on the boundary between the spectrum
 plot and the waterfall history, not a band over the spectrum and history,
 so it is never mistaken for an identified signal (verified CW tracks are
@@ -109,7 +116,8 @@ near shoulder and hertz-scaled far references, repeat in at least three
 spectral observations across normal key-up gaps, and exhibit at least six keyed
 transitions,
 three spacing observations, and narrowband coherence. It must then decode at
-least three known symbols with no more than 20% unknown output and meet the
+least three known symbols with no more than 30% unknown output in the bounded
+recent evidence window and meet the
 cadence, timing, and mean-character-confidence floors before it becomes a
 published CW track with a stable color. Each track
 maintains separate soft key evidence, timing, provisional text, stable text,
@@ -240,6 +248,8 @@ can transmit through this path in the current build.
 
 ## Display page
 
+- **Spectrum view:** profile-persisted **Audio spectrum** (smoothed) or **CW
+  symbols** (unaveraged acoustic keying raster).
 - **Target FPS:** UI redraw target from 10 to 120.
 - **Waterfall lines/second:** independent scroll/update rate from 1 to 120.
 - **Automatic range:** adapts the visible dBFS range using smoothed robust

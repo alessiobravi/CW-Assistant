@@ -30,7 +30,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   narrowband coherence, keyed-edge/spacing cadence, Morse-symbol validity,
   unknown-output, timing-quality, and character-confidence gates verify a CW
   trace. Track candidate, Morse-likely, verified, and lost states with
-  inspectable rejection reasons. Unverified candidates must not receive
+  inspectable rejection reasons. Qualification must use bounded recent
+  evidence, require sustained entry, and continuously re-evaluate verified
+  tracks with demotion hysteresis. Unverified candidates must not receive
   overlays, session rows, or a detected-signal count.
 - Track frequency drift and maintain separate timing/decoder state per channel.
 - Preserve soft tone/envelope/timing evidence and combine an explainable
@@ -80,8 +82,13 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 ### Display
 
 - Spectrum and waterfall share the same FFT output used by channel detection.
-- Render the configured CW pitch/width as a translucent band that is visually
-  distinct from verified signal traces; keep vertical decoded annotations in
+- Provide profile-persisted **Audio spectrum** and **CW symbols** views. The
+  former may use averaged FFT power; the latter uses unaveraged acoustic rows
+  and crisp sampling to expose dit/dah/gap timing. Switching views must not
+  reset or influence decoding, and CW symbols must not fabricate text.
+- Render the configured CW pitch/width as a bold axis-boundary guide that is
+  visually distinct from the filter-width area of verified signal traces;
+  keep vertical decoded annotations in
   the spectrum region rather than over waterfall history.
 - Clicking a trace selects the nearest tracked channel; clicking a callsign
   opens the QSO confirmation panel.

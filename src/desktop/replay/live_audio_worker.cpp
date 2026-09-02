@@ -423,12 +423,18 @@ void LiveAudioDspWorker::drain() {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
       std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
                 bins.begin());
+      QVector<float> instantaneous_bins(
+          static_cast<qsizetype>(snapshot.instantaneous_bins_dbfs.size()));
+      std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
+                snapshot.instantaneous_bins_dbfs.cend(),
+                instantaneous_bins.begin());
       emit frameProduced(SpectrumFrame{
           .bins_dbfs = std::move(bins),
           .sequence = snapshot.sequence,
           .timestamp_ns = snapshot.timestamp_ns,
           .lower_frequency_hz = snapshot.lower_frequency_hz,
           .upper_frequency_hz = snapshot.upper_frequency_hz,
+          .instantaneous_bins_dbfs = std::move(instantaneous_bins),
       });
     }
     emit decoderProduced(decoderChannelModel(decoder_channels));

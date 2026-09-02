@@ -152,12 +152,14 @@ Each new track evaluates nine timing starts from 8 through 60 WPM. During at
 least the first 2.5 seconds after keyed evidence begins, the best current path
 is intentionally shown as amber provisional text because it may change as
 slower hypotheses gain enough evidence. After the timing score and
-decoded-symbol threshold pass, one
-path locks and continues adapting its WPM. A gap of at least 2.5 seconds after a
-locked transmission preserves stable text and starts a fresh speed acquisition,
-so another transmission on that frequency can use a substantially different
-speed. Short or ambiguous fragments may remain provisional rather than being
-presented as certain.
+decoded-symbol threshold pass, one path becomes the presentation leader while
+all nine fixed speed anchors keep processing. A gap of at least 2.5 seconds
+reselects the best complete path, preserves stable text, and starts a fresh
+speed acquisition, so an early choice cannot permanently disable alternatives
+and another sender can use a substantially different speed. Quality is judged
+over bounded recent evidence, allowing a rough acquisition to recover. Short
+or ambiguous fragments may remain provisional rather than being presented as
+certain.
 
 The baseline handles letters, digits, common punctuation, selected prosigns,
 sub-bin drift tracking, and automatic filter width selection, but does not yet
@@ -199,7 +201,9 @@ capture folder with anyone.
 1. Choose **WAV replay**, select **Open WAV**, and choose a local recording.
 2. Review the detected filename, sample rate, and duration.
 3. Select **Play**. The upper trace is the current Hann-windowed FFT; the lower
-   panel is the scrolling waterfall built from those same spectrum frames.
+   panel is the scrolling waterfall. Select **Audio spectrum** for smoothed
+   spectral history or **CW symbols** for crisp, unaveraged acoustic dit/dah/gap
+   rows. The symbols view is received energy, not reconstructed decoder text.
 4. Use **Pause** to retain the current display or **Stop** to return to the
    beginning. Opening another file clears the previous display.
 
@@ -210,7 +214,8 @@ ordinary WAV replay is treated as real-valued audio, not complex I/Q.
 
 Open **Settings → Display** to select the redraw target, waterfall row rate,
 automatic or manual dBFS range, DSP averaging from 1 to 32 frames, and the
-reference grid. Automatic range uses a smoothed robust estimate so an isolated
+profile-persisted spectrum view. Switching views while live or replaying does
+not reset the decoder. Automatic range uses a smoothed robust estimate so an isolated
 strong bin does not repeatedly rescale the entire view. These values are saved
 independently in each station profile.
 

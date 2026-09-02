@@ -303,6 +303,12 @@ Pane {
                     columnSpacing: 18
                     rowSpacing: 12
                     anchors.margins: 22
+                    Label { text: "Spectrum view" }
+                    ComboBox {
+                        model: ["Audio spectrum", "CW symbols"]
+                        currentIndex: appSettings.spectrumDisplayMode
+                        onActivated: appSettings.spectrumDisplayMode = currentIndex
+                    }
                     Label { text: "Target FPS" }
                     SpinBox { from: 10; to: 120; value: appSettings.targetFps; onValueModified: appSettings.targetFps = value }
                     Label { text: "Waterfall lines / second" }

@@ -343,6 +343,9 @@ int AppSettings::waterfallRate() const noexcept { return waterfall_rate_; }
 int AppSettings::waterfallTimeSpanSeconds() const noexcept {
   return waterfall_time_span_seconds_;
 }
+int AppSettings::spectrumDisplayMode() const noexcept {
+  return spectrum_display_mode_;
+}
 bool AppSettings::automaticRange() const noexcept { return automatic_range_; }
 double AppSettings::lowerBoundDb() const noexcept { return lower_bound_db_; }
 double AppSettings::upperBoundDb() const noexcept { return upper_bound_db_; }
@@ -411,6 +414,7 @@ CWA_SETTER(setKeyActiveHigh, key_active_high_, bool)
 CWA_SETTER(setTargetFps, target_fps_, int)
 CWA_SETTER(setWaterfallRate, waterfall_rate_, int)
 CWA_SETTER(setWaterfallTimeSpanSeconds, waterfall_time_span_seconds_, int)
+CWA_SETTER(setSpectrumDisplayMode, spectrum_display_mode_, int)
 CWA_SETTER(setAutomaticRange, automatic_range_, bool)
 CWA_SETTER(setLowerBoundDb, lower_bound_db_, double)
 CWA_SETTER(setUpperBoundDb, upper_bound_db_, double)
@@ -652,6 +656,7 @@ bool AppSettings::apply() {
   waterfall_rate_ = std::clamp(waterfall_rate_, 1, 120);
   waterfall_time_span_seconds_ =
       std::clamp(waterfall_time_span_seconds_, 5, 30);
+  spectrum_display_mode_ = std::clamp(spectrum_display_mode_, 0, 1);
   averaging_frames_ = std::clamp(averaging_frames_, 1, 32);
   automatic_range_span_db_ =
       std::clamp(automatic_range_span_db_, 30.0, 100.0);
@@ -711,6 +716,7 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("display/targetFps")), target_fps_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallRate")), waterfall_rate_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), waterfall_time_span_seconds_);
+  settings.setValue(storageKey(QStringLiteral("display/spectrumDisplayMode")), spectrum_display_mode_);
   settings.setValue(storageKey(QStringLiteral("display/automaticRange")), automatic_range_);
   settings.setValue(storageKey(QStringLiteral("display/lowerBoundDb")), lower_bound_db_);
   settings.setValue(storageKey(QStringLiteral("display/upperBoundDb")), upper_bound_db_);
@@ -804,6 +810,9 @@ void AppSettings::load() {
   waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60).toInt();
   waterfall_time_span_seconds_ =
       settings.value(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), 10).toInt();
+  spectrum_display_mode_ = std::clamp(settings.value(
+      storageKey(QStringLiteral("display/spectrumDisplayMode")), 0).toInt(),
+      0, 1);
   automatic_range_ = settings.value(storageKey(QStringLiteral("display/automaticRange")), true).toBool();
   lower_bound_db_ = settings.value(storageKey(QStringLiteral("display/lowerBoundDb")), -120.0).toDouble();
   upper_bound_db_ = settings.value(storageKey(QStringLiteral("display/upperBoundDb")), -20.0).toDouble();
@@ -971,6 +980,7 @@ void AppSettings::resetInMemorySettings() {
   target_fps_ = 60;
   waterfall_rate_ = 60;
   waterfall_time_span_seconds_ = 10;
+  spectrum_display_mode_ = 0;
   automatic_range_ = true;
   lower_bound_db_ = -120.0;
   upper_bound_db_ = -20.0;

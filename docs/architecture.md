@@ -86,9 +86,10 @@ the shared display FFT and rejects numerical-floor peaks outside an initial
 audio block using a phase-continuous complex mixer, parallel three-stage 60,
 120, and 240 Hz filters, separately smoothed lower/upper noise references, and
 500 Hz evidence updates. Acquisition holds the 120 Hz path before measured WPM,
-drift, and SNR select another width. A center-localization ratio rejects strong
-adjacent energy. That
-raw narrowband SNR drives smoothed key probability and adaptive timing; display
+drift, and SNR select another width. A bounded 0–1 center-concentration measure
+helps reject wide energy. The geometric mean of both side references and a
+per-track adaptive floor/peak envelope drive smoothed key probability and
+adaptive timing; display
 averaging, gain, palette, and guide settings cannot assert key-down. This work
 runs inside the live/WAV DSP workers rather than the UI thread.
 
@@ -99,19 +100,24 @@ tracks expire after a bounded hold. The 700 Hz guide is a rendering reference
 only and is absent from the decoder data path.
 
 Timing acquisition is also bounded per track: nine deterministic decoders start
-at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Accumulated element quality,
+at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Recent bounded element quality,
 unknown-symbol rate, and a conservative 20 WPM prior rank them while output is
 provisional. After at least 2.5 seconds of keyed evidence and sufficient symbol
-or score separation, only the winning adaptive path continues processing. A
-2.5-second post-transmission silence commits its stable prefix and permits a
-fresh bounded acquisition for a different sender/speed. Current allocated state
+or score separation, one path becomes the presentation leader but all fixed
+anchors continue processing. A 2.5-second post-transmission silence reselects
+the best complete path, commits its stable prefix, and permits a fresh bounded
+acquisition for a different sender/speed. Current allocated state
 is reported conservatively, including dynamic evidence buffers; the timing
 corpus enforces a 256 KiB per-decoder ceiling and currently remains far below
 it. This estimate is a regression guard, not a replacement for platform peak
 memory measurement.
 
 Candidate peaks use parabolic sub-bin interpolation, and a bounded predictor
-maintains carrier frequency plus drift while preserving track identity.
+maintains carrier frequency plus drift while preserving track identity. A
+saturated bank admits a stronger new carrier by evicting only the weakest
+unmatched unverified track; verified tracks are protected. Established tracks
+reject identity-breaking frequency innovations rather than carrying old text
+onto a new station.
 Corpus-qualified configurable widths, robust noise quantiles, calibrated
 confidence, delayed multi-pass refinement, a bounded worker pool for those
 heavier passes, and co-channel source separation remain.
@@ -121,9 +127,10 @@ broad spectral shoulders using a near check and FFT-resolution-independent
 hertz-scaled references. Remaining tracks progress through candidate,
 Morse-likely, verified, and lost states. Repeated spectral persistence across
 normal key-up gaps, keyed edges, narrowband coherence, spacing cadence,
-known-symbol ratio, mark
-timing, and character confidence supply inspectable rejection reasons and one
-frozen verification-time score. Private states cannot consume UI colors,
+known-symbol ratio, mark timing, and character confidence supply inspectable
+rejection reasons. Passing evidence must persist before publication, and a
+separate failure hold is required before demotion; every gate remains live
+after verification. Private states cannot consume UI colors,
 detected-signal count, or session rows. Stable characters carry bounded
 per-character evidence; completed-word gating is applied again before a
 structurally valid callsign is exposed.
@@ -168,11 +175,18 @@ frequency resolution while increasing real dit/dah timing observations.
 
 The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
 clock from sample indices, applies a Hann window, and publishes immutable dBFS
-spectrum snapshots with exact frequency coordinates. Audio produces a one-sided
+spectrum snapshots with exact frequency coordinates. Each snapshot carries
+averaged bins for stable tracking/the Audio spectrum view and unaveraged bins
+for the CW symbols view. Audio produces a one-sided
 spectrum; complex I/Q produces an FFT-shifted full-band spectrum. The shared
 audio path can reject frame DC, apply bounded manual or smoothed automatic
 gain, and crop published bins to an input-derived or explicit bandwidth. This same
 snapshot contract feeds the renderer and future channel detector.
+
+The operator can switch live between **Audio spectrum** (smoothed rows) and
+**CW symbols** (unaveraged, noise-gated, nearest-neighbor acoustic keying
+rows). The latter visualizes received dit/dah/gap evidence; it does not render
+or invent decoded characters and does not reset DSP state.
 
 Only a functional 2D spectrum and waterfall are supported. The renderer does
 not include a 3D spectrum or decorative shader effects.

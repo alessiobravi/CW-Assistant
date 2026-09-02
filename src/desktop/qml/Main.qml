@@ -198,6 +198,7 @@ ApplicationWindow {
                     targetFps: appSettings.targetFps
                     waterfallRate: appSettings.waterfallRate
                     waterfallTimeSpanSeconds: appSettings.waterfallTimeSpanSeconds
+                    displayMode: appSettings.spectrumDisplayMode
                     automaticRange: appSettings.automaticRange
                     automaticRangeSpanDb: appSettings.automaticRangeSpanDb
                     lowerBoundDb: appSettings.lowerBoundDb
@@ -495,6 +496,12 @@ ApplicationWindow {
                             RowLayout {
                                 id: displayControls
                                 spacing: 8
+                            Label { text: "View" }
+                            ComboBox {
+                                model: ["Audio spectrum", "CW symbols"]
+                                currentIndex: appSettings.spectrumDisplayMode
+                                onActivated: appSettings.spectrumDisplayMode = currentIndex
+                            }
                             Label { text: "FPS" }
                             SpinBox {
                                 from: 10

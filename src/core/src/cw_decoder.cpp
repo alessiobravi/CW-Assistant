@@ -52,6 +52,9 @@ std::size_t updateDynamicBytes(const CwDecoderUpdate& update) noexcept {
          characterEvidenceBytes(update.characters);
 }
 
+constexpr std::size_t kRecentCharacterWindow = 32;
+constexpr std::size_t kRecentCadenceWindow = 64;
+
 }  // namespace
 
 CwTimingDecoder::CwTimingDecoder(CwDecoderConfig config) : config_(config) {
@@ -80,15 +83,13 @@ void CwTimingDecoder::reset() noexcept {
   last_snr_db_ = 0.0F; key_down_probability_ = 0.0F;
   confidence_ = 0.0F; element_confidence_sum_ = 0.0F;
   mark_probability_sum_ = 0.0F; mark_probability_duration_ms_ = 0.0;
-  timing_quality_sum_ = 0.0F;
-  cadence_quality_sum_ = 0.0F;
-  character_confidence_sum_ = 0.0F;
   decoded_symbol_count_ = 0;
   unknown_symbol_count_ = 0;
   key_transition_count_ = 0;
   cadence_observation_count_ = 0;
   element_count_ = 0;
   characters_.clear();
+  recent_cadence_quality_.clear();
   provisional_character_ = {};
   initialized_ = false; key_down_ = false; character_finished_ = false;
   word_space_emitted_ = false;
@@ -146,8 +147,12 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
             ? std::abs(ratio - 1.0)
             : std::min(std::abs(ratio - 3.0) / 1.5,
                        std::abs(ratio - 7.0) / 3.0);
-        cadence_quality_sum_ += static_cast<float>(
+        const float cadence_quality = static_cast<float>(
             std::exp(-1.2 * std::min(distance, 8.0)));
+        if (recent_cadence_quality_.size() >= kRecentCadenceWindow) {
+          recent_cadence_quality_.erase(recent_cadence_quality_.begin());
+        }
+        recent_cadence_quality_.push_back(cadence_quality);
         if (cadence_observation_count_ <
             std::numeric_limits<std::uint32_t>::max()) {
           ++cadence_observation_count_;
@@ -207,6 +212,7 @@ std::size_t CwTimingDecoder::stateBytes() const noexcept {
   return sizeof(*this) + stable_text_.capacity() +
          provisional_text_.capacity() + elements_.capacity() +
          characterEvidenceBytes(characters_) +
+         recent_cadence_quality_.capacity() * sizeof(float) +
          provisional_character_.symbol.capacity();
 }
 
@@ -261,8 +267,6 @@ void CwTimingDecoder::finishCharacter() {
     confidence_ *= 0.35F;
     character_timing_quality *= 0.35F;
   }
-  timing_quality_sum_ += character_timing_quality;
-  character_confidence_sum_ += confidence_;
   if (decoded_symbol_count_ < std::numeric_limits<std::uint32_t>::max())
     ++decoded_symbol_count_;
   if (provisional_text_ == "?" &&
@@ -302,17 +306,39 @@ float CwTimingDecoder::probabilityForSnr(const float snr_db) const noexcept {
 }
 
 CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
-  const float timing_quality = decoded_symbol_count_ == 0
+  const std::size_t character_count = std::min(
+      characters_.size(), kRecentCharacterWindow);
+  const auto character_begin = characters_.end() -
+      static_cast<std::ptrdiff_t>(character_count);
+  float recent_timing_sum = 0.0F;
+  float recent_confidence_sum = 0.0F;
+  std::uint32_t recent_unknown = 0;
+  for (auto character = character_begin; character != characters_.end();
+       ++character) {
+    recent_timing_sum += character->timing_quality;
+    recent_confidence_sum += character->confidence;
+    if (!character->known) ++recent_unknown;
+  }
+  // Include the current provisional character in the live quality metrics.
+  // It is not counted as recent decoded evidence until it is promoted.
+  const bool has_provisional = !provisional_character_.symbol.empty();
+  const float quality_count = static_cast<float>(
+      character_count + (has_provisional ? 1U : 0U));
+  if (has_provisional) {
+    recent_timing_sum += provisional_character_.timing_quality;
+    recent_confidence_sum += provisional_character_.confidence;
+  }
+  const float timing_quality = quality_count == 0.0F
+      ? 0.0F : recent_timing_sum / quality_count;
+  const float mean_character_confidence = quality_count == 0.0F
+      ? 0.0F : recent_confidence_sum / quality_count;
+  float recent_cadence_sum = 0.0F;
+  for (const float quality : recent_cadence_quality_)
+    recent_cadence_sum += quality;
+  const float cadence_quality = recent_cadence_quality_.empty()
       ? 0.0F
-      : timing_quality_sum_ / static_cast<float>(decoded_symbol_count_);
-  const float cadence_quality = cadence_observation_count_ == 0
-      ? 0.0F
-      : cadence_quality_sum_ /
-            static_cast<float>(cadence_observation_count_);
-  const float mean_character_confidence = decoded_symbol_count_ == 0
-      ? 0.0F
-      : character_confidence_sum_ /
-            static_cast<float>(decoded_symbol_count_);
+      : recent_cadence_sum /
+            static_cast<float>(recent_cadence_quality_.size());
   return {.changed = changed, .key_down = key_down_,
           .key_down_probability = key_down_probability_,
           .wpm = 1'200.0 / dot_ms_, .confidence = confidence_,
@@ -324,7 +350,12 @@ CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
           .unknown_symbols = unknown_symbol_count_,
           .key_transitions = key_transition_count_,
           .cadence_observations = cadence_observation_count_,
-          .characters = characters_};
+          .characters = characters_,
+          .recent_decoded_symbols =
+              static_cast<std::uint32_t>(character_count),
+          .recent_unknown_symbols = recent_unknown,
+          .recent_cadence_observations = static_cast<std::uint32_t>(
+              recent_cadence_quality_.size())};
 }
 
 CwMultiSpeedDecoder::Hypothesis::Hypothesis(
@@ -382,8 +413,12 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     initialized_ = true;
   }
   if (locked_) {
-    auto& selected = hypotheses_[locked_index_];
-    selected.update = selected.decoder.process(timestamp_ns, snr_db);
+    bool changed = false;
+    for (auto& hypothesis : hypotheses_) {
+      hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
+      changed = changed || hypothesis.update.changed;
+    }
+    const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
     const double silence_ms = signal_seen_ &&
             timestamp_ns >= last_signal_timestamp_ns_
@@ -391,7 +426,11 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
         : 0.0;
     if (!selected.update.key_down && selected.update.decoded_symbols > 0 &&
         silence_ms >= config_.reacquire_after_silence_ms) {
-      committed_prefix_ += selected.update.text;
+      // All fixed speed anchors continue observing after the initial
+      // selection. At a safe segment boundary, commit the best complete
+      // hypothesis rather than making the early WPM choice irreversible.
+      const std::size_t final_leader = selectLeader();
+      committed_prefix_ += hypotheses_[final_leader].update.text;
       if (!committed_prefix_.empty() && committed_prefix_.back() != ' ')
         committed_prefix_.push_back(' ');
       if (committed_prefix_.size() > 4'096)
@@ -399,7 +438,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
       resetHypotheses();
       return snapshot(true);
     }
-    return snapshot(selected.update.changed);
+    return snapshot(changed);
   }
 
   bool changed = false;
@@ -420,12 +459,6 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
 
 CwDecoderUpdate CwMultiSpeedDecoder::flush(
     const std::uint64_t timestamp_ns) {
-  if (locked_) {
-    auto& selected = hypotheses_[locked_index_];
-    selected.update = selected.decoder.flush(timestamp_ns);
-    leader_index_ = locked_index_;
-    return snapshot(true);
-  }
   for (auto& hypothesis : hypotheses_)
     hypothesis.update = hypothesis.decoder.flush(timestamp_ns);
   leader_index_ = selectLeader();
@@ -456,9 +489,13 @@ float CwMultiSpeedDecoder::score(
       std::log2(hypothesis.seed_wpm / config_.preferred_wpm)));
   if (update.decoded_symbols == 0)
     return -0.20F * prior_distance;
+  const std::uint32_t recent_symbols = update.recent_decoded_symbols > 0
+      ? update.recent_decoded_symbols : update.decoded_symbols;
+  const std::uint32_t recent_unknown = update.recent_decoded_symbols > 0
+      ? update.recent_unknown_symbols : update.unknown_symbols;
   const float known_fraction = 1.0F -
-      static_cast<float>(update.unknown_symbols) /
-          static_cast<float>(update.decoded_symbols);
+      static_cast<float>(std::min(recent_unknown, recent_symbols)) /
+          static_cast<float>(std::max<std::uint32_t>(recent_symbols, 1U));
   // Hypothesis selection deliberately scores on mean_character_confidence
   // (the blended amplitude/keying-probability and timing signal), not the
   // now-independent pure-cadence timing_quality: this preserves the

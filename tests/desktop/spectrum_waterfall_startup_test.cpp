@@ -37,6 +37,7 @@ int main(int argc, char* argv[]) {
       .timestamp_ns = 1'000'000'000,
       .lower_frequency_hz = 100.0,
       .upper_frequency_hz = 3'000.0,
+      .instantaneous_bins_dbfs = QVector<float>(128, -95.0F),
   };
   item.acceptFrame(noise_frame);
   if (item.effectiveUpperBoundDb() - item.effectiveLowerBoundDb() < 59.9 ||
@@ -54,6 +55,16 @@ int main(int argc, char* argv[]) {
     return 5;
   }
   if (item.storedWaterfallRows() != 31) return 6;
+
+  item.setDisplayMode(1);
+  if (item.displayMode() != 1 || item.storedWaterfallRows() != 0) return 8;
+  noise_frame.sequence = 3;
+  noise_frame.timestamp_ns = 2'100'000'000;
+  noise_frame.instantaneous_bins_dbfs.fill(-70.0F);
+  item.acceptFrame(noise_frame);
+  if (item.storedWaterfallRows() != 1) return 9;
+  item.setDisplayMode(99);
+  if (item.displayMode() != 1) return 10;
 
   QSGNode* node = item.updatePaintNode(nullptr, nullptr);
   if (node == nullptr) return 7;

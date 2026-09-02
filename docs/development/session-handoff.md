@@ -30,7 +30,61 @@ second unrelated repository, copy authentication material into this tree, or
 record credential paths in documentation. If authenticated Git metadata is not
 available, continue with safe local work and report the publication gap.
 
-## Implementation checkpoint — 2026-09-01 (later session)
+## Implementation checkpoint — 2026-09-02
+
+The repository coordinates and recovered local Git operation are documented in
+`AGENTS.md`. In managed workspaces where a `.git` entry cannot be created, this
+tree may contain a local untracked `.cwa-git` store; invoke Git with
+`git --git-dir=.cwa-git --work-tree=.` and verify the canonical origin before
+any remote operation. Never use metadata from another project.
+
+The operator supplied three private WAV/debug bundles and authorized a complete
+capture-driven fix, native verification, and push. Replaying their raw audio
+through the current production core established four primary failures: the
+24-track bank silently starved later peaks; old tracks could walk onto new
+peaks while retaining decoder history; the min-side noise reference and
+unbounded narrow/wide ratio were unstable; and lifetime evidence plus an
+early one-path WPM lock prevented recovery. A separate display issue was also
+confirmed: temporally averaged waterfall rows smoothed acoustic dits/dahs into
+generic traces.
+
+The implemented recovery slice now:
+
+1. admits a strong new candidate into a saturated bank by evicting only the
+   weakest unmatched unverified occupancy, protects verified tracks, decays
+   unmatched persistence, and retains decoded/Morse-likely candidates across
+   ordinary word gaps;
+2. rejects identity-breaking innovations on established tracks so decoder text
+   and evidence cannot migrate to a different nearby carrier;
+3. combines both side references geometrically, normalizes a per-track
+   floor/peak key envelope, and reports bounded 0–1 spectral concentration;
+4. bases character, cadence, unknown-fraction, verification, and WPM scores on
+   bounded recent evidence; all nine fixed WPM anchors continue processing
+   after presentation selection and the best complete path is reselected at a
+   silence/flush boundary;
+5. continuously re-evaluates verification with a sustained-entry interval and
+   a longer exit hold instead of permanently latching a transient pass;
+6. publishes averaged and instantaneous bins from the same FFT and provides a
+   profile-persisted **Audio spectrum** / **CW symbols** selector. CW symbols
+   is a crisp unaveraged acoustic keying raster, not reconstructed text, and
+   switching it does not reset decoding;
+7. adds the native `cwa_capture_replay` executable for repeatable local audits
+   of private `audio.wav` files without adding those files to the repository.
+
+Deterministic core tests include saturated admission, identity-jump rejection,
+recent metrics, and instantaneous-bin coverage. The dependency-free core,
+decoder benchmark, verification hard-negative benchmark, and native capture
+tool are the required local gates. The private captures now demonstrate stable
+tracking of the long approximately 1.42 kHz stream and acquisition of the later
+approximately 2.016 kHz and 700 Hz streams instead of total starvation. They
+also show that decoded character accuracy remains materially below acceptable
+on difficult field audio; do not claim full CW recognition is solved. The next
+decoder step is the full semi-Markov/Viterbi timing path and a licensed,
+optional compact learned likelihood adapter only after held-out native
+benchmarks prove a gain. Pattern tokens may add evidence but must never bypass
+acoustic gates. The marker-click defect described below remains open.
+
+## Implementation checkpoint — 2026-09-01 (historical)
 
 Published baseline as of this checkpoint: commit `fd15f6a` (`Drop tracks a
 VFO shift carries past 0 Hz instead of leaving them invalid`), confirmed
@@ -110,7 +164,8 @@ field case. In order, this investigation produced:
    silence gap that contest/QSK traffic often never provides. This can be
    self-reinforcing-wrong (a miscalibrated lock suppresses the very
    confidence signal the per-element adaptation gates on). **This is the
-   next priority.** Full investigation notes, a detailed options
+   next priority at that checkpoint; the 2026-09-02 slice above supersedes
+   that status. Full investigation notes, a detailed options
    comparison, and the agreed design direction are written to
    `docs/development/decoder-timing-redesign-notes.md` — a local-only file,
    listed in `.gitignore`, never committed; read it directly from disk
@@ -258,9 +313,11 @@ Peak discovery uses a permissive near-shape check and hertz-scaled far
 references so detection does not depend on FFT bin width. A candidate needs
 repeated spectral persistence across normal key-up gaps, keyed edges, spacing
 observations, and narrowband coherence before becoming Morse-likely.
-Verification additionally requires at least three known symbols, at most 20%
-unknown output, adequate spacing cadence, mark timing, and mean character
-confidence. A character-distribution plausibility check
+Verification additionally requires at least three known symbols, at most 30%
+unknown output in the bounded recent window, adequate spacing cadence, mark
+timing, and mean character confidence. A passing track must sustain every gate
+for the configured entry interval; a verified track is demoted only after a
+longer sustained failure interval. A character-distribution plausibility check
 (`ImplausibleCharacterDistribution`) re-evaluates even an already-verified
 track once at least 40 characters have accumulated, rejecting text whose
 E/T fraction exceeds 0.35 (calibrated against real captured noise false
@@ -268,9 +325,9 @@ positives) — the one gate that can retroactively un-verify a track, since
 plausibility can only be judged from accumulated text, not one instant's
 evidence. Only verified tracks receive UI colors, rows, counts, or sessions.
 
-Every private track carries an inspectable rejection reason. Verification-time
-cadence, timing, character confidence, and a combined score are frozen for
-audit; live measurements continue updating. Stable decoded logical characters
+Every private track carries an inspectable rejection reason. Recent cadence,
+timing, character confidence, and a combined score remain live and are logged
+for audit. Stable decoded logical characters
 carry bounded symbol, confidence, timing-quality, and known/unknown evidence.
 Callsign text remains hidden until verified stable text contains a complete
 structurally valid word terminated by a gap.
@@ -295,11 +352,11 @@ the underlying field report failed repeatedly. Real operator debug captures
 (`OBS-003`, see below) later showed the actual defects: noise was being
 *over*-verified (fixed by the character-distribution plausibility gate), a
 verification-gate metric-conflation bug (fixed, see the implementation
-checkpoint above), and — the currently open item — an irrevocable
-WPM-hypothesis lock in `CW-001` that a real contest capture confirmed can
-leave a track stuck decoding plausible-but-wrong text indefinitely. Do not
-claim signal identification is fully resolved until the `CW-001` redesign
-described in the checkpoint above and in
+checkpoint above), and an irrevocable WPM-hypothesis lock in `CW-001`. The
+2026-09-02 slice keeps every fixed anchor processing and reselects at safe
+boundaries, but field character accuracy still requires the full timing model.
+Do not claim signal identification is fully resolved until the remaining
+`CW-001` work described in the checkpoint above and in
 `docs/development/decoder-timing-redesign-notes.md` is implemented and
 validated against real capture data.
 
@@ -405,14 +462,14 @@ or cancelled.
 
 ## Recommended next decoder work after this checkpoint
 
-1. **Top priority**: the `CW-001` redesign — remove `CwMultiSpeedDecoder`'s
-   irrevocable hypothesis lock, replacing it with continuous hysteresis-gated
-   re-evaluation and prefix-freezing on leader switch, per the design agreed
-   with the operator. Read `docs/development/decoder-timing-redesign-notes.md`
-   in full before starting; validate with the full existing test/benchmark
-   suite, the real debug captures already gathered this session, and a
-   CPU/state-budget check against `PERF-001`'s existing limits (running more
-   hypotheses for longer increases cost).
+1. **Top decoder priority**: extend the delivered `CW-001` recent-window and
+   continuous-fixed-anchor slice into the full explainable semi-Markov/Viterbi
+   timing path. Define an append-only consensus boundary before allowing a
+   leader switch inside an active transmission; never freeze an outgoing
+   leader's unconfirmed full text. Read
+   `docs/development/decoder-timing-redesign-notes.md` in full before starting;
+   validate against every deterministic benchmark, the native replay of all
+   private captures, and `PERF-001`'s CPU/state limits.
 2. Add consented, legally reusable real receiver recordings and annotations to
    the corpus; tune thresholds from measured false-publication, acquisition,
    and character-error results rather than visual intuition.

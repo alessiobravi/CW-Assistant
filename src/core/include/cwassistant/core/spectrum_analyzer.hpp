@@ -29,6 +29,10 @@ struct SpectrumSnapshot {
   double upper_frequency_hz{0.0};
   double bin_width_hz{0.0};
   std::vector<float> bins_dbfs;
+  // Unaveraged bins from the same FFT. The decoder continues to use the
+  // averaged spectrum for stable carrier tracking; the UI can select these
+  // bins to preserve the time edges of dits, dahs, and gaps.
+  std::vector<float> instantaneous_bins_dbfs;
 };
 
 class SpectrumAnalyzer {

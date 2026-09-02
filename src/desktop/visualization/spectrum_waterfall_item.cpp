@@ -205,6 +205,18 @@ void SpectrumWaterfallItem::setWaterfallRate(const int value) {
 int SpectrumWaterfallItem::waterfallTimeSpanSeconds() const noexcept {
   return waterfall_time_span_seconds_;
 }
+int SpectrumWaterfallItem::displayMode() const noexcept {
+  return display_mode_;
+}
+void SpectrumWaterfallItem::setDisplayMode(const int value) {
+  const int clamped = std::clamp(value, 0, 1);
+  if (display_mode_ == clamped) return;
+  display_mode_ = clamped;
+  waterfall_rows_.clear();
+  has_row_timestamp_ = false;
+  emit displayChanged();
+  update();
+}
 void SpectrumWaterfallItem::setWaterfallTimeSpanSeconds(const int value) {
   const int clamped = std::clamp(value, 5, 30);
   if (waterfall_time_span_seconds_ == clamped) return;
@@ -256,6 +268,11 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
     has_row_timestamp_ = false;
   }
   latest_bins_ = frame.bins_dbfs;
+  const QVector<float>& waterfall_bins =
+      display_mode_ == 1 &&
+              frame.instantaneous_bins_dbfs.size() == frame.bins_dbfs.size()
+          ? frame.instantaneous_bins_dbfs
+          : frame.bins_dbfs;
   if (!qFuzzyCompare(lower_frequency_hz_, frame.lower_frequency_hz) ||
       !qFuzzyCompare(upper_frequency_hz_, frame.upper_frequency_hz)) {
     lower_frequency_hz_ = frame.lower_frequency_hz;
@@ -274,7 +291,7 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   const std::uint64_t row_interval =
       1'000'000'000ULL / static_cast<std::uint64_t>(waterfall_rate_);
   if (!has_row_timestamp_) {
-    appendWaterfallRow(conditionedWaterfallRow(latest_bins_));
+    appendWaterfallRow(conditionedWaterfallRow(waterfall_bins));
     last_row_timestamp_ns_ = frame.timestamp_ns;
     has_row_timestamp_ = true;
   } else if (frame.timestamp_ns >= last_row_timestamp_ns_ + row_interval) {
@@ -284,11 +301,11 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
     const std::uint64_t retained_missing = std::min<std::uint64_t>(
         missing_intervals,
         static_cast<std::uint64_t>(waterfallRowCapacity() - 1));
-    const QVector<float> blank = blankWaterfallRow(latest_bins_.size());
+    const QVector<float> blank = blankWaterfallRow(waterfall_bins.size());
     for (std::uint64_t i = 0; i < retained_missing; ++i) {
       appendWaterfallRow(blank);
     }
-    appendWaterfallRow(conditionedWaterfallRow(latest_bins_));
+    appendWaterfallRow(conditionedWaterfallRow(waterfall_bins));
     last_row_timestamp_ns_ += elapsed_intervals * row_interval;
   }
   scheduleRender();
@@ -388,7 +405,8 @@ void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
 
 QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
     const QVector<float>& bins) const {
-  if (!noise_suppression_ || !noise_floor_initialized_) return bins;
+  if ((!noise_suppression_ && display_mode_ == 0) ||
+      !noise_floor_initialized_) return bins;
   QVector<float> conditioned = bins;
   const double cutoff = estimated_noise_floor_db_ + noise_margin_db_;
   const double muted = estimated_noise_floor_db_ - 18.0;
@@ -404,6 +422,11 @@ QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
           0.0, 1.0);
       bin = static_cast<float>(muted * (1.0 - mix) +
                                static_cast<double>(bin) * mix);
+    } else if (display_mode_ == 1) {
+      // The CW-symbol view is an acoustic keying raster, not decoded text:
+      // preserve the instantaneous time edge and give every confidently
+      // above-floor mark a consistent visible floor.
+      bin = std::max(bin, static_cast<float>(cutoff + 12.0));
     }
   }
   return conditioned;
@@ -523,7 +546,8 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
       root->waterfall->setTexture(texture);
     }
     root->waterfall->setRect(0.0F, waterfall_top, width, waterfall_height);
-    root->waterfall->setFiltering(QSGTexture::Linear);
+    root->waterfall->setFiltering(
+        display_mode_ == 1 ? QSGTexture::Nearest : QSGTexture::Linear);
   } else if (root->waterfall != nullptr) {
     root->waterfall->setRect(QRectF{});
   }

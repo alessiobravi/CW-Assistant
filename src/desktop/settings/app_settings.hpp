@@ -70,6 +70,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(int spectrumDisplayMode READ spectrumDisplayMode WRITE setSpectrumDisplayMode NOTIFY settingsChanged)
   Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange NOTIFY settingsChanged)
   Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY settingsChanged)
   Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY settingsChanged)
@@ -145,6 +146,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] int targetFps() const noexcept;
   [[nodiscard]] int waterfallRate() const noexcept;
   [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
+  [[nodiscard]] int spectrumDisplayMode() const noexcept;
   [[nodiscard]] bool automaticRange() const noexcept;
   [[nodiscard]] double lowerBoundDb() const noexcept;
   [[nodiscard]] double upperBoundDb() const noexcept;
@@ -194,6 +196,7 @@ class AppSettings final : public QObject {
   void setTargetFps(int value);
   void setWaterfallRate(int value);
   void setWaterfallTimeSpanSeconds(int value);
+  void setSpectrumDisplayMode(int value);
   void setAutomaticRange(bool value);
   void setLowerBoundDb(double value);
   void setUpperBoundDb(double value);
@@ -300,6 +303,7 @@ class AppSettings final : public QObject {
   int target_fps_{60};
   int waterfall_rate_{60};
   int waterfall_time_span_seconds_{10};
+  int spectrum_display_mode_{0};
   bool automatic_range_{true};
   double lower_bound_db_{-120.0};
   double upper_bound_db_{-20.0};

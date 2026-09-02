@@ -30,6 +30,7 @@ enum class CwVerificationReason : std::uint8_t {
   TooManyUnknownSymbols,
   LowTimingQuality,
   LowCharacterConfidence,
+  NeedsSustainedEvidence,
   ImplausibleCharacterDistribution,
   Verified,
   SignalLost,
@@ -77,7 +78,7 @@ struct CwChannelBankConfig {
   std::uint16_t minimum_key_transitions{6};
   std::uint16_t minimum_cadence_observations{3};
   float minimum_verification_timing_quality{0.45F};
-  float minimum_verification_cadence_quality{0.48F};
+  float minimum_verification_cadence_quality{0.42F};
   float minimum_character_confidence{0.50F};
   // A long run of decoded text dominated by only the two single-element
   // characters (E, T) is the statistical signature of timing noise being
@@ -90,8 +91,14 @@ struct CwChannelBankConfig {
   // it can only be judged from accumulated text, not a single instant.
   std::uint16_t minimum_plausibility_check_characters{40};
   float maximum_simple_character_fraction{0.35F};
-  float minimum_narrowband_coherence{2.0F};
-  float maximum_verification_unknown_fraction{0.20F};
+  // Normalized spectral concentration: 0 is approximately wideband noise,
+  // 1 is a tone concentrated in the narrowest analysis filter.
+  float minimum_narrowband_coherence{0.18F};
+  float maximum_verification_unknown_fraction{0.30F};
+  double track_identity_tolerance_hz{35.0};
+  float track_replacement_margin_db{3.0F};
+  double verification_enter_seconds{0.50};
+  double verification_exit_seconds{2.0};
 };
 
 struct CwVerificationDiagnostics {
@@ -199,6 +206,7 @@ class CwChannelBank {
     double drift_hz_per_second{0.0};
     std::uint64_t last_detected_ns;
     std::uint64_t last_frequency_update_ns;
+    std::uint64_t last_candidate_match_ns;
     CwMultiSpeedDecoder decoder;
     CwDecoderUpdate update;
     float snr_db{0.0F};
@@ -213,6 +221,13 @@ class CwChannelBank {
     float verification_character_confidence{0.0F};
     float narrowband_coherence{0.0F};
     std::uint16_t spectral_observations{0};
+    std::uint16_t consecutive_spectrum_misses{0};
+    std::uint16_t verification_pass_samples{0};
+    std::uint16_t verification_fail_samples{0};
+    float keying_snr_db{0.0F};
+    float keying_floor_db{0.0F};
+    float keying_peak_db{0.0F};
+    bool keying_envelope_initialized{false};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};
     std::array<std::complex<float>, 3> lower_filter{};

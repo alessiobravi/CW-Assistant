@@ -11,6 +11,7 @@ struct SpectrumFrame {
   quint64 timestamp_ns{0};
   double lower_frequency_hz{0.0};
   double upper_frequency_hz{0.0};
+  QVector<float> instantaneous_bins_dbfs;
 };
 
 }  // namespace cwassistant::desktop

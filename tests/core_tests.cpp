@@ -224,6 +224,57 @@ void test_cw_channel_bank() {
            "silent decoded tracks expire from the full-spectrum model");
   }
 
+  {
+    CwChannelBank admission_bank({.maximum_tracks = 2,
+                                  .minimum_spectral_observations = 50});
+    std::vector<float> admission_bins(1'001, -110.0F);
+    admission_bins[200] = -76.0F;
+    admission_bins[400] = -74.0F;
+    static_cast<void>(admission_bank.updateSpectrum(
+        0, 0.0, 1'000.0, admission_bins));
+    expect(admission_bank.allTrackDiagnostics().size() == 2,
+           "track bank reaches its configured candidate capacity");
+    admission_bins[800] = -45.0F;
+    static_cast<void>(admission_bank.updateSpectrum(
+        20'000'000, 0.0, 1'000.0, admission_bins));
+    const auto admitted = admission_bank.allTrackDiagnostics();
+    const bool admitted_strong_new_peak = std::any_of(
+        admitted.begin(), admitted.end(), [](const auto& track) {
+          return std::abs(track.frequency_hz - 800.0) < 2.0;
+        });
+    expect(admitted.size() == 2 && admitted_strong_new_peak,
+           "a saturated track bank replaces weak unverified occupancy with a stronger new carrier");
+  }
+
+  {
+    CwChannelBank identity_bank({.minimum_spectral_observations = 3,
+                                 .track_identity_tolerance_hz = 35.0});
+    std::vector<float> identity_bins(1'001, -110.0F);
+    for (std::uint64_t frame = 0; frame < 3; ++frame) {
+      identity_bins.assign(identity_bins.size(), -110.0F);
+      identity_bins[250] = -65.0F;
+      static_cast<void>(identity_bank.updateSpectrum(
+          frame * 20'000'000, 0.0, 1'000.0, identity_bins));
+    }
+    const auto original_tracks = identity_bank.allTrackDiagnostics();
+    const auto original_id = original_tracks.front().id;
+    identity_bins.assign(identity_bins.size(), -110.0F);
+    identity_bins[300] = -55.0F;
+    static_cast<void>(identity_bank.updateSpectrum(
+        80'000'000, 0.0, 1'000.0, identity_bins));
+    const auto separated_tracks = identity_bank.allTrackDiagnostics();
+    const auto new_signal = std::min_element(
+        separated_tracks.begin(), separated_tracks.end(),
+        [](const auto& left, const auto& right) {
+          return std::abs(left.frequency_hz - 300.0) <
+                 std::abs(right.frequency_hz - 300.0);
+        });
+    expect(separated_tracks.size() == 2 &&
+               new_signal != separated_tracks.end() &&
+               new_signal->id != original_id,
+           "an established track cannot carry decoder history across an identity-breaking frequency jump");
+  }
+
   CwChannelBank rejection_bank;
   bins.assign(bins.size(), -100.0F);
   bins[70] = -75.0F;
@@ -359,7 +410,7 @@ void test_cw_channel_bank() {
     expect(verified.verification_state ==
                cwassistant::core::CwTrackState::Verified &&
                verified.verification_confidence >= 0.55F &&
-               verified.verification_cadence_quality >= 0.55F &&
+               verified.verification_cadence_quality >= 0.45F &&
                verified.verification_timing_quality >= 0.55F &&
                verified.verification_character_confidence >= 0.55F &&
                verified.key_transitions >= 6,
@@ -598,7 +649,7 @@ void test_cw_channel_bank_state_reason_consistency() {
                         CwVerificationReason::LowCadenceQuality)) {
         pre_morse_likely_reasons += count;
       } else if (reason <= static_cast<std::size_t>(
-                                CwVerificationReason::LowCharacterConfidence)) {
+                                CwVerificationReason::NeedsSustainedEvidence)) {
         post_morse_likely_reasons += count;
       }
     }
@@ -799,8 +850,9 @@ void test_spectrum_analyzer() {
 
   SpectrumAnalyzer analyzer({.fft_size = fft_size, .averaging_frames = 1});
   const auto snapshots = analyzer.process(block);
-  expect(snapshots.size() == 1 && snapshots[0].bins_dbfs.size() == 513,
-         "audio FFT emits one-sided bins including Nyquist");
+  expect(snapshots.size() == 1 && snapshots[0].bins_dbfs.size() == 513 &&
+             snapshots[0].instantaneous_bins_dbfs.size() == 513,
+         "audio FFT emits averaged and instantaneous one-sided bins including Nyquist");
   const auto peak = static_cast<std::size_t>(std::distance(
       snapshots[0].bins_dbfs.begin(),
       std::max_element(snapshots[0].bins_dbfs.begin(),
@@ -808,6 +860,9 @@ void test_spectrum_analyzer() {
   expect(peak == tone_bin, "windowed FFT locates a bin-centered CW tone");
   expect(std::abs(snapshots[0].bins_dbfs[peak]) < 0.05F,
          "window coherent-gain normalization reports a full-scale tone near 0 dBFS");
+  expect(std::abs(snapshots[0].instantaneous_bins_dbfs[peak] -
+                  snapshots[0].bins_dbfs[peak]) < 1.0e-6F,
+         "one-frame averaging preserves the instantaneous CW-symbol raster bins");
   expect(snapshots[0].lower_frequency_hz == 0.0 &&
              snapshots[0].upper_frequency_hz == 24'000.0 &&
              std::abs(snapshots[0].bin_width_hz - 46.875) < 1.0e-9,
