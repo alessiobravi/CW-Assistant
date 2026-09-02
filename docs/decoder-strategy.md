@@ -180,6 +180,38 @@ spatial evidence, and non-coherent receiver diversity can add independent
 fading evidence, but both require measured alignment and a safe single-source
 fallback.
 
+### Exchange-role inference
+
+Role inference operates on complete transmission segments and n-best decoded
+tokens; it must not concatenate every operator on a frequency into one asserted
+identity. The initial bounded state machine is:
+
+1. a runner solicitation (`CQ`, optionally a contest qualifier, `DE`, a
+   repeated self-callsign, or callsign followed by `UP`);
+2. a short caller response, usually one callsign repeated once or twice;
+3. a runner response containing the selected caller's call plus report/exchange;
+4. the caller's report/exchange; and
+5. runner acknowledgement (`TU`) followed by the stable runner callsign, `CQ`,
+   or another solicitation.
+
+Each segment first receives an acoustic operator assignment from the carrier,
+keying-envelope, speed, weighting, spacing, and jitter fingerprint above. Text
+then supplies only soft role likelihoods. `DE`, `CQ`, `TU`, and callsign-before-
+`UP` strongly support runner self-identification; a standalone repeated
+callsign immediately following a solicitation supports a caller; a callsign
+followed by a report supports the runner addressing that caller. Reports,
+serials, abbreviations, and isolated callsign-shaped tokens never establish an
+identity by themselves. Evidence decays over a bounded observation window, but
+the recurring runner identity is expected to outscore changing callers.
+
+The marker label represents only a sufficiently supported persistent station
+identity. Caller alternatives and their role confidence belong in the decoded
+session, not in a rapidly changing marker label. If acoustic assignments swap,
+the exchange sequence is incomplete, or two simultaneous operators remain
+indistinguishable, the role stays unknown and competing calls remain visibly
+provisional. Context can rank acoustically possible hypotheses; it cannot split
+an inseparable waveform or replace incorrectly decoded dits and dahs.
+
 ## Stable text and uncertainty
 
 Decoder output has three distinct forms:

@@ -1139,7 +1139,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
     const std::string callsign =
         track.update.timing_quality >=
                 config_.minimum_verification_timing_quality
-            ? CallsignPolicy::latest_complete_in_text(track.update.text)
+            ? CallsignPolicy::best_complete_in_text(track.update.text)
                   .value_or(std::string{})
             : std::string{};
     CwChannelSnapshot snapshot{
@@ -1225,6 +1225,10 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       }
       if (snapshot.callsign.empty())
         snapshot.callsign = retained->snapshot.callsign;
+      if (const auto merged_callsign =
+              CallsignPolicy::best_complete_in_text(snapshot.text)) {
+        snapshot.callsign = *merged_callsign;
+      }
     }
     retained->snapshot = std::move(snapshot);
     retained->last_seen_ns = track.last_detected_ns;

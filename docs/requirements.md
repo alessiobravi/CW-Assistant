@@ -53,7 +53,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
 - Display a callsign on a trace only after the CW track is verified and stable
-  text contains a structurally valid complete token terminated by a word gap.
+  text contains a structurally valid complete token terminated by a word gap,
+  with exchange-role context or exact repetition supporting automatic
+  promotion. A lone call-shaped token is not sufficient.
 - Distinguish raw evidence, provisional text, stable text, and context-derived
   suggestions. Store per-character pass/evidence provenance and calibrate
   confidence on held-out recordings.

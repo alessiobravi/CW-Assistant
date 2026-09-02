@@ -23,6 +23,11 @@ class CallsignPolicy {
       std::string_view decoded_text);
   [[nodiscard]] static std::optional<std::string> latest_complete_in_text(
       std::string_view stable_text);
+  // Returns a completed, structurally plausible callsign only when decoded
+  // word context or exact repetition makes a random call-shaped token
+  // unlikely. Intended for automatic stream labels, not operator input.
+  [[nodiscard]] static std::optional<std::string> best_complete_in_text(
+      std::string_view stable_text);
 
  private:
   std::unordered_set<std::string> ignored_;

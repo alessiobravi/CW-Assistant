@@ -141,13 +141,14 @@ default 30 seconds, configurable up to 300 seconds) so normal word and message
 gaps preserve identity. Silence retains rather than invalidates the verified
 observation. The filled area and center line clear
 while inactive, leaving a short horizontal identity-color mark on the frequency
-axis. The larger stream label magnifies further while the marker is hovered.
+axis. The stream label is 18 px normally and magnifies to 32 px while the marker
+is hovered.
 Retention preserves identity and text only: without a current matched peak it
 cannot keep the area active or generate CW-symbol rows from residual noise.
 The area bridges ordinary word gaps for 750 ms, but then clears; this visual
 hold is independent of the longer six-second verification-exit and configured
 marker-retention timers. The label stays at its acquired carrier center while
-internal drift tracking continues, and grows to 26 px on hover.
+internal drift tracking continues, and grows to 32 px on hover.
 If the marker eventually expires, its carrier keeps
 the same reserved color for at least five minutes and reuses it when recognized
 again; a new track ID therefore does not make the same frequency look like a
@@ -164,10 +165,13 @@ never appear as a candidate at all, because its shape fails the
 local-prominence check before any track is created.
 
 Frequency text is written vertically beside the matching colored area inside
-the upper spectrum region, never over waterfall history. Callsign text remains
+the upper spectrum region, never over waterfall history. Until a callsign is
+confirmed the label reads **CW stream** and its frequency. Callsign text remains
 hidden until the track is verified, the decoder has promoted the text to stable,
-and a word gap confirms that the structurally valid token is complete. This is
-signal/timing confirmation, not external directory validation. The marker
+a word gap confirms that the structurally valid token is complete, and decoded
+exchange context (`DE`, `CQ`, `TU`, or `UP`) or exact repetition supports it.
+This is signal/timing and text-context evidence, not external directory
+validation. The marker
 tooltip exposes the same confirmed call, frequency, audio tone, filter width,
 and measured drift.
 

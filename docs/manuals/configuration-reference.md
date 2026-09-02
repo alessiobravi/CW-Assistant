@@ -143,7 +143,7 @@ The verified stream marker also remains at a stable 120 Hz presentation width;
 adaptive filter changes are diagnostic and do not resize its clickable area.
 When retained but inactive, its filled area clears and only a short horizontal
 identity-color mark remains on the frequency axis. Its frequency/callsign label
-uses a larger font and magnifies again on hover.
+uses an 18 px font and magnifies to 32 px on hover.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
 are treated as one track, numerical peaks more than 96 dB below the strongest
 current bin are excluded, and decoded tracks remain visible for the
@@ -152,17 +152,20 @@ signal disappears. Silence does not demote an already-verified observation;
 after its marker expires, the frequency-to-color assignment remains leased for
 at least five minutes and is reused if that carrier returns. Decoder filter
 width/evidence rate and these other
-starting limits are not yet exposed as profile controls. Click a
-colored marker to open only that decoded session in its larger wrapped text
+starting limits are not yet exposed as profile controls. Click a colored marker
+to open only that decoded session in its larger scrollable/selectable wrapped text
 window, close it with **×** without stopping decode, reopen it from the marker,
 and drag open cards to reorder them. If the retained carrier is reacquired with
 a new internal ID, the open session follows the same frequency/color identity.
 The decoder pane preserves a bounded 2,048-character presentation transcript
 and any already-confirmed callsign across that replacement. Callsign extraction
-requires a complete stable word and rejects noise-like digit placement.
+requires a complete stable word, rejects noise-like separated digit runs while
+retaining contiguous multi-digit special-event calls, and
+requires decoded `DE`/`CQ`/`TU`/`UP` context or exact repetition before
+automatically naming a stream.
 Unverified candidates expire after 750 ms and never appear in the signal count.
 A callsign label additionally requires stable text and a completed word gap;
-partial and provisional callsigns remain hidden.
+partial, provisional, and unsupported one-off candidates remain hidden.
 
 Timing acquisition evaluates nine fixed starting hypotheses at 8, 12, 16, 20,
 25, 32, 40, 50, and 60 WPM. The current leader is provisional for at least 2.5

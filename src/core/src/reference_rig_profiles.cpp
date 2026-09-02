@@ -9,6 +9,7 @@ constexpr SerialSettings cat_settings(const std::uint32_t baud_rate,
                                       const std::uint8_t stop_bits,
                                       const bool hardware_flow_control) {
   return SerialSettings{
+      .port = {},
       .baud_rate = baud_rate,
       .data_bits = 8,
       .stop_bits = stop_bits,
@@ -21,6 +22,7 @@ constexpr SerialSettings cat_settings(const std::uint32_t baud_rate,
 
 constexpr SerialSettings direct_keying_settings() {
   return SerialSettings{
+      .port = {},
       .baud_rate = 9'600,
       .data_bits = 8,
       .stop_bits = 1,

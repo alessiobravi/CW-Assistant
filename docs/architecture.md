@@ -147,7 +147,10 @@ separate failure hold is required before demotion; every gate remains live
 after verification. Private states cannot consume UI colors,
 detected-signal count, or session rows. Stable characters carry bounded
 per-character evidence; completed-word gating is applied again before a
-structurally valid callsign is exposed.
+structurally valid callsign is considered. Automatic stream naming then
+requires decoded exchange evidence (`DE`, `CQ`, `TU`, callsign-before-`UP`) or
+exact repetition; this ranks existing decoder output and never repairs or
+invents characters.
 
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session

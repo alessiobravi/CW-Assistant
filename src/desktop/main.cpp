@@ -159,6 +159,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("decoderChannelList"));
       auto* live_controls = root_object->findChild<QQuickItem*>(
           QStringLiteral("liveControlsFrame"));
+      auto* view_selector = root_object->findChild<QQuickItem*>(
+          QStringLiteral("viewSelector"));
       auto* pin_live_controls = root_object->findChild<QQuickItem*>(
           QStringLiteral("pinLiveControlsButton"));
       auto* about_version_label = root_object->findChild<QQuickItem*>(
@@ -177,7 +179,8 @@ int main(int argc, char* argv[]) {
           live_levels_check == nullptr || live_noise_check == nullptr ||
           live_cw_guide_check == nullptr || cw_guide_boundaries == nullptr ||
           decoder_channel_list == nullptr ||
-          live_controls == nullptr || pin_live_controls == nullptr ||
+          live_controls == nullptr || view_selector == nullptr ||
+          pin_live_controls == nullptr ||
           live_controls->property("expanded").toBool() ||
           about_version_label == nullptr ||
           about_version_label->property("text").toString() !=

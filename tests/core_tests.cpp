@@ -837,6 +837,35 @@ void test_callsign_policy() {
              std::optional<std::string>("GW0KRL"),
          "callsign extraction ignores noise tokens with trailing or embedded "
          "digits after the district numeral");
+  expect(CallsignPolicy::best_complete_in_text("CQ IU0LFQ ") ==
+             std::optional<std::string>("IU0LFQ"),
+         "CQ context supplies enough evidence for an automatic call label");
+  expect(CallsignPolicy::best_complete_in_text(
+             "CQ TEST IU0LFQ IU0LFQ 599 ") ==
+             std::optional<std::string>("IU0LFQ"),
+         "an exactly repeated decoded callsign supplies label evidence");
+  expect(!CallsignPolicy::best_complete_in_text("QA1RRK 599 "),
+         "a lone random call-shaped token is not promoted to a stream label");
+  expect(CallsignPolicy::best_complete_in_text("CQ TEST IU0LFQ ") ==
+             std::optional<std::string>("IU0LFQ"),
+         "a runner callsign after a CQ qualifier is identified");
+  expect(CallsignPolicy::best_complete_in_text("TU IK3EYN CQ ") ==
+             std::optional<std::string>("IK3EYN"),
+         "a runner callsign in the acknowledgement pattern is identified");
+  expect(CallsignPolicy::best_complete_in_text("IK3EYN UP ") ==
+             std::optional<std::string>("IK3EYN"),
+         "a split runner callsign before UP is identified");
+  expect(CallsignPolicy::best_complete_in_text("W1AW W1AW ") ==
+             std::optional<std::string>("W1AW"),
+         "an exactly repeated standalone caller callsign is identified");
+  expect(CallsignPolicy::best_complete_in_text("CQ SN100PKP ") ==
+             std::optional<std::string>("SN100PKP"),
+         "a special-event callsign with one multi-digit block is identified");
+  expect(CallsignPolicy::best_complete_in_text("DE 3DA0RU ") ==
+             std::optional<std::string>("3DA0RU"),
+         "a valid numeric-leading international prefix is retained");
+  expect(!CallsignPolicy::best_complete_in_text("EA7G2NX 599 P7FN "),
+         "report context and random callsign-shaped fragments are not labels");
 }
 
 void test_spectrum_settings() {
@@ -1081,17 +1110,16 @@ void test_remote_control_lease() {
 }
 
 void test_adif() {
-  const cwassistant::core::QsoRecord qso{
-      .callsign = "I1ABC",
-      .qso_date = "20260830",
-      .time_on = "143512",
-      .band = "20M",
-      .mode = "CW",
-      .frequency_mhz = "14.025000",
-      .rst_sent = "599",
-      .rst_received = "579",
-      .station_callsign = "IU0XYZ",
-  };
+  cwassistant::core::QsoRecord qso{};
+  qso.callsign = "I1ABC";
+  qso.qso_date = "20260830";
+  qso.time_on = "143512";
+  qso.band = "20M";
+  qso.mode = "CW";
+  qso.frequency_mhz = "14.025000";
+  qso.rst_sent = "599";
+  qso.rst_received = "579";
+  qso.station_callsign = "IU0XYZ";
   const auto adif = cwassistant::core::to_adif(qso);
   expect(adif.find("<CALL:5>I1ABC") != std::string::npos,
          "ADIF encodes field length");
@@ -1116,15 +1144,14 @@ void test_split_transverter_and_satellite_adif() {
   expect(resolved && resolved->tx_rf_hz == 435'300'000,
          "independent positive TX offset produces actual uplink RF");
 
-  QsoRecord qso{
-      .callsign = "I1ABC",
-      .qso_date = "20260830",
-      .time_on = "143512",
-      .mode = "CW",
-      .rst_sent = "599",
-      .rst_received = "579",
-      .station_callsign = "IU0XYZ",
-  };
+  QsoRecord qso{};
+  qso.callsign = "I1ABC";
+  qso.qso_date = "20260830";
+  qso.time_on = "143512";
+  qso.mode = "CW";
+  qso.rst_sent = "599";
+  qso.rst_received = "579";
+  qso.station_callsign = "IU0XYZ";
   const SatelliteQsoDetails satellite{.name = "AO-7", .mode = "U/V"};
   expect(populate_qso_frequencies(qso, plan, offsets, &satellite),
          "satellite QSO receives calculated RF fields");
@@ -1178,7 +1205,11 @@ void test_band_selected_station_equipment_adif() {
   const std::vector<StationEquipmentRule> rules{
       {
           .bands = {"6M", "10M", "12M", "15M", "17M", "20M"},
-          .equipment = {.radio = "Yaesu FT-450D", .antenna = "Dipole"},
+          .equipment = {
+              .radio = "Yaesu FT-450D",
+              .transverter = {},
+              .antenna = "Dipole",
+          },
       },
       {
           .bands = {"13CM"},

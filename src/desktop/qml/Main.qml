@@ -361,12 +361,12 @@ ApplicationWindow {
                             y: spectrumDisplay.height * 0.36 - height - 12
                             transformOrigin: Item.BottomLeft
                             rotation: -90
-                            text: (modelData.callsign.length > 0
-                                   ? modelData.callsign + "  •  " : "")
-                                  + modelData.frequencyLabel
+                            text: modelData.callsign.length > 0
+                                  ? modelData.callsign
+                                  : "CW stream  •  " + modelData.frequencyLabel
                             color: modelData.color
-                            font.pixelSize: channelHitArea.containsMouse ? 26 : 14
-                            font.weight: Font.DemiBold
+                            font.pixelSize: channelHitArea.containsMouse ? 32 : 18
+                            font.weight: Font.Bold
                             leftPadding: 4
                             rightPadding: 4
                             topPadding: 2
@@ -386,8 +386,15 @@ ApplicationWindow {
                             id: channelHitArea
                             anchors.fill: parent
                             hoverEnabled: true
-                            acceptedButtons: Qt.NoButton
+                            acceptedButtons: Qt.LeftButton
+                            preventStealing: true
+                            z: 10
                             cursorShape: Qt.PointingHandCursor
+                            onPressed: function(mouse) {
+                                replayController.openDecoderSession(
+                                            channelMarker.modelData.id)
+                                mouse.accepted = true
+                            }
                             ToolTip.visible: containsMouse
                             ToolTip.delay: 450
                             ToolTip.text: (modelData.callsign.length > 0
@@ -399,11 +406,6 @@ ApplicationWindow {
                                             + " Hz filter • "
                                           + modelData.driftHzPerSecond.toFixed(1)
                                             + " Hz/s drift"
-                        }
-                        TapHandler {
-                            acceptedButtons: Qt.LeftButton
-                            onTapped: replayController.openDecoderSession(
-                                          channelMarker.modelData.id)
                         }
                     }
                 }
@@ -449,6 +451,7 @@ ApplicationWindow {
                 objectName: "liveControlsFrame"
                 property bool pinned: false
                 readonly property bool expanded: pinned || controlsHover.hovered
+                                                 || viewSelector.popup.visible
                 Layout.fillWidth: true
                 Layout.preferredHeight: expanded
                                         ? controlsContent.implicitHeight + 16
@@ -570,6 +573,8 @@ ApplicationWindow {
                             ColumnLayout {
                                 Label { text: "View"; font.pixelSize: 11 }
                                 ComboBox {
+                                    id: viewSelector
+                                    objectName: "viewSelector"
                                     Layout.preferredWidth: 150
                                     model: ["Audio spectrum", "CW symbols"]
                                     currentIndex: appSettings.spectrumDisplayMode
@@ -906,7 +911,7 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         width: decoderChannelList.width
-                        height: 158
+                        height: 210
                         radius: 7
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
@@ -940,9 +945,13 @@ ApplicationWindow {
                                     color: modelData.color
                                 }
                                 Label {
-                                    text: modelData.frequencyLabel
+                                    text: modelData.callsign.length > 0
+                                          ? modelData.callsign + "  •  "
+                                            + modelData.frequencyLabel
+                                          : modelData.frequencyLabel
                                     color: modelData.color
                                     font.weight: Font.Bold
+                                    font.pixelSize: 16
                                 }
                                 Item { Layout.fillWidth: true }
                                 Label {
@@ -957,16 +966,14 @@ ApplicationWindow {
                                                    modelData.id)
                                 }
                             }
-                            Rectangle {
+                            ScrollView {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 62
-                                radius: 4
-                                color: "#0b121a"
-                                border.color: "#263241"
-                                border.width: 1
-                                Label {
-                                    anchors.fill: parent
-                                    anchors.margins: 7
+                                Layout.preferredHeight: 112
+                                clip: true
+                                TextArea {
+                                    id: decodedTextArea
+                                    readOnly: true
+                                    selectByMouse: true
                                     text: modelData.text.length > 0
                                           ? modelData.text
                                           : (modelData.provisionalText.length > 0
@@ -981,10 +988,14 @@ ApplicationWindow {
                                               ? "#e3ad55" : "#8290a0")
                                     font.pixelSize: 18
                                     font.italic: modelData.text.length === 0
-                                    wrapMode: Text.WrapAnywhere
-                                    maximumLineCount: 2
-                                    elide: Text.ElideLeft
-                                    verticalAlignment: Text.AlignVCenter
+                                    wrapMode: TextEdit.WrapAnywhere
+                                    padding: 8
+                                    background: Rectangle {
+                                        radius: 4
+                                        color: "#0b121a"
+                                        border.color: "#263241"
+                                        border.width: 1
+                                    }
                                 }
                             }
                             Label {
