@@ -10,7 +10,9 @@ Last reviewed: 2026-09-02 — connected the bounded timing lattice to live
 envelope runs, exposing append-only acoustic consensus separately from literal
 text, and added fixed-center manual probes that promote only through ordinary
 verification. Right-click creates a manual probe while left-click remains
-dedicated to detected streams. Operator labels now use the stable presentation center. CW-001,
+dedicated to detected streams; a stable plot-level pointer router prevents live
+model refreshes from destroying a marker between press and release. Operator
+labels now use the stable presentation center. CW-001,
 UI-003, DSP-002, and CW-004 retain the calibrated confidence, cancellation,
 weak-signal filtering, close-carrier, and true co-channel work documented below.
 

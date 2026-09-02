@@ -192,6 +192,11 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Detected-stream left-clicks now pass through one stable plot-level pointer
+  router instead of a delegate recreated by live decoder-model refreshes. This
+  prevents cursor flicker and lost press/release pairs while preserving
+  right-click manual signal picking and marker hover magnification.
+
 - Decoder-card dragging is now limited to a dedicated drag handle, so the
   adjacent close button reliably dismisses the card while its stream continues
   decoding and remains available to reopen from the spectrum marker.

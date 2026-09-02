@@ -66,17 +66,18 @@ int main() {
   const std::string marker = qml.substr(marker_start,
                                         marker_end - marker_start);
   if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
-      !contains(manual, "z: 4") ||
-      !contains(manual, "acceptedButtons: Qt.RightButton") ||
+      !contains(manual, "z: 6") ||
+      !contains(manual, "acceptedButtons: Qt.LeftButton | Qt.RightButton") ||
+      !contains(manual, "function streamIdAtX(positionX)") ||
+      !contains(manual, "replayController.openDecoderSession(streamId)") ||
+      !contains(manual, "mouse.button === Qt.LeftButton") ||
       !contains(manual, "onClicked: function(mouse)") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
       !contains(marker, "z: 5") ||
-      !contains(marker, "id: channelHitArea") ||
-      !contains(marker, "acceptedButtons: Qt.LeftButton") ||
-      !contains(marker, "onClicked: function(mouse)") ||
-      !contains(marker, "replayController.openDecoderSession(")) {
+      contains(marker, "id: channelHitArea") ||
+      !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
     return 6;
   }
   return 0;

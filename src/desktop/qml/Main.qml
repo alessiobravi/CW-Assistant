@@ -322,28 +322,72 @@ ApplicationWindow {
                     y: spectrumDisplay.y
                     width: spectrumDisplay.width
                     height: spectrumDisplay.height
-                    z: 4
+                    z: 6
                     hoverEnabled: true
-                    acceptedButtons: Qt.RightButton
-                    cursorShape: Qt.CrossCursor
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    function frequencyAtX(positionX) {
+                        var fraction = Math.max(0, Math.min(1,
+                                                           positionX / width))
+                        return spectrumDisplay.lowerFrequencyHz
+                                + fraction
+                                  * (spectrumDisplay.upperFrequencyHz
+                                     - spectrumDisplay.lowerFrequencyHz)
+                    }
+                    function streamIdAtX(positionX) {
+                        if (width <= 0 || spectrumDisplay.upperFrequencyHz
+                                <= spectrumDisplay.lowerFrequencyHz) {
+                            return 0
+                        }
+                        var pointedHz = frequencyAtX(positionX)
+                        var pixelToleranceHz = 14
+                                * (spectrumDisplay.upperFrequencyHz
+                                   - spectrumDisplay.lowerFrequencyHz) / width
+                        var toleranceHz = Math.max(60, pixelToleranceHz)
+                        var nearestDistance = toleranceHz
+                        var nearestId = 0
+                        for (var index = 0;
+                             index < replayController.decoderChannels.length;
+                             ++index) {
+                            var channel = replayController.decoderChannels[index]
+                            if (!channel.verifiedCw
+                                    && !channel.operatorSelected) {
+                                continue
+                            }
+                            var distance = Math.abs(
+                                        channel.presentationFrequencyHz
+                                        - pointedHz)
+                            if (distance <= nearestDistance) {
+                                nearestDistance = distance
+                                nearestId = channel.id
+                            }
+                        }
+                        return nearestId
+                    }
+                    property var hoveredStreamId: containsMouse
+                                                  ? streamIdAtX(mouseX) : 0
+                    cursorShape: hoveredStreamId !== 0
+                                 ? Qt.PointingHandCursor : Qt.CrossCursor
                     onClicked: function(mouse) {
                         if (!replayController.activeSource || width <= 0
                                 || spectrumDisplay.upperFrequencyHz
                                    <= spectrumDisplay.lowerFrequencyHz) {
                             return
                         }
-                        var fraction = Math.max(0, Math.min(1,
-                                                           mouse.x / width))
-                        var frequencyHz = spectrumDisplay.lowerFrequencyHz
-                                + fraction
-                                  * (spectrumDisplay.upperFrequencyHz
-                                     - spectrumDisplay.lowerFrequencyHz)
+                        if (mouse.button === Qt.LeftButton) {
+                            var streamId = streamIdAtX(mouse.x)
+                            if (streamId !== 0)
+                                replayController.openDecoderSession(streamId)
+                            return
+                        }
+                        var frequencyHz = frequencyAtX(mouse.x)
                         appSettings.cwGuideCenterHz = frequencyHz
                         replayController.openManualDecoderSession(frequencyHz)
                     }
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 650
-                    ToolTip.text: "Right-click an unmarked signal to open a manual decoding slice"
+                    ToolTip.text: hoveredStreamId !== 0
+                                  ? "Left-click to open this decoded stream"
+                                  : "Right-click an unmarked signal to open a manual decoding slice"
                 }
                 Repeater {
                     model: replayController.decoderChannels
@@ -373,6 +417,8 @@ ApplicationWindow {
                         width: areaWidthPx
                         height: spectrumDisplay.height
                         z: 5
+                        property bool pointerHovered:
+                            manualSliceHitArea.hoveredStreamId === modelData.id
                         Rectangle {
                             anchors.fill: parent
                             color: modelData.color
@@ -414,7 +460,7 @@ ApplicationWindow {
                                   ? modelData.callsign
                                   : modelData.frequencyLabel
                             color: modelData.color
-                            font.pixelSize: channelHitArea.containsMouse ? 32 : 18
+                            font.pixelSize: channelMarker.pointerHovered ? 32 : 18
                             font.weight: Font.Bold
                             leftPadding: 4
                             rightPadding: 4
@@ -424,41 +470,27 @@ ApplicationWindow {
                             background: Rectangle {
                                 color: "#e6091018"
                                 border.color: modelData.color
-                                border.width: channelHitArea.containsMouse ? 1 : 0
+                                border.width: channelMarker.pointerHovered ? 1 : 0
                                 radius: 3
                             }
                             Behavior on font.pixelSize {
                                 NumberAnimation { duration: 90 }
                             }
                         }
-                        MouseArea {
-                            id: channelHitArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            acceptedButtons: Qt.LeftButton
-                            preventStealing: true
-                            z: 10
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: function(mouse) {
-                                replayController.openDecoderSession(
-                                            channelMarker.modelData.id)
-                                mouse.accepted = true
-                            }
-                            ToolTip.visible: containsMouse
-                            ToolTip.delay: 450
-                            ToolTip.text: (modelData.callsign.length > 0
-                                           ? modelData.callsign + "\n" : "")
-                                          + modelData.frequencyLabel + "\n"
-                                          + (!modelData.verifiedCw
-                                             ? "Manual slice • awaiting ordinary CW verification\n"
-                                             : "")
-                                          + modelData.audioFrequencyHz.toFixed(1)
-                                            + " Hz audio • "
-                                          + modelData.filterWidthHz.toFixed(0)
-                                            + " Hz filter • "
-                                          + modelData.driftHzPerSecond.toFixed(1)
-                                            + " Hz/s drift"
-                        }
+                        ToolTip.visible: channelMarker.pointerHovered
+                        ToolTip.delay: 450
+                        ToolTip.text: (modelData.callsign.length > 0
+                                       ? modelData.callsign + "\n" : "")
+                                      + modelData.frequencyLabel + "\n"
+                                      + (!modelData.verifiedCw
+                                         ? "Manual slice • awaiting ordinary CW verification\n"
+                                         : "")
+                                      + modelData.audioFrequencyHz.toFixed(1)
+                                        + " Hz audio • "
+                                      + modelData.filterWidthHz.toFixed(0)
+                                        + " Hz filter • "
+                                      + modelData.driftHzPerSecond.toFixed(1)
+                                        + " Hz/s drift"
                     }
                 }
                 Label {
