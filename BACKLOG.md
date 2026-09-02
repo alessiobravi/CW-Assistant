@@ -35,8 +35,8 @@ live updates: appends scroll only the viewport while it is following the
 bottom, never move the text cursor, and do not override text selection or an
 operator's upward scroll. Plain text plus a permanently reserved scrollbar
 gutter prevents rich-text and scrollbar-driven line reflow; confirmed calls
-remain prominent in the card header. UI-003 remains active for its wider
-interaction scope.
+remain prominent in the card header. Its contract test normalizes platform
+line endings. UI-003 remains active for its wider interaction scope.
 Last reviewed: 2026-09-02 — corrected the live-view selector auto-hide
 regression and replaced indirect marker tapping with a direct pointer target.
 Decoded text is now scrollable/selectable, and automatic stream naming requires

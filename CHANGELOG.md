@@ -94,6 +94,8 @@ All notable changes to CW Assistant are recorded here. The format follows
   fixed wrapping width and reserved vertical scrollbar gutter also prevent
   line reflow as the transcript grows. Confirmed calls remain emphasized in
   the card header and own-call alerts remain unchanged.
+  Its source-level regression check is line-ending independent on Windows,
+  Linux, and macOS checkouts.
 
 - The hosted Windows MSI contract check now accesses the legacy Windows
   Installer automation API through explicit reflected method and indexed-field

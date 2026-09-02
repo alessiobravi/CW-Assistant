@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -13,8 +14,11 @@ bool contains(const std::string& value, const std::string& expected) {
 int main() {
   std::ifstream source(CWA_MAIN_QML_PATH, std::ios::binary);
   if (!source) return 1;
-  const std::string qml{std::istreambuf_iterator<char>{source},
-                        std::istreambuf_iterator<char>{}};
+  std::string qml{std::istreambuf_iterator<char>{source},
+                  std::istreambuf_iterator<char>{}};
+  // Git may materialize text files with CRLF on Windows. The QML contract is
+  // line-ending independent, so normalize before matching its bounded block.
+  qml.erase(std::remove(qml.begin(), qml.end(), '\r'), qml.end());
   const std::size_t start = qml.find("id: transcriptScroll");
   const std::size_t end = qml.find("Layout.fillWidth: true\n                                text: modelData.wpm", start);
   if (start == std::string::npos || end == std::string::npos) return 2;
