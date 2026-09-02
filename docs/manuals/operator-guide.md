@@ -161,6 +161,10 @@ over bounded recent evidence, allowing a rough acquisition to recover. Short
 or ambiguous fragments may remain provisional rather than being presented as
 certain.
 
+A colored verified marker is intentionally delayed until the complete evidence
+set remains valid for roughly half a second. Brief fades then receive a longer
+hold before removal, reducing both transient false markers and visible flapping.
+
 The baseline handles letters, digits, common punctuation, selected prosigns,
 sub-bin drift tracking, and automatic filter width selection, but does not yet
 provide calibrated confidence, multiple-pass weak-signal recovery, or separation of

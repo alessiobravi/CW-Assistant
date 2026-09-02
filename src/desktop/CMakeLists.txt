@@ -98,7 +98,7 @@ if(CWA_BUILD_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_live_audio_pipeline_test
     COMMAND cwa_live_audio_pipeline_test)
-  set_tests_properties(cwa_live_audio_pipeline_test PROPERTIES TIMEOUT 5)
+  set_tests_properties(cwa_live_audio_pipeline_test PROPERTIES TIMEOUT 15)
 
   qt_add_executable(cwa_desktop_render_startup_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/spectrum_waterfall_startup_test.cpp

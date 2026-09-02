@@ -19,6 +19,12 @@ Last reviewed: 2026-09-02 — extended the SSH-queryable desktop CI status tag
 to include bounded `ctest --output-on-failure` diagnostics after the first
 hosted run compiled on both macOS architectures but failed in the test stage;
 the rerun retains the same implementation title and still fails closed.
+Last reviewed: 2026-09-02 — hosted diagnostics isolated the corrective-run
+failure to the live-audio integration fixture's obsolete two-repetition,
+5-second limit after sustained verification and continuous hypotheses were
+introduced. The fixture now supplies four repetitions, checks instantaneous
+display bins too, and retains bounded 10/15-second failure limits without
+relaxing its verified-channel assertions.
 Last reviewed: 2026-09-01 — fixed `CwChannelBank::shiftTrackedFrequencies()`
 leaving a nonsensical negative-frequency track behind when a VFO retune (or
 several accumulating) carried a signal's audio frequency past 0 Hz, found

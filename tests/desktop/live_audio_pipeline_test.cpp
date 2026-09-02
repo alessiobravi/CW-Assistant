@@ -30,6 +30,7 @@ int main(int argc, char* argv[]) {
       [&application](const cwassistant::desktop::SpectrumFrame& frame) {
         application.setProperty(
             "validFrame", frame.bins_dbfs.size() == 1'025 &&
+                              frame.instantaneous_bins_dbfs.size() == 1'025 &&
                               frame.lower_frequency_hz == 0.0 &&
                               frame.upper_frequency_hz == 24'000.0);
       });
@@ -83,7 +84,9 @@ int main(int argc, char* argv[]) {
       append_units(false, element + 1 == elements.size() ? 3U : 1U);
     }
   };
-  for (int repetition = 0; repetition < 2; ++repetition) {
+  // Four repetitions leave a deterministic post-symbol evidence interval for
+  // the verification entry hysteresis while exercising continued hypotheses.
+  for (int repetition = 0; repetition < 4; ++repetition) {
     append_letter("...");
     append_letter("---");
     append_letter("...");
@@ -144,7 +147,7 @@ int main(int argc, char* argv[]) {
   });
   feeder.start();
 
-  QTimer::singleShot(5'000, &application, [&application] {
+  QTimer::singleShot(10'000, &application, [&application] {
     application.exit(3);
   });
   const int result = application.exec();

@@ -84,6 +84,11 @@ All notable changes to CW Assistant are recorded here. The format follows
   the test stage fails, while preserving pipeline failure through `pipefail`;
   cross-platform failures can therefore be diagnosed without privileged API
   access instead of exposing only the word `failure`.
+- Updated the live-audio integration fixture for sustained verification: it
+  supplies four keyed `SOS` repetitions, asserts both averaged and
+  instantaneous live spectrum bins, and retains a bounded 10-second internal
+  failure deadline (15-second outer CTest limit). This corrects the obsolete
+  two-repetition/5-second timeout without weakening decoder assertions.
 - Fixed the bounded 24-track bank silently discarding every later carrier once
   full. Strong new candidates can now replace the weakest unmatched
   unverified occupancy, evidence decays while unmatched, and decoded or
