@@ -18,7 +18,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Added the native `cwa_capture_replay` audit executable. It replays one or
   more operator-provided `audio.wav` captures through the production spectrum,
   tracking, and decoding path and reports every publication plus bounded-bank
-  summary metrics; private captures remain local and are not CI fixtures.
+  summary metrics, including the assigned color lease index; private captures
+  remain local and are not CI fixtures.
 - Added an independent bounded cadence estimator that fits recent key-down
   durations to 1/3 units and key-up durations to 1/3/7 units. Production
   capture audits now report its acoustic WPM and fit confidence alongside the
@@ -89,6 +90,21 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Verified CW areas no longer vanish after the short verification-failure hold
+  merely because the carrier is silent: inactive observations now remain for
+  the configured decoded-signal timeout (still 30 seconds by default, now
+  selectable up to 300 seconds). If a track does expire, its frequency retains
+  the same palette color for at least five minutes, including across a known
+  radio retune, so later passes do not appear to change identity.
+- Verified-stream areas now use a stable 120 Hz presentation width instead of
+  following the decoder's rapidly adaptive analysis filter, eliminating size
+  flicker while the actual 60/120/240 Hz filter remains visible in diagnostics.
+- Fixed macOS development archives being rejected as damaged: their custom
+  bundle metadata no longer expands the name, executable, identifier, and icon
+  to empty values, and deployment now seals the bundle only after its canonical
+  `VERSION` resource is installed. Hosted macOS jobs validate every required
+  plist value and the complete strict code-signing resource envelope before
+  upload.
 - Fixed a persistent, unverified frequency track carrying an implausible
   timing/text hypothesis into a later real transmission. When recent
   single-element-dominated output remains rejected and the independent
@@ -99,7 +115,10 @@ All notable changes to CW Assistant are recorded here. The format follows
   block and CW symbols turning instantaneous broadband fluctuations into
   horizontal confetti. Waterfall suppression now uses a slow per-bin baseline
   plus 55–180 Hz local side references, while symbols mode maps only locally
-  prominent narrowband energy to crisp marks.
+  prominent narrowband energy to crisp marks. CW symbols now applies an
+  additional contrast floor and adjacent-bin ridge test, suppressing isolated
+  FFT/noise speckles and drawing accepted marks with a sharper high-contrast
+  edge.
 - Fixed transient `latest.json`, checksum, or package HTTP 404/server failures
   surfacing immediately during continuous-release replacement. Publication
   now leaves the previous manifest available while binaries/checksums are

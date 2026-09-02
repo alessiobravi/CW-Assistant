@@ -122,9 +122,19 @@ the Intel x64 archive for supported Intel Macs. Extract the archive and move
 `cw-assistant-desktop.app` to `/Applications` if desired.
 
 The hosted matrix inspects the staged executable's Mach-O build metadata and
-rejects an artifact unless its minimum macOS version is exactly 14.0. Builds are
-currently unsigned and not notarized; signing and notarization remain release
-gates.
+rejects an artifact unless its minimum macOS version is exactly 14.0. It also
+checks the bundle identity, executable, icon, and version metadata and performs
+a strict recursive verification of the final resource seal after every bundled
+file has been installed.
+
+Builds are currently unsigned and not notarized; signing and notarization
+remain release gates. After verifying the archive against `SHA256SUMS`, launch
+the extracted app once. If Gatekeeper blocks this known development build, open
+**System Settings → Privacy & Security**, locate the blocked-app message, click
+**Open Anyway**, then confirm **Open**. This exception is specific to that app;
+do not disable Gatekeeper globally. A "damaged" error is not an expected
+unsigned-build warning: download the current archive again and report the
+release version if it persists.
 
 ## Debian and Ubuntu
 

@@ -24,13 +24,18 @@ qt_add_executable(cw-assistant-desktop
   visualization/spectrum_waterfall_item.hpp
 )
 
+set(CWA_MACOS_BUNDLE_NAME "CW Assistant")
+set(CWA_MACOS_BUNDLE_EXECUTABLE "cw-assistant-desktop")
+set(CWA_MACOS_BUNDLE_IDENTIFIER "it.iu0lfq.CWAssistant")
+set(CWA_MACOS_BUNDLE_ICON "cw-assistant.icns")
+
 set_target_properties(cw-assistant-desktop PROPERTIES
   MACOSX_BUNDLE TRUE
-  MACOSX_BUNDLE_BUNDLE_NAME "CW Assistant"
-  MACOSX_BUNDLE_GUI_IDENTIFIER "it.iu0lfq.CWAssistant"
+  MACOSX_BUNDLE_BUNDLE_NAME "${CWA_MACOS_BUNDLE_NAME}"
+  MACOSX_BUNDLE_GUI_IDENTIFIER "${CWA_MACOS_BUNDLE_IDENTIFIER}"
   MACOSX_BUNDLE_BUNDLE_VERSION "${CWA_BUILD_VERSION}"
   MACOSX_BUNDLE_SHORT_VERSION_STRING "${CWA_BUILD_VERSION}"
-  MACOSX_BUNDLE_ICON_FILE "cw-assistant.icns"
+  MACOSX_BUNDLE_ICON_FILE "${CWA_MACOS_BUNDLE_ICON}"
   MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in"
   WIN32_EXECUTABLE TRUE
 )
@@ -156,7 +161,6 @@ qt_generate_deploy_qml_app_script(
   OUTPUT_SCRIPT cwa_deploy_script
   NO_UNSUPPORTED_PLATFORM_ERROR
 )
-install(SCRIPT ${cwa_deploy_script})
 
 if(UNIX AND NOT APPLE)
   install(FILES packaging/cw-assistant.desktop
@@ -196,6 +200,11 @@ if(EXISTS "${cwa_qt_prefix}/LICENSES")
   install(DIRECTORY "${cwa_qt_prefix}/LICENSES/"
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/third-party/qt6)
 endif()
+
+# Deployment copies and signs the completed macOS bundle. Keep it after every
+# install rule that can add a sealed resource (notably Contents/Resources/VERSION)
+# so the published bundle's final resource envelope remains valid.
+install(SCRIPT ${cwa_deploy_script})
 
 if(WIN32)
   target_link_libraries(cw-assistant-desktop PRIVATE ole32 oleaut32)

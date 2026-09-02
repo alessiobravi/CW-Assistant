@@ -97,12 +97,15 @@ for the sharpest element boundaries; higher averaging deliberately smooths time.
 
 **View** selects **Audio spectrum** or **CW symbols** and is saved per profile.
 Audio spectrum uses the configured FFT power averaging. CW symbols uses the
-same FFT timestamps but draws unaveraged, locally conditioned rows with crisp pixels so
-carrier-on intervals appear as dits/dahs and carrier-off intervals as gaps.
+same FFT timestamps but draws unaveraged, locally conditioned rows with crisp
+pixels so carrier-on intervals appear as dits/dahs and carrier-off intervals
+as gaps.
 Only narrow energy that exceeds both its per-frequency baseline and its
-55–180 Hz side references is promoted as a mark; raising **Margin** rejects
-more weak texture but can hide weak CW. It is acoustic evidence rather than decoded characters. Switching is immediate
-and does not clear tracking, timing hypotheses, or decoded sessions.
+55–180 Hz side references, a stronger symbol-mode contrast floor, and an
+adjacent-bin ridge check is promoted as a mark. Raising **Margin** rejects more
+weak texture but can hide weak CW. It is acoustic evidence rather than decoded
+characters. Switching is immediate and does not clear tracking, timing
+hypotheses, or decoded sessions.
 
 **Visual guide** draws a bold red line on the boundary between the spectrum
 plot and the waterfall history, not a band over the spectrum and history,
@@ -130,11 +133,16 @@ through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
 updates/second. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
 then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
+The verified stream marker also remains at a stable 120 Hz presentation width;
+adaptive filter changes are diagnostic and do not resize its clickable area.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
 are treated as one track, numerical peaks more than 96 dB below the strongest
 current bin are excluded, and decoded tracks remain visible for the
 Display-page **Decoded signal timeout** (default 30 seconds) after their
-signal disappears. Decoder filter width/evidence rate and these other
+signal disappears. Silence does not demote an already-verified observation;
+after its marker expires, the frequency-to-color assignment remains leased for
+at least five minutes and is reused if that carrier returns. Decoder filter
+width/evidence rate and these other
 starting limits are not yet exposed as profile controls. Click a
 colored marker to open only that decoded session, close it with **×** without
 stopping decode, reopen it from the marker, and drag open cards to reorder them.
@@ -261,10 +269,12 @@ can transmit through this path in the current build.
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
 - **Lower/upper dB:** manual bounds; at least 10 dB of span is enforced.
-- **Decoded signal timeout:** from 5 to 120 seconds, default 30. Controls how
+- **Decoded signal timeout:** from 5 to 300 seconds, default 30. Controls how
   long a verified track's marker and session stay visible after its signal
   disappears before being removed. Applies immediately to a running decoder
   session on both the live-audio and WAV-replay paths, without restarting RX.
+  A carrier recognized again within at least five minutes reuses its previous
+  color even if this shorter marker/session timeout has already elapsed.
 
 The current receiver canvas is an honest empty state and does not draw simulated
 radio data.

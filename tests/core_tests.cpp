@@ -242,12 +242,29 @@ void test_cw_channel_bank() {
                held[1].id == high_id && held[0].color_index == low_color &&
                held[1].color_index == high_color,
            "frequency track identity and colors survive keyed gaps");
+    feed(false, false, 3'000);
+    const auto& silent_held = bank.channels();
+    expect(silent_held.size() == 2 &&
+               silent_held[0].id == low_id && silent_held[1].id == high_id &&
+               silent_held[0].color_index == low_color &&
+               silent_held[1].color_index == high_color,
+           "silence cannot bypass the decoded-signal retention timeout by "
+           "demoting verified tracks");
     bank.configure({.empty_track_retention_seconds = 2.0,
                     .decoded_track_retention_seconds = 2.0,
                     .minimum_verification_symbols = 0});
     feed(false, false, 2'500);
     expect(bank.channels().empty(),
            "silent decoded tracks expire from the full-spectrum model");
+    // Exercise the lease close to its promised five-minute boundary without
+    // making the deterministic test wait in real time.
+    now += 292'000'000'000ULL;
+    feed(true, false, 100);
+    const auto& reacquired = bank.channels();
+    expect(reacquired.size() == 1 && reacquired.front().id != low_id &&
+               reacquired.front().color_index == low_color,
+           "a verified frequency reuses its color after track expiry within "
+           "the five-minute identity lease");
   }
 
   {

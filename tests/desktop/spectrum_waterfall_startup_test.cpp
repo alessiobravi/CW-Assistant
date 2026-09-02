@@ -38,6 +38,15 @@ int main(int argc, char* argv[]) {
       isolated[20] > -100.0F) {
     return 11;
   }
+  QVector<float> clutter = shaped_noise;
+  clutter[20] += 8.0F;
+  clutter[82] += 8.0F;
+  const QVector<float> rejected_clutter = conditioner.process(
+      clutter, true, true, 6.0, -110.0, -40.0, 3.0, -90.0);
+  if (rejected_clutter[20] > -100.0F ||
+      rejected_clutter[82] > -100.0F) {
+    return 12;
+  }
   TestableSpectrumWaterfallItem item;
   item.setWidth(960.0);
   item.setHeight(540.0);

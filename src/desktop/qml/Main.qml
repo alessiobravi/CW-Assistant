@@ -296,14 +296,16 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         property real channelHz: modelData.frequencyHz
-                        // The colored area is the primary identification cue
-                        // for a verified CW stream, sized to the decoder's
-                        // actual narrowband filter width so its footprint on
-                        // the spectrum matches what was really tracked;
-                        // never narrower than a comfortable click target.
+                        // Keep presentation geometry independent of the
+                        // decoder's adaptive 60/120/240 Hz analysis filter.
+                        // That filter may legitimately change while decoding,
+                        // but making the clickable marker follow it causes a
+                        // distracting size flicker and falsely suggests that
+                        // the transmitted carrier itself is changing width.
+                        readonly property real markerWidthHz: 120
                         property real areaWidthPx: Math.max(28,
-                            window.hzToX(channelHz + modelData.filterWidthHz / 2)
-                            - window.hzToX(channelHz - modelData.filterWidthHz / 2))
+                            window.hzToX(channelHz + markerWidthHz / 2)
+                            - window.hzToX(channelHz - markerWidthHz / 2))
                         visible: modelData.verifiedCw
                                  && channelHz >= spectrumDisplay.lowerFrequencyHz
                                  && channelHz <= spectrumDisplay.upperFrequencyHz

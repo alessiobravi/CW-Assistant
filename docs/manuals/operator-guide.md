@@ -75,6 +75,13 @@ duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subjec
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
 it only when a steadier but less time-sharp display is more useful.
 
+For timing inspection, select **CW symbols**. Unlike **Audio spectrum**, this
+is intentionally sparse: it requires stronger local contrast and an
+adjacent-bin narrow ridge before drawing a high-contrast mark. Isolated FFT
+speckles remain dark, while carrier-on rows form sharp dit/dah segments.
+Increase **Margin** if receiver noise still appears; lower it cautiously for a
+weak carrier.
+
 Enable **Visual guide** to draw a bold red line marking the desired receive
 tone, sitting exactly on the boundary between the spectrum plot and the
 waterfall history — where frequency is actually read against traces. The
@@ -108,9 +115,11 @@ narrowband energy and keyed edges, and progress through a Morse-likely state. It
 then must
 produce at least three known Morse symbols with bounded unknown output plus
 adequate spacing cadence, timing, and character confidence. Only then does
-it receive a stable color and a colored vertical area, sized to the
-decoder's actual narrowband filter width rather than a fixed pixel width,
-or increment **signals detected**. A thinner line inside that area flashes
+it receive a stable color and a colored vertical area with a fixed 120 Hz
+presentation width, or increment **signals detected**. The internal adaptive
+filter remains independent and is reported in the tooltip/session diagnostics,
+so its normal 60/120/240 Hz changes cannot resize or flicker the marker. A
+thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Closing a card with **×** does not stop
 its DSP; click the marker to reopen it. Drag cards over one another to set the
@@ -118,7 +127,12 @@ operator's preferred order. Stable text, amber provisional text/elements,
 adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
-default 30 seconds) so normal word and message gaps preserve identity.
+default 30 seconds, configurable up to 300 seconds) so normal word and message
+gaps preserve identity. Silence makes the marker dim rather than invalidating
+the verified observation. If the marker eventually expires, its carrier keeps
+the same reserved color for at least five minutes and reuses it when recognized
+again; a new track ID therefore does not make the same frequency look like a
+different station merely because one pass ended.
 
 Peak shape is measured in hertz rather than a fixed number of FFT bins. A small
 near-shape requirement rejects broad shoulders, while farther references allow
@@ -164,6 +178,8 @@ certain.
 A colored verified marker is intentionally delayed until the complete evidence
 set remains valid for roughly half a second. Brief fades then receive a longer
 hold before removal, reducing both transient false markers and visible flapping.
+No-signal evidence cannot demote a verified marker before the configured
+decoded-signal timeout; contradictory evidence from an active carrier can.
 Cadence, pure timing, and blended character confidence remain separate gates;
 one strong metric cannot substitute for a failing one.
 An extremely short fragment can therefore end while still provisional; this is

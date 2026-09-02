@@ -45,6 +45,7 @@ int replay(const std::string& path) {
       if (!published_ids.insert(channel.id).second) continue;
       std::cout << "published path=\"" << path << "\" time_s="
                 << elapsed_seconds << " id=" << channel.id
+                << " color=" << static_cast<unsigned>(channel.color_index)
                 << " frequency_hz=" << channel.frequency_hz
                 << " wpm=" << channel.wpm
                 << " acoustic_wpm=" << channel.acoustic_wpm

@@ -665,7 +665,7 @@ bool AppSettings::apply() {
   cw_guide_center_hz_ = std::clamp(cw_guide_center_hz_, 0.0, 96'000.0);
   cw_guide_width_hz_ = std::clamp(cw_guide_width_hz_, 10.0, 5'000.0);
   decoded_signal_timeout_seconds_ =
-      std::clamp(decoded_signal_timeout_seconds_, 5, 120);
+      std::clamp(decoded_signal_timeout_seconds_, 5, 300);
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }

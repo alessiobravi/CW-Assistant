@@ -95,9 +95,15 @@ runs inside the live/WAV DSP workers rather than the UI thread.
 
 Each track separates provisional from stable text and publishes letters,
 digits, punctuation/prosigns, WPM, SNR, and an initial evidence-derived
-confidence score. Stable track IDs select one of 24 shared UI colors, and silent
-tracks expire after a bounded hold. The 700 Hz guide is a rendering reference
-only and is absent from the decoder data path.
+confidence score. Stable track IDs select one of 24 shared UI colors. A bounded
+presentation-observation layer retains the last verified snapshot for the
+configured silent hold without keeping a dead decoder candidate resident; a
+separate five-minute frequency lease lets a later track at the same carrier
+reuse that color. Known VFO retunes shift both live tracks and these visual
+frequency identities together. The verified marker has a stable presentation
+width independent of the adaptive analysis filter, so DSP width decisions do
+not resize the operator's click target. The 700 Hz guide is a rendering
+reference only and is absent from the decoder data path.
 
 Timing acquisition is also bounded per track: nine deterministic decoders start
 at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Recent bounded element quality,

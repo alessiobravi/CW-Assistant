@@ -142,13 +142,10 @@ jobs:
               cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -x "${app_binary}"
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
-              plist=stage/cw-assistant-desktop.app/Contents/Info.plist
-              short_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${plist}")"
-              bundle_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${plist}")"
-              echo "macOS CFBundleShortVersionString: ${short_version}"
-              echo "macOS CFBundleVersion: ${bundle_version}"
-              test "${short_version}" = "${build_version}"
-              test "${bundle_version}" = "${build_version}"
+              cmake \
+                -DCWA_APP_BUNDLE="$PWD/stage/cw-assistant-desktop.app" \
+                -DCWA_EXPECTED_VERSION="${build_version}" \
+                -P cmake/VerifyMacOSBundle.cmake
               ;;
             Linux)
               installed_version_file=stage/share/doc/cw-assistant/VERSION

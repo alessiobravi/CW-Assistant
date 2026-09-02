@@ -32,6 +32,7 @@ QVector<float> WaterfallConditioner::process(
   const double muted = lower_display_db;
   const double span = std::max(12.0, upper_display_db - lower_display_db);
   QVector<float> result(bins.size(), static_cast<float>(muted));
+  QVector<float> excesses(bins.size(), 0.0F);
   std::vector<float> sides;
   sides.reserve(static_cast<std::size_t>(2 * (outer - inner + 1)));
 
@@ -61,24 +62,51 @@ QVector<float> WaterfallConditioner::process(
     const double reference = 0.65 * side_reference +
                              0.35 * temporal_reference;
     const double excess = observed - reference;
+    excesses[index] = static_cast<float>(excess);
 
     if (!symbols_mode && !noise_suppression) {
       result[index] = static_cast<float>(observed);
-    } else if (excess >= margin) {
+    } else if (!symbols_mode && excess >= margin) {
       const double strength = std::clamp((excess - margin) / 18.0,
                                          0.0, 1.0);
-      if (symbols_mode) {
-        result[index] = static_cast<float>(
-            muted + span * (0.62 + 0.38 * strength));
-      } else {
-        const double softened = muted + span *
-            std::clamp(0.20 + 0.80 * strength, 0.0, 1.0);
-        result[index] = static_cast<float>(std::max(observed, softened));
-      }
+      const double softened = muted + span *
+          std::clamp(0.20 + 0.80 * strength, 0.0, 1.0);
+      result[index] = static_cast<float>(std::max(observed, softened));
     } else if (!symbols_mode) {
       const double knee = std::clamp(excess / margin, 0.0, 1.0);
       result[index] = static_cast<float>(muted * (1.0 - knee) +
                                          observed * knee);
+    }
+  }
+
+  if (symbols_mode) {
+    // Symbol mode is deliberately sparse rather than a second spectrogram.
+    // Demand more local contrast than the continuous waterfall and retain
+    // only the narrow ridge around each supported peak. Hann-windowed CW
+    // energy occupies adjacent bins; isolated single-bin excursions are much
+    // more commonly receiver/FFT noise and stay black.
+    const double symbol_threshold = std::max(9.0, margin + 3.0);
+    const qsizetype ridge_radius = std::max<qsizetype>(
+        1, static_cast<qsizetype>(std::ceil(30.0 / usable_bin_width)));
+    for (qsizetype index = 0; index < excesses.size(); ++index) {
+      const qsizetype first = std::max<qsizetype>(0, index - ridge_radius);
+      const qsizetype last = std::min<qsizetype>(
+          excesses.size() - 1, index + ridge_radius);
+      float local_peak = excesses[index];
+      int supporting_bins = 0;
+      for (qsizetype nearby = first; nearby <= last; ++nearby) {
+        local_peak = std::max(local_peak, excesses[nearby]);
+        if (excesses[nearby] >= symbol_threshold - 3.0) ++supporting_bins;
+      }
+      if (excesses[index] < symbol_threshold || supporting_bins < 2 ||
+          excesses[index] < local_peak - 6.0F) {
+        continue;
+      }
+      const double strength = std::clamp(
+          (static_cast<double>(excesses[index]) - symbol_threshold) / 12.0,
+          0.0, 1.0);
+      result[index] = static_cast<float>(
+          muted + span * (0.82 + 0.18 * strength));
     }
   }
 

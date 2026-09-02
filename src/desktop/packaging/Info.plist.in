@@ -6,17 +6,17 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>English</string>
   <key>CFBundleDisplayName</key>
-  <string>@MACOSX_BUNDLE_BUNDLE_NAME@</string>
+  <string>@CWA_MACOS_BUNDLE_NAME@</string>
   <key>CFBundleExecutable</key>
-  <string>@MACOSX_BUNDLE_EXECUTABLE_NAME@</string>
+  <string>@CWA_MACOS_BUNDLE_EXECUTABLE@</string>
   <key>CFBundleIconFile</key>
-  <string>@MACOSX_BUNDLE_ICON_FILE@</string>
+  <string>@CWA_MACOS_BUNDLE_ICON@</string>
   <key>CFBundleIdentifier</key>
-  <string>@MACOSX_BUNDLE_GUI_IDENTIFIER@</string>
+  <string>@CWA_MACOS_BUNDLE_IDENTIFIER@</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>@MACOSX_BUNDLE_BUNDLE_NAME@</string>
+  <string>@CWA_MACOS_BUNDLE_NAME@</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>

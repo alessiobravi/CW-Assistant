@@ -87,9 +87,12 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   and crisp sampling to expose dit/dah/gap timing. Switching views must not
   reset or influence decoding, and CW symbols must not fabricate text.
 - Render the configured CW pitch/width as a bold axis-boundary guide that is
-  visually distinct from the filter-width area of verified signal traces;
+  visually distinct from the stable-width area of verified signal traces;
   keep vertical decoded annotations in
   the spectrum region rather than over waterfall history.
+- Keep verified-marker geometry stable while the decoder changes its internal
+  analysis-filter width; expose that filter choice as diagnostics, not as a
+  continuously resizing carrier footprint.
 - Clicking a trace selects the nearest tracked channel; clicking a callsign
   opens the QSO confirmation panel.
 - Left-clicking the waterfall moves the local CW guide center to the pointed
@@ -100,7 +103,10 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Anchor decoded observations to checked absolute RF Hz and stable track IDs,
   not screen coordinates. Continued decoding updates an observation in place;
   configurable loss and expiry timers remove stale overlays and list entries
-  consistently while permitting short-gap reacquisition.
+  consistently while permitting short-gap reacquisition. Preserve a verified
+  frequency's visual color identity for at least five minutes, independently
+  of the shorter marker/session expiry, and carry it through a known VFO
+  retune; a later pass at that carrier must reuse the color.
 - Rendering is independently rate-limited (initial target 30 or 60 FPS) and may
   drop display frames. DSP sample blocks must not be dropped to keep UI current.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are

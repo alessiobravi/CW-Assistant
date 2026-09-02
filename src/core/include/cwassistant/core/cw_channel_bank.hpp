@@ -69,6 +69,10 @@ struct CwChannelBankConfig {
   double empty_track_retention_seconds{2.0};
   double decoded_track_retention_seconds{30.0};
   double unverified_track_retention_seconds{0.75};
+  // A verified frequency keeps its display color after the live track expires
+  // so later passes from the same carrier do not look like different stations.
+  double color_identity_retention_seconds{300.0};
+  double color_identity_tolerance_hz{35.0};
   double narrowband_width_hz{120.0};
   double noise_reference_offset_hz{300.0};
   double evidence_rate_hz{500.0};
@@ -208,6 +212,8 @@ class CwChannelBank {
           std::uint64_t timestamp_ns);
 
     std::uint64_t id;
+    std::uint8_t color_index{0};
+    bool color_assigned{false};
     double frequency_hz;
     double drift_hz_per_second{0.0};
     std::uint64_t last_detected_ns;
@@ -262,6 +268,20 @@ class CwChannelBank {
     float snr_db{0.0F};
   };
 
+  struct ColorLease {
+    double frequency_hz{0.0};
+    std::uint64_t last_seen_ns{0};
+    bool occupied{false};
+  };
+
+  struct RetainedObservation {
+    CwChannelSnapshot snapshot;
+    std::uint64_t last_seen_ns{0};
+    bool refreshed{false};
+  };
+
+  static constexpr std::size_t kColorLeaseCount = 24;
+
   [[nodiscard]] float estimateNoise(std::span<const float> bins_dbfs) const;
   [[nodiscard]] float spectralSnr(const Track& track,
                                   double lower_frequency_hz,
@@ -270,13 +290,19 @@ class CwChannelBank {
                                   float noise_dbfs) const;
   void sanitizeConfig() noexcept;
   void resetFilter(Track& track) noexcept;
-  void updateVerification(Track& track);
+  void updateVerification(Track& track, std::uint64_t timestamp_ns);
   void recoverRejectedDecoder(Track& track);
-  void rebuildSnapshots();
+  void assignOrRefreshColor(Track& track,
+                            std::uint64_t timestamp_ns) noexcept;
+  [[nodiscard]] bool colorLeaseIsCurrent(
+      const ColorLease& lease, std::uint64_t timestamp_ns) const noexcept;
+  void rebuildSnapshots(std::uint64_t timestamp_ns);
 
   CwChannelBankConfig config_;
   std::vector<Track> tracks_;
   std::vector<CwChannelSnapshot> snapshots_;
+  std::vector<RetainedObservation> retained_observations_;
+  std::array<ColorLease, kColorLeaseCount> color_leases_{};
   std::uint64_t next_track_id_{1};
   StreamDescriptor stream_{};
   std::uint64_t expected_sample_timestamp_ns_{0};
