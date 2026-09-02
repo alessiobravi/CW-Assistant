@@ -149,14 +149,13 @@ that replacement. The prior transcript is carried forward once rather than
 being appended repeatedly during live refreshes. Simultaneous nearby decoded
 signals keep separate cards and colors; only a later return after the previous
 track has ended inherits that track's retained identity. Closing a card with **×** does not
-stop its DSP; click the marker to reopen it. Use the arrow handle beside the
-close button to drag cards over one another and set the
-operator's preferred order. Stable text, amber provisional text/elements,
+stop its DSP; click the marker to reopen it. Use the **↑** and **↓** buttons
+beside the close button to set the operator's preferred order. These controls
+act on press so a live decoder refresh cannot cancel them. Stable text, amber provisional text/elements,
 adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
-When competitive acoustic timing paths disagree with the literal timing
-leader, the card also shows a separately labeled **Acoustic correction**. It is
-append-only agreement from the same received mark/gap evidence, not a
-dictionary or callbook replacement. The literal transcript remains visible.
+Competitive acoustic timing paths remain internal evidence for callsign
+selection and debug capture. They are not appended below the live card text,
+because consensus can correctly abstain while the literal decoder continues.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
 default 30 seconds, configurable up to 300 seconds) so normal word and message
@@ -261,8 +260,9 @@ processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
 Treat `?` as retained acoustic uncertainty, not as a character that an online
-directory has disproved. The card exposes acoustic consensus separately, while
-the displayed literal transcript remains the receiver's raw stable result. A
+directory has disproved. Acoustic alternatives remain available in diagnostic
+capture, while the card remains the receiver's continuously updated literal
+stable result. A
 future callbook, activity list, or cluster spot must never silently replace the
 raw text or confirm what this receiver heard.
 

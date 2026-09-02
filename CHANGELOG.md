@@ -20,9 +20,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   event lattice. At completed-gap checkpoints it publishes up to four acoustic
   timing alternatives and a separate append-only correction containing only
   characters and spaces on which competitive paths agree. Decoder cards keep
-  the literal transcript and label this consensus separately; a supported
-  complete callsign may be identified from either stream without silently
-  rewriting the received text.
+  the continuously updating literal transcript; consensus remains separate
+  callsign/debug evidence so a supported complete callsign can be identified
+  without silently rewriting or visually displacing received text.
 
 - Added dependency-free decoder foundations for the next accuracy pass: a
   bounded acoustic event lattice retains timestamped mark/gap evidence and
@@ -192,14 +192,20 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Decoder cards no longer place a bounded acoustic-consensus transcript below
+  the live literal text, where a valid consensus abstention made auto-scroll
+  appear to stop decoding. Close and explicit up/down reorder controls now act
+  on press so frequent decoder-model refresh cannot cancel them, and the
+  receiver toolbar is kept above the clipped spectrum pointer layer.
+
 - Detected-stream left-clicks now pass through one stable plot-level pointer
   router instead of a delegate recreated by live decoder-model refreshes. This
   prevents cursor flicker and lost press/release pairs while preserving
   right-click manual signal picking and marker hover magnification.
 
-- Decoder-card dragging is now limited to a dedicated drag handle, so the
-  adjacent close button reliably dismisses the card while its stream continues
-  decoding and remains available to reopen from the spectrum marker.
+- Decoder-card ordering uses explicit up/down controls, so the adjacent close
+  button and reorder operations remain reliable while streams continue decoding
+  and remain available to reopen from the spectrum marker.
 
 - Reference serial defaults and ADIF/equipment fixtures now initialize every
   aggregate field explicitly, keeping the dependency-free core warning-clean
@@ -477,7 +483,7 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Operator-selected decoded sessions: every detected signal keeps decoding in
   the background, while clicking its colored spectrum/waterfall marker opens a
   session card. Cards can be closed without stopping DSP, reopened from the
-  marker, and reordered by dragging. Conservative decoded callsign candidates
+  marker, and reordered with explicit up/down controls. Conservative decoded callsign candidates
   and frequency labels run vertically beside the matching colored trace.
   Session reordering uses an explicitly bounded cross-platform index type.
 - Checked actual-RF labels for linked live radio audio. Profiles explicitly

@@ -34,8 +34,9 @@ int main() {
       !contains(transcript, "decodedTextArea.selectionStart") ||
       !contains(transcript, "decodedTextArea.selectionEnd") ||
       !contains(transcript, "function applyDecodedText(nextText)") ||
-      !contains(qml, "property string correctedDecodedText:") ||
-      !contains(qml, "Acoustic correction:") ||
+      !contains(qml, "property string displayedDecodedText: rawDecodedText") ||
+      !contains(qml, "property string callsignEvidenceText:") ||
+      contains(qml, "Acoustic correction:") ||
       !contains(transcript, "onDisplayedDecodedTextChanged()") ||
       !contains(transcript, "select(Math.min(oldSelectionStart") ||
       !contains(transcript, "if (!followTail)") ||
@@ -79,6 +80,15 @@ int main() {
       contains(marker, "id: channelHitArea") ||
       !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
     return 6;
+  }
+  if (!contains(qml, "id: receiverToolbar") ||
+      !contains(qml, "objectName: \"startLiveAudioButton\"") ||
+      !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||
+      !contains(qml, "objectName: \"moveDecoderSessionDownButton\"") ||
+      !contains(qml, "onPressed: replayController.moveDecoderSession(") ||
+      !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
+      !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
+    return 7;
   }
   return 0;
 }

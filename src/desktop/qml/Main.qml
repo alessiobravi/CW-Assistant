@@ -155,7 +155,9 @@ ApplicationWindow {
             spacing: 12
 
             RowLayout {
+                id: receiverToolbar
                 Layout.fillWidth: true
+                z: 20
                 Label { text: "Receiver workspace"; font.pixelSize: 18; font.weight: Font.DemiBold }
                 ComboBox {
                     model: ["Live audio", "WAV replay"]
@@ -173,6 +175,7 @@ ApplicationWindow {
                 }
                 Button {
                     objectName: "startLiveAudioButton"
+                    z: 21
                     text: "Start live RX"
                     visible: replayController.sourceMode === 0
                     enabled: !replayController.liveCapturing
@@ -201,6 +204,8 @@ ApplicationWindow {
                 radius: 10
                 color: "#09111a"
                 border.color: "#263241"
+                clip: true
+                z: 0
 
                 SpectrumWaterfall {
                     id: spectrumDisplay
@@ -1002,21 +1007,7 @@ ApplicationWindow {
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
                         border.color: modelData.color
-                        Drag.active: sessionDrag.active
-                        Drag.source: sessionCard
-                        Drag.hotSpot.x: width / 2
-                        Drag.hotSpot.y: height / 2
-                        z: sessionDrag.active ? 20 : 1
-                        opacity: sessionDrag.active ? 0.78 : 1.0
-                        DropArea {
-                            anchors.fill: parent
-                            onEntered: function(drag) {
-                                if (drag.source && drag.source !== sessionCard)
-                                    replayController.moveDecoderSession(
-                                                drag.source.modelData.id,
-                                                sessionCard.index)
-                            }
-                        }
+                        z: 1
                         property string rawDecodedText: modelData.text.length > 0
                             ? modelData.text
                             : (modelData.provisionalText.length > 0
@@ -1026,17 +1017,17 @@ ApplicationWindow {
                                   : (!modelData.verifiedCw
                                      ? "Analyzing the selected frequency…"
                                      : "Listening…")))
-                        property string correctedDecodedText:
-                            modelData.refinedText.length > 0
-                            && modelData.refinedText !== modelData.text
-                            ? modelData.refinedText : ""
-                        property string displayedDecodedText:
-                            correctedDecodedText.length > 0
-                            ? rawDecodedText + "\n\nAcoustic correction:\n"
-                              + correctedDecodedText
-                            : rawDecodedText
+                        // Acoustic alternatives remain available to callsign
+                        // evidence and diagnostics, but do not sit below the
+                        // continuously growing literal transcript. A bounded
+                        // consensus can legitimately abstain while raw text
+                        // continues, which otherwise makes the viewport look
+                        // frozen at the older consensus tail.
+                        property string displayedDecodedText: rawDecodedText
+                        property string callsignEvidenceText:
+                            rawDecodedText + " " + modelData.refinedText
                         property int ownCallMatches: window.exactCallCount(
-                            displayedDecodedText, appSettings.ownCallsign)
+                            callsignEvidenceText, appSettings.ownCallsign)
                         property int previousOwnCallMatches: 0
                         onOwnCallMatchesChanged: {
                             if (ownCallMatches > previousOwnCallMatches)
@@ -1107,29 +1098,31 @@ ApplicationWindow {
                                     color: modelData.active ? modelData.color : "#718091"
                                     font.pixelSize: 10
                                 }
-                                Item {
-                                    implicitWidth: 28
-                                    implicitHeight: 28
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "↕"
-                                        color: "#8290a0"
-                                        font.pixelSize: 16
-                                    }
-                                    DragHandler {
-                                        id: sessionDrag
-                                        target: sessionCard
-                                    }
-                                    HoverHandler { id: sessionDragHover }
-                                    ToolTip.visible: sessionDragHover.hovered
-                                    ToolTip.text: "Drag to reorder"
+                                ToolButton {
+                                    objectName: "moveDecoderSessionUpButton"
+                                    text: "↑"
+                                    enabled: sessionCard.index > 0
+                                    Accessible.name: "Move decoded session up"
+                                    onPressed: replayController.moveDecoderSession(
+                                                   modelData.id,
+                                                   sessionCard.index - 1)
+                                }
+                                ToolButton {
+                                    objectName: "moveDecoderSessionDownButton"
+                                    text: "↓"
+                                    enabled: sessionCard.index + 1
+                                             < decoderChannelList.count
+                                    Accessible.name: "Move decoded session down"
+                                    onPressed: replayController.moveDecoderSession(
+                                                   modelData.id,
+                                                   sessionCard.index + 1)
                                 }
                                 ToolButton {
                                     objectName: "closeDecoderSessionButton"
                                     text: "×"
                                     z: 40
                                     Accessible.name: "Close decoded session"
-                                    onClicked: replayController.closeDecoderSession(
+                                    onPressed: replayController.closeDecoderSession(
                                                    modelData.id)
                                 }
                             }

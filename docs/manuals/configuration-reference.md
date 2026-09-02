@@ -157,7 +157,8 @@ to open only that decoded session in its larger scrollable/selectable wrapped te
 window. It follows appended text unless a selection is active, bolds the
 confirmed remote call, and highlights an exact own-callsign match while flashing
 the card five times. Close with **×** without stopping decode, reopen from the
-marker, and use the adjacent arrow handle to drag open cards into another order.
+marker, and use the adjacent **↑**/**↓** controls to reorder open cards. Close
+and reorder act on press so decoder-model refresh cannot cancel the operation.
 If the retained carrier is reacquired with
 a new internal ID, the open session follows the same frequency/color identity.
 The decoder pane preserves a bounded 2,048-character presentation transcript
@@ -186,8 +187,8 @@ profile controls will be added only with benchmark-backed safe ranges.
 The parallel acoustic lattice is evaluated at most every 500 ms and at a
 completed gap, retains at most four alternatives within 1.0 cost of the best
 path, and requires at least 0.40 timing evidence before appending consensus.
-Its **Acoustic correction** is displayed separately and never edits the literal
-stable transcript.
+Its consensus remains separate internal callsign/debug evidence and never edits
+or displaces the continuously updating literal transcript in the decoder card.
 
 The current deterministic qualification target is acquisition within six
 simulated seconds for clean, 30 WPM, and weak/fading/drifting CW, zero published
