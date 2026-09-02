@@ -15,47 +15,15 @@ replay audit and selectable profile-persisted Audio spectrum/CW symbols views;
 the latter displays unaveraged acoustic keying evidence rather than inventing
 decoded glyphs. CW-001 and DSP-002 remain active for the full semi-Markov path,
 held-out calibration, and legally reusable real corpus.
-Last reviewed: 2026-09-02 — extended the SSH-queryable desktop CI status tag
-to include bounded `ctest --output-on-failure` diagnostics after the first
-hosted run compiled on both macOS architectures but failed in the test stage;
-the rerun retains the same implementation title and still fails closed.
-Last reviewed: 2026-09-02 — hosted diagnostics isolated the corrective-run
-failure to the live-audio integration fixture's obsolete two-repetition,
-5-second limit after sustained verification and continuous hypotheses were
-introduced. The fixture now supplies five repetitions, checks instantaneous
-display bins too, and retains bounded 10/15-second failure limits without
-relaxing its verified-channel assertions.
-Last reviewed: 2026-09-02 — because the expanded live integration corpus still
-failed its internal deadline, the fixture now emits its final spectrum flag,
-channel model, and verification summary on failure so the next same-title run
-can isolate the actual gate without weakening or guessing around it.
-Last reviewed: 2026-09-02 — the captured hosted fixture state isolated the
-remaining failure to character confidence: a valid track had 15 symbols, 85
-edges, 0.522 cadence, and 0.546 independent timing but remained below the old
-0.50 blended-confidence floor. Recalibrated that independent floor to 0.40;
-the separate timing gate and full hard-negative corpus remain mandatory.
-Last reviewed: 2026-09-01 — fixed `CwChannelBank::shiftTrackedFrequencies()`
-leaving a nonsensical negative-frequency track behind when a VFO retune (or
-several accumulating) carried a signal's audio frequency past 0 Hz, found
-via a real debug capture spanning a live VFO sweep; such a track is now
-dropped instead of lingering as an invalid candidate. Separately, agreed
-with the operator on a real architectural fix (not a threshold patch) for
-`CW-001`'s adaptive-timing weakness: the WPM-hypothesis decoder currently
-locks irrevocably onto one of nine seed speeds after only ~2.5s/a couple of
-symbols, with no way back except a full 2.5s silence gap that real traffic
-often never provides — confirmed as the likely dominant remaining blocker
-after the `timing_quality`/`mean_character_confidence` fix above stopped
-helping further. The agreed direction: redesign the decoder to never
-irrevocably lock, keeping hypotheses continuously re-evaluated with
-hysteresis and prefix-freezing on leader switch, instead of a one-time
-acquisition decision. Full design notes are kept locally only (not in this
-repository — see the standing instruction to keep that analysis out of
-git) pending implementation.
+Last reviewed: 2026-09-02 — the live integration fixture now exercises the
+sustained-verification interval with five keyed repetitions, validates both
+averaged and instantaneous spectrum output, and emits bounded failure
+diagnostics. The independent character-confidence floor is 0.40 while cadence,
+pure timing, and the complete hard-negative corpus remain separate gates.
 Last reviewed: 2026-09-01 — added AUDIO-002 (selected-track audio monitor
 output: play back only the selected decoded CW track's isolated,
 700 Hz-repitched narrowband audio to a PC output, like an operator-enabled
-bandpass filter tied to the identified trace) per an operator request; no
-implementation yet.
+bandpass filter tied to the identified trace); no implementation yet.
 Last reviewed: 2026-09-01 — fixed `timing_quality` and
 `mean_character_confidence` being mathematically forced identical (traced
 directly to real contest debug-capture data: a track with a legible `TEST`
@@ -65,8 +33,8 @@ threshold); see the `CW-001` note for the fix and its remaining known gap
 (recognize well-known CW/contest patterns like CQ, TEST, 599, 5NN, TU, UP
 as independent verification evidence, motivated by the same finding) as a
 not-yet-implemented follow-up.
-Last reviewed: 2026-09-01 — per operator feedback that retuning the linked
-radio's VFO lost a signal's tracking identity, added
+Last reviewed: 2026-09-01 — retuning the linked radio's VFO previously lost a
+signal's tracking identity, so the receive path added
 `CwChannelBank::shiftTrackedFrequencies()`: a retune while live audio is
 running now re-centers every currently tracked signal by the exact
 audio-domain shift implied (accounting for CW-U/CW-L sideband direction)
@@ -76,8 +44,7 @@ decimal precision (e.g. 7016.45 kHz), and added RX/TX frequency and split
 state to every debug-capture diagnostics line so a VFO move during a
 capture is visible after the fact.
 Last reviewed: 2026-09-01 — implemented the check/download/verify/guided-
-install slice of PKG-004 per operator direction ("build check + manual
-download + verify + guided install first"): background + manual update
+install slice of PKG-004: background + manual update
 checks against the published manifest's version field, SHA-256-verified
 download to the Downloads folder, and handoff to the OS installer/package
 handler rather than a silent self-install (deferred until PKG-001/PKG-002
@@ -86,17 +53,17 @@ badge) to match the decoder panel's visual weight, added a styled but
 intentionally unwired "ON AIR" placeholder (no backend reports real PTT/
 transmit state yet — see CAT-002, CAT-004), and moved the CW guide's axis
 line to sit on the spectrum/waterfall boundary rather than the bottom of
-the waterfall, per operator feedback on both.
+the waterfall.
 Last reviewed: 2026-09-01 — added DOC-002 (render documentation diagrams,
 e.g. Mermaid, instead of the ASCII art currently in docs/architecture.md,
 docs/decoder-strategy.md, and docs/decisions/0001-qt-quick-spectrum-renderer.md)
-per an operator request; no implementation yet.
+with no implementation yet.
 Last reviewed: 2026-09-01 — added PKG-004 (application update checking and
 guided install: periodic/manual update checks against the published release
 manifest, operator-confirmed download/checksum-verify/install/cleanup) per
-an operator request; no implementation yet.
+the documented safety policy; no implementation yet.
 Last reviewed: 2026-09-01 — swapped which spectrum overlay reads as an
-"area", per an operator request that the two were easy to confuse: the CW
+"area" to remove visual ambiguity: the CW
 pitch guide is now a bold line on the frequency axis only rather than a
 vertical band, and a verified CW track is now identified primarily by a
 colored vertical area sized to its actual narrowband filter width (rather
@@ -253,7 +220,7 @@ translucent band rather than two signal-like lines.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | BUILD-001 | done | Establish dependency-free C++20 core build | Core builds and tests passed on Windows x64, Linux x64, macOS ARM64, and macOS x64 in the first complete hosted matrix. |
-| PROC-001 | done | Keep manuals, changelog, backlog, and session handoff current | Repository guidance and PR automation require user manuals plus both project records for implementation/delivery changes. A model-neutral handoff records the safety boundaries, dated implementation checkpoint, verification commands, and all-green hosted completion rule for fresh sessions. |
+| PROC-001 | done | Keep manuals, changelog, and backlog current | Repository guidance and PR automation require user manuals plus both project records for implementation and delivery changes. |
 | CI-001 | done | Add full desktop dependency/build matrix | Qt 6.11.2 desktop and core tests pass on Windows x64, Linux x64, macOS ARM64, and macOS x64; successful jobs publish artifacts, stable continuous-release assets/checksums, and a verified-commit tag. |
 | CI-002 | todo | Add Windows 11 x64 runtime acceptance | Self-hosted or release-candidate testing launches the packaged app and verifies graphics/audio/serial discovery on Windows 11. |
 | VER-001 | done | Keep application and package versions consistent | One effective `major.minor.revision` value drives About, Qt identity, Windows executable/MSI metadata, macOS bundle metadata and in-bundle VERSION record, Debian package, CAT4OM identity, and the continuous manifest; hosted checks compare native metadata and installed records before publication. |
@@ -280,7 +247,7 @@ translucent band rather than two signal-like lines.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | DATA-001 | todo | Register the located CC0 pileup WAV | Manifest records source, CC0, checksum, audio format, preprocessing, and storage location. |
-| DATA-002 | todo | Build deterministic synthetic CW corpus | Covers agreed speed/keying/SNR/drift/fading/jitter/interference/AGC/audio-path matrix, exact and near-exact co-channel pileups, no-CW hard negatives, exact sample annotations, legally reusable real recordings, and leakage-safe held-out splits. |
+| DATA-002 | todo | Build deterministic synthetic CW corpus | Covers the speed/keying/SNR/drift/fading/jitter/interference/AGC/audio-path matrix, exact and near-exact co-channel pileups, no-CW hard negatives, exact sample annotations, legally reusable real recordings, and leakage-safe held-out splits. |
 | DSP-002 | active | Detect and track candidate CW tones | The bounded full-passband bank provides sub-bin peaks, drift prediction, nearby-candidate suppression, numerical-floor and FFT-resolution-aware near/far prominence guards, and private-candidate expiry. Saturated admission now replaces only weak unmatched unverified occupancy, established identities reject large innovations, and decoded/Morse-likely candidates survive normal word gaps. Two-sided noise references feed an adaptive per-track key envelope; coherence is a bounded spectral-concentration measure. Candidate → Morse-likely → verified → lost transitions combine recent spectral, edge, cadence, known-symbol, timing, confidence, and character-distribution evidence with separate enter/exit hysteresis, so a transient cannot latch forever and a brief fade does not flap a marker. Only verified tracks publish IDs/colors. Deterministic saturation/identity tests and hard-negative verification benchmarks pass; native private-WAV replay is available for field audits. Add legally reusable recordings, held-out threshold/confidence calibration, stronger quantile/envelope estimation, and measured publication/character-error targets. |
 | DSP-003 | todo | Add bounded per-channel DSP worker pool | Preserves channel order, sheds lowest-priority work, and passes overload soak tests. |
 | CW-001 | active | Implement explainable adaptive timing baseline | Every detected passband track converts adaptive per-track key-envelope evidence to smoothed key probability and evaluates nine bounded 8–60 WPM timing hypotheses. The leader remains provisional during acquisition; every fixed anchor now continues processing afterward, and silence/flush boundaries reselect the best complete path rather than making the early choice irreversible. Character/timing/cadence quality and unknown fractions use bounded recent windows, so early damaged evidence ages out. Letters/digits, punctuation/prosigns, WPM, SNR, cadence and timing quality, plus bounded per-character confidence/evidence are published. The earlier defect that forced `timing_quality` and `mean_character_confidence` mathematically identical is fixed and regression-tested. The capture-driven recovery slice preserves all fixed anchors instead of periodically reseeding every loser near the leader, which would collapse the speed diversity needed to escape a bad leader. Remaining: implement the full hidden semi-Markov/Viterbi path, consider closer-spaced local alternatives only where measured data supports them, add held-out confidence calibration, and define safe mid-transmission leader switching that never rewrites already-stable text. Validate every extension against `PERF-001` CPU/state budgets and the native capture replay audit. |

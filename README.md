@@ -66,9 +66,6 @@ The proposed decoder pipeline and measurable acceptance gates are in the
 [high-accuracy decoder strategy](docs/decoder-strategy.md).
 ADIF release gates and official-fixture verification are documented in the
 [ADIF conformance policy](docs/adif-conformance.md).
-Fresh development sessions should begin with the model-neutral
-[session handoff](docs/development/session-handoff.md), then verify its status
-against the current source, tests, backlog, and changelog.
 
 ## Download current development binaries
 

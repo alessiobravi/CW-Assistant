@@ -259,11 +259,6 @@ All notable changes to CW Assistant are recorded here. The format follows
   created, closing a coverage gap the existing steady-carrier and
   speech-like-AM cases did not exercise (those reject on keying pattern
   rather than peak shape).
-- A model-neutral development-session handoff covering the product safety
-  boundaries, implemented receive/decoder architecture, dated implementation
-  checkpoint, source map, required reading, local verification commands, and
-  hosted all-green completion procedure for reliable continuation by a fresh
-  development session.
 - An explicit candidate → Morse-likely → verified → lost lifecycle with
   inspectable rejection reasons and frozen verification-time confidence. The
   gate now combines repeated spectral persistence, keyed edges, narrowband
