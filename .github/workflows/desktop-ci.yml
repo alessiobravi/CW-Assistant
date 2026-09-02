@@ -192,9 +192,17 @@ jobs:
         id: verify_windows_installer
         if: matrix.windows_installer
         shell: pwsh
-        run: >-
-          ./src/desktop/packaging/windows/VerifyWindowsInstaller.ps1
-          -PackageDirectory packages
+        run: |
+          try {
+            & ./src/desktop/packaging/windows/VerifyWindowsInstaller.ps1 `
+              -PackageDirectory packages 2>&1 |
+                Tee-Object -FilePath windows-installer-verification.log
+          }
+          catch {
+            $_ | Out-String |
+              Tee-Object -FilePath windows-installer-verification.log -Append
+            throw
+          }
       - name: Publish Windows installer
         id: upload_windows_installer
         if: matrix.windows_installer
@@ -258,6 +266,12 @@ jobs:
             wix_log="$(tail -n 30 cpack-wix.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${wix_log}" ]]; then
               status_message="${status_message}"$'\n'"wix_log=${wix_log}"
+            fi
+          fi
+          if [[ "${CWA_WINDOWS_VERIFY_RESULT}" == "failure" ]]; then
+            verify_log="$(tail -n 30 windows-installer-verification.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
+            if [[ -n "${verify_log}" ]]; then
+              status_message="${status_message}"$'\n'"win_verify_log=${verify_log}"
             fi
           fi
           if [[ "${CWA_BUILD_RESULT}" == "failure" ]]; then

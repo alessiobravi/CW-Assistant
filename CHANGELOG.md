@@ -85,7 +85,8 @@ All notable changes to CW Assistant are recorded here. The format follows
   row. The Windows MSI finish page now offers **Launch CW Assistant**, selecting
   it automatically only when an interactive upgrade found and closed a running
   instance; its process detection, bounded shutdown, condition, and installed
-  launch target are verified from the generated MSI tables in CI.
+  launch target are verified from the generated MSI tables in CI, with verifier
+  failures retained in the queryable job result for diagnosis.
 - A verified marker without a confirmed callsign now labels only its frequency,
   avoiding repetitive vertical **CW stream** text. The confirmed callsign
   replaces the frequency as soon as sufficient decode/context evidence exists.

@@ -95,6 +95,9 @@ requests a graceful close, waits up to 15 seconds before terminating a stuck
 instance, and selects the launch option so the updated application normally
 reopens when setup finishes. You can clear the option before selecting
 **Finish**.
+The hosted Windows job also inspects the generated MSI tables and retains a
+failed assertion in its CI status record, so packaging regressions block
+publication with a diagnosable result.
 
 The installer presents the canonical GPL-3.0-or-later text. The build copies
 that UTF-8 source into the `.txt` input format required by CPack's WiX generator;
