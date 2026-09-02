@@ -152,6 +152,32 @@ void test_cw_timing_decoder() {
   staged_feed(false, 60);
   expect(staged.text == "E" && staged.provisional_text.empty(),
          "confirmation delay promotes provisional text to append-only stable text");
+
+  cwassistant::core::CwMultiSpeedDecoder cadence_decoder;
+  std::uint64_t cadence_now = 0;
+  cwassistant::core::CwDecoderUpdate cadence;
+  const auto cadence_feed = [&](const bool down, const int milliseconds) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 5) {
+      cadence_now += 5'000'000;
+      cadence = cadence_decoder.process(cadence_now,
+                                        down ? 12.0F : 0.0F);
+    }
+  };
+  cadence_feed(false, 200);
+  for (int word = 0; word < 3; ++word) {
+    for (int element = 0; element < 3; ++element) {
+      cadence_feed(true, 50);
+      cadence_feed(false, element == 2 ? 150 : 50);
+    }
+    for (int element = 0; element < 3; ++element) {
+      cadence_feed(true, 150);
+      cadence_feed(false, element == 2 ? 150 : 50);
+    }
+  }
+  expect(cadence.acoustic_wpm >= 22.0 && cadence.acoustic_wpm <= 26.0 &&
+             cadence.acoustic_cadence_confidence >= 0.70F,
+         "independent run-length fitting derives CW speed from 1:3 marks "
+         "and 1:3 gaps without using decoded characters");
 }
 
 void test_cw_channel_bank() {
@@ -688,6 +714,47 @@ void test_cw_channel_bank_implausible_character_distribution() {
          "so a spaced-out run of only E/T is still flagged");
   expect(!isCharacterDistributionImplausible("SOS DE W1AW K", 10, 0.60F),
          "raising the threshold config value relaxes the gate accordingly");
+
+  using cwassistant::core::CwChannelBank;
+  constexpr double sample_rate = 8'000.0;
+  CwChannelBank recovery_bank({
+      .minimum_verification_symbols = 20,
+      .minimum_plausibility_check_characters = 6,
+      .decoder_recovery_seconds = 0.5,
+  });
+  std::vector<float> bins(1'001, -110.0F);
+  double phase = 0.0;
+  std::uint64_t now = 0;
+  const auto feed = [&](const bool keyed, const int milliseconds) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 10) {
+      bins.assign(bins.size(), -110.0F);
+      if (keyed) bins[500] = -65.0F;
+      static_cast<void>(recovery_bank.updateSpectrum(
+          now, 0.0, 1'000.0, bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.30F * static_cast<float>(std::sin(phase)) : 0.0F,
+            0.0F};
+        phase += 2.0 * std::numbers::pi * 500.0 / sample_rate;
+      }
+      static_cast<void>(recovery_bank.processSamples(block));
+      now += 10'000'000;
+    }
+  };
+  for (int repetition = 0; repetition < 12; ++repetition) {
+    feed(true, 60);   // E
+    feed(false, 180);
+    feed(true, 180);  // T
+    feed(false, 180);
+  }
+  expect(recovery_bank.verificationDiagnostics().decoder_reacquisitions > 0 &&
+             recovery_bank.allTrackDiagnostics().size() == 1,
+         "a cadence-confirmed unverified decoder trapped in implausible "
+         "single-element output reacquires while retaining its carrier");
 }
 
 void test_transmit_guard() {

@@ -99,6 +99,7 @@ struct CwChannelBankConfig {
   float track_replacement_margin_db{3.0F};
   double verification_enter_seconds{0.50};
   double verification_exit_seconds{2.0};
+  double decoder_recovery_seconds{3.0};
 };
 
 struct CwVerificationDiagnostics {
@@ -107,6 +108,7 @@ struct CwVerificationDiagnostics {
   std::size_t verified_tracks{0};
   std::uint64_t verified_transitions{0};
   std::uint64_t expired_unverified_tracks{0};
+  std::uint64_t decoder_reacquisitions{0};
   std::uint32_t maximum_decoded_symbols{0};
   std::uint32_t maximum_key_transitions{0};
   float best_timing_quality{0.0F};
@@ -123,6 +125,8 @@ struct CwChannelSnapshot {
   double filter_width_hz{120.0};
   float snr_db{0.0F};
   double wpm{0.0};
+  double acoustic_wpm{0.0};
+  float acoustic_cadence_confidence{0.0F};
   float confidence{0.0F};
   float key_down_probability{0.0F};
   bool key_down{false};
@@ -167,6 +171,8 @@ struct CwTrackDiagnostic {
   float cadence_quality{0.0F};
   float mean_character_confidence{0.0F};
   double wpm{0.0};
+  double acoustic_wpm{0.0};
+  float acoustic_cadence_confidence{0.0F};
   std::string text;
   std::string provisional_text;
 };
@@ -224,6 +230,8 @@ class CwChannelBank {
     std::uint16_t consecutive_spectrum_misses{0};
     std::uint16_t verification_pass_samples{0};
     std::uint16_t verification_fail_samples{0};
+    std::uint16_t decoder_rejection_samples{0};
+    bool ever_verified{false};
     float keying_snr_db{0.0F};
     float keying_floor_db{0.0F};
     float keying_peak_db{0.0F};
@@ -263,6 +271,7 @@ class CwChannelBank {
   void sanitizeConfig() noexcept;
   void resetFilter(Track& track) noexcept;
   void updateVerification(Track& track);
+  void recoverRejectedDecoder(Track& track);
   void rebuildSnapshots();
 
   CwChannelBankConfig config_;
@@ -275,6 +284,7 @@ class CwChannelBank {
   bool sample_timing_initialized_{false};
   std::uint64_t verified_transitions_{0};
   std::uint64_t expired_unverified_tracks_{0};
+  std::uint64_t decoder_reacquisitions_{0};
 };
 
 }  // namespace cwassistant::core

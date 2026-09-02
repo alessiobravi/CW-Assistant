@@ -46,6 +46,10 @@ int replay(const std::string& path) {
       std::cout << "published path=\"" << path << "\" time_s="
                 << elapsed_seconds << " id=" << channel.id
                 << " frequency_hz=" << channel.frequency_hz
+                << " wpm=" << channel.wpm
+                << " acoustic_wpm=" << channel.acoustic_wpm
+                << " cadence_fit="
+                << channel.acoustic_cadence_confidence
                 << " confidence=" << channel.verification_confidence
                 << " text=\"" << channel.text << "\"\n";
     }
@@ -56,6 +60,8 @@ int replay(const std::string& path) {
             << source.duration_seconds() << " maximum_tracks="
             << maximum_tracks << " maximum_published=" << maximum_published
             << " verified_transitions=" << verification.verified_transitions
+            << " decoder_reacquisitions="
+            << verification.decoder_reacquisitions
             << " expired_unverified="
             << verification.expired_unverified_tracks << '\n';
   return 0;

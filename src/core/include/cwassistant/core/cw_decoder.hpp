@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -50,6 +51,11 @@ struct CwDecoderUpdate {
   std::uint32_t recent_decoded_symbols{0};
   std::uint32_t recent_unknown_symbols{0};
   std::uint32_t recent_cadence_observations{0};
+  // Independent run-length fit of recent marks/gaps to Morse's 1:3 and
+  // 1:3:7 timing ratios. This is acoustic cadence evidence, not a language
+  // prediction and not necessarily the currently selected decoder speed.
+  double acoustic_wpm{0.0};
+  float acoustic_cadence_confidence{0.0F};
 };
 
 class CwTimingDecoder {
@@ -134,6 +140,8 @@ class CwMultiSpeedDecoder {
   [[nodiscard]] CwDecoderUpdate snapshot(bool changed) const;
   void considerLock(float margin);
   void resetHypotheses();
+  void observeCadence(bool key_down, std::uint64_t timestamp_ns);
+  void recomputeCadenceEstimate();
 
   CwDecoderConfig decoder_config_;
   CwMultiSpeedConfig config_;
@@ -143,6 +151,18 @@ class CwMultiSpeedDecoder {
   std::uint64_t first_timestamp_ns_{0};
   std::uint64_t last_signal_timestamp_ns_{0};
   std::string committed_prefix_;
+  static constexpr std::size_t kCadenceDurationWindow = 64;
+  std::array<double, kCadenceDurationWindow> recent_mark_ms_{};
+  std::array<double, kCadenceDurationWindow> recent_gap_ms_{};
+  std::size_t recent_mark_count_{0};
+  std::size_t recent_gap_count_{0};
+  std::size_t recent_mark_index_{0};
+  std::size_t recent_gap_index_{0};
+  std::uint64_t cadence_state_started_ns_{0};
+  double cadence_dot_ms_{0.0};
+  float cadence_confidence_{0.0F};
+  bool cadence_initialized_{false};
+  bool cadence_key_down_{false};
   bool locked_{false};
   bool initialized_{false};
   bool signal_seen_{false};

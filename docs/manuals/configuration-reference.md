@@ -81,8 +81,9 @@ constant history seconds, and the CW frequency guide.
 
 Changes are applied immediately to active live audio and WAV replay. Select
 **Save profile** to persist them. The default 60 dB automatic span anchors the
-palette well above the measured floor, while noise suppression darkens only
-waterfall pixels below `noise floor + margin`. Raw spectrum bins are retained
+palette well above the measured floor. Noise suppression compares every bin
+with a slow baseline and nearby side frequencies, darkening broad receiver
+texture while retaining locally prominent narrowband signals. Raw spectrum bins are retained
 for future detection and decoding.
 
 **Waterfall history** selects a constant 5–30 second vertical time window. The
@@ -96,9 +97,11 @@ for the sharpest element boundaries; higher averaging deliberately smooths time.
 
 **View** selects **Audio spectrum** or **CW symbols** and is saved per profile.
 Audio spectrum uses the configured FFT power averaging. CW symbols uses the
-same FFT timestamps but draws unaveraged, noise-gated rows with crisp pixels so
+same FFT timestamps but draws unaveraged, locally conditioned rows with crisp pixels so
 carrier-on intervals appear as dits/dahs and carrier-off intervals as gaps.
-It is acoustic evidence rather than decoded characters. Switching is immediate
+Only narrow energy that exceeds both its per-frequency baseline and its
+55–180 Hz side references is promoted as a mark; raising **Margin** rejects
+more weak texture but can hide weak CW. It is acoustic evidence rather than decoded characters. Switching is immediate
 and does not clear tracking, timing hypotheses, or decoded sessions.
 
 **Visual guide** draws a bold red line on the boundary between the spectrum

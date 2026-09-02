@@ -253,6 +253,10 @@ The same **Settings → About** page checks for updates. A background check
 runs a few seconds after every launch (uncheck **Automatically check for
 updates** to disable it), and **Check for updates** runs one on demand,
 showing when it last ran and whether a newer version is published.
+During the short interval in which continuous-release files are being replaced,
+the previous manifest remains available and the application retries transient
+404, timeout, and server errors. A persistent failure is still reported after
+three attempts; it is never treated as an available or verified update.
 
 When an update is available, **Download update** fetches this platform's
 installer/package to your Downloads folder and verifies its checksum against

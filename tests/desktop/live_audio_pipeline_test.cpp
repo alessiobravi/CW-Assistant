@@ -187,7 +187,9 @@ int main(int argc, char* argv[]) {
   }
   const QByteArray first_line = log_file.readLine();
   if (!first_line.contains("\"tracks\"") ||
-      !first_line.contains("\"candidateTracks\"")) {
+      !first_line.contains("\"candidateTracks\"") ||
+      !first_line.contains("\"acousticWpm\"") ||
+      !first_line.contains("\"acousticCadenceConfidence\"")) {
     return 7;  // Diagnostics log line missing expected structure.
   }
   if (!first_line.contains("\"radio\"") ||

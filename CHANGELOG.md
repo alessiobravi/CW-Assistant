@@ -10,14 +10,19 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 - The spectrum panel now offers two profile-persisted live views: **Audio
   spectrum** keeps the smoothed FFT waterfall, while **CW symbols** renders
-  unaveraged acoustic FFT rows with a hard noise-floor knee and nearest-neighbor
-  texture sampling so dit, dah, and gap edges remain visible. Both views use
+  unaveraged acoustic FFT rows with per-frequency/local-side noise conditioning
+  and nearest-neighbor texture sampling so dit, dah, and gap edges remain
+  visible without promoting broadband receiver texture into false marks. Both views use
   the same live/replay stream and can be switched without resetting decoder
   state; the symbols view is raw keying evidence, not reconstructed text.
 - Added the native `cwa_capture_replay` audit executable. It replays one or
   more operator-provided `audio.wav` captures through the production spectrum,
   tracking, and decoding path and reports every publication plus bounded-bank
   summary metrics; private captures remain local and are not CI fixtures.
+- Added an independent bounded cadence estimator that fits recent key-down
+  durations to 1/3 units and key-up durations to 1/3/7 units. Production
+  capture audits now report its acoustic WPM and fit confidence alongside the
+  selected decoder WPM, without using decoded words as timing evidence.
 - `CwChannelBank::shiftTrackedFrequencies()`: retuning the linked radio's RX
   VFO while live audio is running now re-centers every currently tracked
   signal by the exact audio-domain shift the retune implies (accounting for
@@ -83,6 +88,23 @@ All notable changes to CW Assistant are recorded here. The format follows
   frequency against traces.
 
 ### Fixed
+
+- Fixed a persistent, unverified frequency track carrying an implausible
+  timing/text hypothesis into a later real transmission. When recent
+  single-element-dominated output remains rejected and the independent
+  acoustic cadence fit confirms Morse timing, only that track's decoder state
+  is reacquired; its carrier/noise tracking remains continuous and verified
+  text is never rewritten.
+- Fixed Audio spectrum showing the receiver passband as a bright textured
+  block and CW symbols turning instantaneous broadband fluctuations into
+  horizontal confetti. Waterfall suppression now uses a slow per-bin baseline
+  plus 55–180 Hz local side references, while symbols mode maps only locally
+  prominent narrowband energy to crisp marks.
+- Fixed transient `latest.json`, checksum, or package HTTP 404/server failures
+  surfacing immediately during continuous-release replacement. Publication
+  now leaves the previous manifest available while binaries/checksums are
+  replaced and uploads the new manifest last; the client retries transient
+  network and publication failures three times with bounded backoff.
 
 - SSH-queryable hosted job markers now retain the tail of `ctest` output when
   the test stage fails, while preserving pipeline failure through `pipefail`;

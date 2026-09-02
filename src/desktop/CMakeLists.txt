@@ -18,6 +18,8 @@ qt_add_executable(cw-assistant-desktop
   updates/update_checker.cpp
   updates/update_checker.hpp
   visualization/spectrum_frame.hpp
+  visualization/waterfall_conditioner.cpp
+  visualization/waterfall_conditioner.hpp
   visualization/spectrum_waterfall_item.cpp
   visualization/spectrum_waterfall_item.hpp
 )
@@ -109,6 +111,8 @@ if(CWA_BUILD_TESTS)
     replay/decoder_channel_model.cpp
     replay/decoder_channel_model.hpp
     visualization/spectrum_frame.hpp
+    visualization/waterfall_conditioner.cpp
+    visualization/waterfall_conditioner.hpp
     visualization/spectrum_waterfall_item.cpp
     visualization/spectrum_waterfall_item.hpp
   )
@@ -127,6 +131,18 @@ if(CWA_BUILD_TESTS)
   set_tests_properties(cwa_desktop_qml_startup_smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
     TIMEOUT 15)
+
+  qt_add_executable(cwa_update_checker_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/update_checker_test.cpp
+    updates/update_checker.cpp
+    updates/update_checker.hpp
+  )
+  target_link_libraries(cwa_update_checker_test PRIVATE
+    Qt6::Core Qt6::Gui Qt6::Network)
+  target_include_directories(cwa_update_checker_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_update_checker_test COMMAND cwa_update_checker_test)
+  set_tests_properties(cwa_update_checker_test PROPERTIES TIMEOUT 10)
 endif()
 
 include(GNUInstallDirs)

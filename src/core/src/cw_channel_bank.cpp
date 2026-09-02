@@ -157,6 +157,8 @@ void CwChannelBank::sanitizeConfig() noexcept {
   config_.verification_exit_seconds = std::clamp(
       config_.verification_exit_seconds,
       config_.verification_enter_seconds, 15.0);
+  config_.decoder_recovery_seconds = std::clamp(
+      config_.decoder_recovery_seconds, 0.5, 15.0);
 }
 
 void CwChannelBank::reset() noexcept {
@@ -168,6 +170,7 @@ void CwChannelBank::reset() noexcept {
   sample_timing_initialized_ = false;
   verified_transitions_ = 0;
   expired_unverified_tracks_ = 0;
+  decoder_reacquisitions_ = 0;
 }
 
 const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
@@ -467,6 +470,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       for (auto& track : tracks_) {
         track.decoder.reset();
         track.update = {};
+        track.decoder_rejection_samples = 0;
         resetFilter(track);
       }
     }
@@ -652,6 +656,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.update = track.decoder.process(timestamp_ns,
                                             track.keying_snr_db);
       updateVerification(track);
+      recoverRejectedDecoder(track);
       track.center_power_sums = {};
       track.lower_power_sum = 0.0F;
       track.upper_power_sum = 0.0F;
@@ -676,6 +681,7 @@ CwVerificationDiagnostics CwChannelBank::verificationDiagnostics() const {
   CwVerificationDiagnostics result{
       .verified_transitions = verified_transitions_,
       .expired_unverified_tracks = expired_unverified_tracks_,
+      .decoder_reacquisitions = decoder_reacquisitions_,
   };
   for (const auto& track : tracks_) {
     switch (track.verification_state) {
@@ -903,6 +909,7 @@ void CwChannelBank::updateVerification(Track& track) {
   if (config_.minimum_verification_symbols == 0) {
     track.verification_state = CwTrackState::Verified;
     track.verification_reason = CwVerificationReason::Verified;
+    track.ever_verified = true;
     track.verification_confidence = 1.0F;
     if (!was_verified) ++verified_transitions_;
     return;
@@ -921,6 +928,7 @@ void CwChannelBank::updateVerification(Track& track) {
   track.verification_pass_samples = enter_samples;
   track.verification_state = CwTrackState::Verified;
   track.verification_reason = CwVerificationReason::Verified;
+  track.ever_verified = true;
   track.verification_cadence_quality = track.update.cadence_quality;
   track.verification_timing_quality = track.update.timing_quality;
   track.verification_character_confidence =
@@ -928,6 +936,42 @@ void CwChannelBank::updateVerification(Track& track) {
   if (!was_verified) {
     ++verified_transitions_;
   }
+}
+
+void CwChannelBank::recoverRejectedDecoder(Track& track) {
+  const bool quality_rejection =
+      !track.ever_verified &&
+      track.verification_state != CwTrackState::Verified &&
+      track.verification_reason ==
+          CwVerificationReason::ImplausibleCharacterDistribution &&
+      track.update.recent_decoded_symbols >= 8U &&
+      track.update.acoustic_cadence_confidence >= 0.55F;
+  if (!quality_rejection) {
+    track.decoder_rejection_samples = 0;
+    return;
+  }
+
+  const auto recovery_samples = static_cast<std::uint16_t>(std::clamp(
+      std::lround(config_.decoder_recovery_seconds *
+                  config_.evidence_rate_hz),
+      1L, static_cast<long>(std::numeric_limits<std::uint16_t>::max())));
+  if (track.decoder_rejection_samples < recovery_samples)
+    ++track.decoder_rejection_samples;
+  if (track.decoder_rejection_samples < recovery_samples) return;
+
+  // The carrier/noise filters remain valid; only timing/text state is
+  // reacquired. This lets a real transmission take over a frequency that was
+  // previously occupied by a persistent noise-derived timing hypothesis.
+  // No verified text is rewritten because recovery is restricted to tracks
+  // that have never reached verification.
+  track.decoder.reset();
+  track.update = {};
+  track.decoder_rejection_samples = 0;
+  track.verification_pass_samples = 0;
+  track.verification_fail_samples = 0;
+  track.verification_state = CwTrackState::Candidate;
+  track.verification_reason = CwVerificationReason::NeedsKeyingEdges;
+  ++decoder_reacquisitions_;
 }
 
 std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
@@ -951,6 +995,9 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
         .cadence_quality = track.update.cadence_quality,
         .mean_character_confidence = track.update.mean_character_confidence,
         .wpm = track.update.wpm,
+        .acoustic_wpm = track.update.acoustic_wpm,
+        .acoustic_cadence_confidence =
+            track.update.acoustic_cadence_confidence,
         .text = track.update.text,
         .provisional_text = track.update.provisional_text,
     });
@@ -978,6 +1025,9 @@ void CwChannelBank::rebuildSnapshots() {
             kNarrowbandWidthsHz[track.selected_width_index],
         .snr_db = track.snr_db,
         .wpm = track.update.wpm,
+        .acoustic_wpm = track.update.acoustic_wpm,
+        .acoustic_cadence_confidence =
+            track.update.acoustic_cadence_confidence,
         .confidence = track.update.confidence,
         .key_down_probability = track.update.key_down_probability,
         .key_down = track.update.key_down,

@@ -351,6 +351,9 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("meanCharacterConfidence"),
                 track.mean_character_confidence);
     item.insert(QStringLiteral("wpm"), track.wpm);
+    item.insert(QStringLiteral("acousticWpm"), track.acoustic_wpm);
+    item.insert(QStringLiteral("acousticCadenceConfidence"),
+                track.acoustic_cadence_confidence);
     item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
     item.insert(QStringLiteral("provisionalText"),
                 QString::fromStdString(track.provisional_text));

@@ -341,7 +341,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view continuous >/dev/null 2>&1; then
-            gh release upload continuous release-assets/* --clobber
+            payloads=()
+            for asset in release-assets/*; do
+              if [[ "$(basename "${asset}")" != "latest.json" ]]; then
+                payloads+=("${asset}")
+              fi
+            done
+            gh release upload continuous "${payloads[@]}" --clobber
+            # Keep the previous manifest reachable while large platform
+            # artifacts are replaced. The new manifest becomes the final,
+            # pointer to the completed release set.
+            gh release upload continuous release-assets/latest.json --clobber
             gh release edit continuous \
               --title "Continuous development builds" \
               --notes-file continuous-release-notes.md \

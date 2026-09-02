@@ -89,6 +89,16 @@ This avoids irrevocable early speed lock without rewriting stable text in the
 middle of a transmission. Mid-segment switching remains future work and must
 first define an append-only consensus boundary.
 
+Alongside those character paths, a bounded decoder-independent cadence fit
+records recent key-down and key-up run lengths. It searches candidate dot
+durations from observed marks divided by 1/3 and gaps divided by 1/3/7, scores
+them with a clipped robust residual, and reports acoustic WPM plus fit
+confidence. It does not use decoded words and does not broadly override the
+selected character path. A sustained implausible-character rejection may reset
+an unverified timing decoder only when this independent fit confirms regular
+Morse cadence; carrier identity, noise tracking, and verified text remain
+untouched.
+
 An explicit hidden semi-Markov timing model tracks dit length, key-down and
 key-up duration distributions, character spacing, word spacing, drift, and
 keying style. Viterbi/beam search produces several Morse-valid hypotheses with

@@ -10,6 +10,13 @@
 
 namespace cwassistant::desktop {
 
+namespace update_detail {
+inline constexpr int kMaximumAttempts = 3;
+[[nodiscard]] bool isTransientFailure(QNetworkReply::NetworkError error,
+                                      int http_status) noexcept;
+[[nodiscard]] int retryDelayMs(int completed_attempts) noexcept;
+}  // namespace update_detail
+
 // Operator-controlled update checking, download, and checksum verification
 // against the published continuous-release manifest (PKG-004). This class
 // never installs or replaces anything itself: once a download is verified,
@@ -70,6 +77,9 @@ class UpdateChecker final : public QObject {
   void autoCheckEnabledChanged();
 
  private:
+  void requestManifest();
+  void requestChecksums();
+  void requestArtifact();
   void handleManifestReply(QNetworkReply* reply);
   void handleChecksumsReply(QNetworkReply* reply);
   void handleArtifactReply(QNetworkReply* reply);
@@ -93,7 +103,11 @@ class UpdateChecker final : public QObject {
   QString downloaded_file_path_;
   QJsonObject last_manifest_;
   QString pending_artifact_url_;
+  QString pending_checksums_url_;
   QByteArray pending_checksums_text_;
+  int manifest_attempts_{0};
+  int checksums_attempts_{0};
+  int artifact_attempts_{0};
 };
 
 }  // namespace cwassistant::desktop

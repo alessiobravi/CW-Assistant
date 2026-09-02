@@ -400,6 +400,15 @@ void CwMultiSpeedDecoder::resetHypotheses() {
   locked_ = false;
   initialized_ = false;
   signal_seen_ = false;
+  recent_mark_count_ = 0;
+  recent_gap_count_ = 0;
+  recent_mark_index_ = 0;
+  recent_gap_index_ = 0;
+  cadence_state_started_ns_ = 0;
+  cadence_dot_ms_ = 0.0;
+  cadence_confidence_ = 0.0F;
+  cadence_initialized_ = false;
+  cadence_key_down_ = false;
 }
 
 CwDecoderUpdate CwMultiSpeedDecoder::process(
@@ -418,6 +427,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
       hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
       changed = changed || hypothesis.update.changed;
     }
+    observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
     const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
     const double silence_ms = signal_seen_ &&
@@ -446,6 +456,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
     changed = changed || hypothesis.update.changed;
   }
+  observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
   const std::size_t previous_leader = leader_index_;
   float margin = 0.0F;
   leader_index_ = selectLeader(&margin);
@@ -508,6 +519,123 @@ float CwMultiSpeedDecoder::score(
          0.20F * prior_distance;
 }
 
+void CwMultiSpeedDecoder::observeCadence(const bool key_down,
+                                         const std::uint64_t timestamp_ns) {
+  if (!cadence_initialized_) {
+    cadence_initialized_ = true;
+    cadence_key_down_ = key_down;
+    cadence_state_started_ns_ = timestamp_ns;
+    return;
+  }
+  if (timestamp_ns < cadence_state_started_ns_) {
+    cadence_initialized_ = false;
+    cadence_confidence_ = 0.0F;
+    return;
+  }
+  if (key_down == cadence_key_down_) return;
+
+  const double duration_ms = milliseconds(timestamp_ns -
+                                           cadence_state_started_ns_);
+  if (duration_ms >= 10.0 && duration_ms <= 2'000.0) {
+    if (cadence_key_down_) {
+      recent_mark_ms_[recent_mark_index_] = duration_ms;
+      recent_mark_index_ =
+          (recent_mark_index_ + 1U) % kCadenceDurationWindow;
+      recent_mark_count_ = std::min(recent_mark_count_ + 1U,
+                                    kCadenceDurationWindow);
+    } else {
+      recent_gap_ms_[recent_gap_index_] = duration_ms;
+      recent_gap_index_ =
+          (recent_gap_index_ + 1U) % kCadenceDurationWindow;
+      recent_gap_count_ = std::min(recent_gap_count_ + 1U,
+                                   kCadenceDurationWindow);
+    }
+    recomputeCadenceEstimate();
+  }
+  cadence_key_down_ = key_down;
+  cadence_state_started_ns_ = timestamp_ns;
+}
+
+void CwMultiSpeedDecoder::recomputeCadenceEstimate() {
+  const std::size_t observation_count = recent_mark_count_ +
+                                        recent_gap_count_;
+  if (recent_mark_count_ < 3U || observation_count < 6U) {
+    cadence_confidence_ = 0.0F;
+    return;
+  }
+
+  std::array<double, kCadenceDurationWindow * 5U> candidates{};
+  std::size_t candidate_count = 0;
+  const auto add_candidate = [&](const double value) {
+    if (value >= 15.0 && value <= 240.0 &&
+        candidate_count < candidates.size()) {
+      candidates[candidate_count++] = value;
+    }
+  };
+  for (std::size_t index = 0; index < recent_mark_count_; ++index) {
+    add_candidate(recent_mark_ms_[index]);
+    add_candidate(recent_mark_ms_[index] / 3.0);
+  }
+  for (std::size_t index = 0; index < recent_gap_count_; ++index) {
+    add_candidate(recent_gap_ms_[index]);
+    add_candidate(recent_gap_ms_[index] / 3.0);
+    add_candidate(recent_gap_ms_[index] / 7.0);
+  }
+  if (candidate_count == 0) return;
+
+  const auto mark_residual = [](const double duration,
+                                const double dot) {
+    const double ratio = duration / dot;
+    return std::min(std::abs(ratio - 1.0) / 0.40,
+                    std::abs(ratio - 3.0) / 0.85);
+  };
+  const auto gap_residual = [](const double duration,
+                               const double dot) {
+    const double ratio = duration / dot;
+    return std::min({std::abs(ratio - 1.0) / 0.45,
+                     std::abs(ratio - 3.0) / 1.0,
+                     std::abs(ratio - 7.0) / 2.2});
+  };
+
+  double best_dot = candidates[0];
+  double best_cost = std::numeric_limits<double>::max();
+  for (std::size_t candidate = 0; candidate < candidate_count; ++candidate) {
+    const double dot = candidates[candidate];
+    double cost = 0.0;
+    for (std::size_t index = 0; index < recent_mark_count_; ++index) {
+      cost += std::min(mark_residual(recent_mark_ms_[index], dot), 1.0);
+    }
+    for (std::size_t index = 0; index < recent_gap_count_; ++index) {
+      cost += std::min(gap_residual(recent_gap_ms_[index], dot), 1.0);
+    }
+    // Clipping every observation bounds the influence of key clicks and
+    // missed edges without sorting inside the per-track real-time path.
+    cost /= static_cast<double>(observation_count);
+    // Only resolve otherwise-near ties toward the normal operating range.
+    // The measured ratios, not this weak prior, remain decisive.
+    cost += 0.015 * std::abs(std::log2(dot / 60.0));
+    if (cost < best_cost) {
+      best_cost = cost;
+      best_dot = dot;
+    }
+  }
+
+  const float coverage = std::min(
+      1.0F, static_cast<float>(observation_count) / 18.0F);
+  const float fit = static_cast<float>(std::clamp(1.0 - best_cost,
+                                                  0.0, 1.0));
+  const float confidence = coverage * fit;
+  if (cadence_dot_ms_ <= 0.0 || cadence_confidence_ < 0.25F) {
+    cadence_dot_ms_ = best_dot;
+  } else if (best_dot / cadence_dot_ms_ >= 0.55 &&
+             best_dot / cadence_dot_ms_ <= 1.8) {
+    cadence_dot_ms_ += 0.25 * (best_dot - cadence_dot_ms_);
+  } else if (confidence >= 0.75F) {
+    cadence_dot_ms_ = best_dot;
+  }
+  cadence_confidence_ = confidence;
+}
+
 std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
   std::size_t best_index = 0;
   float best_score = score(hypotheses_.front());
@@ -529,6 +657,9 @@ std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
 CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
   CwDecoderUpdate result = hypotheses_[leader_index_].update;
   result.changed = changed;
+  result.acoustic_wpm = cadence_dot_ms_ > 0.0
+      ? 1'200.0 / cadence_dot_ms_ : 0.0;
+  result.acoustic_cadence_confidence = cadence_confidence_;
   if (!locked_) {
     result.provisional_text = result.text + result.provisional_text;
     result.text = committed_prefix_;

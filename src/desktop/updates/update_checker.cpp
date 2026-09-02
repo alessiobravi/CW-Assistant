@@ -12,6 +12,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QSysInfo>
+#include <QTimer>
 
 #include <array>
 
@@ -40,6 +41,37 @@ constexpr auto kManifestUrl =
 }
 
 }  // namespace
+
+namespace update_detail {
+
+bool isTransientFailure(const QNetworkReply::NetworkError error,
+                        const int http_status) noexcept {
+  if (http_status == 404 || http_status == 408 || http_status == 425 ||
+      http_status == 429 || (http_status >= 500 && http_status <= 599)) {
+    return true;
+  }
+  switch (error) {
+    case QNetworkReply::ConnectionRefusedError:
+    case QNetworkReply::RemoteHostClosedError:
+    case QNetworkReply::HostNotFoundError:
+    case QNetworkReply::TimeoutError:
+    case QNetworkReply::TemporaryNetworkFailureError:
+    case QNetworkReply::NetworkSessionFailedError:
+    case QNetworkReply::UnknownNetworkError:
+    case QNetworkReply::UnknownProxyError:
+    case QNetworkReply::UnknownServerError:
+      return true;
+    default:
+      return false;
+  }
+}
+
+int retryDelayMs(const int completed_attempts) noexcept {
+  if (completed_attempts <= 1) return 400;
+  return completed_attempts == 2 ? 1'200 : 2'500;
+}
+
+}  // namespace update_detail
 
 UpdateChecker::UpdateChecker(QObject* parent)
     : QObject(parent),
@@ -122,6 +154,12 @@ void UpdateChecker::checkForUpdates() {
   checking_ = true;
   setStatus(QStringLiteral("Checking for updates…"));
   emit stateChanged();
+  manifest_attempts_ = 0;
+  requestManifest();
+}
+
+void UpdateChecker::requestManifest() {
+  ++manifest_attempts_;
   auto* reply = network_.get(QNetworkRequest(QUrl(QString::fromLatin1(
       kManifestUrl))));
   connect(reply, &QNetworkReply::finished, this,
@@ -129,13 +167,28 @@ void UpdateChecker::checkForUpdates() {
 }
 
 void UpdateChecker::handleManifestReply(QNetworkReply* reply) {
-  checking_ = false;
   if (reply->error() != QNetworkReply::NoError) {
-    setStatus(QStringLiteral("Update check failed: ") + reply->errorString());
-    emit stateChanged();
+    const int status = reply->attribute(
+        QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool retry =
+        manifest_attempts_ < update_detail::kMaximumAttempts &&
+        update_detail::isTransientFailure(reply->error(), status);
+    const QString error = reply->errorString();
     reply->deleteLater();
+    if (retry) {
+      setStatus(QStringLiteral(
+          "Release is being published; retrying update check…"));
+      emit stateChanged();
+      QTimer::singleShot(update_detail::retryDelayMs(manifest_attempts_), this,
+                         [this] { requestManifest(); });
+      return;
+    }
+    checking_ = false;
+    setStatus(QStringLiteral("Update check failed: ") + error);
+    emit stateChanged();
     return;
   }
+  checking_ = false;
   const auto document = QJsonDocument::fromJson(reply->readAll());
   reply->deleteLater();
   if (!document.isObject() ||
@@ -190,23 +243,46 @@ void UpdateChecker::downloadUpdate() {
   download_verified_ = false;
   downloaded_file_path_.clear();
   pending_artifact_url_ = artifact_url;
+  pending_checksums_url_ = checksums_url;
+  checksums_attempts_ = 0;
+  artifact_attempts_ = 0;
   setStatus(QStringLiteral("Downloading checksums…"));
   emit stateChanged();
 
   // Fetched sequentially, not concurrently: the artifact reply must not be
   // able to finish before pending_checksums_text_ is populated, since
   // handleArtifactReply() needs it to verify the download.
-  auto* checksums_reply = network_.get(QNetworkRequest(QUrl(checksums_url)));
+  requestChecksums();
+}
+
+void UpdateChecker::requestChecksums() {
+  ++checksums_attempts_;
+  auto* checksums_reply = network_.get(
+      QNetworkRequest(QUrl(pending_checksums_url_)));
   connect(checksums_reply, &QNetworkReply::finished, this,
           [this, checksums_reply] { handleChecksumsReply(checksums_reply); });
 }
 
 void UpdateChecker::handleChecksumsReply(QNetworkReply* reply) {
   if (reply->error() != QNetworkReply::NoError) {
+    const int status = reply->attribute(
+        QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool retry =
+        checksums_attempts_ < update_detail::kMaximumAttempts &&
+        update_detail::isTransientFailure(reply->error(), status);
+    const QString error = reply->errorString();
     reply->deleteLater();
+    if (retry) {
+      setStatus(QStringLiteral(
+          "Release files are being published; retrying checksums…"));
+      emit stateChanged();
+      QTimer::singleShot(update_detail::retryDelayMs(checksums_attempts_), this,
+                         [this] { requestChecksums(); });
+      return;
+    }
     finishDownload(false,
                    QStringLiteral("Checksum fetch failed: ") +
-                       reply->errorString());
+                       error);
     return;
   }
   pending_checksums_text_ = reply->readAll();
@@ -214,6 +290,12 @@ void UpdateChecker::handleChecksumsReply(QNetworkReply* reply) {
 
   setStatus(QStringLiteral("Downloading update…"));
   emit stateChanged();
+  requestArtifact();
+}
+
+void UpdateChecker::requestArtifact() {
+  ++artifact_attempts_;
+  download_progress_ = 0.0;
   auto* artifact_reply =
       network_.get(QNetworkRequest(QUrl(pending_artifact_url_)));
   connect(artifact_reply, &QNetworkReply::downloadProgress, this,
@@ -230,9 +312,22 @@ void UpdateChecker::handleChecksumsReply(QNetworkReply* reply) {
 
 void UpdateChecker::handleArtifactReply(QNetworkReply* reply) {
   if (reply->error() != QNetworkReply::NoError) {
-    finishDownload(false, QStringLiteral("Download failed: ") +
-                              reply->errorString());
+    const int status = reply->attribute(
+        QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const bool retry =
+        artifact_attempts_ < update_detail::kMaximumAttempts &&
+        update_detail::isTransientFailure(reply->error(), status);
+    const QString error = reply->errorString();
     reply->deleteLater();
+    if (retry) {
+      setStatus(QStringLiteral(
+          "Release file is being published; retrying download…"));
+      emit stateChanged();
+      QTimer::singleShot(update_detail::retryDelayMs(artifact_attempts_), this,
+                         [this] { requestArtifact(); });
+      return;
+    }
+    finishDownload(false, QStringLiteral("Download failed: ") + error);
     return;
   }
   const auto file_name =

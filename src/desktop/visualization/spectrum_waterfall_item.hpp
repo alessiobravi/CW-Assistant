@@ -7,6 +7,7 @@
 #include <deque>
 
 #include "spectrum_frame.hpp"
+#include "waterfall_conditioner.hpp"
 
 namespace cwassistant::desktop {
 
@@ -90,7 +91,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   void updateAutomaticRange(const QVector<float>& bins);
   void updateNoiseFloor(const QVector<float>& bins);
   [[nodiscard]] QVector<float> conditionedWaterfallRow(
-      const QVector<float>& bins) const;
+      const QVector<float>& bins);
   [[nodiscard]] QVector<float> blankWaterfallRow(qsizetype width) const;
   void appendWaterfallRow(QVector<float> row);
   void scheduleRender();
@@ -122,6 +123,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   bool has_sequence_{false};
   qulonglong dropped_rows_{0};
   QElapsedTimer render_clock_;
+  WaterfallConditioner conditioner_;
 };
 
 }  // namespace cwassistant::desktop

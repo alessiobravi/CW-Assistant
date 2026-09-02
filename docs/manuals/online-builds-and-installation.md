@@ -20,7 +20,10 @@ manifest and SHA-256 checksum link. The prerelease is updated only after the
 complete platform matrix passes. Its `continuous` Git tag is force-moved to
 that fully verified commit only after the release assets and checksums have
 also been published; a failed run leaves the prior known-good downloads and
-marker untouched.
+marker untouched. When replacing an existing prerelease, binaries and
+`SHA256SUMS` are uploaded first and `latest.json` last, leaving the previous
+manifest reachable until the replacement set is complete. The in-app updater
+also retries transient publication/network failures three times.
 
 For private-repository automation that can push through Git SSH but cannot read
 the Actions API, each matrix leg publishes a temporary annotated

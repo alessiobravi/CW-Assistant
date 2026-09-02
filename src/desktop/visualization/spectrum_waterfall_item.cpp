@@ -213,6 +213,7 @@ void SpectrumWaterfallItem::setDisplayMode(const int value) {
   if (display_mode_ == clamped) return;
   display_mode_ = clamped;
   waterfall_rows_.clear();
+  conditioner_.reset();
   has_row_timestamp_ = false;
   emit displayChanged();
   update();
@@ -320,6 +321,7 @@ void SpectrumWaterfallItem::resetFrames() {
   has_sequence_ = false;
   automatic_range_initialized_ = false;
   noise_floor_initialized_ = false;
+  conditioner_.reset();
   estimated_noise_floor_db_ = -120.0;
   if (automatic_range_) {
     effective_lower_bound_db_ = -120.0;
@@ -404,32 +406,16 @@ void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
 }
 
 QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
-    const QVector<float>& bins) const {
-  if ((!noise_suppression_ && display_mode_ == 0) ||
-      !noise_floor_initialized_) return bins;
-  QVector<float> conditioned = bins;
-  const double cutoff = estimated_noise_floor_db_ + noise_margin_db_;
-  const double muted = estimated_noise_floor_db_ - 18.0;
-  const double knee = std::max(1.0, noise_margin_db_);
-  for (float& bin : conditioned) {
-    if (!std::isfinite(bin)) {
-      bin = static_cast<float>(muted);
-      continue;
-    }
-    if (static_cast<double>(bin) < cutoff) {
-      const double mix = std::clamp(
-          (static_cast<double>(bin) - estimated_noise_floor_db_) / knee,
-          0.0, 1.0);
-      bin = static_cast<float>(muted * (1.0 - mix) +
-                               static_cast<double>(bin) * mix);
-    } else if (display_mode_ == 1) {
-      // The CW-symbol view is an acoustic keying raster, not decoded text:
-      // preserve the instantaneous time edge and give every confidently
-      // above-floor mark a consistent visible floor.
-      bin = std::max(bin, static_cast<float>(cutoff + 12.0));
-    }
-  }
-  return conditioned;
+    const QVector<float>& bins) {
+  if (!noise_floor_initialized_) return bins;
+  const double bin_width_hz = bins.size() > 1
+      ? (upper_frequency_hz_ - lower_frequency_hz_) /
+            static_cast<double>(bins.size() - 1)
+      : 1.0;
+  return conditioner_.process(
+      bins, display_mode_ == 1, noise_suppression_, noise_margin_db_,
+      effective_lower_bound_db_, effective_upper_bound_db_, bin_width_hz,
+      estimated_noise_floor_db_);
 }
 
 QVector<float> SpectrumWaterfallItem::blankWaterfallRow(

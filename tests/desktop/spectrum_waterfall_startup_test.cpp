@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "visualization/spectrum_waterfall_item.hpp"
+#include "visualization/waterfall_conditioner.hpp"
 #include "replay/replay_controller.hpp"
 
 namespace {
@@ -18,6 +19,25 @@ class TestableSpectrumWaterfallItem final
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  cwassistant::desktop::WaterfallConditioner conditioner;
+  QVector<float> shaped_noise(128);
+  for (qsizetype index = 0; index < shaped_noise.size(); ++index)
+    shaped_noise[index] = -92.0F + 0.08F * static_cast<float>(index);
+  static_cast<void>(conditioner.process(
+      shaped_noise, true, true, 6.0, -110.0, -40.0, 3.0, -90.0));
+  QVector<float> keyed = shaped_noise;
+  for (qsizetype index = 62; index <= 66; ++index)
+    keyed[index] += 24.0F;
+  const QVector<float> isolated = conditioner.process(
+      keyed, true, true, 6.0, -110.0, -40.0, 3.0, -90.0);
+  int bright_bins = 0;
+  for (const float value : isolated) {
+    if (value > -75.0F) ++bright_bins;
+  }
+  if (bright_bins < 5 || bright_bins > 9 || isolated[64] < -60.0F ||
+      isolated[20] > -100.0F) {
+    return 11;
+  }
   TestableSpectrumWaterfallItem item;
   item.setWidth(960.0);
   item.setHeight(540.0);
