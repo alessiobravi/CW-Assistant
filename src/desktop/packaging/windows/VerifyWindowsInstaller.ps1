@@ -98,24 +98,47 @@ WHERE `Property`='WIXUI_EXITDIALOGOPTIONALCHECKBOX'
         throw "The launch checkbox must not have an unconditional default"
     }
 
-    $detector = Read-Record $database @'
-SELECT `Target`, `Condition`, `Attributes`, `Sequence`, `Property`
-FROM `WixCloseApplication`
-WHERE `WixCloseApplication`='CwaDetectRunningApplicationDuringUpgrade'
+    $unsafeUiCloseAction = Read-Record $database @'
+SELECT `Action` FROM `InstallUISequence`
+WHERE `Action`='WixCloseApplications'
 '@
-    Assert-Equal (Read-ComField $detector "StringData" 1) `
-        "cw-assistant-desktop.exe" `
-        "The running application detector targets the wrong process"
-    Assert-Equal (Read-ComField $detector "StringData" 2) `
-        "WIX_UPGRADE_DETECTED AND CwaDetectionOnly" `
-        "The running application detector is not confined to its UI phase"
-    Assert-Equal (Read-ComField $detector "IntegerData" 3) 0 `
-        "The UI-phase detector must not close or terminate the application"
-    Assert-Equal (Read-ComField $detector "IntegerData" 4) 1 `
-        "The detector must run before the closer"
-    Assert-Equal (Read-ComField $detector "StringData" 5) `
-        "CWA_APP_WAS_RUNNING" `
-        "The running application state is not handed to the finish-page UI"
+    if ($null -ne $unsafeUiCloseAction) {
+        throw "The standard WixCloseApplications action must remain in InstallExecuteSequence"
+    }
+
+    $legacyUiDetector = Read-Record $database @'
+SELECT `Source`, `Target` FROM `CustomAction`
+WHERE `Action`='CwaDetectRunningApplication'
+'@
+    if ($null -ne $legacyUiDetector) {
+        throw "The incompatible UI process-detector custom action is still present"
+    }
+
+    $legacyUiDetectorSequence = Read-Record $database @'
+SELECT `Action` FROM `InstallUISequence`
+WHERE `Action`='CwaDetectRunningApplication'
+'@
+    if ($null -ne $legacyUiDetectorSequence) {
+        throw "The incompatible UI process detector is still scheduled"
+    }
+
+    $standardCloseAction = Read-Record $database @'
+SELECT `Source`, `Target` FROM `CustomAction`
+WHERE `Action`='WixCloseApplications'
+'@
+    Assert-Equal (Read-ComField $standardCloseAction "StringData" 1) "WixCA" `
+        "The process closer uses the wrong WiX binary"
+    Assert-Equal (Read-ComField $standardCloseAction "StringData" 2) `
+        "WixCloseApplications" `
+        "The process closer calls the wrong WiX entry point"
+
+    $standardCloseSequence = Read-Record $database @'
+SELECT `Condition`, `Sequence` FROM `InstallExecuteSequence`
+WHERE `Action`='WixCloseApplications'
+'@
+    if ($null -eq $standardCloseSequence) {
+        throw "The standard process closer is missing from InstallExecuteSequence"
+    }
 
     $closeApplication = Read-Record $database @'
 SELECT `Target`, `Condition`, `Attributes`, `Property`, `TerminateExitCode`, `Timeout`
@@ -126,7 +149,7 @@ WHERE `WixCloseApplication`='CwaCloseRunningApplicationDuringUpgrade'
         "cw-assistant-desktop.exe" `
         "The application closer targets the wrong process"
     Assert-Equal (Read-ComField $closeApplication "StringData" 2) `
-        "WIX_UPGRADE_DETECTED AND NOT CwaDetectionOnly" `
+        "WIX_UPGRADE_DETECTED" `
         "The application closer is not confined to the execute phase"
     Assert-Equal (Read-ComField $closeApplication "StringData" 4) "" `
         "The closer must not overwrite the UI-phase detection state"
@@ -143,46 +166,6 @@ WHERE `WixCloseApplication`='CwaCloseRunningApplicationDuringUpgrade'
     Assert-Equal ($closeAttributes -band 2) 0 `
         "The installer must not request reboot instead of completing the update"
 
-    $detectionAction = Read-Record $database @'
-SELECT `Source`, `Target` FROM `CustomAction`
-WHERE `Action`='CwaDetectRunningApplication'
-'@
-    Assert-Equal (Read-ComField $detectionAction "StringData" 1) "WixCA_x64" `
-        "The UI detector does not use the WiX process detector"
-    Assert-Equal (Read-ComField $detectionAction "StringData" 2) `
-        "WixCloseApplications" `
-        "The UI detector calls the wrong entry point"
-
-    $beginDetectionAction = Read-Record $database @'
-SELECT `Source`, `Target` FROM `CustomAction`
-WHERE `Action`='CwaBeginRunningApplicationDetection'
-'@
-    Assert-Equal (Read-ComField $beginDetectionAction "StringData" 1) `
-        "CwaDetectionOnly" `
-        "The detection phase does not use a private client property"
-    Assert-Equal (Read-ComField $beginDetectionAction "StringData" 2) "1" `
-        "The detection phase is not enabled before process detection"
-
-    $detectionSequence = Read-Record $database @'
-SELECT `Condition`, `Sequence` FROM `InstallUISequence`
-WHERE `Action`='CwaDetectRunningApplication'
-'@
-    Assert-Equal (Read-ComField $detectionSequence "StringData" 1) `
-        "WIX_UPGRADE_DETECTED" `
-        "The UI detector is not upgrade-scoped"
-
-    $beginDetectionSequence = Read-Record $database @'
-SELECT `Condition`, `Sequence` FROM `InstallUISequence`
-WHERE `Action`='CwaBeginRunningApplicationDetection'
-'@
-    Assert-Equal (Read-ComField $beginDetectionSequence "StringData" 1) `
-        "WIX_UPGRADE_DETECTED" `
-        "The private detection phase is not upgrade-scoped"
-    if ((Read-ComField $beginDetectionSequence "IntegerData" 2) -ge
-        (Read-ComField $detectionSequence "IntegerData" 2)) {
-        throw "The private detection phase must be set before process detection"
-    }
-
     $defaultAction = Read-Record $database @'
 SELECT `Source`, `Target` FROM `CustomAction`
 WHERE `Action`='CwaDefaultLaunchAfterClosingApplication'
@@ -198,16 +181,12 @@ SELECT `Condition`, `Sequence` FROM `InstallUISequence`
 WHERE `Action`='CwaDefaultLaunchAfterClosingApplication'
 '@
     Assert-Equal (Read-ComField $defaultSequence "StringData" 1) `
-        'CWA_APP_WAS_RUNNING AND NOT REMOVE~="ALL"' `
-        "The checkbox default is not guarded by the detected running state"
+        'WIX_UPGRADE_DETECTED AND NOT REMOVE~="ALL"' `
+        "The checkbox default is not guarded by the upgrade state"
 
     $executeSequence = Read-Record $database @'
 SELECT `Sequence` FROM `InstallUISequence` WHERE `Action`='ExecuteAction'
 '@
-    if ((Read-ComField $detectionSequence "IntegerData" 2) -ge
-        (Read-ComField $executeSequence "IntegerData" 1)) {
-        throw "Process detection must run before the elevated execute sequence"
-    }
     if ((Read-ComField $defaultSequence "IntegerData" 2) -le
         (Read-ComField $executeSequence "IntegerData" 1)) {
         throw "The conditional checkbox default must run after installation"
@@ -217,7 +196,7 @@ SELECT `Sequence` FROM `InstallUISequence` WHERE `Action`='ExecuteAction'
 SELECT `Source`, `Target` FROM `CustomAction`
 WHERE `Action`='CwaLaunchApplication'
 '@
-    Assert-Equal (Read-ComField $launchAction "StringData" 1) "WixCA_x64" `
+    Assert-Equal (Read-ComField $launchAction "StringData" 1) "WixCA" `
         "The finish-page launch action uses the wrong WiX binary"
     Assert-Equal (Read-ComField $launchAction "StringData" 2) "WixShellExec" `
         "The finish-page launch action calls the wrong entry point"

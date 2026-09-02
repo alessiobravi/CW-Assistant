@@ -89,15 +89,19 @@ user’s application settings and are not removed with program files. Downgrades
 are rejected by Windows Installer.
 
 The successful finish page includes **Launch CW Assistant**. It is unchecked
-for a clean install or an upgrade started while the application is closed. If
-an interactive upgrade finds CW Assistant running, Windows Installer first
-requests a graceful close, waits up to 15 seconds before terminating a stuck
-instance, and selects the launch option so the updated application normally
-reopens when setup finishes. You can clear the option before selecting
-**Finish**.
+for a clean install and selected by default for an interactive upgrade, so the
+updated application normally reopens when setup finishes. You can clear the
+option before selecting **Finish**. During an upgrade, Windows Installer asks a
+running CW Assistant instance to close gracefully and waits up to 15 seconds
+before terminating a stuck instance. The launch default applies to every
+interactive upgrade because process closure occurs separately in Windows
+Installer's elevated execute session; its result is not reused by the
+finish-page session.
 The hosted Windows job also inspects the generated MSI tables through
 PowerShell 7-compatible access to the Windows Installer automation API and
-retains a failed assertion in its CI status record, so packaging regressions
+retains a failed assertion in its CI status record. It verifies that process
+closure runs only in the execute sequence, along with the bounded shutdown,
+conditional launch default, and launch target, so these packaging regressions
 block publication with a diagnosable result.
 
 The installer presents the canonical GPL-3.0-or-later text. The build copies

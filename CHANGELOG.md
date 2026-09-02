@@ -102,6 +102,14 @@ All notable changes to CW Assistant are recorded here. The format follows
   calls, avoiding null results from late-bound COM dispatch under PowerShell 7
   while retaining readable normalized queries and strict table assertions.
 
+- Windows MSI upgrades no longer invoke a nonstandard UI process detector
+  bound to the incompatible x64 WiX custom-action binary, which caused setup to
+  fail immediately after the welcome page. Process closure now remains in
+  WiX's standard execute sequence, the finish-page launcher uses the canonical
+  WiX binary, and CI rejects the unsafe detector or a wrong action binding.
+  **Launch CW Assistant** remains unchecked on clean installs and is selected
+  by default after interactive upgrades.
+
 - Verified stream markers now correct a biased initial acquisition from robust
   recent carrier evidence, then follow only sustained coherent motion through
   deadband, dispersion/drift, slew-rate, and immutable-origin bounds. Identity,

@@ -3,8 +3,7 @@
   <CPackWiXFragment Id="#PRODUCT">
     <!--
       Keep the finish-page launch choice visible but initially unchecked. The
-      CloseApplication property below is the only path that selects it by
-      default, after an upgrade installer actually found a running instance.
+      upgrade path below selects it by default after installation completes.
     -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
               Value="Launch CW Assistant" />
@@ -12,39 +11,17 @@
               Value="[INSTALL_ROOT]bin\cw-assistant-desktop.exe" />
 
     <CustomAction Id="CwaLaunchApplication"
-                  BinaryKey="WixCA_x64"
+                  BinaryKey="WixCA"
                   DllEntry="WixShellExec"
                   Impersonate="yes"
                   Return="ignore" />
     <CustomAction Id="CwaDefaultLaunchAfterClosingApplication"
                   Property="WIXUI_EXITDIALOGOPTIONALCHECKBOX"
                   Value="1" />
-    <CustomAction Id="CwaBeginRunningApplicationDetection"
-                  Property="CwaDetectionOnly"
-                  Value="1" />
-    <CustomAction Id="CwaDetectRunningApplication"
-                  BinaryKey="WixCA_x64"
-                  DllEntry="WixCloseApplications"
-                  Execute="immediate"
-                  Return="check" />
-
     <InstallUISequence>
-      <!--
-        Detect in the client/UI session so CWA_APP_WAS_RUNNING remains
-        available to ExitDialog. CwaDetectionOnly is intentionally private:
-        Windows Installer does not copy it to the elevated execute session.
-      -->
-      <Custom Action="CwaBeginRunningApplicationDetection"
-              Before="CwaDetectRunningApplication">
-        WIX_UPGRADE_DETECTED
-      </Custom>
-      <Custom Action="CwaDetectRunningApplication"
-              Before="ExecuteAction">
-        WIX_UPGRADE_DETECTED
-      </Custom>
       <Custom Action="CwaDefaultLaunchAfterClosingApplication"
               After="ExecuteAction">
-        CWA_APP_WAS_RUNNING AND NOT REMOVE~=&quot;ALL&quot;
+        WIX_UPGRADE_DETECTED AND NOT REMOVE~=&quot;ALL&quot;
       </Custom>
     </InstallUISequence>
 
@@ -58,29 +35,22 @@
     </UI>
 
     <!--
-      CPack's MajorUpgrade authoring sets WIX_UPGRADE_DETECTED. The first row
-      only detects the process in the UI session. The standard execute-sequence
-      WixCloseApplications action processes the second row, requests a graceful
-      close, and only terminates after the bounded wait expires.
+      CPack's MajorUpgrade authoring sets WIX_UPGRADE_DETECTED. The standard
+      execute-sequence WixCloseApplications action requests a graceful close
+      and only terminates after the bounded wait expires. Keep that canonical
+      action here instead of binding a separate UI action to a
+      platform-specific WiX custom-action binary.
     -->
-    <util:CloseApplication Id="CwaDetectRunningApplicationDuringUpgrade"
-                           Target="cw-assistant-desktop.exe"
-                           Description="CW Assistant must close before the update can continue."
-                           Property="CWA_APP_WAS_RUNNING"
-                           Sequence="1"
-                           RebootPrompt="no">
-      WIX_UPGRADE_DETECTED AND CwaDetectionOnly
-    </util:CloseApplication>
     <util:CloseApplication Id="CwaCloseRunningApplicationDuringUpgrade"
                            Target="cw-assistant-desktop.exe"
                            Description="CW Assistant must close before the update can continue."
-                           Sequence="2"
+                           Sequence="1"
                            CloseMessage="yes"
                            ElevatedCloseMessage="yes"
                            Timeout="15"
                            TerminateProcess="1"
                            RebootPrompt="no">
-      WIX_UPGRADE_DETECTED AND NOT CwaDetectionOnly
+      WIX_UPGRADE_DETECTED
     </util:CloseApplication>
   </CPackWiXFragment>
 </CPackWiXPatch>
