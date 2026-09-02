@@ -67,12 +67,14 @@ int main() {
                                         marker_end - marker_start);
   if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
       !contains(manual, "z: 4") ||
+      !contains(manual, "acceptedButtons: Qt.RightButton") ||
       !contains(manual, "onClicked: function(mouse)") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
       !contains(marker, "z: 5") ||
       !contains(marker, "id: channelHitArea") ||
+      !contains(marker, "acceptedButtons: Qt.LeftButton") ||
       !contains(marker, "onClicked: function(mouse)") ||
       !contains(marker, "replayController.openDecoderSession(")) {
     return 6;

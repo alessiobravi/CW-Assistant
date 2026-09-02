@@ -324,7 +324,7 @@ ApplicationWindow {
                     height: spectrumDisplay.height
                     z: 4
                     hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton
+                    acceptedButtons: Qt.RightButton
                     cursorShape: Qt.CrossCursor
                     onClicked: function(mouse) {
                         if (!replayController.activeSource || width <= 0
@@ -343,7 +343,7 @@ ApplicationWindow {
                     }
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 650
-                    ToolTip.text: "Click an unmarked signal to open a manual decoding slice"
+                    ToolTip.text: "Right-click an unmarked signal to open a manual decoding slice"
                 }
                 Repeater {
                     model: replayController.decoderChannels

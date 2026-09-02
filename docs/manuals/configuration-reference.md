@@ -166,11 +166,12 @@ requires a complete stable word, rejects noise-like separated digit runs while
 retaining contiguous multi-digit special-event calls, and
 requires decoded `DE`/`CQ`/`TU`/`UP` context or exact repetition before
 automatically naming a stream.
-Left-clicking an unmarked spectrum/waterfall position instead creates a neutral
+Right-clicking an unmarked spectrum/waterfall position creates a neutral
 manual probe at that exact center and opens its card. It is not included in the
 detected count, exposes no decoded content before ordinary verification, reuses
 only another manual center within 12 Hz, and expires after 30 seconds if it
 cannot verify. Successful verification promotes the same session normally.
+Left-click opens an existing detected stream and never creates a manual probe.
 Unverified candidates expire after 750 ms and never appear in the signal count.
 A callsign label additionally requires stable text and a completed word gap;
 partial, provisional, and unsupported one-off candidates remain hidden.

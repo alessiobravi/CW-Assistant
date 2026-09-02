@@ -8,12 +8,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
-- Clicking an unmarked spectrum/waterfall frequency now opens a neutral manual
+- Right-clicking an unmarked spectrum/waterfall frequency now opens a neutral manual
   decoder slice at that exact audio center. The probe can accumulate measured
   weak-signal evidence below automatic acquisition, keeps nearby manually
   selected lanes distinct, and promotes into the normal colored stream only
   after the unchanged acoustic verification gates pass; otherwise it expires
-  after 30 seconds and exposes no text or callsign.
+  after 30 seconds and exposes no text or callsign. Left-click remains
+  dedicated to opening an already detected stream.
 
 - The live timing decoder now feeds immutable mark/gap runs into its bounded
   event lattice. At completed-gap checkpoints it publishes up to four acoustic

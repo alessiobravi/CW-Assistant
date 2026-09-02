@@ -99,7 +99,7 @@ is reserved for active verified CW tracks (see below). This guide is visual
 only: it does not select a decoder, limit decoding, change receiver tuning, or
 change decoder bandwidth.
 
-Left-click an unmarked spectrum or waterfall trace to move the local CW guide
+Right-click an unmarked spectrum or waterfall trace to move the local CW guide
 and immediately open a neutral manual decoder slice at that audio frequency.
 The slice uses real narrowband evidence but does not claim that the signal is
 CW: its text and callsign remain hidden and it is excluded from the detected
@@ -109,6 +109,7 @@ unverified slice expires after 30 seconds. Click again to refresh it. Manual
 centers within 12 Hz reuse the slice, while more distant centers can remain
 separate for close pileup inspection. Radio retuning remains a separate,
 capability-checked operation rather than a consequence of this click.
+Left-click remains reserved for opening an already detected colored stream.
 
 For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
 noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
