@@ -84,9 +84,9 @@ int main(int argc, char* argv[]) {
       append_units(false, element + 1 == elements.size() ? 3U : 1U);
     }
   };
-  // Four repetitions leave a deterministic post-symbol evidence interval for
+  // Five repetitions leave a deterministic post-symbol evidence interval for
   // the verification entry hysteresis while exercising continued hypotheses.
-  for (int repetition = 0; repetition < 4; ++repetition) {
+  for (int repetition = 0; repetition < 5; ++repetition) {
     append_letter("...");
     append_letter("---");
     append_letter("...");
