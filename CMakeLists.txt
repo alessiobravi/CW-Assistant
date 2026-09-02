@@ -80,6 +80,11 @@ if(CWA_BUILD_DESKTOP)
     set(CPACK_WIX_UPGRADE_GUID "3310FD2E-106F-4A39-A031-A602683BCB19")
     set(CPACK_WIX_PRODUCT_ICON
         "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/cw-assistant.ico")
+    set(CPACK_WIX_PATCH_FILE
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/windows/windows-installer-patch.xml")
+    set(CPACK_WIX_EXTENSIONS WixUtilExtension)
+    set(CPACK_WIX_CUSTOM_XMLNS
+        "util=http://schemas.microsoft.com/wix/UtilExtension")
     # Keep the launcher inside its own Start-menu program group. The matching
     # CPACK_PACKAGE_EXECUTABLES/CPACK_CREATE_DESKTOP_LINKS pair above also
     # creates the all-users desktop shortcut through the WiX generator.

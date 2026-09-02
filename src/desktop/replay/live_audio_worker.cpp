@@ -331,6 +331,10 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     QJsonObject item;
     item.insert(QStringLiteral("id"), static_cast<qint64>(track.id));
     item.insert(QStringLiteral("frequencyHz"), track.frequency_hz);
+    item.insert(QStringLiteral("identityOriginFrequencyHz"),
+                track.identity_origin_frequency_hz);
+    item.insert(QStringLiteral("presentationFrequencyHz"),
+                track.presentation_frequency_hz);
     item.insert(QStringLiteral("driftHzPerSecond"), track.drift_hz_per_second);
     item.insert(QStringLiteral("snrDb"), track.snr_db);
     item.insert(QStringLiteral("narrowbandCoherence"), track.narrowband_coherence);
@@ -357,6 +361,12 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
     item.insert(QStringLiteral("provisionalText"),
                 QString::fromStdString(track.provisional_text));
+    item.insert(QStringLiteral("matchAgeSeconds"), track.match_age_seconds);
+    item.insert(QStringLiteral("colorIndex"),
+                static_cast<int>(track.color_index));
+    item.insert(QStringLiteral("matched"), track.matched);
+    item.insert(QStringLiteral("active"), track.active);
+    item.insert(QStringLiteral("keyDown"), track.key_down);
     tracks.push_back(item);
   }
   root.insert(QStringLiteral("tracks"), tracks);

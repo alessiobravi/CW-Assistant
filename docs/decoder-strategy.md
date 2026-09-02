@@ -70,6 +70,11 @@ The bounded track bank uses explicit admission control: a strong new carrier
 may replace only the weakest unmatched unverified occupancy, never a verified
 track. Once a track has enough persistence, an identity-breaking frequency
 innovation starts a fresh track rather than transferring decoder history.
+The association origin remains immutable except for a known receiver retune.
+The adaptive DSP center follows accepted peaks, while a separate display center
+is robustly reanchored at first verification and thereafter follows only
+sustained coherent, low-dispersion motion through bounded deadband and slew
+guards. Display correction never feeds association, decoding, or color leases.
 
 Discovery and publication are separate. Broad shoulders fail a local-prominence
 test combining a permissive near check with hertz-scaled far references;

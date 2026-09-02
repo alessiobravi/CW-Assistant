@@ -110,10 +110,15 @@ presentation-observation layer retains the last verified snapshot for the
 configured silent hold without keeping a dead decoder candidate resident; a
 separate five-minute frequency lease lets a later track at the same carrier
 reuse that color. Known VFO retunes shift both live tracks and these visual
-frequency identities together. The verified marker has a stable presentation
-center and width independent of the adaptive carrier estimate/filter, so DSP
-drift and width decisions do not move or resize the operator's click target.
-Only a known VFO retune moves the presentation anchor. Inactive retained observations render
+frequency identities together. A track keeps an immutable association origin,
+an adaptive DSP carrier estimate, and an independent fixed-width presentation
+center. Robust recent peak evidence corrects initial acquisition bias at first
+verification; afterward, only sustained coherent low-dispersion motion moves
+the presentation center through a deadband and slow slew, within a hard bound
+around the association origin. This follows a real drifting carrier without
+letting instantaneous noise, adjacent signals, or adaptive filter changes walk
+the operator's click target. A known VFO retune translates all three frequency
+states exactly. Inactive retained observations render
 only an axis mark; retention cannot assert live carrier/key-down state, which
 requires a current matched peak. The configurable 700 Hz receive region is represented by
 two unfilled dashed boundaries and is absent from the decoder data path.

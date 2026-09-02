@@ -189,7 +189,14 @@ int main(int argc, char* argv[]) {
   if (!first_line.contains("\"tracks\"") ||
       !first_line.contains("\"candidateTracks\"") ||
       !first_line.contains("\"acousticWpm\"") ||
-      !first_line.contains("\"acousticCadenceConfidence\"")) {
+      !first_line.contains("\"acousticCadenceConfidence\"") ||
+      !first_line.contains("\"identityOriginFrequencyHz\"") ||
+      !first_line.contains("\"presentationFrequencyHz\"") ||
+      !first_line.contains("\"matchAgeSeconds\"") ||
+      !first_line.contains("\"colorIndex\"") ||
+      !first_line.contains("\"matched\"") ||
+      !first_line.contains("\"active\"") ||
+      !first_line.contains("\"keyDown\"")) {
     return 7;  // Diagnostics log line missing expected structure.
   }
   if (!first_line.contains("\"radio\"") ||

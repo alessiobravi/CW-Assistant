@@ -71,6 +71,18 @@ int retryDelayMs(const int completed_attempts) noexcept {
   return completed_attempts == 2 ? 1'200 : 2'500;
 }
 
+UpdateActionVisibility updateActionVisibility(
+    const bool update_available, const bool platform_supported,
+    const bool download_verified) noexcept {
+  if (download_verified) {
+    return {.row = true, .download = false, .verified_download = true};
+  }
+  const bool can_download = update_available && platform_supported;
+  return {.row = can_download,
+          .download = can_download,
+          .verified_download = false};
+}
+
 }  // namespace update_detail
 
 UpdateChecker::UpdateChecker(QObject* parent)
@@ -127,6 +139,21 @@ const QString& UpdateChecker::downloadedFilePath() const noexcept {
 }
 bool UpdateChecker::platformSupported() const noexcept {
   return !platformArtifactKey().isEmpty();
+}
+bool UpdateChecker::updateActionVisible() const noexcept {
+  return update_detail::updateActionVisibility(
+             update_available_, platformSupported(), download_verified_)
+      .row;
+}
+bool UpdateChecker::downloadActionVisible() const noexcept {
+  return update_detail::updateActionVisibility(
+             update_available_, platformSupported(), download_verified_)
+      .download;
+}
+bool UpdateChecker::verifiedDownloadActionsVisible() const noexcept {
+  return update_detail::updateActionVisibility(
+             update_available_, platformSupported(), download_verified_)
+      .verified_download;
 }
 
 void UpdateChecker::setStatus(QString message) {

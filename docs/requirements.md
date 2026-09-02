@@ -105,8 +105,11 @@ decoding hints rather than sharing one assumed contest sequence.
   the spectrum region rather than over waterfall history.
 - Keep verified-marker geometry stable while the decoder changes its internal
   carrier estimate and analysis-filter width; expose those choices as
-  diagnostics, not as a continuously moving or resizing carrier footprint.
-  Move the presentation anchor only for a known receiver retune.
+  diagnostics, not as a jittering or resizing carrier footprint. Correct an
+  initially biased presentation center from robust first-verification evidence,
+  then follow only sustained coherent carrier motion with a deadband, slew
+  limit, dispersion/drift gates, and an absolute immutable-identity bound.
+  Move all frequency states together for a known receiver retune.
 - Render a retained inactive observation without a filled area, using only a
   short identity-colored horizontal mark on the frequency axis. Keep its
   stream label readable at normal size and enlarge it further on hover.
@@ -129,6 +132,14 @@ decoding hints rather than sharing one assumed contest sequence.
   pointed actual RF frequency to the configured CW pitch using current
   sideband, dial frequency, split state, and transverter offset; unavailable or
   ambiguous mappings are rejected visibly.
+- Permit an explicit operator-selected decoder probe at a pointed audio
+  frequency. It opens a clearly identified manual session but does not assign
+  a verified color/callsign, increment detected-signal counts, or expose text
+  until normal acoustic evidence qualifies it; probes are bounded in number
+  and frequency motion and remain cancellable. Once every ordinary gate passes,
+  promote the probe once into the normal verified/detected-stream lifecycle.
+  Clicking historical waterfall pixels starts listening now and does not imply
+  historical audio replay.
 - Anchor decoded observations to checked absolute RF Hz and stable track IDs,
   not screen coordinates. Continued decoding updates an observation in place;
   configurable loss and expiry timers remove stale overlays and list entries

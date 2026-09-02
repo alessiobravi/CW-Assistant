@@ -73,6 +73,19 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- Verified stream markers now correct a biased initial acquisition from robust
+  recent carrier evidence, then follow only sustained coherent motion through
+  deadband, dispersion/drift, slew-rate, and immutable-origin bounds. Identity,
+  color retention, and decoder association remain anchored independently, so
+  noise and adjacent signals cannot walk the marker. Debug captures now expose
+  identity, DSP, and presentation frequencies plus match age, activity, color,
+  and key state for direct field diagnosis.
+- After an update artifact passes checksum verification, **Open Installer**
+  and the platform-native reveal action replace **Download update** in the same
+  row. The Windows MSI finish page now offers **Launch CW Assistant**, selecting
+  it automatically only when an interactive upgrade found and closed a running
+  instance; its process detection, bounded shutdown, condition, and installed
+  launch target are verified from the generated MSI tables in CI.
 - A verified marker without a confirmed callsign now labels only its frequency,
   avoiding repetitive vertical **CW stream** text. The confirmed callsign
   replaces the frequency as soon as sufficient decode/context evidence exists.

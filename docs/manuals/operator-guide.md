@@ -153,8 +153,11 @@ Retention preserves identity and text only: without a current matched peak it
 cannot keep the area active or generate CW-symbol rows from residual noise.
 The area bridges ordinary word gaps for 750 ms, but then clears; this visual
 hold is independent of the longer six-second verification-exit and configured
-marker-retention timers. The label stays at its acquired carrier center while
-internal drift tracking continues, and grows to 32 px on hover.
+marker-retention timers. At first verification the marker corrects an initially
+biased acquisition from recent consistent carrier measurements. It then
+follows only sustained, coherent carrier motion slowly; short peak jitter,
+nearby signals, silence, and noise cannot move it, resize it, or change its
+retained color. The label grows to 32 px on hover.
 If the marker eventually expires, its carrier keeps
 the same reserved color for at least five minutes and reuses it when recognized
 again; a new track ID therefore does not make the same frequency look like a
@@ -316,10 +319,13 @@ When an update is available, **Download update** fetches this platform's
 installer/package to your Downloads folder and verifies its checksum against
 the published `SHA256SUMS` before keeping it — a failed or mismatched
 download is discarded automatically, never silently kept. Once verified,
-**Open installer** hands it to the OS's own installer or package manager
+**Open Installer** and the platform-specific reveal action replace **Download
+update** in the same action row. **Open Installer** hands it to the OS's own
+installer or package manager
 (the Windows MSI installer, the Linux package tool, or an archive tool on
 the portable builds) so you complete the install the normal way; **Show in
-folder** reveals it instead if you would rather run it yourself. The
+Finder**, **Show in File Explorer**, or **Show in Folder** reveals it instead.
+The
 application never downloads or installs anything without you clicking
 these buttons, and never silently replaces itself while running.
 

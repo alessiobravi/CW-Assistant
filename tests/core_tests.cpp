@@ -720,6 +720,197 @@ void test_cw_channel_bank_state_reason_consistency() {
          "least once, so the consistency checks above are not vacuous");
 }
 
+void test_cw_channel_presentation_frequency_model() {
+  using namespace cwassistant::core;
+  CwChannelBank bank({
+      .decoded_track_retention_seconds = 4.0,
+      .minimum_verification_symbols = 1,
+      .minimum_key_transitions = 2,
+      .minimum_cadence_observations = 1,
+      .minimum_verification_timing_quality = 0.0F,
+      .minimum_verification_cadence_quality = 0.0F,
+      .minimum_character_confidence = 0.0F,
+      .minimum_narrowband_coherence = 0.0F,
+      .maximum_verification_unknown_fraction = 1.0F,
+      .presentation_follow_stable_seconds = 0.5,
+      .verification_enter_seconds = 0.0,
+  });
+  constexpr double sample_rate = 8'000.0;
+  constexpr double acquired_hz = 500.0;
+  constexpr double carrier_hz = 558.0;
+  std::vector<float> bins(1'001, -110.0F);
+  std::uint64_t now = 0;
+  double phase = 0.0;
+
+  // The first acquisition is deliberately 58 Hz low. Subsequent observations
+  // remain within the immutable origin's hard association radius and converge
+  // the adaptive DSP center before verification.
+  bins[static_cast<std::size_t>(acquired_hz)] = -68.0F;
+  static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+  now += 10'000'000U;
+
+  const auto step = [&](const bool keyed, const double frequency_hz,
+                        const bool adjacent = false) {
+    bins.assign(bins.size(), -110.0F);
+    if (keyed) {
+      bins[static_cast<std::size_t>(std::llround(frequency_hz))] = -68.0F;
+      if (adjacent) bins[630] = -67.0F;
+    }
+    static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+    RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = now;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.32F * static_cast<float>(std::sin(phase)) : 0.0F,
+          0.0F};
+      phase += 2.0 * std::numbers::pi * frequency_hz / sample_rate;
+    }
+    static_cast<void>(bank.processSamples(block));
+    now += 10'000'000U;
+  };
+  const auto feed = [&](const bool keyed, const int milliseconds,
+                        const double frequency_hz) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 10)
+      step(keyed, frequency_hz);
+  };
+  const auto letter = [&](const std::string_view elements,
+                          const double frequency_hz) {
+    for (std::size_t index = 0; index < elements.size(); ++index) {
+      feed(true, elements[index] == '.' ? 60 : 180, frequency_hz);
+      feed(false, index + 1U == elements.size() ? 180 : 60, frequency_hz);
+    }
+  };
+  for (int repeat = 0; repeat < 3; ++repeat) {
+    letter("...", carrier_hz);
+    letter("---", carrier_hz);
+    letter("...", carrier_hz);
+  }
+
+  auto diagnostics = bank.allTrackDiagnostics();
+  auto main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(), [](const auto& track) {
+        return track.verification_state == CwTrackState::Verified &&
+               std::abs(track.frequency_hz - carrier_hz) < 10.0;
+      });
+  expect(main_track != diagnostics.end(),
+         "biased acquisition still produces one verified carrier track");
+  if (main_track == diagnostics.end()) return;
+  const std::uint64_t main_id = main_track->id;
+  expect(std::abs(main_track->identity_origin_frequency_hz - acquired_hz) < 2.0 &&
+             std::abs(main_track->presentation_frequency_hz - carrier_hz) < 3.0,
+         "first verification robustly centers presentation without moving identity origin");
+  expect(!main_track->matched && main_track->active &&
+             main_track->match_age_seconds <= 0.75 &&
+             main_track->color_index == 0,
+         "diagnostics expose match, activity, and stable color state");
+
+  // Symmetric carrier jitter remains inside the deadband and cannot flicker
+  // the presentation center.
+  const double centered = main_track->presentation_frequency_hz;
+  for (int index = 0; index < 160; ++index) {
+    const double jittered = carrier_hz + (index % 2 == 0 ? -3.0 : 3.0);
+    step(index % 12 < 6, jittered);
+  }
+  diagnostics = bank.allTrackDiagnostics();
+  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
+                            [main_id](const auto& track) {
+                              return track.id == main_id;
+                            });
+  expect(main_track != diagnostics.end() &&
+             std::abs(main_track->presentation_frequency_hz - centered) < 1.0,
+         "bounded jitter does not move the presentation center");
+
+  // A genuine slow carrier motion must persist beyond the robust-window window
+  // and stable-time guard, then follows at the configured slew rate. Its
+  // absolute center remains capped relative to the immutable identity origin.
+  for (int index = 0; index < 700; ++index) {
+    const double moving = carrier_hz + 9.0 *
+        static_cast<double>(index) / 699.0;
+    step(index % 12 < 6, moving);
+  }
+  diagnostics = bank.allTrackDiagnostics();
+  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
+                            [main_id](const auto& track) {
+                              return track.id == main_id;
+                            });
+  expect(main_track != diagnostics.end() &&
+             main_track->presentation_frequency_hz > centered + 2.0 &&
+             main_track->presentation_frequency_hz <= acquired_hz + 65.01 &&
+             std::abs(main_track->identity_origin_frequency_hz - acquired_hz) < 2.0,
+         "sustained slow motion follows within an immutable-origin hard bound");
+
+  // An adjacent strong carrier gets a separate candidate and cannot pull the
+  // verified marker. Small cumulative innovations likewise stop at the same
+  // absolute origin bound rather than moving that bound themselves.
+  const double before_adjacent = main_track->presentation_frequency_hz;
+  for (int index = 0; index < 80; ++index)
+    step(index % 12 < 6, 565.0, true);
+  for (int index = 0; index < 120; ++index)
+    step(true, 565.0 + 0.5 * static_cast<double>(index));
+  diagnostics = bank.allTrackDiagnostics();
+  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
+                            [main_id](const auto& track) {
+                              return track.id == main_id;
+                            });
+  expect(main_track != diagnostics.end() &&
+             main_track->presentation_frequency_hz <= acquired_hz + 65.01 &&
+             main_track->identity_origin_frequency_hz < acquired_hz + 2.0 &&
+             main_track->presentation_frequency_hz >= before_adjacent - 1.0,
+         "adjacent and cumulative peaks cannot walk the identity origin or presentation cap");
+
+  const double before_silence = main_track->presentation_frequency_hz;
+  for (int index = 0; index < 120; ++index) step(false, 565.0);
+  diagnostics = bank.allTrackDiagnostics();
+  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
+                            [main_id](const auto& track) {
+                              return track.id == main_id;
+                            });
+  expect(main_track != diagnostics.end() && !main_track->active &&
+             !main_track->key_down && main_track->match_age_seconds > 0.75 &&
+             std::abs(main_track->presentation_frequency_hz - before_silence) < 0.01,
+         "silence exposes inactive match age without moving presentation");
+
+  const double dsp_before_shift = main_track->frequency_hz;
+  const double origin_before_shift = main_track->identity_origin_frequency_hz;
+  const double presentation_before_shift = main_track->presentation_frequency_hz;
+  bank.shiftTrackedFrequencies(200.0);
+  diagnostics = bank.allTrackDiagnostics();
+  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
+                            [main_id](const auto& track) {
+                              return track.id == main_id;
+                            });
+  expect(main_track != diagnostics.end() &&
+             std::abs(main_track->frequency_hz - (dsp_before_shift + 200.0)) < 0.01 &&
+             std::abs(main_track->identity_origin_frequency_hz -
+                      (origin_before_shift + 200.0)) < 0.01 &&
+             std::abs(main_track->presentation_frequency_hz -
+                      (presentation_before_shift + 200.0)) < 0.01,
+         "known VFO retune shifts DSP, identity, and presentation exactly together");
+
+  // Let the original track expire, then reacquire directly at the corrected
+  // carrier. Its new association origin is about 58 Hz away from the old
+  // biased origin, but the frozen color lease is tied to the robust verified
+  // carrier center and must preserve the operator-facing color.
+  feed(false, 2'200, carrier_hz + 200.0);
+  for (int repeat = 0; repeat < 3; ++repeat) {
+    letter("...", carrier_hz + 200.0);
+    letter("---", carrier_hz + 200.0);
+    letter("...", carrier_hz + 200.0);
+  }
+  diagnostics = bank.allTrackDiagnostics();
+  const auto replacement = std::find_if(
+      diagnostics.begin(), diagnostics.end(), [main_id](const auto& track) {
+        return track.id != main_id &&
+               track.verification_state == CwTrackState::Verified;
+      });
+  expect(replacement != diagnostics.end() && replacement->color_index == 0 &&
+             std::abs(replacement->presentation_frequency_hz -
+                      (carrier_hz + 200.0)) < 3.0,
+         "reacquisition after a biased origin preserves the verified-carrier color lease");
+}
+
 void test_cw_channel_bank_implausible_character_distribution() {
   using cwassistant::core::isCharacterDistributionImplausible;
 
@@ -1328,6 +1519,7 @@ int main() {
   test_cw_timing_decoder();
   test_cw_channel_bank();
   test_cw_channel_bank_state_reason_consistency();
+  test_cw_channel_presentation_frequency_model();
   test_cw_channel_bank_implausible_character_distribution();
   test_callsign_policy();
   test_spectrum_settings();

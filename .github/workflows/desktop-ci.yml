@@ -188,6 +188,13 @@ jobs:
         if: matrix.windows_installer
         shell: bash
         run: cpack --config build/CPackConfig.cmake -G WIX -B packages 2>&1 | tee cpack-wix.log
+      - name: Verify Windows installer finish-page launch behavior
+        id: verify_windows_installer
+        if: matrix.windows_installer
+        shell: pwsh
+        run: >-
+          ./src/desktop/packaging/windows/VerifyWindowsInstaller.ps1
+          -PackageDirectory packages
       - name: Publish Windows installer
         id: upload_windows_installer
         if: matrix.windows_installer
@@ -234,12 +241,13 @@ jobs:
           CWA_ARCHIVE_RESULT: ${{ steps.archive.outcome }}
           CWA_UPLOAD_RESULT: ${{ steps.upload.outcome }}
           CWA_WINDOWS_INSTALLER_RESULT: ${{ steps.build_windows_installer.outcome }}
+          CWA_WINDOWS_VERIFY_RESULT: ${{ steps.verify_windows_installer.outcome }}
           CWA_WINDOWS_UPLOAD_RESULT: ${{ steps.upload_windows_installer.outcome }}
           CWA_DEB_RESULT: ${{ steps.build_deb.outcome }}
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_verify=${CWA_WINDOWS_VERIFY_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           if [[ "${CWA_QT_RESULT}" == "failure" ]]; then
             qt_log="$(find "${GITHUB_WORKSPACE}" -type f -name aqtinstall.log -exec tail -n 20 {} \; 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${qt_log}" ]]; then

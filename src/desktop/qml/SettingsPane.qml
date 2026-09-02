@@ -420,28 +420,31 @@ Pane {
                         color: updateChecker.updateAvailable ? "#4dff88" : "#91a0b1"
                     }
                     RowLayout {
-                        visible: updateChecker.updateAvailable && updateChecker.platformSupported
+                        objectName: "updateActionRow"
+                        visible: updateChecker.updateActionVisible
                         spacing: 10
                         Button {
                             objectName: "downloadUpdateButton"
+                            visible: updateChecker.downloadActionVisible
                             text: updateChecker.downloading
                                   ? "Downloading… " + Math.round(updateChecker.downloadProgress * 100) + "%"
                                   : "Download update"
                             enabled: !updateChecker.downloading
                             onClicked: updateChecker.downloadUpdate()
                         }
-                    }
-                    RowLayout {
-                        visible: updateChecker.downloadVerified
-                        spacing: 10
                         Button {
                             objectName: "openUpdateButton"
-                            text: "Open installer"
+                            visible: updateChecker.verifiedDownloadActionsVisible
+                            text: "Open Installer"
                             onClicked: updateChecker.openDownloadedFile()
                         }
                         Button {
                             objectName: "revealUpdateButton"
-                            text: "Show in folder"
+                            visible: updateChecker.verifiedDownloadActionsVisible
+                            text: Qt.platform.os === "osx" ? "Show in Finder"
+                                  : Qt.platform.os === "windows"
+                                    ? "Show in File Explorer"
+                                    : "Show in Folder"
                             flat: true
                             onClicked: updateChecker.revealDownloadFolder()
                         }

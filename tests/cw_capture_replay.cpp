@@ -47,6 +47,8 @@ int replay(const std::string& path) {
                 << elapsed_seconds << " id=" << channel.id
                 << " color=" << static_cast<unsigned>(channel.color_index)
                 << " frequency_hz=" << channel.frequency_hz
+                << " presentation_frequency_hz="
+                << channel.presentation_frequency_hz
                 << " wpm=" << channel.wpm
                 << " acoustic_wpm=" << channel.acoustic_wpm
                 << " cadence_fit="

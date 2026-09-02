@@ -12,9 +12,19 @@ namespace cwassistant::desktop {
 
 namespace update_detail {
 inline constexpr int kMaximumAttempts = 3;
+
+struct UpdateActionVisibility {
+  bool row{false};
+  bool download{false};
+  bool verified_download{false};
+};
+
 [[nodiscard]] bool isTransientFailure(QNetworkReply::NetworkError error,
                                       int http_status) noexcept;
 [[nodiscard]] int retryDelayMs(int completed_attempts) noexcept;
+[[nodiscard]] UpdateActionVisibility updateActionVisibility(
+    bool update_available, bool platform_supported,
+    bool download_verified) noexcept;
 }  // namespace update_detail
 
 // Operator-controlled update checking, download, and checksum verification
@@ -40,6 +50,12 @@ class UpdateChecker final : public QObject {
   Q_PROPERTY(QString downloadedFilePath READ downloadedFilePath
                  NOTIFY stateChanged)
   Q_PROPERTY(bool platformSupported READ platformSupported CONSTANT)
+  Q_PROPERTY(bool updateActionVisible READ updateActionVisible
+                 NOTIFY stateChanged)
+  Q_PROPERTY(bool downloadActionVisible READ downloadActionVisible
+                 NOTIFY stateChanged)
+  Q_PROPERTY(bool verifiedDownloadActionsVisible
+                 READ verifiedDownloadActionsVisible NOTIFY stateChanged)
 
  public:
   explicit UpdateChecker(QObject* parent = nullptr);
@@ -57,6 +73,9 @@ class UpdateChecker final : public QObject {
   [[nodiscard]] bool downloadVerified() const noexcept;
   [[nodiscard]] const QString& downloadedFilePath() const noexcept;
   [[nodiscard]] bool platformSupported() const noexcept;
+  [[nodiscard]] bool updateActionVisible() const noexcept;
+  [[nodiscard]] bool downloadActionVisible() const noexcept;
+  [[nodiscard]] bool verifiedDownloadActionsVisible() const noexcept;
 
   // Fetches the published manifest and compares its version to this build.
   Q_INVOKABLE void checkForUpdates();

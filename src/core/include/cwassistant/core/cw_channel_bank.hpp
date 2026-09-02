@@ -100,6 +100,15 @@ struct CwChannelBankConfig {
   float minimum_narrowband_coherence{0.18F};
   float maximum_verification_unknown_fraction{0.30F};
   double track_identity_tolerance_hz{35.0};
+  // Presentation may correct a biased first acquisition and cautiously follow
+  // qualified carrier motion, but can never leave this radius around the
+  // immutable identity origin. It never participates in DSP association.
+  double presentation_reanchor_limit_hz{65.0};
+  double presentation_follow_deadband_hz{4.0};
+  double presentation_follow_slew_hz_per_second{2.0};
+  double presentation_follow_stable_seconds{1.0};
+  double presentation_follow_maximum_drift_hz_per_second{5.0};
+  double presentation_follow_maximum_mad_hz{6.0};
   float track_replacement_margin_db{3.0F};
   double verification_enter_seconds{0.50};
   double verification_exit_seconds{6.0};
@@ -163,6 +172,8 @@ struct CwChannelSnapshot {
 struct CwTrackDiagnostic {
   std::uint64_t id{0};
   double frequency_hz{0.0};
+  double identity_origin_frequency_hz{0.0};
+  double presentation_frequency_hz{0.0};
   double drift_hz_per_second{0.0};
   float snr_db{0.0F};
   float narrowband_coherence{0.0F};
@@ -182,6 +193,11 @@ struct CwTrackDiagnostic {
   float acoustic_cadence_confidence{0.0F};
   std::string text;
   std::string provisional_text;
+  double match_age_seconds{0.0};
+  std::uint8_t color_index{0};
+  bool matched{false};
+  bool active{false};
+  bool key_down{false};
 };
 
 class CwChannelBank {
@@ -218,7 +234,10 @@ class CwChannelBank {
     std::uint8_t color_index{0};
     bool color_assigned{false};
     double frequency_hz;
-    double identity_anchor_frequency_hz;
+    // Immutable except for a known receiver retune.
+    double identity_origin_frequency_hz;
+    // Operator-facing center; independent from DSP and identity association.
+    double presentation_frequency_hz;
     double drift_hz_per_second{0.0};
     std::uint64_t last_detected_ns;
     std::uint64_t last_frequency_update_ns;
@@ -265,6 +284,15 @@ class CwChannelBank {
     std::uint16_t total_width_observations{0};
     bool noise_initialized{false};
     bool filter_initialized{false};
+    static constexpr std::size_t kPresentationEvidenceWindow = 15;
+    std::array<double, kPresentationEvidenceWindow>
+        presentation_frequency_evidence{};
+    std::size_t presentation_frequency_evidence_count{0};
+    std::size_t presentation_frequency_evidence_index{0};
+    double presentation_follow_median_hz{0.0};
+    std::uint64_t presentation_follow_stable_since_ns{0};
+    std::uint64_t last_presentation_follow_update_ns{0};
+    std::uint64_t last_presentation_evidence_ns{0};
   };
 
   struct Candidate {
@@ -298,6 +326,13 @@ class CwChannelBank {
   void recoverRejectedDecoder(Track& track);
   void assignOrRefreshColor(Track& track,
                             std::uint64_t timestamp_ns) noexcept;
+  void observePresentationFrequency(Track& track,
+                                    double candidate_frequency_hz,
+                                    std::uint64_t timestamp_ns) noexcept;
+  void reanchorPresentationOnFirstVerification(
+      Track& track, std::uint64_t timestamp_ns) noexcept;
+  void followVerifiedPresentation(Track& track,
+                                  std::uint64_t timestamp_ns) noexcept;
   [[nodiscard]] bool colorLeaseIsCurrent(
       const ColorLease& lease, std::uint64_t timestamp_ns) const noexcept;
   void rebuildSnapshots(std::uint64_t timestamp_ns);

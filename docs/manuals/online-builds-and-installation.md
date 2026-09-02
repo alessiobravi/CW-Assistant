@@ -88,6 +88,14 @@ major upgrade of the existing installation; station profiles remain in the
 user’s application settings and are not removed with program files. Downgrades
 are rejected by Windows Installer.
 
+The successful finish page includes **Launch CW Assistant**. It is unchecked
+for a clean install or an upgrade started while the application is closed. If
+an interactive upgrade finds CW Assistant running, Windows Installer first
+requests a graceful close, waits up to 15 seconds before terminating a stuck
+instance, and selects the launch option so the updated application normally
+reopens when setup finishes. You can clear the option before selecting
+**Finish**.
+
 The installer presents the canonical GPL-3.0-or-later text. The build copies
 that UTF-8 source into the `.txt` input format required by CPack's WiX generator;
 the repository license remains the single source of truth.
