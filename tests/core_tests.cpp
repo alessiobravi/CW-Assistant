@@ -236,20 +236,26 @@ void test_cw_channel_bank() {
            "upper-frequency slice decodes its own dah");
     expect(channels[0].color_index != channels[1].color_index,
            "simultaneous tracks receive stable distinct colors");
+    expect(channels[0].active && channels[1].active,
+           "short Morse word gaps retain presentation activity without "
+           "flickering the stream areas");
     feed(false, false, 1'000);
     const auto& held = bank.channels();
     expect(held.size() == 2 && held[0].id == low_id &&
                held[1].id == high_id && held[0].color_index == low_color &&
-               held[1].color_index == high_color,
-           "frequency track identity and colors survive keyed gaps");
+               held[1].color_index == high_color && !held[0].active &&
+               !held[1].active && !held[0].key_down && !held[1].key_down,
+           "frequency identity survives keyed gaps without presenting a "
+           "retained track as active or keyed");
     feed(false, false, 3'000);
     const auto& silent_held = bank.channels();
     expect(silent_held.size() == 2 &&
                silent_held[0].id == low_id && silent_held[1].id == high_id &&
                silent_held[0].color_index == low_color &&
-               silent_held[1].color_index == high_color,
+               silent_held[1].color_index == high_color &&
+               !silent_held[0].active && !silent_held[1].active,
            "silence cannot bypass the decoded-signal retention timeout by "
-           "demoting verified tracks");
+           "demoting verified tracks or keeping their carrier active");
     bank.configure({.empty_track_retention_seconds = 2.0,
                     .decoded_track_retention_seconds = 2.0,
                     .minimum_verification_symbols = 0});
@@ -400,6 +406,10 @@ void test_cw_channel_bank() {
     const auto& drifting = drift_bank.channels().front();
     expect(std::abs(drifting.frequency_hz - 547.6) < 4.0,
            "sub-bin tracker follows the current drifting tone frequency");
+    expect(std::abs(drifting.presentation_frequency_hz - initial_tone_hz) <
+               2.0,
+           "operator marker remains anchored while internal tracking follows "
+           "bounded oscillator drift");
     expect(drifting.drift_hz_per_second > 20.0 &&
                drifting.drift_hz_per_second < 65.0,
            "frequency tracker reports a bounded tone drift estimate");
@@ -487,6 +497,8 @@ void test_cw_channel_bank() {
   expect(!slow_bank.channels().empty() &&
              std::abs(slow_bank.channels().front().frequency_hz -
                       (frequency_before_shift + 300.0)) < 0.01 &&
+             std::abs(slow_bank.channels().front().presentation_frequency_hz -
+                      700.0) < 2.0 &&
              slow_bank.channels().front().verification_state ==
                  cwassistant::core::CwTrackState::Verified &&
              slow_bank.channels().front().text == text_before_shift,
@@ -810,6 +822,9 @@ void test_callsign_policy() {
   expect(CallsignPolicy::latest_in_text("CQ TEST DE iu0lfq/p K") ==
              std::optional<std::string>("IU0LFQ/P"),
          "latest decoded callsign extraction supports portable calls");
+  expect(CallsignPolicy::latest_in_text("DE EA8/W1AW ") ==
+             std::optional<std::string>("EA8/W1AW"),
+         "latest decoded callsign extraction supports operating prefixes");
   expect(!CallsignPolicy::latest_in_text("CQ TEST 599 ?"),
          "reports and operating words are not mistaken for callsigns");
   expect(!CallsignPolicy::latest_complete_in_text("CQ IU0LF"),
@@ -817,6 +832,11 @@ void test_callsign_policy() {
   expect(CallsignPolicy::latest_complete_in_text("CQ IU0LFQ ") ==
              std::optional<std::string>("IU0LFQ"),
          "a stable word gap confirms a structurally valid decoded callsign");
+  expect(CallsignPolicy::latest_complete_in_text(
+             "GW0KRL KN28N6 RANDOM7 ") ==
+             std::optional<std::string>("GW0KRL"),
+         "callsign extraction ignores noise tokens with trailing or embedded "
+         "digits after the district numeral");
 }
 
 void test_spectrum_settings() {

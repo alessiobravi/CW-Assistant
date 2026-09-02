@@ -12,6 +12,7 @@ namespace cwassistant::core {
 namespace {
 
 constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
+constexpr double kPresentationActivityHoldSeconds = 0.75;
 
 }  // namespace
 
@@ -76,6 +77,7 @@ CwChannelBank::Track::Track(const std::uint64_t track_id,
                             const std::uint64_t timestamp_ns)
     : id(track_id),
       frequency_hz(frequency),
+      identity_anchor_frequency_hz(frequency),
       last_detected_ns(timestamp_ns),
       last_frequency_update_ns(timestamp_ns),
       last_candidate_match_ns(timestamp_ns) {}
@@ -304,8 +306,12 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
           ? static_cast<double>(timestamp_ns - track->last_frequency_update_ns) /
                 1'000'000'000.0
           : 0.0;
+      // Drift is a short-term predictor, not permission to coast through a
+      // word/message gap. Unbounded extrapolation let a modest noisy estimate
+      // move the match tens or hundreds of hertz while the key was up.
+      const double prediction_seconds = std::min(elapsed_seconds, 0.25);
       const double predicted_frequency = track->frequency_hz +
-          track->drift_hz_per_second * elapsed_seconds;
+          track->drift_hz_per_second * prediction_seconds;
       const double distance =
           std::abs(predicted_frequency - candidate.frequency_hz);
       // Once a track has accumulated enough evidence, a large innovation is
@@ -314,7 +320,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       // peaks and being attached to a new station.
       if (track->spectral_observations >=
               config_.minimum_spectral_observations &&
-          distance > config_.track_identity_tolerance_hz) {
+          (distance > config_.track_identity_tolerance_hz ||
+           std::abs(candidate.frequency_hz -
+                    track->identity_anchor_frequency_hz) >
+               config_.tracking_tolerance_hz)) {
         continue;
       }
       if (distance <= nearest_distance) {
@@ -409,8 +418,12 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
           track.spectral_observations > 0) {
         --track.spectral_observations;
       }
+      track.drift_hz_per_second *= 0.92;
+      if (std::abs(track.drift_hz_per_second) < 0.1)
+        track.drift_hz_per_second = 0.0;
     }
-    if (track.verification_state == CwTrackState::Verified &&
+    if (track.matched &&
+        track.verification_state == CwTrackState::Verified &&
         track.spectral_snr_db >= config_.retention_snr_db) {
       track.last_detected_ns = timestamp_ns;
     }
@@ -774,6 +787,7 @@ void CwChannelBank::shiftTrackedFrequencies(
   if (audio_hz_delta == 0.0 || !std::isfinite(audio_hz_delta)) return;
   for (Track& track : tracks_) {
     track.frequency_hz += audio_hz_delta;
+    track.identity_anchor_frequency_hz += audio_hz_delta;
     resetFilter(track);
   }
   for (ColorLease& lease : color_leases_) {
@@ -781,8 +795,10 @@ void CwChannelBank::shiftTrackedFrequencies(
     lease.frequency_hz += audio_hz_delta;
     if (lease.frequency_hz <= 0.0) lease = {};
   }
-  for (RetainedObservation& observation : retained_observations_)
+  for (RetainedObservation& observation : retained_observations_) {
     observation.snapshot.frequency_hz += audio_hz_delta;
+    observation.snapshot.presentation_frequency_hz += audio_hz_delta;
+  }
   std::erase_if(
       retained_observations_, [](const RetainedObservation& observation) {
         return observation.snapshot.frequency_hz <= 0.0;
@@ -830,7 +846,6 @@ void CwChannelBank::updateVerification(Track& track,
   // 30-second retention and causing every later pass to receive a new ID/color.
   if (was_verified && !track.matched &&
       track.spectral_snr_db < config_.retention_snr_db) {
-    track.verification_fail_samples = 0;
     track.verification_reason = CwVerificationReason::SignalLost;
     return;
   }
@@ -1117,6 +1132,10 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
 
   for (const auto& track : tracks_) {
     if (track.verification_state != CwTrackState::Verified) continue;
+    const bool recently_matched = timestamp_ns < track.last_candidate_match_ns ||
+        static_cast<long double>(timestamp_ns -
+                                 track.last_candidate_match_ns) /
+                1'000'000'000.0L <= kPresentationActivityHoldSeconds;
     const std::string callsign =
         track.update.timing_quality >=
                 config_.minimum_verification_timing_quality
@@ -1127,6 +1146,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .id = track.id,
         .color_index = track.color_index,
         .frequency_hz = track.frequency_hz,
+        .presentation_frequency_hz = track.identity_anchor_frequency_hz,
         .drift_hz_per_second = track.drift_hz_per_second,
         .filter_width_hz =
             kNarrowbandWidthsHz[track.selected_width_index],
@@ -1136,12 +1156,13 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .acoustic_cadence_confidence =
             track.update.acoustic_cadence_confidence,
         .confidence = track.update.confidence,
-        .key_down_probability = track.update.key_down_probability,
-        .key_down = track.update.key_down,
-        .active = track.verification_reason !=
-                          CwVerificationReason::SignalLost &&
-                  (track.update.key_down ||
-                   track.spectral_snr_db >= config_.retention_snr_db),
+        .key_down_probability = recently_matched
+            ? track.update.key_down_probability : 0.0F,
+        .key_down = recently_matched && track.update.key_down,
+        // Retention preserves identity and text, not live carrier state.
+        // Residual energy/noise at a remembered frequency must not keep the
+        // marker filled or generate CW-symbol rows without a current peak.
+        .active = recently_matched,
         .verified_cw = true,
         .verification_state = track.verification_state,
         .verification_reason = track.verification_reason,
@@ -1168,8 +1189,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         [&](const RetainedObservation& observation) {
           if (observation.snapshot.id == track.id) return true;
           return observation.snapshot.color_index == track.color_index &&
-                 std::abs(observation.snapshot.frequency_hz -
-                          track.frequency_hz) <=
+                 std::abs(observation.snapshot.presentation_frequency_hz -
+                          track.identity_anchor_frequency_hz) <=
                      config_.color_identity_tolerance_hz;
         });
     if (retained == retained_observations_.end()) {
@@ -1186,6 +1207,24 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         retained_observations_.push_back({});
         retained = std::prev(retained_observations_.end());
       }
+    } else if (retained->snapshot.id != snapshot.id) {
+      // A replacement tracker at the same retained identity starts with a
+      // fresh timing decoder, but the operator's session is continuous.
+      // Preserve a bounded presentation transcript and any already-confirmed
+      // callsign instead of replacing the decoder window with an empty card.
+      if (!retained->snapshot.text.empty()) {
+        if (!snapshot.text.empty()) retained->snapshot.text += " | ";
+        retained->snapshot.text += snapshot.text;
+        constexpr std::size_t kMaximumPresentationText = 2'048;
+        if (retained->snapshot.text.size() > kMaximumPresentationText) {
+          const std::size_t trim = retained->snapshot.text.size() -
+                                   kMaximumPresentationText;
+          retained->snapshot.text.erase(0, trim);
+        }
+        snapshot.text = retained->snapshot.text;
+      }
+      if (snapshot.callsign.empty())
+        snapshot.callsign = retained->snapshot.callsign;
     }
     retained->snapshot = std::move(snapshot);
     retained->last_seen_ns = track.last_detected_ns;

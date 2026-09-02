@@ -22,6 +22,61 @@
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
+
+QList<qulonglong> reconcileDecoderSessionOrder(
+    const QList<qulonglong>& requested_order,
+    const QVariantList& previous_sessions,
+    const QVariantList& current_channels) {
+  const auto identity_frequency = [](const QVariantMap& item) {
+    const QVariant presentation =
+        item.value(QStringLiteral("presentationFrequencyHz"));
+    return presentation.isValid()
+        ? presentation.toDouble()
+        : item.value(QStringLiteral("audioFrequencyHz")).toDouble();
+  };
+  QHash<qulonglong, QVariantMap> current_by_id;
+  QHash<qulonglong, QVariantMap> previous_by_id;
+  for (const QVariant& value : current_channels) {
+    const QVariantMap channel = value.toMap();
+    current_by_id.insert(
+        channel.value(QStringLiteral("id")).toULongLong(), channel);
+  }
+  for (const QVariant& value : previous_sessions) {
+    const QVariantMap session = value.toMap();
+    previous_by_id.insert(
+        session.value(QStringLiteral("id")).toULongLong(), session);
+  }
+
+  QList<qulonglong> reconciled;
+  reconciled.reserve(requested_order.size());
+  for (const qulonglong requested_id : requested_order) {
+    if (current_by_id.contains(requested_id)) {
+      if (!reconciled.contains(requested_id)) reconciled.push_back(requested_id);
+      continue;
+    }
+    const QVariantMap previous = previous_by_id.value(requested_id);
+    if (previous.isEmpty()) continue;
+    const QString previous_color = previous.value(QStringLiteral("color")).toString();
+    const double previous_frequency = identity_frequency(previous);
+    qulonglong replacement_id = 0;
+    double nearest_distance = 35.0;
+    for (auto current = current_by_id.cbegin();
+         current != current_by_id.cend(); ++current) {
+      const QVariantMap& channel = current.value();
+      if (channel.value(QStringLiteral("color")).toString() != previous_color)
+        continue;
+      const double distance = std::abs(
+          identity_frequency(channel) - previous_frequency);
+      if (distance <= nearest_distance && !reconciled.contains(current.key())) {
+        nearest_distance = distance;
+        replacement_id = current.key();
+      }
+    }
+    if (replacement_id != 0) reconciled.push_back(replacement_id);
+  }
+  return reconciled;
+}
+
 class ReplayWorker final : public QObject {
   Q_OBJECT
 
@@ -518,6 +573,7 @@ void ReplayController::acceptDecoderChannels(const QVariantList& channels) {
 }
 
 void ReplayController::rebuildDecoderModels() {
+  const QVariantList previous_sessions = decoder_sessions_;
   decoder_channels_.clear();
   QHash<qulonglong, QVariantMap> by_id;
   const bool show_rf = radio_frequency_available_ && source_mode_ == 0 &&
@@ -551,13 +607,15 @@ void ReplayController::rebuildDecoderModels() {
     decoder_channels_.push_back(item);
     by_id.insert(id, item);
   }
-  for (auto iterator = decoder_session_order_.begin();
-       iterator != decoder_session_order_.end();) {
-    if (!by_id.contains(*iterator)) {
-      iterator = decoder_session_order_.erase(iterator);
-    } else {
-      ++iterator;
-    }
+  decoder_session_order_ = reconcileDecoderSessionOrder(
+      decoder_session_order_, previous_sessions, decoder_channels_);
+  for (QVariant& value : decoder_channels_) {
+    QVariantMap item = value.toMap();
+    item.insert(QStringLiteral("sessionOpen"),
+                decoder_session_order_.contains(
+                    item.value(QStringLiteral("id")).toULongLong()));
+    value = item;
+    by_id.insert(item.value(QStringLiteral("id")).toULongLong(), item);
   }
   decoder_sessions_.clear();
   for (const auto id : decoder_session_order_) {

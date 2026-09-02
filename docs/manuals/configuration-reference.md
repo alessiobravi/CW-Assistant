@@ -71,7 +71,9 @@ gain and cannot create or remove a spectral peak.
 ## Live spectrum controls
 
 The compact panel immediately below the spectrum mirrors the operational
-settings that need adjustment while listening:
+settings that need adjustment while listening. It collapses automatically to
+its header when the pointer leaves, expands on hover, and can be held open with
+**Pin**:
 
 - **Signal**: DC rejection, automatic/manual software gain, gain target, and
   automatic/manual bandwidth.
@@ -104,7 +106,9 @@ Audio spectrum uses the configured FFT power averaging. CW symbols uses the
 same timestamps but draws only active verified channels' carrier-on states as
 sharp three-bin marks on a neutral background; carrier-off intervals remain
 blank gaps. Full-passband and unverified receiver noise is intentionally absent
-and remains available in Audio spectrum. **Margin** controls Audio spectrum
+and remains available in Audio spectrum. A retained marker is not active unless
+the detector currently matches its peak, so residual noise during the identity
+hold cannot draw symbol rows after the 750 ms word-gap bridge. **Margin** controls Audio spectrum
 suppression, not this keyed raster. CW symbols is acoustic keying evidence
 rather than decoded characters. Switching is immediate and does not clear
 tracking, timing hypotheses, or decoded sessions.
@@ -149,8 +153,13 @@ after its marker expires, the frequency-to-color assignment remains leased for
 at least five minutes and is reused if that carrier returns. Decoder filter
 width/evidence rate and these other
 starting limits are not yet exposed as profile controls. Click a
-colored marker to open only that decoded session, close it with **×** without
-stopping decode, reopen it from the marker, and drag open cards to reorder them.
+colored marker to open only that decoded session in its larger wrapped text
+window, close it with **×** without stopping decode, reopen it from the marker,
+and drag open cards to reorder them. If the retained carrier is reacquired with
+a new internal ID, the open session follows the same frequency/color identity.
+The decoder pane preserves a bounded 2,048-character presentation transcript
+and any already-confirmed callsign across that replacement. Callsign extraction
+requires a complete stable word and rejects noise-like digit placement.
 Unverified candidates expire after 750 ms and never appear in the signal count.
 A callsign label additionally requires stable text and a completed word gap;
 partial and provisional callsigns remain hidden.

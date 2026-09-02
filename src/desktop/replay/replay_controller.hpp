@@ -12,6 +12,14 @@
 
 namespace cwassistant::desktop {
 
+// Keeps an operator-opened decoder card attached to the retained visual
+// stream when the low-level tracker reacquires that same color/frequency with
+// a new internal ID.
+[[nodiscard]] QList<qulonglong> reconcileDecoderSessionOrder(
+    const QList<qulonglong>& requested_order,
+    const QVariantList& previous_sessions,
+    const QVariantList& current_channels);
+
 class ReplayController final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QString sourceName READ sourceName NOTIFY stateChanged)

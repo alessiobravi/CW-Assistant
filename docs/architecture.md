@@ -101,9 +101,11 @@ configured silent hold without keeping a dead decoder candidate resident; a
 separate five-minute frequency lease lets a later track at the same carrier
 reuse that color. Known VFO retunes shift both live tracks and these visual
 frequency identities together. The verified marker has a stable presentation
-width independent of the adaptive analysis filter, so DSP width decisions do
-not resize the operator's click target. Inactive retained observations render
-only an axis mark. The configurable 700 Hz receive region is represented by
+center and width independent of the adaptive carrier estimate/filter, so DSP
+drift and width decisions do not move or resize the operator's click target.
+Only a known VFO retune moves the presentation anchor. Inactive retained observations render
+only an axis mark; retention cannot assert live carrier/key-down state, which
+requires a current matched peak. The configurable 700 Hz receive region is represented by
 two unfilled dashed boundaries and is absent from the decoder data path.
 
 Timing acquisition is also bounded per track: nine deterministic decoders start
@@ -121,6 +123,11 @@ memory measurement.
 
 Candidate peaks use parabolic sub-bin interpolation, and a bounded predictor
 maintains carrier frequency plus drift while preserving track identity. A
+spectrum gap extrapolates at most 250 ms of drift and then damps the stale
+estimate, preventing ordinary key-up from walking a tracker away from its
+identity anchor. A 750 ms presentation-only activity hold bridges word gaps,
+while the separate six-second verification-exit hysteresis absorbs transient
+contest fades and timing errors. A
 saturated bank admits a stronger new carrier by evicting only the weakest
 unmatched unverified track; verified tracks are protected. Established tracks
 reject identity-breaking frequency innovations rather than carrying old text
@@ -144,7 +151,11 @@ structurally valid callsign is exposed.
 
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session
-cards. Closing or reordering a card cannot mutate DSP state. Callsign tokens and
+cards. If a retained frequency/color is reacquired under a replacement tracker
+ID, that ordered selection is reconciled to the new ID so its decoded-text
+window remains open. The presentation layer retains at most 2,048 stable text
+characters and an already-confirmed callsign across that replacement; this
+does not rewrite decoder state. Closing or reordering a card cannot mutate DSP state. Callsign tokens and
 frequency labels are derived views of each stable track ID.
 
 Actual-RF presentation is evidence-gated. A profile must explicitly associate

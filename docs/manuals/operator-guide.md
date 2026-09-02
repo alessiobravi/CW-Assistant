@@ -64,7 +64,9 @@ The same operational controls now sit immediately below the spectrum. Changes
 to DC rejection, software gain, bandwidth, display levels, automatic span, and
 waterfall noise suppression take effect while RX is running. **Save profile**
 persists the current values; the Settings pages remain available for complete
-profile configuration.
+profile configuration. The panel collapses to a slim header when the pointer
+leaves it; hover over the header to reveal it, or select **Pin** while making
+several adjustments.
 
 The waterfall always represents the selected fixed number of **History**
 seconds from top to bottom. At startup, unavailable older time stays dark rather
@@ -79,8 +81,9 @@ For timing inspection, select **CW symbols**. Unlike **Audio spectrum**, this
 is intentionally sparse: only active, verified channels' carrier-on states are
 drawn as high-contrast marks on a neutral background. Carrier-off rows form
 blank gaps, and full-passband/unverified noise remains exclusively in Audio
-spectrum. This makes dit/dah timing readable rather than presenting a second
-noise spectrogram.
+spectrum. A retained marker cannot draw marks unless its peak is currently
+matched, so residual noise during the identity hold stays blank. This makes
+dit/dah timing readable rather than presenting a second noise spectrogram.
 
 The Display controls are grouped into multiple responsive rows. Drag the
 labeled sliders for FPS, line rate, averaging, history, levels, CW center/width,
@@ -124,8 +127,12 @@ filter remains independent and is reported in the tooltip/session diagnostics,
 so its normal 60/120/240 Hz changes cannot resize or flicker the marker. A
 thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
-decoded session in the right-hand panel. Closing a card with **×** does not stop
-its DSP; click the marker to reopen it. Drag cards over one another to set the
+decoded session in the right-hand panel. Its larger decoded-text window wraps
+the latest output and remains selected if the same frequency/color is
+reacquired under a replacement tracker ID. Up to 2,048 stable text characters
+and an already-confirmed structurally plausible callsign remain visible across
+that replacement. Closing a card with **×** does not
+stop its DSP; click the marker to reopen it. Drag cards over one another to set the
 operator's preferred order. Stable text, amber provisional text/elements,
 adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
 A keyed gap does not immediately discard a track; decoded tracks are retained
@@ -135,6 +142,12 @@ gaps preserve identity. Silence retains rather than invalidates the verified
 observation. The filled area and center line clear
 while inactive, leaving a short horizontal identity-color mark on the frequency
 axis. The larger stream label magnifies further while the marker is hovered.
+Retention preserves identity and text only: without a current matched peak it
+cannot keep the area active or generate CW-symbol rows from residual noise.
+The area bridges ordinary word gaps for 750 ms, but then clears; this visual
+hold is independent of the longer six-second verification-exit and configured
+marker-retention timers. The label stays at its acquired carrier center while
+internal drift tracking continues, and grows to 26 px on hover.
 If the marker eventually expires, its carrier keeps
 the same reserved color for at least five minutes and reuses it when recognized
 again; a new track ID therefore does not make the same frequency look like a

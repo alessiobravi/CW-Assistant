@@ -19,6 +19,24 @@ class TestableSpectrumWaterfallItem final
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  const QVariantMap previous_session{
+      {QStringLiteral("id"), QVariant::fromValue<qulonglong>(7)},
+      {QStringLiteral("color"), QStringLiteral("#4dd0e1")},
+      {QStringLiteral("audioFrequencyHz"), 700.0},
+      {QStringLiteral("presentationFrequencyHz"), 700.0},
+  };
+  const QVariantMap reacquired_channel{
+      {QStringLiteral("id"), QVariant::fromValue<qulonglong>(19)},
+      {QStringLiteral("color"), QStringLiteral("#4dd0e1")},
+      {QStringLiteral("audioFrequencyHz"), 742.0},
+      {QStringLiteral("presentationFrequencyHz"), 706.0},
+  };
+  const QList<qulonglong> reconciled =
+      cwassistant::desktop::reconcileDecoderSessionOrder(
+          QList<qulonglong>{7}, QVariantList{previous_session},
+          QVariantList{reacquired_channel});
+  if (reconciled != QList<qulonglong>{19}) return 15;
+
   cwassistant::desktop::WaterfallConditioner conditioner;
   QVector<float> shaped_noise(128);
   for (qsizetype index = 0; index < shaped_noise.size(); ++index)
@@ -60,6 +78,15 @@ int main(int argc, char* argv[]) {
   if (std::any_of(gap_row.cbegin(), gap_row.cend(),
                   [](const float value) { return value > -100.0F; })) {
     return 14;
+  }
+  keyed_channel.insert(QStringLiteral("keyDown"), true);
+  keyed_channel.insert(QStringLiteral("active"), false);
+  const QVector<float> retained_noise_row =
+      cwassistant::desktop::cwSymbolRow(
+          QVariantList{keyed_channel}, 101, 200.0, 1'200.0, -110.0, -40.0);
+  if (std::any_of(retained_noise_row.cbegin(), retained_noise_row.cend(),
+                  [](const float value) { return value > -100.0F; })) {
+    return 16;
   }
   TestableSpectrumWaterfallItem item;
   item.setWidth(960.0);

@@ -58,6 +58,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- The live spectrum controls now auto-collapse to their header when the
+  pointer leaves the panel, reclaiming vertical space for the spectrum and
+  waterfall. Hovering expands them immediately, and **Pin** keeps them open
+  while making several adjustments.
 - CW verification and WPM selection now use bounded recent character/cadence
   evidence instead of lifetime averages. All nine fixed 8–60 WPM hypotheses
   continue processing after the initial presentation choice, and the best
@@ -74,6 +78,11 @@ All notable changes to CW Assistant are recorded here. The format follows
   hosted live-pipeline evidence showed a valid 15-symbol/85-edge track with
   passing 0.522 cadence and 0.546 pure timing was otherwise held out by the old
   0.50 value. The separate timing gate and hard-negative corpus remain intact.
+- Verified-stream exit hysteresis is now six seconds, and frequency prediction
+  is capped across key-up gaps rather than extrapolating a noisy drift estimate
+  indefinitely. Internal tracking can still follow bounded real drift, while
+  the operator-facing marker stays at its identity anchor until a known VFO
+  retune moves it. A 750 ms presentation hold bridges normal Morse word gaps.
 - The VFO frequency readout is now a large, prominent display (RX in green,
   TX in yellow when split is active) with a distinct SPLIT badge, instead of
   a small single-line label — matching the visual weight of the decoder
@@ -90,6 +99,18 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Clicking a verified stream now reliably opens a larger decoded-text window
+  in the decoder pane. An operator-opened session follows the retained
+  frequency/color identity if the tracker reacquires it under a new internal
+  ID, instead of silently closing the card. Its bounded presentation
+  transcript and an already-confirmed callsign also survive that replacement.
+- Callsign labels now reject noise-like alphanumeric tokens whose digits occur
+  after the callsign's district numeral, while retaining international and
+  portable calls. Hovering a stream enlarges its label to 26 px.
+- Retained stream identity no longer treats residual energy at the remembered
+  frequency as a live carrier. Only a currently matched spectral peak can fill
+  the marker or enable keyed CW-symbol rows, so background noise cannot keep a
+  departed stream visibly active or paint random symbols throughout its hold.
 - Verified CW areas no longer vanish after the short verification-failure hold
   merely because the carrier is silent: inactive observations now remain for
   the configured decoded-signal timeout (still 30 seconds by default, now

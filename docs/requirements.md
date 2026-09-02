@@ -94,13 +94,19 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   keep vertical decoded annotations in
   the spectrum region rather than over waterfall history.
 - Keep verified-marker geometry stable while the decoder changes its internal
-  analysis-filter width; expose that filter choice as diagnostics, not as a
-  continuously resizing carrier footprint.
+  carrier estimate and analysis-filter width; expose those choices as
+  diagnostics, not as a continuously moving or resizing carrier footprint.
+  Move the presentation anchor only for a known receiver retune.
 - Render a retained inactive observation without a filled area, using only a
   short identity-colored horizontal mark on the frequency axis. Keep its
   stream label readable at normal size and enlarge it further on hover.
-- Clicking a trace selects the nearest tracked channel; clicking a callsign
-  opens the QSO confirmation panel.
+  Retention must never assert current carrier/key-down state or generate a CW
+  symbol without a current matched spectral observation.
+- Clicking a trace opens its decoded-text session in the decoder pane. Keep an
+  operator-opened session attached across a same-frequency/color tracker
+  reacquisition; clicking a callsign opens the QSO confirmation panel.
+- Auto-collapse the bottom live-control panel when it is not being used, while
+  retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking the waterfall moves the local CW guide center to the pointed
   signal. Right-clicking is a distinct RX-only CAT tuning request that maps the
   pointed actual RF frequency to the configured CW pitch using current
@@ -113,6 +119,10 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   frequency's visual color identity for at least five minutes, independently
   of the shorter marker/session expiry, and carry it through a known VFO
   retune; a later pass at that carrier must reuse the color.
+- Bound drift extrapolation across missing evidence, bridge ordinary Morse word
+  gaps with short presentation hysteresis, and preserve bounded decoded text
+  plus a confirmed callsign when the same retained identity receives a new
+  internal tracker ID.
 - Rendering is independently rate-limited (initial target 30 or 60 FPS) and may
   drop display frames. DSP sample blocks must not be dropped to keep UI current.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are

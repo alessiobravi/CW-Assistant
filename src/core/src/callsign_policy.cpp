@@ -4,6 +4,47 @@
 #include <cctype>
 
 namespace cwassistant::core {
+namespace {
+
+bool isPlausibleDecodedCallsign(const std::string_view normalized) {
+  const auto slash = normalized.find('/');
+  if (slash != std::string_view::npos &&
+      normalized.find('/', slash + 1) != std::string_view::npos) return false;
+  const auto plausible_base = [](const std::string_view base) {
+    if (base.size() < 3 || base.size() > 12) return false;
+    const auto last_digit = base.find_last_of("0123456789");
+    if (last_digit == std::string_view::npos || last_digit == 0 ||
+        last_digit + 1 >= base.size() || base.size() - last_digit - 1 > 4) {
+      return false;
+    }
+    if (!std::all_of(
+            base.begin() + static_cast<std::ptrdiff_t>(last_digit + 1),
+            base.end(), [](const unsigned char character) {
+              return std::isalpha(character) != 0;
+            })) {
+      return false;
+    }
+    return std::any_of(
+        base.begin(), base.begin() + static_cast<std::ptrdiff_t>(last_digit),
+        [](const unsigned char character) {
+          return std::isalpha(character) != 0;
+        });
+  };
+  if (slash == std::string_view::npos) return plausible_base(normalized);
+  const std::string_view left = normalized.substr(0, slash);
+  const std::string_view right = normalized.substr(slash + 1);
+  const auto plausible_modifier = [](const std::string_view value) {
+    return !value.empty() && value.size() <= 4 &&
+        std::all_of(value.begin(), value.end(),
+                    [](const unsigned char character) {
+                      return std::isalnum(character) != 0;
+                    });
+  };
+  return (plausible_base(left) && plausible_modifier(right)) ||
+         (plausible_modifier(left) && plausible_base(right));
+}
+
+}  // namespace
 
 std::optional<std::string> CallsignPolicy::normalize(
     const std::string_view callsign) {
@@ -50,7 +91,10 @@ std::optional<std::string> CallsignPolicy::latest_in_text(
   std::string token;
   std::optional<std::string> result;
   const auto consider = [&result](const std::string& candidate) {
-    if (const auto normalized = normalize(candidate)) result = *normalized;
+    if (const auto normalized = normalize(candidate);
+        normalized && isPlausibleDecodedCallsign(*normalized)) {
+      result = *normalized;
+    }
   };
   for (const unsigned char character : decoded_text) {
     if (std::isalnum(character) != 0 || character == '/') {

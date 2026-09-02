@@ -157,6 +157,10 @@ int main(int argc, char* argv[]) {
           QStringLiteral("cwGuideBoundaryOverlay"));
       auto* decoder_channel_list = root_object->findChild<QQuickItem*>(
           QStringLiteral("decoderChannelList"));
+      auto* live_controls = root_object->findChild<QQuickItem*>(
+          QStringLiteral("liveControlsFrame"));
+      auto* pin_live_controls = root_object->findChild<QQuickItem*>(
+          QStringLiteral("pinLiveControlsButton"));
       auto* about_version_label = root_object->findChild<QQuickItem*>(
           QStringLiteral("aboutVersionLabel"));
       if (next_button == nullptr || !next_button->isVisible() ||
@@ -173,12 +177,19 @@ int main(int argc, char* argv[]) {
           live_levels_check == nullptr || live_noise_check == nullptr ||
           live_cw_guide_check == nullptr || cw_guide_boundaries == nullptr ||
           decoder_channel_list == nullptr ||
+          live_controls == nullptr || pin_live_controls == nullptr ||
+          live_controls->property("expanded").toBool() ||
           about_version_label == nullptr ||
           about_version_label->property("text").toString() !=
               QStringLiteral("Version %1").arg(
                   QCoreApplication::applicationVersion()) ||
           own_callsign_field->property("text").toString() !=
               QStringLiteral("IU0LFQ/P")) {
+        QCoreApplication::exit(EXIT_FAILURE);
+        return;
+      }
+      live_controls->setProperty("pinned", true);
+      if (!live_controls->property("expanded").toBool()) {
         QCoreApplication::exit(EXIT_FAILURE);
         return;
       }

@@ -27,6 +27,8 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("id"),
                 QVariant::fromValue<qulonglong>(channel.id));
     item.insert(QStringLiteral("frequencyHz"), channel.frequency_hz);
+    item.insert(QStringLiteral("presentationFrequencyHz"),
+                channel.presentation_frequency_hz);
     item.insert(QStringLiteral("driftHzPerSecond"),
                 channel.drift_hz_per_second);
     item.insert(QStringLiteral("filterWidthHz"), channel.filter_width_hz);

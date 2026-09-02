@@ -305,9 +305,10 @@ ApplicationWindow {
                 Repeater {
                     model: replayController.decoderChannels
                     delegate: Item {
+                        id: channelMarker
                         required property var modelData
                         required property int index
-                        property real channelHz: modelData.frequencyHz
+                        property real channelHz: modelData.presentationFrequencyHz
                         // Keep presentation geometry independent of the
                         // decoder's adaptive 60/120/240 Hz analysis filter.
                         // That filter may legitimately change while decoding,
@@ -364,7 +365,7 @@ ApplicationWindow {
                                    ? modelData.callsign + "  •  " : "")
                                   + modelData.frequencyLabel
                             color: modelData.color
-                            font.pixelSize: channelHitArea.containsMouse ? 18 : 13
+                            font.pixelSize: channelHitArea.containsMouse ? 26 : 14
                             font.weight: Font.DemiBold
                             leftPadding: 4
                             rightPadding: 4
@@ -385,8 +386,8 @@ ApplicationWindow {
                             id: channelHitArea
                             anchors.fill: parent
                             hoverEnabled: true
+                            acceptedButtons: Qt.NoButton
                             cursorShape: Qt.PointingHandCursor
-                            onClicked: replayController.openDecoderSession(modelData.id)
                             ToolTip.visible: containsMouse
                             ToolTip.delay: 450
                             ToolTip.text: (modelData.callsign.length > 0
@@ -398,6 +399,11 @@ ApplicationWindow {
                                             + " Hz filter • "
                                           + modelData.driftHzPerSecond.toFixed(1)
                                             + " Hz/s drift"
+                        }
+                        TapHandler {
+                            acceptedButtons: Qt.LeftButton
+                            onTapped: replayController.openDecoderSession(
+                                          channelMarker.modelData.id)
                         }
                     }
                 }
@@ -439,19 +445,34 @@ ApplicationWindow {
             }
 
             Frame {
+                id: liveControlsFrame
+                objectName: "liveControlsFrame"
+                property bool pinned: false
+                readonly property bool expanded: pinned || controlsHover.hovered
                 Layout.fillWidth: true
+                Layout.preferredHeight: expanded
+                                        ? controlsContent.implicitHeight + 16
+                                        : controlsHeader.implicitHeight + 16
                 padding: 8
+                clip: true
                 background: Rectangle {
                     radius: 8
                     color: "#151b23"
                     border.color: "#2b3541"
                 }
                 ColumnLayout {
+                    id: controlsContent
                     width: parent.width
                     spacing: 4
                     RowLayout {
+                        id: controlsHeader
                         Layout.fillWidth: true
-                        Label { text: "Live spectrum controls"; font.weight: Font.DemiBold }
+                        Label {
+                            text: liveControlsFrame.expanded
+                                  ? "Live spectrum controls"
+                                  : "Live spectrum controls — hover to open"
+                            font.weight: Font.DemiBold
+                        }
                         TabBar {
                             id: liveControlTabs
                             Layout.preferredWidth: 190
@@ -460,9 +481,22 @@ ApplicationWindow {
                         }
                         Item { Layout.fillWidth: true }
                         Button { text: "Save profile"; onClicked: appSettings.apply() }
+                        ToolButton {
+                            objectName: "pinLiveControlsButton"
+                            text: liveControlsFrame.pinned ? "Unpin" : "Pin"
+                            checkable: true
+                            checked: liveControlsFrame.pinned
+                            onToggled: liveControlsFrame.pinned = checked
+                            ToolTip.visible: hovered
+                            ToolTip.text: checked
+                                          ? "Restore automatic hiding"
+                                          : "Keep controls open"
+                        }
                     }
                     StackLayout {
                         Layout.fillWidth: true
+                        enabled: liveControlsFrame.expanded
+                        opacity: liveControlsFrame.expanded ? 1.0 : 0.0
                         currentIndex: liveControlTabs.currentIndex
                         ScrollView {
                             Layout.fillWidth: true
@@ -648,6 +682,7 @@ ApplicationWindow {
                         }
                     }
                 }
+                HoverHandler { id: controlsHover }
             }
 
             RowLayout {
@@ -871,7 +906,7 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         width: decoderChannelList.width
-                        height: 116
+                        height: 158
                         radius: 7
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
@@ -922,36 +957,34 @@ ApplicationWindow {
                                                    modelData.id)
                                 }
                             }
-                            RowLayout {
+                            Rectangle {
                                 Layout.fillWidth: true
-                                spacing: 6
+                                Layout.preferredHeight: 62
+                                radius: 4
+                                color: "#0b121a"
+                                border.color: "#263241"
+                                border.width: 1
                                 Label {
-                                    visible: modelData.text.length > 0
-                                    Layout.fillWidth: true
-                                    text: modelData.text
-                                    color: "#edf3f8"
-                                    font.pixelSize: 17
+                                    anchors.fill: parent
+                                    anchors.margins: 7
+                                    text: modelData.text.length > 0
+                                          ? modelData.text
+                                          : (modelData.provisionalText.length > 0
+                                             ? modelData.provisionalText
+                                             : (modelData.elements.length > 0
+                                                ? modelData.elements
+                                                : "Listening…"))
+                                    color: modelData.text.length > 0
+                                           ? "#edf3f8"
+                                           : (modelData.provisionalText.length > 0
+                                              || modelData.elements.length > 0
+                                              ? "#e3ad55" : "#8290a0")
+                                    font.pixelSize: 18
+                                    font.italic: modelData.text.length === 0
+                                    wrapMode: Text.WrapAnywhere
+                                    maximumLineCount: 2
                                     elide: Text.ElideLeft
-                                }
-                                Label {
-                                    visible: modelData.provisionalText.length > 0
-                                             || modelData.elements.length > 0
-                                    text: modelData.provisionalText.length > 0
-                                          ? modelData.provisionalText
-                                          : modelData.elements
-                                    color: "#e3ad55"
-                                    font.pixelSize: 17
-                                    font.italic: true
-                                }
-                                Label {
-                                    visible: modelData.text.length === 0
-                                             && modelData.provisionalText.length === 0
-                                             && modelData.elements.length === 0
-                                    Layout.fillWidth: true
-                                    text: "Listening…"
-                                    color: "#8290a0"
-                                    font.pixelSize: 15
-                                    font.italic: true
+                                    verticalAlignment: Text.AlignVCenter
                                 }
                             }
                             Label {

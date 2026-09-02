@@ -102,7 +102,7 @@ struct CwChannelBankConfig {
   double track_identity_tolerance_hz{35.0};
   float track_replacement_margin_db{3.0F};
   double verification_enter_seconds{0.50};
-  double verification_exit_seconds{2.0};
+  double verification_exit_seconds{6.0};
   double decoder_recovery_seconds{3.0};
 };
 
@@ -125,6 +125,9 @@ struct CwChannelSnapshot {
   std::uint64_t id{0};
   std::uint8_t color_index{0};
   double frequency_hz{0.0};
+  // Stable operator-facing center. The adaptive tracker may move within its
+  // bounded identity region, but presentation moves only on a known retune.
+  double presentation_frequency_hz{0.0};
   double drift_hz_per_second{0.0};
   double filter_width_hz{120.0};
   float snr_db{0.0F};
@@ -215,6 +218,7 @@ class CwChannelBank {
     std::uint8_t color_index{0};
     bool color_assigned{false};
     double frequency_hz;
+    double identity_anchor_frequency_hz;
     double drift_hz_per_second{0.0};
     std::uint64_t last_detected_ns;
     std::uint64_t last_frequency_update_ns;
