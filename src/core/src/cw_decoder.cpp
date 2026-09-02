@@ -530,6 +530,11 @@ CwDecoderUpdate CwMultiSpeedDecoder::flush(
   locked_ = true;
   observeLattice(false, 0.0F, timestamp_ns);
   refreshLattice(CwLatticeDecodeMode::Flush);
+  // Flush is an explicit end-of-segment boundary. Preserve that fact in the
+  // append-only refined transcript so a callsign ending the transmission is
+  // complete even when no following mark arrived to classify the final gap.
+  if (!refined_text_.empty() && refined_text_.back() != ' ')
+    refined_text_.push_back(' ');
   return snapshot(true);
 }
 

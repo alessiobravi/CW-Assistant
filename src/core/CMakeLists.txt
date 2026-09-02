@@ -7,6 +7,7 @@ add_library(cwa_core
   src/cw_channel_bank.cpp
   src/cw_decoder.cpp
   src/cw_event_lattice.cpp
+  src/cw_probabilistic_decoder.cpp
   src/conversation_profile.cpp
   src/frequency_plan.cpp
   src/reference_rig_profiles.cpp

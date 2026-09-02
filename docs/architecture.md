@@ -69,8 +69,13 @@ their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
 tone/envelope estimation, adaptive dit timing, symbol decoding, and language
 confidence scoring. This avoids repeating a wide FFT for every signal.
 
-The planned decoder uses an explainable semi-Markov timing path plus an optional
-compact causal learned likelihood path. A bounded rolling buffer permits
+The decoder uses an explainable semi-Markov timing path and now has an
+experimental optional boundary for compact causal learned key/CW likelihoods.
+The learned component does not emit text: the same dependency-free timing
+lattice retains Morse alternatives, UNKNOWN states, provenance, and the stable
+prefix for deterministic and learned evidence. No model or inference runtime is
+bundled until held-out receiver and cross-platform resource gates pass. A
+bounded rolling buffer permits
 delayed multi-hypothesis rescoring, joint co-channel separation, and
 conservative strongest-track interference cancellation without delaying live
 capture. Context and callsign sources can re-rank alternatives but remain

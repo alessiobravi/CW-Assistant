@@ -325,6 +325,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
                         (static_cast<double>(bin) + fractional_bin) *
                             bin_width_hz,
         .snr_db = snr_db,
+        .preferred_track_id = 0,
     });
   }
   std::sort(candidates.begin(), candidates.end(),
@@ -334,7 +335,70 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
 
   std::vector<Candidate> separated;
   separated.reserve(candidates.size());
-  for (const auto& candidate : candidates) {
+  std::vector<bool> reserved(candidates.size(), false);
+  // Preserve the ridge nearest each established decoder before choosing the
+  // globally strongest separated peaks. Without this pass, a stronger skirt
+  // peak inside minimum_separation_hz can suppress the real carrier, then
+  // walk a verified track away through a sequence of individually small
+  // innovations while a duplicate track is created on the actual signal.
+  for (const auto& track : tracks_) {
+    if (!track.operator_selected && !track.ever_verified &&
+        track.verification_state != CwTrackState::MorseLikely &&
+        track.verification_state != CwTrackState::Verified) {
+      continue;
+    }
+    const double elapsed_seconds = timestamp_ns > track.last_frequency_update_ns
+        ? static_cast<double>(timestamp_ns - track.last_frequency_update_ns) /
+              1'000'000'000.0
+        : 0.0;
+    const double predicted_frequency = track.frequency_hz +
+        track.drift_hz_per_second * std::min(elapsed_seconds, 0.25);
+    std::size_t nearest_index = candidates.size();
+    double best_reservation_score =
+        std::numeric_limits<double>::infinity();
+    for (std::size_t index = 0; index < candidates.size(); ++index) {
+      if (reserved[index]) continue;
+      const auto& candidate = candidates[index];
+      const double predicted_distance = std::abs(
+          candidate.frequency_hz - predicted_frequency);
+      const double presentation_distance = std::abs(
+          candidate.frequency_hz - track.presentation_frequency_hz);
+      if (track.operator_selected &&
+          std::abs(candidate.frequency_hz -
+                   track.identity_origin_frequency_hz) >
+              kManualSelectionReuseToleranceHz) {
+        continue;
+      }
+      if (track.spectral_observations >=
+              config_.minimum_spectral_observations &&
+          (std::min(predicted_distance, presentation_distance) >
+               config_.track_identity_tolerance_hz ||
+           std::abs(candidate.frequency_hz -
+                    track.identity_origin_frequency_hz) >
+               config_.tracking_tolerance_hz)) {
+        continue;
+      }
+      // Prediction keeps real drifting carriers eligible, while the stable
+      // presentation center breaks ties against a noise ridge that has begun
+      // walking the internal DSP center. If the true ridge returns alongside
+      // that noise, it therefore reacquires the established identity instead
+      // of creating a duplicate at the original frequency.
+      const double reservation_score = predicted_distance +
+          1.5 * presentation_distance;
+      if (reservation_score <= best_reservation_score) {
+        best_reservation_score = reservation_score;
+        nearest_index = index;
+      }
+    }
+    if (nearest_index == candidates.size()) continue;
+    Candidate protected_candidate = candidates[nearest_index];
+    protected_candidate.preferred_track_id = track.id;
+    separated.push_back(protected_candidate);
+    reserved[nearest_index] = true;
+  }
+  for (std::size_t index = 0; index < candidates.size(); ++index) {
+    if (reserved[index]) continue;
+    const auto& candidate = candidates[index];
     const bool overlaps = std::any_of(
         separated.cbegin(), separated.cend(), [&](const Candidate& selected) {
           return std::abs(candidate.frequency_hz - selected.frequency_hz) <
@@ -349,6 +413,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     double nearest_distance = config_.tracking_tolerance_hz;
     for (auto track = tracks_.begin(); track != tracks_.end(); ++track) {
       if (track->matched) continue;
+      if (candidate.preferred_track_id != 0U &&
+          candidate.preferred_track_id != track->id) {
+        continue;
+      }
       const double elapsed_seconds = timestamp_ns > track->last_frequency_update_ns
           ? static_cast<double>(timestamp_ns - track->last_frequency_update_ns) /
                 1'000'000'000.0
@@ -359,8 +427,13 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       const double prediction_seconds = std::min(elapsed_seconds, 0.25);
       const double predicted_frequency = track->frequency_hz +
           track->drift_hz_per_second * prediction_seconds;
-      const double distance =
+      const double predicted_distance =
           std::abs(predicted_frequency - candidate.frequency_hz);
+      const double distance = candidate.preferred_track_id == track->id
+          ? std::min(predicted_distance,
+                     std::abs(track->presentation_frequency_hz -
+                              candidate.frequency_hz))
+          : predicted_distance;
       if (track->operator_selected &&
           std::abs(candidate.frequency_hz -
                    track->identity_origin_frequency_hz) >
@@ -1562,15 +1635,18 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
                                  track.last_candidate_match_ns) /
                 1'000'000'000.0L <= kCandidateMatchHoldSeconds;
     std::string callsign;
+    // Refined text has already crossed the lattice's append-only N-best
+    // consensus and minimum acoustic-evidence gates. Do not suppress that
+    // independent evidence because the legacy greedy path's recent timing
+    // average later fell below its own verification threshold. Prefer a
+    // complete, context-supported refined call; otherwise retain the literal
+    // decoder's separately gated result.
+    callsign = CallsignPolicy::best_complete_in_text(track.update.refined_text)
+                   .value_or(std::string{});
     if (track.update.timing_quality >=
-        config_.minimum_verification_timing_quality) {
+            config_.minimum_verification_timing_quality && callsign.empty()) {
       callsign = CallsignPolicy::best_complete_in_text(track.update.text)
                      .value_or(std::string{});
-      if (callsign.empty()) {
-        callsign = CallsignPolicy::best_complete_in_text(
-                       track.update.refined_text)
-                       .value_or(std::string{});
-      }
     }
     CwChannelSnapshot snapshot{
         .id = track.id,

@@ -137,8 +137,10 @@ the latest output and follows new text while its viewport is at the bottom.
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
 The transcript remains plain text so incoming characters cannot cause styled
-text or scrollbar-driven line reflow. A confirmed remote callsign is bold and
-shown in the card header using the stream color. If
+text or scrollbar-driven line reflow. Short content fills the complete
+transcript viewport instead of leaving a differently sized inner box; longer
+content grows vertically inside the same scroller. A confirmed remote callsign
+is bold and shown in the card header using the stream color. If
 stable text contains an exact match for **Settings → Station → Own station
 callsign**, the card displays **YOUR CALL HEARD** and its border flashes five
 times. This notification is visual and receive-only;
@@ -258,6 +260,13 @@ therefore appear as one track, and noise or non-CW
 carriers may produce `?` or incorrect text. Changing the audio source or
 processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
+
+Development tooling includes an experimental independently trained acoustic
+likelihood model, but released applications do not load it yet. The live binary
+continues to use the deterministic narrowband envelope and timing decoder. A
+learned model will be enabled only after it improves locked receiver recordings
+at character level, preserves no-CW safety, fits the CPU/memory budget on every
+packaged architecture, and keeps the deterministic path available as fallback.
 
 Treat `?` as retained acoustic uncertainty, not as a character that an online
 directory has disproved. Acoustic alternatives remain available in diagnostic

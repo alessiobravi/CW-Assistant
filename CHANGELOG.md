@@ -8,6 +8,20 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Added an independently implemented experimental CW likelihood toolchain:
+  deterministic synthetic receiver audio with exact key-run labels and
+  checksummed leakage-safe splits, a compact stateful causal GRU that predicts
+  key-down and target-channel-CW probabilities (not characters), temporal and
+  hard-negative evaluation, ONNX export equivalence checks, and deterministic
+  anti-aliased WAV inference. No model artifact or inference runtime is bundled
+  or enabled in the application until held-out receiver accuracy and packaging
+  gates pass.
+- Added a dependency-free streaming probability-to-Morse boundary. It debounces
+  isolated probability spikes, converts confirmed transitions into immutable
+  evidence runs, preserves observation provenance, and exposes bounded N-best,
+  provisional, and append-only stable output from the existing acoustic timing
+  lattice without callsign, language, or conversation input.
+
 - Right-clicking an unmarked spectrum/waterfall frequency now opens a neutral manual
   decoder slice at that exact audio center. The probe can accumulate measured
   weak-signal evidence below automatic acquisition, keeps nearby manually
@@ -90,6 +104,23 @@ All notable changes to CW Assistant are recorded here. The format follows
   remaining scope of `PKG-004`).
 
 ### Changed
+
+- Established operator-selected, Morse-likely, and verified streams now reserve
+  their nearest raw spectral ridge before global peak-separation ranking. A
+  stable presentation-center tie-break lets a returning true carrier reclaim
+  its existing identity instead of being suppressed by a nearby skirt and
+  published as an adjacent duplicate.
+- Learned-likelihood experiments now preserve physically scaled input features,
+  use a causal 30 ms contrast integrator, and score transition excess and
+  implausibly short runs in addition to aggregate frame accuracy. This reduced
+  field-replay probability fragmentation substantially, but the candidate
+  remains experimental because exact character accuracy has not met the
+  shipment gate.
+- Decoder-card transcript content now fills the viewport when short and grows
+  for scrolling when long. A complete callsign in append-only acoustic
+  consensus remains eligible for the existing context/repetition label policy
+  even when the separate legacy timing score later declines, and explicit
+  segment flush preserves the final word boundary needed to complete a call.
 
 - Stream labels and RF mapping now use the stabilized presentation frequency;
   the adaptive DSP center remains available for diagnostics but small carrier

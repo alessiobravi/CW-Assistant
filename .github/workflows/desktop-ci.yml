@@ -14,6 +14,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate-training-tools:
+    name: Synthetic corpus tooling
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Verify dependency-free generator and Python syntax
+        run: |
+          python -m py_compile tools/cw_key_model/*.py
+          python tools/cw_key_model/test_generator.py
+
   build-desktop:
     name: ${{ matrix.name }}
     strategy:

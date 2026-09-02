@@ -1,0 +1,6 @@
+# Exact direct dependency versions used to train, evaluate, and export.
+# The generator and its smoke tests require only Python 3.11+.
+numpy==2.5.2
+onnx==1.22.0
+onnxruntime==1.29.0
+torch==2.14.0

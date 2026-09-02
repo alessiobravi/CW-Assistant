@@ -911,6 +911,113 @@ void test_cw_channel_bank() {
          "shared FFT discovery feeds raw narrowband channel evidence");
 }
 
+void test_established_cw_track_reserves_its_carrier_ridge() {
+  using namespace cwassistant::core;
+  CwChannelBank bank({
+      .minimum_separation_hz = 45.0,
+      .minimum_spectral_observations = 1,
+      .minimum_verification_symbols = 0,
+      .minimum_key_transitions = 0,
+      .minimum_cadence_observations = 0,
+      .minimum_verification_timing_quality = 0.0F,
+      .minimum_verification_cadence_quality = 0.0F,
+      .minimum_character_confidence = 0.0F,
+      .minimum_plausibility_check_characters = 10,
+      .maximum_simple_character_fraction = 0.80F,
+      .minimum_narrowband_coherence = 0.0F,
+      .maximum_verification_unknown_fraction = 1.0F,
+      .verification_enter_seconds = 0.0,
+  });
+  constexpr double sample_rate_hz = 8'000.0;
+  constexpr double carrier_hz = 500.0;
+  constexpr double stronger_skirt_hz = 530.0;
+  std::vector<float> bins(1'001, -110.0F);
+  std::uint64_t now = 0;
+  double phase = 0.0;
+
+  const auto step = [&](const bool keyed, const bool stronger_skirt) {
+    bins.assign(bins.size(), -110.0F);
+    if (keyed) {
+      bins[static_cast<std::size_t>(carrier_hz)] = -65.0F;
+      if (stronger_skirt) {
+        bins[static_cast<std::size_t>(stronger_skirt_hz)] = -55.0F;
+      }
+    }
+    static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+
+    RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate_hz;
+    block.timestamp_ns = now;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.35F * static_cast<float>(std::sin(phase)) : 0.0F,
+          0.0F};
+      phase += 2.0 * std::numbers::pi * carrier_hz / sample_rate_hz;
+    }
+    static_cast<void>(bank.processSamples(block));
+    now += 10'000'000U;
+  };
+  const auto feed = [&](const bool keyed, const int milliseconds,
+                        const bool stronger_skirt = false) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 10) {
+      step(keyed, stronger_skirt);
+    }
+  };
+
+  for (int symbol = 0; symbol < 8; ++symbol) {
+    feed(true, 60);
+    feed(false, 60);
+  }
+  auto diagnostics = bank.allTrackDiagnostics();
+  auto established = std::find_if(
+      diagnostics.cbegin(), diagnostics.cend(), [](const auto& track) {
+        return track.verification_state == CwTrackState::Verified &&
+               std::abs(track.frequency_hz - carrier_hz) < 2.0;
+      });
+  expect(established != diagnostics.cend(),
+         "ridge-reservation fixture establishes the true CW carrier");
+  if (established == diagnostics.cend()) return;
+  const std::uint64_t established_id = established->id;
+
+  // Add enough deliberately implausible one-element text to demote the live
+  // verification state while retaining its established identity. This is the
+  // field lifecycle in which an adjacent duplicate used to appear.
+  for (int symbol = 0; symbol < 30; ++symbol) {
+    feed(true, 60, true);
+    feed(false, 180, true);
+  }
+  diagnostics = bank.allTrackDiagnostics();
+  established = std::find_if(
+      diagnostics.cbegin(), diagnostics.cend(),
+      [established_id](const auto& track) {
+        return track.id == established_id;
+      });
+  expect(established != diagnostics.cend() &&
+             established->verification_state == CwTrackState::Candidate,
+         "ridge reservation survives demotion of an established identity");
+
+  // The 30 Hz neighbor is deliberately 10 dB stronger but remains inside the
+  // 45 Hz global peak-separation radius. The established decoder must reserve
+  // its own nearest raw ridge before strength ranking considers that neighbor.
+  feed(true, 1'200, true);
+  diagnostics = bank.allTrackDiagnostics();
+  established = std::find_if(
+      diagnostics.cbegin(), diagnostics.cend(),
+      [established_id](const auto& track) {
+        return track.id == established_id;
+      });
+  const auto adjacent_duplicates = std::count_if(
+      diagnostics.cbegin(), diagnostics.cend(), [](const auto& track) {
+        return std::abs(track.frequency_hz - carrier_hz) <= 45.0;
+      });
+  expect(established != diagnostics.cend() &&
+             std::abs(established->frequency_hz - carrier_hz) < 2.0 &&
+             adjacent_duplicates == 1,
+         "an established CW track retains the true carrier and does not "
+         "spawn a duplicate when a stronger adjacent skirt appears");
+}
+
 void test_cw_channel_bank_state_reason_consistency() {
   using cwassistant::core::CwChannelBank;
   using cwassistant::core::CwVerificationReason;
@@ -1397,6 +1504,10 @@ void test_callsign_policy() {
   expect(CallsignPolicy::best_complete_in_text("W1AW W1AW ") ==
              std::optional<std::string>("W1AW"),
          "an exactly repeated standalone caller callsign is identified");
+  expect(CallsignPolicy::best_complete_in_text("IZ3ERM IZ3ERM ") ==
+             std::optional<std::string>("IZ3ERM"),
+         "a repeated acoustic-consensus callsign is eligible for a stream "
+         "label without decoded conversation context");
   expect(CallsignPolicy::best_complete_in_text("CQ SN100PKP ") ==
              std::optional<std::string>("SN100PKP"),
          "a special-event callsign with one multi-digit block is identified");
@@ -1866,6 +1977,7 @@ int main() {
   test_scheduler();
   test_cw_timing_decoder();
   test_cw_channel_bank();
+  test_established_cw_track_reserves_its_carrier_ridge();
   test_cw_channel_bank_state_reason_consistency();
   test_operator_selected_cw_probe();
   test_cw_channel_presentation_frequency_model();

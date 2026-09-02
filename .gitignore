@@ -8,6 +8,9 @@
 *.sigmf-data
 *.sigmf-meta
 *.log
+*.ses
+__pycache__/
+*.py[cod]
 .DS_Store
 /errors/*
 !/errors/README.md

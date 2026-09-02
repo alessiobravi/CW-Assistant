@@ -1189,6 +1189,12 @@ ApplicationWindow {
                                     readOnly: true
                                     selectByMouse: true
                                     width: transcriptScroll.availableWidth
+                                    // Keep the transcript background equal to
+                                    // the viewport when content is short, then
+                                    // let it grow vertically for scrolling.
+                                    height: Math.max(
+                                                transcriptScroll.availableHeight,
+                                                implicitHeight)
                                     text: ""
                                     textFormat: TextEdit.PlainText
                                     color: modelData.text.length > 0

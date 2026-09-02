@@ -48,6 +48,9 @@ int main() {
   // Keep wrapping width independent of scrollbar visibility, with no
   // horizontal scrollbar and a permanently reserved vertical gutter.
   if (!contains(transcript, "width: transcriptScroll.availableWidth") ||
+      !contains(transcript, "height: Math.max(") ||
+      !contains(transcript, "transcriptScroll.availableHeight") ||
+      !contains(transcript, "implicitHeight)") ||
       !contains(transcript, "ScrollBar.horizontal: ScrollBar") ||
       !contains(transcript, "policy: ScrollBar.AlwaysOff") ||
       !contains(transcript, "ScrollBar.vertical: ScrollBar") ||
@@ -81,14 +84,31 @@ int main() {
       !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
     return 6;
   }
-  if (!contains(qml, "id: receiverToolbar") ||
-      !contains(qml, "objectName: \"startLiveAudioButton\"") ||
+  const std::size_t toolbar_start = qml.find("id: receiverToolbar");
+  const std::size_t spectrum_start = qml.find("id: spectrumPanel");
+  const std::size_t display_start = qml.find("id: spectrumDisplay",
+                                              spectrum_start);
+  if (toolbar_start == std::string::npos ||
+      spectrum_start == std::string::npos ||
+      display_start == std::string::npos ||
+      toolbar_start >= spectrum_start || spectrum_start >= display_start) {
+    return 7;
+  }
+  const std::string toolbar = qml.substr(toolbar_start,
+                                         spectrum_start - toolbar_start);
+  const std::string spectrum_panel = qml.substr(
+      spectrum_start, display_start - spectrum_start);
+  if (!contains(toolbar, "z: 20") ||
+      !contains(toolbar, "objectName: \"startLiveAudioButton\"") ||
+      !contains(toolbar, "z: 21") ||
+      !contains(spectrum_panel, "clip: true") ||
+      !contains(spectrum_panel, "z: 0") ||
       !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionDownButton\"") ||
       !contains(qml, "onPressed: replayController.moveDecoderSession(") ||
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
       !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
-    return 7;
+    return 8;
   }
   return 0;
 }

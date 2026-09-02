@@ -319,6 +319,10 @@ class CwChannelBank {
   struct Candidate {
     double frequency_hz{0.0};
     float snr_db{0.0F};
+    // An established track may reserve its nearest raw ridge before global
+    // peak-separation ranking. This prevents a stronger adjacent skirt/noise
+    // peak from suppressing the real ridge and spawning a duplicate identity.
+    std::uint64_t preferred_track_id{0};
   };
 
   struct ColorLease {

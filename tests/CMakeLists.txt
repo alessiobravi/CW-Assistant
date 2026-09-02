@@ -21,6 +21,18 @@ add_executable(cwa_event_lattice_tests cw_event_lattice_tests.cpp)
 target_link_libraries(cwa_event_lattice_tests PRIVATE cwa_core)
 add_test(NAME cwa_event_lattice_tests COMMAND cwa_event_lattice_tests)
 
+add_executable(cwa_probabilistic_decoder_tests
+  cw_probabilistic_decoder_tests.cpp)
+target_link_libraries(cwa_probabilistic_decoder_tests PRIVATE cwa_core)
+add_test(NAME cwa_probabilistic_decoder_tests
+  COMMAND cwa_probabilistic_decoder_tests)
+
+add_executable(cwa_probabilistic_decoder_benchmark
+  cw_probabilistic_decoder_benchmark.cpp)
+target_link_libraries(cwa_probabilistic_decoder_benchmark PRIVATE cwa_core)
+add_test(NAME cwa_probabilistic_decoder_benchmark
+  COMMAND cwa_probabilistic_decoder_benchmark)
+
 add_executable(cwa_decoder_benchmark cw_decoder_benchmark.cpp)
 target_link_libraries(cwa_decoder_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_decoder_benchmark COMMAND cwa_decoder_benchmark)

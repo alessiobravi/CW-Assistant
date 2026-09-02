@@ -65,6 +65,8 @@ int replay(const std::string& path) {
   for (const auto& [id, channel] : latest_published) {
     std::cout << "final path=\"" << path << "\" id=" << id
               << " frequency_hz=" << channel.frequency_hz
+              << " timing_quality=" << channel.verification_timing_quality
+              << " callsign=\"" << channel.callsign << "\""
               << " text=\"" << channel.text << "\""
               << " refined_text=\"" << channel.refined_text << "\""
               << " alternatives=" << channel.acoustic_alternatives.size();

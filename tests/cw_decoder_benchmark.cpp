@@ -74,6 +74,7 @@ struct ReplayResult {
   std::string best_alternative;
   float alternative_confidence{0.0F};
   std::size_t maximum_alternatives{0};
+  bool refined_segment_terminated{false};
 };
 
 ReplayResult replayMessage(const std::string_view message, const double wpm,
@@ -139,7 +140,9 @@ ReplayResult replayMessage(const std::string_view message, const double wpm,
           .alternative_confidence = latest.acoustic_alternatives.empty()
               ? 0.0F
               : latest.acoustic_alternatives.front().evidence_confidence,
-          .maximum_alternatives = maximum_alternatives};
+          .maximum_alternatives = maximum_alternatives,
+          .refined_segment_terminated = !latest.refined_text.empty() &&
+                                        latest.refined_text.back() == ' '};
 }
 
 ReplayResult replaySpeedChange() {
@@ -186,7 +189,9 @@ ReplayResult replaySpeedChange() {
           .alternative_confidence = latest.acoustic_alternatives.empty()
               ? 0.0F
               : latest.acoustic_alternatives.front().evidence_confidence,
-          .maximum_alternatives = latest.acoustic_alternatives.size()};
+          .maximum_alternatives = latest.acoustic_alternatives.size(),
+          .refined_segment_terminated = !latest.refined_text.empty() &&
+                                        latest.refined_text.back() == ' '};
 }
 
 }  // namespace
@@ -215,6 +220,7 @@ int main() {
   std::size_t refined_edits = 0;
   bool refined_append_only = true;
   bool alternatives_bounded = true;
+  bool refined_segments_terminated = true;
   std::uint64_t updates = 0;
   double simulated_seconds = 0.0;
   std::size_t maximum_state_bytes = 0;
@@ -233,6 +239,8 @@ int main() {
     refined_append_only = refined_append_only && result.refined_append_only;
     alternatives_bounded = alternatives_bounded &&
                            result.maximum_alternatives <= 4U;
+    refined_segments_terminated = refined_segments_terminated &&
+                                  result.refined_segment_terminated;
     updates += result.updates;
     simulated_seconds += result.simulated_seconds;
     maximum_state_bytes = std::max(maximum_state_bytes, result.state_bytes);
@@ -257,6 +265,8 @@ int main() {
   refined_edits += compressed_refined_edits;
   refined_append_only = refined_append_only &&
                         compressed_call.refined_append_only;
+  refined_segments_terminated = refined_segments_terminated &&
+      compressed_call.refined_segment_terminated;
   alternatives_bounded = alternatives_bounded &&
                          compressed_call.maximum_alternatives <= 4U;
   updates += compressed_call.updates;
@@ -282,6 +292,8 @@ int main() {
                         long_stream.refined_append_only;
   alternatives_bounded = alternatives_bounded &&
                          long_stream.maximum_alternatives <= 4U;
+  refined_segments_terminated = refined_segments_terminated &&
+                                long_stream.refined_segment_terminated;
   updates += long_stream.updates;
   simulated_seconds += long_stream.simulated_seconds;
   maximum_state_bytes = std::max(maximum_state_bytes,
@@ -297,6 +309,8 @@ int main() {
       editDistance("CQ TEST", speed_change.text);
   edits += speed_change_edits;
   refined_edits += editDistance("CQ TEST", speed_change.refined_text);
+  refined_segments_terminated = refined_segments_terminated &&
+                                speed_change.refined_segment_terminated;
   expected_characters += std::string_view("CQ TEST").size();
   updates += speed_change.updates;
   simulated_seconds += speed_change.simulated_seconds;
@@ -347,6 +361,8 @@ int main() {
             << " refined_edits=" << refined_edits
             << " refined_append_only=" << refined_append_only
             << " alternatives_bounded=" << alternatives_bounded
+            << " refined_segments_terminated="
+            << refined_segments_terminated
             << " speed_failures=" << speed_failures
             << " cer=" << character_error_rate
             << " false_characters_per_noise_minute=" << false_characters
@@ -362,7 +378,7 @@ int main() {
             << '\n';
 
   return edits == 0 && refined_edits == 0 && refined_append_only &&
-      alternatives_bounded &&
+      alternatives_bounded && refined_segments_terminated &&
       speed_failures == 0 && false_characters == 0 &&
       false_refined_characters == 0 &&
       maximum_state_bytes <= maximum_decoder_state_bytes

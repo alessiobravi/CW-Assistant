@@ -32,13 +32,13 @@ candidate tone tracker
       |
 complex mixer + narrow multirate filter bank + adaptive noise estimate
       |
-soft key-down likelihoods and frequency/timing observations
+physical narrowband features
       |                         |
-semi-Markov timing path         tiny causal learned path (optional)
+deterministic key likelihood    tiny causal likelihood model (optional)
       |                         |
-      +--------- confidence fusion ---------+
+      +--------- calibrated probability fusion ---------+
                                                |
-                                 Morse-constrained n-best search
+                              semi-Markov Morse n-best search
                                                |
                        provisional text, stable text, confidence, evidence
                                                |
@@ -114,10 +114,25 @@ length, mark/gap duration distributions, character and word spacing, and
 manual-keying variance. This gives a low-resource baseline that can explain why
 a character was selected and can abstain instead of inventing text.
 
-The optional learned path should be deliberately small: compare a causal
-depthwise temporal convolution network, a compact CNN-GRU, and a compact causal
-Conformer. Its inputs are narrowband log energy, phase/frequency error, noise
-estimate, and envelope features; it emits element/spacing or CTC likelihoods.
+The optional learned path is deliberately limited to acoustic evidence: compare
+a causal depthwise temporal convolution network and compact causal recurrent
+models. Its inputs are physically scaled narrowband log energy,
+phase/frequency error, side-channel contrast, and causal envelope features; it
+emits key-down and target-channel-CW probabilities, never characters. The same
+explainable semi-Markov timing lattice converts either deterministic or learned
+probabilities into Morse alternatives. This keeps timing, UNKNOWN decisions,
+stable-prefix rules, and callsign/context policy outside the model and avoids a
+second opaque text decoder.
+
+The first experimental vertical slice is implemented as reproducible local
+tooling. It generates checksummed synthetic PCM and exact key runs from scratch,
+uses profile-grouped train/validation/test splits, trains a small stateful causal
+GRU, reports frame calibration plus transition excess and implausibly short
+runs, checks streaming ONNX export equivalence, and can infer from resampled
+mono PCM16 WAV input. Early experiments proved that aggregate frame metrics can
+hide unusable envelope fragmentation, so temporal topology and downstream
+character accuracy are mandatory gates. No learned artifact or inference
+runtime is bundled with the application yet.
 The first target is at most two million INT8 parameters, a bounded state cache,
 and CPU-only operation. This is a design budget to benchmark, not a performance
 claim. Model choice will be made from the character-error-rate/resource Pareto
@@ -327,7 +342,8 @@ gain is repeatable and its resource cost is within the published budget.
 4. Extend the delivered bounded recent evidence and continuous fixed-anchor
    evaluation with safe mid-segment consensus switching and multi-pass
    refinement.
-5. Train and evaluate compact learned likelihood models; ship one only after
+5. Extend the delivered learned-likelihood experiment, compare compact causal
+   candidates, and ship one only after receiver character gain, hard-negative,
    license, provenance, checksum, fallback, and resource checks pass.
 6. Add conservative strongest-track cancellation and optional diversity input.
 7. Add two-source then bounded three-source joint co-channel separation.
