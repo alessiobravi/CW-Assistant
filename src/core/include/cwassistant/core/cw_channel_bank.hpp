@@ -247,6 +247,10 @@ class CwChannelBank {
     float snr_db{0.0F};
     float spectral_snr_db{0.0F};
     bool matched{false};
+    // A missing spectral association may be an ordinary Morse gap. Once that
+    // bounded hold expires, close the current timing segment exactly once and
+    // stop feeding residual/adjacent audio until a real candidate matches.
+    bool decoder_input_suspended{false};
     CwTrackState verification_state{CwTrackState::Candidate};
     CwVerificationReason verification_reason{
         CwVerificationReason::NeedsSpectralPersistence};

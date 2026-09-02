@@ -140,9 +140,12 @@ Candidate peaks use parabolic sub-bin interpolation, and a bounded predictor
 maintains carrier frequency plus drift while preserving track identity. A
 spectrum gap extrapolates at most 250 ms of drift and then damps the stale
 estimate, preventing ordinary key-up from walking a tracker away from its
-identity anchor. A 750 ms presentation-only activity hold bridges word gaps,
-while the separate six-second verification-exit hysteresis absorbs transient
-contest fades and timing errors. A
+identity anchor. A 750 ms association hold bridges word gaps for both
+presentation and decoder input. When it expires, an unmatched track receives
+one forced key-up/flush and its timing state is frozen until a real candidate
+match resumes; filter-skirt energy from an independently tracked neighbor
+therefore cannot keep extending an absent track's text. The separate six-second
+verification-exit hysteresis absorbs transient contest fades and timing errors. A
 saturated bank admits a stronger new carrier by evicting only the weakest
 unmatched unverified track; verified tracks are protected. Established tracks
 reject identity-breaking frequency innovations rather than carrying old text

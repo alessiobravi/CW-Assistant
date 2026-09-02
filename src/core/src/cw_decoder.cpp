@@ -200,6 +200,22 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
 
 CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
   auto result = process(timestamp_ns, -100.0F);
+  if (key_down_) {
+    // Flush is an explicit end-of-input boundary, so it must release a keyed
+    // state even when called only one evidence interval after the last update
+    // and the probability smoother has not naturally crossed key-off yet.
+    const double duration_ms = timestamp_ns >= state_started_ns_
+        ? milliseconds(timestamp_ns - state_started_ns_)
+        : 0.0;
+    if (key_transition_count_ < std::numeric_limits<std::uint32_t>::max())
+      ++key_transition_count_;
+    finishElement(duration_ms);
+    key_down_ = false;
+    key_down_probability_ = 0.0F;
+    state_started_ns_ = timestamp_ns;
+    last_timestamp_ns_ = timestamp_ns;
+    result = snapshot(true);
+  }
   if (!elements_.empty()) { finishCharacter(); result = snapshot(true); }
   if (!provisional_text_.empty()) {
     promoteProvisional();

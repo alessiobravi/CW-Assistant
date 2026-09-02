@@ -158,8 +158,13 @@ axis. The stream label is 18 px normally and magnifies to 32 px while the marker
 is hovered.
 Retention preserves identity and text only: without a current matched peak it
 cannot keep the area active or generate CW-symbol rows from residual noise.
-The area bridges ordinary word gaps for 750 ms, but then clears; this visual
-hold is independent of the longer six-second verification-exit and configured
+Spectrum association and decoder input bridge ordinary word gaps for 750 ms.
+After that unmatched interval, the decoder forces key-up, finishes its pending
+acoustic segment once, and stops accepting narrowband audio until a candidate
+at that carrier is matched again. This prevents residual energy or a nearby
+station inside the analysis-filter skirt from extending the retained
+transcript. The filled area clears at the same boundary. This hold is
+independent of the longer six-second verification-exit and configured
 marker-retention timers. At first verification the marker corrects an initially
 biased acquisition from recent consistent carrier measurements. It then
 follows only sustained, coherent carrier motion slowly; short peak jitter,

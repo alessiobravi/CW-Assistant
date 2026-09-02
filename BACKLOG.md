@@ -15,6 +15,13 @@ replay audit and selectable profile-persisted Audio spectrum/CW symbols views;
 the latter displays verified-channel acoustic keying envelopes on a neutral
 background rather than inventing decoded glyphs. CW-001 and DSP-002 remain active for the full semi-Markov path,
 held-out calibration, and legally reusable real corpus.
+Last reviewed: 2026-09-02 — bounded decoder input by spectral association:
+after the existing 750 ms normal-gap hold, an unmatched verified or private
+track receives one forced key-up/flush and its decoder remains frozen until a
+real candidate matches again. A deterministic alternating-carrier fixture uses
+a stronger station 85 Hz away and also preserves a 600 ms same-frequency gap.
+DSP-002 remains active for calibrated multi-signal association, and CW-004
+still owns true overlapping/co-channel separation.
 Last reviewed: 2026-09-02 — decoder cards now follow live text, emphasize the
 confirmed station call, and provide a bounded flashing visual alert for an
 exact profile own-callsign match. Card close no longer competes with whole-card

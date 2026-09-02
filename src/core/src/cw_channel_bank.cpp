@@ -12,7 +12,7 @@ namespace cwassistant::core {
 namespace {
 
 constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
-constexpr double kPresentationActivityHoldSeconds = 0.75;
+constexpr double kCandidateMatchHoldSeconds = 0.75;
 constexpr std::size_t kMaximumPresentationText = 2'048;
 
 void trimPresentationText(std::string& text) {
@@ -408,6 +408,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       nearest = std::prev(tracks_.end());
     }
     nearest->matched = true;
+    nearest->decoder_input_suspended = false;
     if (nearest->spectral_observations <
         std::numeric_limits<std::uint16_t>::max()) {
       ++nearest->spectral_observations;
@@ -712,10 +713,26 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           static_cast<std::uint64_t>(
               static_cast<long double>(index) * 1'000'000'000.0L /
               sample_rate_hz);
-      track.update = track.decoder.process(timestamp_ns,
-                                            track.keying_snr_db);
-      updateVerification(track, timestamp_ns);
-      recoverRejectedDecoder(track);
+      const bool candidate_match_held =
+          timestamp_ns < track.last_candidate_match_ns ||
+          static_cast<long double>(timestamp_ns -
+                                   track.last_candidate_match_ns) /
+                  1'000'000'000.0L <= kCandidateMatchHoldSeconds;
+      if (!candidate_match_held) {
+        if (!track.decoder_input_suspended) {
+          // End a possibly keyed segment once, then leave every decoder field
+          // untouched. In particular, energy from a distinct nearby carrier
+          // inside this track's filter cannot extend or invent transcript text
+          // while spectrum association says this identity is absent.
+          track.update = track.decoder.flush(timestamp_ns);
+          track.decoder_input_suspended = true;
+        }
+      } else if (!track.decoder_input_suspended) {
+        track.update = track.decoder.process(timestamp_ns,
+                                              track.keying_snr_db);
+        updateVerification(track, timestamp_ns);
+        recoverRejectedDecoder(track);
+      }
       track.center_power_sums = {};
       track.lower_power_sum = 0.0F;
       track.upper_power_sum = 0.0F;
@@ -1344,8 +1361,8 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
         .match_age_seconds = match_age_seconds,
         .color_index = track.color_index,
         .matched = track.matched,
-        .active = match_age_seconds <= kPresentationActivityHoldSeconds,
-        .key_down = track.update.key_down,
+        .active = match_age_seconds <= kCandidateMatchHoldSeconds,
+        .key_down = !track.decoder_input_suspended && track.update.key_down,
     });
   }
   return result;
@@ -1367,7 +1384,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
     const bool recently_matched = timestamp_ns < track.last_candidate_match_ns ||
         static_cast<long double>(timestamp_ns -
                                  track.last_candidate_match_ns) /
-                1'000'000'000.0L <= kPresentationActivityHoldSeconds;
+                1'000'000'000.0L <= kCandidateMatchHoldSeconds;
     const std::string callsign =
         track.update.timing_quality >=
                 config_.minimum_verification_timing_quality

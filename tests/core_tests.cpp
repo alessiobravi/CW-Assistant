@@ -135,6 +135,13 @@ void test_cw_timing_decoder() {
   expect(result.key_down_probability < 0.1F,
          "soft key evidence returns near zero after a completed signal");
 
+  CwTimingDecoder immediate_flush({.initial_wpm = 20.0});
+  static_cast<void>(immediate_flush.process(0, 12.0F));
+  const auto forced_up = immediate_flush.flush(2'000'000);
+  expect(!forced_up.key_down && forced_up.key_down_probability == 0.0F,
+         "flush forces key up even before probability smoothing naturally "
+         "crosses the off threshold");
+
   CwTimingDecoder staged_decoder({.initial_wpm = 20.0});
   std::uint64_t staged_now = 0;
   cwassistant::core::CwDecoderUpdate staged;
@@ -275,10 +282,10 @@ void test_cw_channel_bank() {
 
   {
     CwChannelBank nearby_bank({.minimum_separation_hz = 15.0,
+                               .color_identity_tolerance_hz = 35.0,
                                .minimum_spectral_observations = 1,
                                .minimum_verification_symbols = 0,
-                               .track_identity_tolerance_hz = 10.0,
-                               .color_identity_tolerance_hz = 35.0});
+                               .track_identity_tolerance_hz = 10.0});
     std::vector<float> nearby_bins(201, -110.0F);
     std::uint64_t nearby_now = 0;
     double first_phase = 0.0;
@@ -329,6 +336,130 @@ void test_cw_channel_bank() {
              "nearby retained identities cannot overwrite or ping-pong "
              "during repeated presentation rebuilds");
     }
+  }
+
+  for (const bool keep_unverified : {false, true}) {
+    CwChannelBank alternating_bank({
+        .minimum_separation_hz = 45.0,
+        .empty_track_retention_seconds = 10.0,
+        .decoded_track_retention_seconds = 10.0,
+        .unverified_track_retention_seconds = 10.0,
+        .minimum_spectral_observations = 1,
+        .minimum_verification_symbols = static_cast<std::uint16_t>(
+            keep_unverified ? 100 : 0),
+        .minimum_key_transitions = 0,
+        .minimum_cadence_observations = 0,
+        .minimum_verification_timing_quality = 0.0F,
+        .minimum_verification_cadence_quality = 0.0F,
+        .minimum_character_confidence = 0.0F,
+        .minimum_narrowband_coherence = 0.0F,
+        .maximum_verification_unknown_fraction = 1.0F,
+        .track_identity_tolerance_hz = 35.0,
+        .verification_enter_seconds = 0.0,
+    });
+    constexpr double first_hz = 500.0;
+    constexpr double neighbor_hz = 585.0;
+    std::vector<float> alternating_bins(1'001, -110.0F);
+    std::uint64_t alternating_now = 0;
+    double first_phase = 0.0;
+    double neighbor_phase = 0.0;
+    const auto step = [&](const int keyed_carrier) {
+      alternating_bins.assign(alternating_bins.size(), -110.0F);
+      if (keyed_carrier == 0) alternating_bins[500] = -62.0F;
+      if (keyed_carrier == 1) alternating_bins[585] = -58.0F;
+      static_cast<void>(alternating_bank.updateSpectrum(
+          alternating_now, 0.0, 1'000.0, alternating_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = alternating_now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        float sample = 0.0F;
+        if (keyed_carrier == 0)
+          sample = 0.32F * static_cast<float>(std::sin(first_phase));
+        if (keyed_carrier == 1)
+          sample = 0.42F * static_cast<float>(std::sin(neighbor_phase));
+        block.samples[index] = {sample, 0.0F};
+        first_phase += 2.0 * std::numbers::pi * first_hz / sample_rate;
+        neighbor_phase +=
+            2.0 * std::numbers::pi * neighbor_hz / sample_rate;
+      }
+      static_cast<void>(alternating_bank.processSamples(block));
+      alternating_now += 10'000'000;
+    };
+    const auto feed = [&](const int keyed_carrier, const int milliseconds) {
+      for (int elapsed = 0; elapsed < milliseconds; elapsed += 10)
+        step(keyed_carrier);
+    };
+    const auto dits = [&](const int carrier, const int count) {
+      for (int index = 0; index < count; ++index) {
+        feed(carrier, 60);
+        feed(-1, 180);
+      }
+    };
+
+    dits(0, 12);
+    step(0);
+    auto diagnostics = alternating_bank.allTrackDiagnostics();
+    auto first = std::find_if(diagnostics.begin(), diagnostics.end(),
+                              [](const auto& track) {
+                                return std::abs(track.frequency_hz - first_hz) <
+                                       10.0;
+                              });
+    expect(first != diagnostics.end(),
+           "alternating-tone fixture acquires the first carrier");
+    if (first == diagnostics.end()) continue;
+    const std::uint64_t first_id = first->id;
+    const std::uint32_t symbols_before_gap = first->decoded_symbols;
+    if (keep_unverified) {
+      expect(first->verification_state !=
+                 cwassistant::core::CwTrackState::Verified,
+             "unverified alternating-tone fixture stays private");
+    } else {
+      expect(first->verification_state ==
+                 cwassistant::core::CwTrackState::Verified,
+             "verified alternating-tone fixture reaches publication");
+    }
+
+    feed(-1, 600);
+    dits(0, 3);
+    diagnostics = alternating_bank.allTrackDiagnostics();
+    first = std::find_if(diagnostics.begin(), diagnostics.end(),
+                         [first_id](const auto& track) {
+                           return track.id == first_id;
+                         });
+    expect(first != diagnostics.end() &&
+               first->decoded_symbols > symbols_before_gap,
+           "a same-frequency sender resumes through a normal 600 ms word "
+           "gap without freezing or replacing its decoder");
+
+    dits(1, 10);
+    diagnostics = alternating_bank.allTrackDiagnostics();
+    first = std::find_if(diagnostics.begin(), diagnostics.end(),
+                         [first_id](const auto& track) {
+                           return track.id == first_id;
+                         });
+    expect(first != diagnostics.end() && !first->key_down,
+           "an unmatched adjacent carrier forces the old decoder key up");
+    if (first == diagnostics.end()) continue;
+    const std::string frozen_text = first->text;
+    const std::string frozen_provisional = first->provisional_text;
+    const std::uint32_t frozen_symbols = first->decoded_symbols;
+    const std::uint32_t frozen_transitions = first->key_transitions;
+
+    dits(1, 14);
+    diagnostics = alternating_bank.allTrackDiagnostics();
+    first = std::find_if(diagnostics.begin(), diagnostics.end(),
+                         [first_id](const auto& track) {
+                           return track.id == first_id;
+                         });
+    expect(first != diagnostics.end() && first->text == frozen_text &&
+               first->provisional_text == frozen_provisional &&
+               first->decoded_symbols == frozen_symbols &&
+               first->key_transitions == frozen_transitions &&
+               !first->key_down,
+           "verified and unverified tracks freeze all decoder output after "
+           "the unmatched gap hold despite a stronger 85 Hz neighbor");
   }
 
   {

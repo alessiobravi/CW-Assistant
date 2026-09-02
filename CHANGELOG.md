@@ -73,6 +73,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- A track now stops feeding its timing decoder after 750 ms without a matched
+  spectral candidate. The boundary forces key-up and flushes pending acoustic
+  output once, then freezes verified or private decoder state until that
+  carrier is genuinely matched again. Normal same-frequency word gaps remain
+  continuous, while residual energy or a stronger nearby station can no longer
+  append text indefinitely to an absent track.
+
 - Retained decoder sessions now reconcile replacements with explicit source
   provenance: two simultaneously published nearby tracks cannot overwrite one
   observation or share a display color, while a genuine later reacquisition
