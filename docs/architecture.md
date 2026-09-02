@@ -169,12 +169,18 @@ invents characters.
 
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session
-cards. If a retained frequency/color is reacquired under a replacement tracker
-ID, that ordered selection is reconciled to the new ID so its decoded-text
-window remains open. The presentation layer retains at most 2,048 stable text
-characters and an already-confirmed callsign across that replacement; this
-does not rewrite decoder state. Closing or reordering a card cannot mutate DSP state. Callsign tokens and
-frequency labels are derived views of each stable track ID.
+cards. Each retained observation records its current source track and an
+immutable inherited prefix. A replacement is allowed only after the predecessor
+is no longer concurrently published; this prevents two nearby verified tracks
+from overwriting one observation. A genuine same-identity replacement freezes
+the predecessor transcript exactly once, then replaces only the new source
+suffix on later refreshes. The presentation layer retains at most 2,048 stable
+text characters and an already-confirmed callsign across that replacement;
+only raw source text is evaluated for new callsign evidence, never the composed
+presentation text. Concurrent identities own distinct colors, while a later
+reacquisition may reuse an unoccupied retained color lease. This does not
+rewrite decoder state. Closing or reordering a card cannot mutate DSP state.
+Callsign tokens and frequency labels are derived views of each stable track ID.
 
 Actual-RF presentation is evidence-gated. A profile must explicitly associate
 its selected live input with the configured radio, and a supported provider

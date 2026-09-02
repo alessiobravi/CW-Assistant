@@ -128,15 +128,22 @@ so its normal 60/120/240 Hz changes cannot resize or flicker the marker. A
 thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Its larger decoded-text window wraps
-the latest output and follows new text automatically unless you are selecting
-text. A confirmed remote callsign is bold and shown in the stream color. If
+the latest output and follows new text while its viewport is at the bottom.
+Scroll upward or select text to inspect earlier output without live updates
+moving the cursor or viewport; scroll back to the bottom to resume following.
+The transcript remains plain text so incoming characters cannot cause styled
+text or scrollbar-driven line reflow. A confirmed remote callsign is bold and
+shown in the card header using the stream color. If
 stable text contains an exact match for **Settings → Station → Own station
-callsign**, that token is highlighted, the card displays **YOUR CALL HEARD**,
-and its border flashes five times. This notification is visual and receive-only;
+callsign**, the card displays **YOUR CALL HEARD** and its border flashes five
+times. This notification is visual and receive-only;
 it never arms or starts transmission. The session remains selected if the same frequency/color is
 reacquired under a replacement tracker ID. Up to 2,048 stable text characters
 and an already-confirmed structurally plausible callsign remain visible across
-that replacement. Closing a card with **×** does not
+that replacement. The prior transcript is carried forward once rather than
+being appended repeatedly during live refreshes. Simultaneous nearby decoded
+signals keep separate cards and colors; only a later return after the previous
+track has ended inherits that track's retained identity. Closing a card with **×** does not
 stop its DSP; click the marker to reopen it. Use the arrow handle beside the
 close button to drag cards over one another and set the
 operator's preferred order. Stable text, amber provisional text/elements,

@@ -308,6 +308,13 @@ class CwChannelBank {
 
   struct RetainedObservation {
     CwChannelSnapshot snapshot;
+    // Presentation continuity has explicit provenance. `source_track_id`
+    // owns the live suffix; `inherited_text_prefix` is frozen only when a
+    // genuine predecessor is replaced, so composed UI text is never fed back
+    // through callsign scoring or appended again on the next refresh.
+    std::uint64_t source_track_id{0};
+    std::string inherited_text_prefix;
+    std::string confirmed_callsign;
     std::uint64_t last_seen_ns{0};
     bool refreshed{false};
   };

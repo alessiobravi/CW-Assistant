@@ -2,6 +2,13 @@ add_executable(cwa_core_tests core_tests.cpp)
 target_link_libraries(cwa_core_tests PRIVATE cwa_core)
 add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 
+add_executable(cwa_decoder_transcript_qml_test
+  desktop/decoder_transcript_qml_test.cpp)
+target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE
+  CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml")
+add_test(NAME cwa_decoder_transcript_qml_test
+  COMMAND cwa_decoder_transcript_qml_test)
+
 add_executable(cwa_callsign_evidence_tests callsign_evidence_tests.cpp)
 target_link_libraries(cwa_callsign_evidence_tests PRIVATE cwa_core)
 add_test(NAME cwa_callsign_evidence_tests COMMAND cwa_callsign_evidence_tests)

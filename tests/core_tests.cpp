@@ -274,6 +274,142 @@ void test_cw_channel_bank() {
   }
 
   {
+    CwChannelBank nearby_bank({.minimum_separation_hz = 15.0,
+                               .minimum_spectral_observations = 1,
+                               .minimum_verification_symbols = 0,
+                               .track_identity_tolerance_hz = 10.0,
+                               .color_identity_tolerance_hz = 35.0});
+    std::vector<float> nearby_bins(201, -110.0F);
+    std::uint64_t nearby_now = 0;
+    double first_phase = 0.0;
+    double second_phase = 0.0;
+    for (int step = 0; step < 20; ++step) {
+      nearby_bins.assign(nearby_bins.size(), -110.0F);
+      nearby_bins[60] = -55.0F;
+      nearby_bins[66] = -57.0F;
+      static_cast<void>(nearby_bank.updateSpectrum(
+          nearby_now, 0.0, 1'000.0, nearby_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = nearby_now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            0.30F * static_cast<float>(std::sin(first_phase)) +
+                0.30F * static_cast<float>(std::sin(second_phase)),
+            0.0F};
+        first_phase += 2.0 * std::numbers::pi * 300.0 / sample_rate;
+        second_phase += 2.0 * std::numbers::pi * 330.0 / sample_rate;
+      }
+      static_cast<void>(nearby_bank.processSamples(block));
+      nearby_now += 10'000'000;
+    }
+    const auto first_nearby = nearby_bank.channels();
+    expect(first_nearby.size() == 2 &&
+               first_nearby[0].id != first_nearby[1].id &&
+               first_nearby[0].color_index != first_nearby[1].color_index,
+           "simultaneous verified nearby identities keep separate retained "
+           "observations and exclusive colors");
+    if (first_nearby.size() == 2) {
+      const auto first_id = first_nearby[0].id;
+      const auto second_id = first_nearby[1].id;
+      const auto first_color = first_nearby[0].color_index;
+      const auto second_color = first_nearby[1].color_index;
+      for (int refresh = 0; refresh < 8; ++refresh) {
+        static_cast<void>(nearby_bank.updateSpectrum(
+            nearby_now, 0.0, 1'000.0, nearby_bins));
+        nearby_now += 10'000'000;
+      }
+      const auto& stable_nearby = nearby_bank.channels();
+      expect(stable_nearby.size() == 2 &&
+                 stable_nearby[0].id == first_id &&
+                 stable_nearby[1].id == second_id &&
+                 stable_nearby[0].color_index == first_color &&
+                 stable_nearby[1].color_index == second_color,
+             "nearby retained identities cannot overwrite or ping-pong "
+             "during repeated presentation rebuilds");
+    }
+  }
+
+  {
+    CwChannelBank replacement_bank({.empty_track_retention_seconds = 0.5,
+                                    .decoded_track_retention_seconds = 10.0,
+                                    .minimum_spectral_observations = 1,
+                                    .minimum_verification_symbols = 0,
+                                    .verification_enter_seconds = 0.0,
+                                    .verification_exit_seconds = 0.0});
+    std::vector<float> replacement_bins(201, -110.0F);
+    std::uint64_t replacement_now = 0;
+    double replacement_phase = 0.0;
+    const auto replacement_step = [&](const bool keyed) {
+      replacement_bins.assign(replacement_bins.size(), -110.0F);
+      if (keyed) replacement_bins[60] = -55.0F;
+      static_cast<void>(replacement_bank.updateSpectrum(
+          replacement_now, 0.0, 1'000.0, replacement_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = replacement_now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.40F * static_cast<float>(std::sin(replacement_phase))
+                  : 0.0F,
+            0.0F};
+        replacement_phase +=
+            2.0 * std::numbers::pi * 300.0 / sample_rate;
+      }
+      static_cast<void>(replacement_bank.processSamples(block));
+      replacement_now += 10'000'000;
+    };
+    for (int symbol = 0; symbol < 12; ++symbol) {
+      for (int step = 0; step < 7; ++step) replacement_step(true);
+      for (int step = 0; step < 30; ++step) replacement_step(false);
+    }
+    const auto predecessor = replacement_bank.channels();
+    expect(predecessor.size() == 1 && !predecessor.front().text.empty(),
+           "replacement fixture starts with stable predecessor text");
+    if (predecessor.size() == 1 && !predecessor.front().text.empty()) {
+      const auto predecessor_id = predecessor.front().id;
+      const auto predecessor_color = predecessor.front().color_index;
+      const std::string predecessor_text = predecessor.front().text;
+
+      replacement_bank.configure({
+          .empty_track_retention_seconds = 0.5,
+          .decoded_track_retention_seconds = 10.0,
+          .minimum_spectral_observations = 1,
+          .minimum_verification_symbols = 20,
+          .verification_enter_seconds = 0.0,
+          .verification_exit_seconds = 0.0});
+      replacement_step(true);
+      replacement_now += 1'000'000'000;
+      replacement_bins.assign(replacement_bins.size(), -110.0F);
+      static_cast<void>(replacement_bank.updateSpectrum(
+          replacement_now, 0.0, 1'000.0, replacement_bins));
+
+      replacement_bank.configure({
+          .empty_track_retention_seconds = 0.5,
+          .decoded_track_retention_seconds = 10.0,
+          .minimum_spectral_observations = 1,
+          .minimum_verification_symbols = 0,
+          .verification_enter_seconds = 0.0,
+          .verification_exit_seconds = 0.0});
+      replacement_step(true);
+      const auto& replacement = replacement_bank.channels();
+      expect(replacement.size() == 1 &&
+                 replacement.front().id != predecessor_id &&
+                 replacement.front().color_index == predecessor_color &&
+                 replacement.front().text == predecessor_text,
+             "genuine replacement inherits its predecessor text exactly "
+             "once and reuses the identity color");
+      replacement_step(true);
+      expect(replacement_bank.channels().size() == 1 &&
+                 replacement_bank.channels().front().text == predecessor_text,
+             "refreshing a replacement cannot append its inherited prefix "
+             "again");
+    }
+  }
+
+  {
     CwChannelBank admission_bank({.maximum_tracks = 2,
                                   .minimum_spectral_observations = 50});
     std::vector<float> admission_bins(1'001, -110.0F);

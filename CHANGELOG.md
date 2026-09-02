@@ -73,6 +73,21 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- Retained decoder sessions now reconcile replacements with explicit source
+  provenance: two simultaneously published nearby tracks cannot overwrite one
+  observation or share a display color, while a genuine later reacquisition
+  inherits the previous bounded transcript exactly once. Only the replacement
+  decoder's raw text is considered for new callsign evidence; the composed
+  presentation transcript is never rescored as repeated acoustic output.
+
+- Live decoder transcripts now use a stable plain-text viewport instead of
+  rebuilding rich text and moving the text cursor on every update. A card
+  follows appended output only while already following the bottom; selecting
+  text or scrolling upward leaves the operator's viewport undisturbed. The
+  fixed wrapping width and reserved vertical scrollbar gutter also prevent
+  line reflow as the transcript grows. Confirmed calls remain emphasized in
+  the card header and own-call alerts remain unchanged.
+
 - The hosted Windows MSI contract check now normalizes readable multiline
   table queries into the single-line SQL form required by Windows Installer,
   so verification reaches the installer assertions instead of failing while

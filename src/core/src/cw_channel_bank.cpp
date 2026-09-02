@@ -13,6 +13,27 @@ namespace {
 
 constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
 constexpr double kPresentationActivityHoldSeconds = 0.75;
+constexpr std::size_t kMaximumPresentationText = 2'048;
+
+void trimPresentationText(std::string& text) {
+  if (text.size() <= kMaximumPresentationText) return;
+  text.erase(0, text.size() - kMaximumPresentationText);
+}
+
+[[nodiscard]] std::string composePresentationText(
+    const std::string& prefix, const std::string& source_text) {
+  if (prefix.empty()) {
+    std::string result = source_text;
+    trimPresentationText(result);
+    return result;
+  }
+  if (source_text.empty()) return prefix;
+  std::string result = prefix;
+  result += " | ";
+  result += source_text;
+  trimPresentationText(result);
+  return result;
+}
 
 }  // namespace
 
@@ -1167,14 +1188,28 @@ void CwChannelBank::followVerifiedPresentation(
 void CwChannelBank::assignOrRefreshColor(
     Track& track, const std::uint64_t timestamp_ns) noexcept {
   if (track.color_assigned) {
-    ColorLease& lease = color_leases_[track.color_index % kColorLeaseCount];
-    // Keep the lease anchored to the frequency that established the visual
-    // identity. A verified track can otherwise walk across nearby noise while
-    // silent and move the lease away from the carrier it is meant to remember.
-    // Known operator retunes move every lease explicitly.
-    lease.last_seen_ns = std::max(lease.last_seen_ns, timestamp_ns);
-    lease.occupied = true;
-    return;
+    const bool earlier_verified_owner = std::any_of(
+        tracks_.cbegin(), tracks_.cend(), [&](const Track& other) {
+          return &other != &track && other.id < track.id &&
+                 other.color_assigned &&
+                 other.verification_state == CwTrackState::Verified &&
+                 other.color_index == track.color_index;
+        });
+    if (earlier_verified_owner) {
+      // Repair a collision created by an older build. The established lower
+      // ID retains ownership; the later identity must select another color.
+      track.color_assigned = false;
+    } else {
+      ColorLease& lease =
+          color_leases_[track.color_index % kColorLeaseCount];
+      // Keep the lease anchored to the frequency that established the visual
+      // identity. A verified track can otherwise walk across nearby noise
+      // while silent and move the lease away from the carrier it is meant to
+      // remember. Known operator retunes move every lease explicitly.
+      lease.last_seen_ns = std::max(lease.last_seen_ns, timestamp_ns);
+      lease.occupied = true;
+      return;
+    }
   }
 
   std::array<bool, kColorLeaseCount> colors_in_use{};
@@ -1188,6 +1223,9 @@ void CwChannelBank::assignOrRefreshColor(
   std::size_t selected = kColorLeaseCount;
   double nearest_distance = config_.color_identity_tolerance_hz;
   for (std::size_t index = 0; index < color_leases_.size(); ++index) {
+    // A lease may identify a returning carrier only while no concurrently
+    // published track owns its color.
+    if (colors_in_use[index]) continue;
     const ColorLease& lease = color_leases_[index];
     if (!colorLeaseIsCurrent(lease, timestamp_ns)) continue;
     const double distance = std::abs(
@@ -1317,6 +1355,13 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
   for (RetainedObservation& observation : retained_observations_)
     observation.refreshed = false;
 
+  std::vector<std::uint64_t> verified_track_ids;
+  verified_track_ids.reserve(tracks_.size());
+  for (const Track& track : tracks_) {
+    if (track.verification_state == CwTrackState::Verified)
+      verified_track_ids.push_back(track.id);
+  }
+
   for (const auto& track : tracks_) {
     if (track.verification_state != CwTrackState::Verified) continue;
     const bool recently_matched = timestamp_ns < track.last_candidate_match_ns ||
@@ -1374,12 +1419,29 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
     auto retained = std::find_if(
         retained_observations_.begin(), retained_observations_.end(),
         [&](const RetainedObservation& observation) {
-          if (observation.snapshot.id == track.id) return true;
-          return observation.snapshot.color_index == track.color_index &&
-                 std::abs(observation.snapshot.presentation_frequency_hz -
-                          track.presentation_frequency_hz) <=
-                     config_.color_identity_tolerance_hz;
+          return observation.source_track_id == track.id;
         });
+    bool replacement = false;
+    if (retained == retained_observations_.end()) {
+      double nearest_distance = config_.color_identity_tolerance_hz;
+      for (auto candidate = retained_observations_.begin();
+           candidate != retained_observations_.end(); ++candidate) {
+        const bool predecessor_still_published = std::find(
+            verified_track_ids.cbegin(), verified_track_ids.cend(),
+            candidate->source_track_id) != verified_track_ids.cend();
+        if (candidate->refreshed || predecessor_still_published ||
+            candidate->snapshot.color_index != track.color_index)
+          continue;
+        const double distance = std::abs(
+            candidate->snapshot.presentation_frequency_hz -
+            track.presentation_frequency_hz);
+        if (distance <= nearest_distance) {
+          nearest_distance = distance;
+          retained = candidate;
+          replacement = true;
+        }
+      }
+    }
     if (retained == retained_observations_.end()) {
       if (retained_observations_.size() >= kColorLeaseCount) {
         retained = std::min_element(
@@ -1394,29 +1456,27 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         retained_observations_.push_back({});
         retained = std::prev(retained_observations_.end());
       }
-    } else if (retained->snapshot.id != snapshot.id) {
+      retained->source_track_id = track.id;
+      retained->inherited_text_prefix.clear();
+      retained->confirmed_callsign.clear();
+    } else if (replacement) {
       // A replacement tracker at the same retained identity starts with a
       // fresh timing decoder, but the operator's session is continuous.
-      // Preserve a bounded presentation transcript and any already-confirmed
-      // callsign instead of replacing the decoder window with an empty card.
-      if (!retained->snapshot.text.empty()) {
-        if (!snapshot.text.empty()) retained->snapshot.text += " | ";
-        retained->snapshot.text += snapshot.text;
-        constexpr std::size_t kMaximumPresentationText = 2'048;
-        if (retained->snapshot.text.size() > kMaximumPresentationText) {
-          const std::size_t trim = retained->snapshot.text.size() -
-                                   kMaximumPresentationText;
-          retained->snapshot.text.erase(0, trim);
-        }
-        snapshot.text = retained->snapshot.text;
-      }
+      // Freeze the predecessor once as an explicit prefix. Subsequent
+      // refreshes replace only the new source suffix and cannot duplicate it.
+      retained->inherited_text_prefix = retained->snapshot.text;
+      trimPresentationText(retained->inherited_text_prefix);
+      retained->source_track_id = track.id;
       if (snapshot.callsign.empty())
-        snapshot.callsign = retained->snapshot.callsign;
-      if (const auto merged_callsign =
-              CallsignPolicy::best_complete_in_text(snapshot.text)) {
-        snapshot.callsign = *merged_callsign;
-      }
+        snapshot.callsign = retained->confirmed_callsign;
     }
+    if (snapshot.callsign.empty()) {
+      snapshot.callsign = retained->confirmed_callsign;
+    } else {
+      retained->confirmed_callsign = snapshot.callsign;
+    }
+    snapshot.text = composePresentationText(
+        retained->inherited_text_prefix, snapshot.text);
     retained->snapshot = std::move(snapshot);
     retained->last_seen_ns = track.last_detected_ns;
     retained->refreshed = true;

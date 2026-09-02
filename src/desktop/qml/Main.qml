@@ -69,14 +69,6 @@ ApplicationWindow {
         return text
     }
 
-    function escapeTranscriptHtml(value) {
-        return String(value).replace(/&/g, "&amp;")
-                            .replace(/</g, "&lt;")
-                            .replace(/>/g, "&gt;")
-                            .replace(/\n/g, "<br>")
-                            .replace(/ /g, "&nbsp;")
-    }
-
     function exactCallCount(text, callsign) {
         var wanted = String(callsign).trim().toUpperCase()
         if (wanted.length === 0)
@@ -88,29 +80,6 @@ ApplicationWindow {
                 ++count
         }
         return count
-    }
-
-    function highlightedTranscript(text, confirmedCallsign, ownCallsign,
-                                   streamColor) {
-        var confirmed = String(confirmedCallsign).trim().toUpperCase()
-        var own = String(ownCallsign).trim().toUpperCase()
-        var parts = String(text).split(/([A-Za-z0-9/]+)/)
-        var rendered = ""
-        for (var index = 0; index < parts.length; ++index) {
-            var part = parts[index]
-            var normalized = part.toUpperCase()
-            var escaped = escapeTranscriptHtml(part)
-            if (own.length > 0 && normalized === own) {
-                rendered += "<span style='font-weight:700;color:#111720;" +
-                            "background-color:#ffd54f'>" + escaped + "</span>"
-            } else if (confirmed.length > 0 && normalized === confirmed) {
-                rendered += "<span style='font-weight:700;color:" +
-                            streamColor + "'>" + escaped + "</span>"
-            } else {
-                rendered += escaped
-            }
-        }
-        return rendered
     }
 
     header: ToolBar {
@@ -1078,20 +1047,70 @@ ApplicationWindow {
                                 }
                             }
                             ScrollView {
+                                id: transcriptScroll
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 112
                                 clip: true
+                                property bool followTail: true
+                                function maximumContentY() {
+                                    if (!contentItem)
+                                        return 0
+                                    return Math.max(0, contentItem.contentHeight
+                                                       - contentItem.height)
+                                }
+                                function isAtTail() {
+                                    return !contentItem
+                                           || contentItem.contentY
+                                              >= maximumContentY() - 2
+                                }
+                                function followAppendedText() {
+                                    if (decodedTextArea.selectionStart
+                                            !== decodedTextArea.selectionEnd) {
+                                        followTail = false
+                                        return
+                                    }
+                                    if (!followTail)
+                                        return
+                                    Qt.callLater(function() {
+                                        if (transcriptScroll.followTail
+                                                && transcriptScroll.contentItem) {
+                                            transcriptScroll.contentItem.contentY =
+                                                transcriptScroll.maximumContentY()
+                                        }
+                                    })
+                                }
+                                ScrollBar.horizontal: ScrollBar {
+                                    policy: ScrollBar.AlwaysOff
+                                }
+                                ScrollBar.vertical: ScrollBar {
+                                    id: transcriptVerticalBar
+                                    policy: ScrollBar.AlwaysOn
+                                    onPressedChanged: {
+                                        if (!pressed)
+                                            transcriptScroll.followTail =
+                                                transcriptScroll.isAtTail()
+                                    }
+                                }
+                                Connections {
+                                    target: transcriptScroll.contentItem
+                                    function onMovementStarted() {
+                                        // Wheel/touch scrolling is an explicit
+                                        // request to inspect earlier output.
+                                        transcriptScroll.followTail = false
+                                    }
+                                    function onMovementEnded() {
+                                        transcriptScroll.followTail =
+                                            transcriptScroll.isAtTail()
+                                    }
+                                }
                                 TextArea {
                                     id: decodedTextArea
                                     objectName: "decodedSessionText"
                                     readOnly: true
                                     selectByMouse: true
-                                    text: window.highlightedTranscript(
-                                              sessionCard.rawDecodedText,
-                                              modelData.callsign,
-                                              appSettings.ownCallsign,
-                                              modelData.color)
-                                    textFormat: TextEdit.RichText
+                                    width: transcriptScroll.availableWidth
+                                    text: ""
+                                    textFormat: TextEdit.PlainText
                                     color: modelData.text.length > 0
                                            ? "#edf3f8"
                                            : (modelData.provisionalText.length > 0
@@ -1107,11 +1126,30 @@ ApplicationWindow {
                                         border.color: "#263241"
                                         border.width: 1
                                     }
-                                    function followLatestText() {
-                                        if (selectionStart === selectionEnd)
-                                            cursorPosition = length
+                                    function applyDecodedText(nextText) {
+                                        var oldSelectionStart = selectionStart
+                                        var oldSelectionEnd = selectionEnd
+                                        var hadSelection = oldSelectionStart
+                                                           !== oldSelectionEnd
+                                        text = nextText
+                                        if (hadSelection) {
+                                            select(Math.min(oldSelectionStart,
+                                                            length),
+                                                   Math.min(oldSelectionEnd,
+                                                            length))
+                                        }
+                                        transcriptScroll.followAppendedText()
                                     }
-                                    onTextChanged: Qt.callLater(followLatestText)
+                                    Component.onCompleted:
+                                        applyDecodedText(
+                                            sessionCard.rawDecodedText)
+                                    Connections {
+                                        target: sessionCard
+                                        function onRawDecodedTextChanged() {
+                                            decodedTextArea.applyDecodedText(
+                                                sessionCard.rawDecodedText)
+                                        }
+                                    }
                                 }
                             }
                             Label {
