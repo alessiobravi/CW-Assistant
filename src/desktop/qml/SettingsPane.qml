@@ -310,44 +310,35 @@ Pane {
                         onActivated: appSettings.spectrumDisplayMode = currentIndex
                     }
                     Label { text: "Target FPS" }
-                    SpinBox { from: 10; to: 120; value: appSettings.targetFps; onValueModified: appSettings.targetFps = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "frames/s"; from: 10; to: 120; value: appSettings.targetFps; onMoved: value => appSettings.targetFps = Math.round(value) }
                     Label { text: "Waterfall lines / second" }
-                    SpinBox { from: 1; to: 120; value: appSettings.waterfallRate; onValueModified: appSettings.waterfallRate = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "rows/s"; from: 1; to: 120; value: appSettings.waterfallRate; onMoved: value => appSettings.waterfallRate = Math.round(value) }
                     Label { text: "Waterfall history (seconds)" }
-                    SpinBox { from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onValueModified: appSettings.waterfallTimeSpanSeconds = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "seconds"; from: 5; to: 30; value: appSettings.waterfallTimeSpanSeconds; onMoved: value => appSettings.waterfallTimeSpanSeconds = Math.round(value) }
                     Label { text: "Visual CW reference" }
                     CheckBox { text: "Show red visual boundaries"; checked: appSettings.showCwGuide; onToggled: appSettings.showCwGuide = checked }
                     Label { text: "Visual center tone (Hz)" }
-                    SpinBox { editable: true; from: 0; to: 96000; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideCenterHz = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "Hz"; from: 0; to: appSettings.audioAutomaticBandwidth ? 3000 : Math.max(3000, appSettings.audioUpperFrequencyHz); stepSize: 10; value: appSettings.cwGuideCenterHz; enabled: appSettings.showCwGuide; onMoved: value => appSettings.cwGuideCenterHz = value }
                     Label { text: "Visual width (Hz)" }
-                    SpinBox { editable: true; from: 10; to: 5000; value: appSettings.cwGuideWidthHz; enabled: appSettings.showCwGuide; onValueModified: appSettings.cwGuideWidthHz = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "Hz"; from: 10; to: 5000; stepSize: 10; value: appSettings.cwGuideWidthHz; enabled: appSettings.showCwGuide; onMoved: value => appSettings.cwGuideWidthHz = value }
                     Label { text: "Display level range" }
                     CheckBox { text: "Automatic display scaling"; checked: appSettings.automaticRange; onToggled: appSettings.automaticRange = checked }
                     Label { text: "Lower bound (dB)" }
-                    SpinBox { editable: true; from: -200; to: 50; value: appSettings.lowerBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.lowerBoundDb = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "dBFS"; from: -200; to: 40; value: appSettings.lowerBoundDb; enabled: !appSettings.automaticRange; onMoved: value => appSettings.lowerBoundDb = value }
                     Label { text: "Upper bound (dB)" }
-                    SpinBox { editable: true; from: -190; to: 50; value: appSettings.upperBoundDb; enabled: !appSettings.automaticRange; onValueModified: appSettings.upperBoundDb = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "dBFS"; from: -190; to: 50; value: appSettings.upperBoundDb; enabled: !appSettings.automaticRange; onMoved: value => appSettings.upperBoundDb = value }
                     Label { text: "Automatic span (dB)" }
-                    SpinBox { editable: true; from: 30; to: 100; value: appSettings.automaticRangeSpanDb; enabled: appSettings.automaticRange; onValueModified: appSettings.automaticRangeSpanDb = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "dB"; from: 30; to: 100; value: appSettings.automaticRangeSpanDb; enabled: appSettings.automaticRange; onMoved: value => appSettings.automaticRangeSpanDb = value }
                     Label { text: "Waterfall noise suppression" }
                     CheckBox { text: "Darken bins near the measured noise floor"; checked: appSettings.waterfallNoiseSuppression; onToggled: appSettings.waterfallNoiseSuppression = checked }
                     Label { text: "Noise margin (dB)" }
-                    SpinBox { editable: true; from: 0; to: 30; value: appSettings.waterfallNoiseMarginDb; enabled: appSettings.waterfallNoiseSuppression; onValueModified: appSettings.waterfallNoiseMarginDb = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "dB"; from: 0; to: 30; value: appSettings.waterfallNoiseMarginDb; enabled: appSettings.waterfallNoiseSuppression && appSettings.spectrumDisplayMode === 0; onMoved: value => appSettings.waterfallNoiseMarginDb = value }
                     Label { text: "Spectrum averaging" }
-                    SpinBox { from: 1; to: 32; value: appSettings.averagingFrames; onValueModified: appSettings.averagingFrames = value }
+                    LabeledSlider { Layout.fillWidth: true; caption: "frames"; from: 1; to: 32; value: appSettings.averagingFrames; onMoved: value => appSettings.averagingFrames = Math.round(value) }
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
                     Label { text: "Decoded signal timeout" }
-                    RowLayout {
-                        SpinBox {
-                            editable: true
-                            from: 5
-                            to: 300
-                            value: appSettings.decodedSignalTimeoutSeconds
-                            onValueModified: appSettings.decodedSignalTimeoutSeconds = value
-                        }
-                        Label { text: "seconds"; color: "#8290a0" }
-                    }
+                    LabeledSlider { Layout.fillWidth: true; caption: "seconds"; from: 5; to: 300; value: appSettings.decodedSignalTimeoutSeconds; onMoved: value => appSettings.decodedSignalTimeoutSeconds = Math.round(value) }
                     Label { text: "" }
                     Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Waterfall history is a constant time window: resizing, startup fill, and line density do not stretch or collapse Morse timing. Automatic display scaling uses a stable minimum span so receiver noise stays dark instead of pumping through the palette. Noise suppression affects waterfall colors only; raw spectrum bins remain available to the future decoder. The same operational controls are available directly below the spectrum. A decoded signal's marker and session remain available for the configured timeout after it goes silent, then are removed. Its frequency keeps the same reserved color for at least five minutes so a later pass is visually recognizable." }
                 }

@@ -83,16 +83,22 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 
 - Spectrum and waterfall share the same FFT output used by channel detection.
 - Provide profile-persisted **Audio spectrum** and **CW symbols** views. The
-  former may use averaged FFT power; the latter uses unaveraged acoustic rows
-  and crisp sampling to expose dit/dah/gap timing. Switching views must not
-  reset or influence decoding, and CW symbols must not fabricate text.
-- Render the configured CW pitch/width as a bold axis-boundary guide that is
-  visually distinct from the stable-width area of verified signal traces;
+  former may use averaged FFT power; the latter uses only verified channels'
+  acoustic keying envelopes on a neutral background with crisp sampling to
+  expose dit/dah/gap timing. Full-passband and unverified noise belongs only in
+  Audio spectrum. Switching views must not reset or influence decoding, and CW
+  symbols must not fabricate text.
+- Render the configured CW pitch/width as two dashed vertical boundaries at
+  center ± half-width, with no filled guide band, visually distinct from the
+  stable-width area of active verified signal traces;
   keep vertical decoded annotations in
   the spectrum region rather than over waterfall history.
 - Keep verified-marker geometry stable while the decoder changes its internal
   analysis-filter width; expose that filter choice as diagnostics, not as a
   continuously resizing carrier footprint.
+- Render a retained inactive observation without a filled area, using only a
+  short identity-colored horizontal mark on the frequency axis. Keep its
+  stream label readable at normal size and enlarge it further on hover.
 - Clicking a trace selects the nearest tracked channel; clicking a callsign
   opens the QSO confirmation panel.
 - Left-clicking the waterfall moves the local CW guide center to the pointed
@@ -112,6 +118,9 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are
   configurable.
 - Configure target render FPS and waterfall line/scroll rate independently.
+- Present frequently adjusted visualization values as labeled sliders with
+  live numeric readouts in a responsive multi-row layout; do not require
+  repeated number-box editing for normal spectrum operation.
 - Keep the displayed waterfall history on a constant configurable time axis.
   Pane resizing, startup fill, and missing source intervals must not stretch or
   collapse dit/dah timing; line rate changes temporal resolution, not duration.

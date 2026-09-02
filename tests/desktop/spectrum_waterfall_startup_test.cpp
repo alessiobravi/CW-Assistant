@@ -24,12 +24,12 @@ int main(int argc, char* argv[]) {
   for (qsizetype index = 0; index < shaped_noise.size(); ++index)
     shaped_noise[index] = -92.0F + 0.08F * static_cast<float>(index);
   static_cast<void>(conditioner.process(
-      shaped_noise, true, true, 6.0, -110.0, -40.0, 3.0, -90.0));
+      shaped_noise, true, 6.0, -110.0, -40.0, 3.0, -90.0));
   QVector<float> keyed = shaped_noise;
   for (qsizetype index = 62; index <= 66; ++index)
     keyed[index] += 24.0F;
   const QVector<float> isolated = conditioner.process(
-      keyed, true, true, 6.0, -110.0, -40.0, 3.0, -90.0);
+      keyed, true, 6.0, -110.0, -40.0, 3.0, -90.0);
   int bright_bins = 0;
   for (const float value : isolated) {
     if (value > -75.0F) ++bright_bins;
@@ -38,14 +38,28 @@ int main(int argc, char* argv[]) {
       isolated[20] > -100.0F) {
     return 11;
   }
-  QVector<float> clutter = shaped_noise;
-  clutter[20] += 8.0F;
-  clutter[82] += 8.0F;
-  const QVector<float> rejected_clutter = conditioner.process(
-      clutter, true, true, 6.0, -110.0, -40.0, 3.0, -90.0);
-  if (rejected_clutter[20] > -100.0F ||
-      rejected_clutter[82] > -100.0F) {
-    return 12;
+  QVariantMap keyed_channel{
+      {QStringLiteral("verifiedCw"), true},
+      {QStringLiteral("active"), true},
+      {QStringLiteral("keyDown"), true},
+      {QStringLiteral("frequencyHz"), 700.0},
+  };
+  const QVector<float> symbol_row = cwassistant::desktop::cwSymbolRow(
+      QVariantList{keyed_channel}, 101, 200.0, 1'200.0, -110.0, -40.0);
+  int symbol_bins = 0;
+  for (const float value : symbol_row) {
+    if (value > -50.0F) ++symbol_bins;
+  }
+  if (symbol_bins != 3 || symbol_row[50] < -50.0F ||
+      symbol_row[20] > -100.0F) {
+    return 13;
+  }
+  keyed_channel.insert(QStringLiteral("keyDown"), false);
+  const QVector<float> gap_row = cwassistant::desktop::cwSymbolRow(
+      QVariantList{keyed_channel}, 101, 200.0, 1'200.0, -110.0, -40.0);
+  if (std::any_of(gap_row.cbegin(), gap_row.cend(),
+                  [](const float value) { return value > -100.0F; })) {
+    return 14;
   }
   TestableSpectrumWaterfallItem item;
   item.setWidth(960.0);

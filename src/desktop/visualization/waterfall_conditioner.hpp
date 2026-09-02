@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QVariantList>
 #include <QVector>
 
 namespace cwassistant::desktop {
@@ -12,7 +13,6 @@ class WaterfallConditioner final {
  public:
   void reset() noexcept;
   [[nodiscard]] QVector<float> process(const QVector<float>& bins,
-                                       bool symbols_mode,
                                        bool noise_suppression,
                                        double noise_margin_db,
                                        double lower_display_db,
@@ -23,5 +23,14 @@ class WaterfallConditioner final {
  private:
   QVector<float> baseline_db_;
 };
+
+// Builds the deliberately sparse CW-symbol view from verified per-channel
+// keying envelopes. The result is a neutral row except at channels whose
+// carrier is currently keyed; full-passband FFT texture belongs to the Audio
+// spectrum view and is never copied into this raster.
+[[nodiscard]] QVector<float> cwSymbolRow(
+    const QVariantList& channels, qsizetype bin_count,
+    double lower_frequency_hz, double upper_frequency_hz,
+    double lower_display_db, double upper_display_db);
 
 }  // namespace cwassistant::desktop

@@ -102,8 +102,9 @@ separate five-minute frequency lease lets a later track at the same carrier
 reuse that color. Known VFO retunes shift both live tracks and these visual
 frequency identities together. The verified marker has a stable presentation
 width independent of the adaptive analysis filter, so DSP width decisions do
-not resize the operator's click target. The 700 Hz guide is a rendering
-reference only and is absent from the decoder data path.
+not resize the operator's click target. Inactive retained observations render
+only an axis mark. The configurable 700 Hz receive region is represented by
+two unfilled dashed boundaries and is absent from the decoder data path.
 
 Timing acquisition is also bounded per track: nine deterministic decoders start
 at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Recent bounded element quality,
@@ -182,17 +183,19 @@ frequency resolution while increasing real dit/dah timing observations.
 The dependency-free replay/analyzer path reads bounded WAV blocks, derives its
 clock from sample indices, applies a Hann window, and publishes immutable dBFS
 spectrum snapshots with exact frequency coordinates. Each snapshot carries
-averaged bins for stable tracking/the Audio spectrum view and unaveraged bins
-for the CW symbols view. Audio produces a one-sided
+averaged bins for stable tracking/the Audio spectrum view and retains
+unaveraged bins as diagnostic acoustic evidence. Audio produces a one-sided
 spectrum; complex I/Q produces an FFT-shifted full-band spectrum. The shared
 audio path can reject frame DC, apply bounded manual or smoothed automatic
 gain, and crop published bins to an input-derived or explicit bandwidth. This same
 snapshot contract feeds the renderer and future channel detector.
 
 The operator can switch live between **Audio spectrum** (smoothed rows) and
-**CW symbols** (unaveraged, noise-gated, nearest-neighbor acoustic keying
-rows). The latter visualizes received dit/dah/gap evidence; it does not render
-or invent decoded characters and does not reset DSP state.
+**CW symbols** (verified per-channel keying envelopes drawn with
+nearest-neighbor sampling on a neutral background). The latter visualizes the
+decoder's acoustic carrier-on/carrier-off evidence; it does not render or
+invent decoded characters, does not include unverified full-passband noise,
+and does not reset DSP state.
 
 Only a functional 2D spectrum and waterfall are supported. The renderer does
 not include a 3D spectrum or decorative shader effects.

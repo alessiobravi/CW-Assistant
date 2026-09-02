@@ -259,36 +259,48 @@ ApplicationWindow {
                     }
                 }
 
-                Rectangle {
-                    // A reference pitch marker, not a detected signal: kept
-                    // to the X axis as a bold line rather than a vertical
-                    // band, so it never reads as an identified CW area and
-                    // compete with the verified-signal highlights below.
+                Item {
+                    id: cwGuideBoundaryOverlay
+                    objectName: "cwGuideBoundaryOverlay"
+                    // Two dashed boundaries describe the configured receive
+                    // region without filling it or looking like a detected
+                    // stream. Their separation is exactly the configured CW
+                    // guide width around the configured center frequency.
                     property real guideLowerHz: appSettings.cwGuideCenterHz
                                                 - 0.5 * appSettings.cwGuideWidthHz
                     property real guideUpperHz: appSettings.cwGuideCenterHz
                                                 + 0.5 * appSettings.cwGuideWidthHz
-                    property real visibleLowerHz: Math.max(
-                                                     guideLowerHz,
-                                                     spectrumDisplay.lowerFrequencyHz)
-                    property real visibleUpperHz: Math.min(
-                                                     guideUpperHz,
-                                                     spectrumDisplay.upperFrequencyHz)
+                    readonly property color guideColor: "#ff7b84"
                     visible: appSettings.showCwGuide
-                             && visibleUpperHz > visibleLowerHz
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
-                    x: window.hzToX(visibleLowerHz)
-                    // Sits on the boundary between the spectrum plot and the
-                    // waterfall history (the same 0.36 split the renderer
-                    // uses, see spectrum_waterfall_item.cpp), not at the very
-                    // bottom of the waterfall — that boundary line is where
-                    // the operator actually reads frequency against traces.
-                    y: spectrumDisplay.y + spectrumDisplay.height * 0.36 - 1
-                    width: window.hzToX(visibleUpperHz) - window.hzToX(visibleLowerHz)
-                    height: 3
-                    color: "#ff7b84"
+                    anchors.fill: spectrumDisplay
                     z: 3
+
+                    Repeater {
+                        model: [cwGuideBoundaryOverlay.guideLowerHz,
+                                cwGuideBoundaryOverlay.guideUpperHz]
+                        delegate: Item {
+                            required property var modelData
+                            property real boundaryHz: Number(modelData)
+                            visible: boundaryHz >= spectrumDisplay.lowerFrequencyHz
+                                     && boundaryHz <= spectrumDisplay.upperFrequencyHz
+                            x: window.hzToX(boundaryHz) - spectrumDisplay.x - 1
+                            width: 2
+                            height: cwGuideBoundaryOverlay.height
+
+                            Repeater {
+                                model: Math.ceil(parent.height / 12)
+                                delegate: Rectangle {
+                                    required property int index
+                                    y: index * 12
+                                    width: 2
+                                    height: 6
+                                    color: cwGuideBoundaryOverlay.guideColor
+                                }
+                            }
+                        }
+                    }
                 }
                 Repeater {
                     model: replayController.decoderChannels
@@ -319,16 +331,28 @@ ApplicationWindow {
                         Rectangle {
                             anchors.fill: parent
                             color: modelData.color
-                            opacity: modelData.active ? 0.28 : 0.12
+                            opacity: modelData.active ? 0.28 : 0.0
                             border.color: modelData.color
-                            border.width: 1
+                            border.width: modelData.active ? 1 : 0
                         }
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: modelData.keyDown ? 3 : 1
                             height: parent.height
                             color: modelData.color
-                            opacity: modelData.active ? 0.9 : 0.45
+                            visible: modelData.active
+                            opacity: 0.9
+                        }
+                        Rectangle {
+                            // A retained but inactive stream leaves the plot
+                            // clear and keeps only a short identity-colored
+                            // mark on the frequency axis.
+                            visible: !modelData.active
+                            y: parent.height * 0.36 - 1
+                            width: parent.width
+                            height: 3
+                            color: modelData.color
+                            opacity: 0.9
                         }
                         Label {
                             anchors.left: parent.horizontalCenter
@@ -340,8 +364,22 @@ ApplicationWindow {
                                    ? modelData.callsign + "  •  " : "")
                                   + modelData.frequencyLabel
                             color: modelData.color
-                            font.pixelSize: 10
+                            font.pixelSize: channelHitArea.containsMouse ? 18 : 13
                             font.weight: Font.DemiBold
+                            leftPadding: 4
+                            rightPadding: 4
+                            topPadding: 2
+                            bottomPadding: 2
+                            z: 2
+                            background: Rectangle {
+                                color: "#e6091018"
+                                border.color: modelData.color
+                                border.width: channelHitArea.containsMouse ? 1 : 0
+                                radius: 3
+                            }
+                            Behavior on font.pixelSize {
+                                NumberAnimation { duration: 90 }
+                            }
                         }
                         MouseArea {
                             id: channelHitArea
@@ -488,42 +526,49 @@ ApplicationWindow {
                             Label { text: "Hz"; visible: !appSettings.audioAutomaticBandwidth }
                             }
                         }
-                        ScrollView {
+                        GridLayout {
+                            id: displayControls
                             Layout.fillWidth: true
-                            implicitHeight: displayControls.implicitHeight + 4
-                            contentWidth: displayControls.implicitWidth
-                            contentHeight: displayControls.implicitHeight
-                            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AlwaysOff }
-                            ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AsNeeded }
-                            RowLayout {
-                                id: displayControls
-                                spacing: 8
-                            Label { text: "View" }
-                            ComboBox {
-                                model: ["Audio spectrum", "CW symbols"]
-                                currentIndex: appSettings.spectrumDisplayMode
-                                onActivated: appSettings.spectrumDisplayMode = currentIndex
+                            columns: width >= 1200 ? 6 : 4
+                            columnSpacing: 14
+                            rowSpacing: 4
+
+                            ColumnLayout {
+                                Label { text: "View"; font.pixelSize: 11 }
+                                ComboBox {
+                                    Layout.preferredWidth: 150
+                                    model: ["Audio spectrum", "CW symbols"]
+                                    currentIndex: appSettings.spectrumDisplayMode
+                                    onActivated: appSettings.spectrumDisplayMode = currentIndex
+                                }
                             }
-                            Label { text: "FPS" }
-                            SpinBox {
-                                from: 10
-                                to: 120
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "FPS"
+                                from: 10; to: 120; stepSize: 1
                                 value: appSettings.targetFps
-                                onValueModified: appSettings.targetFps = value
+                                onMoved: value => appSettings.targetFps = Math.round(value)
                             }
-                            Label { text: "Lines/s" }
-                            SpinBox {
-                                from: 1
-                                to: 120
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "Lines / second"
+                                from: 1; to: 120; stepSize: 1
                                 value: appSettings.waterfallRate
-                                onValueModified: appSettings.waterfallRate = value
+                                onMoved: value => appSettings.waterfallRate = Math.round(value)
                             }
-                            Label { text: "Avg" }
-                            SpinBox {
-                                from: 1
-                                to: 32
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "Averaging"
+                                from: 1; to: 32; stepSize: 1
                                 value: appSettings.averagingFrames
-                                onValueModified: appSettings.averagingFrames = value
+                                onMoved: value => appSettings.averagingFrames = Math.round(value)
+                            }
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "History (seconds)"
+                                from: 5; to: 30; stepSize: 1
+                                value: appSettings.waterfallTimeSpanSeconds
+                                onMoved: value => appSettings.waterfallTimeSpanSeconds = Math.round(value)
                             }
                             CheckBox {
                                 objectName: "liveAutomaticLevelsCheck"
@@ -531,82 +576,74 @@ ApplicationWindow {
                                 checked: appSettings.automaticRange
                                 onToggled: appSettings.automaticRange = checked
                             }
-                            Label { text: "Span"; visible: appSettings.automaticRange }
-                            SpinBox {
-                                editable: true
-                                from: 30
-                                to: 100
-                                value: Math.round(appSettings.automaticRangeSpanDb)
+                            LabeledSlider {
+                                Layout.fillWidth: true
                                 visible: appSettings.automaticRange
-                                onValueModified: appSettings.automaticRangeSpanDb = value
+                                caption: "Automatic span (dB)"
+                                from: 30; to: 100; stepSize: 1
+                                value: appSettings.automaticRangeSpanDb
+                                onMoved: value => appSettings.automaticRangeSpanDb = value
                             }
-                            Label { text: "Floor"; visible: !appSettings.automaticRange }
-                            SpinBox {
-                                editable: true
-                                from: -200
-                                to: 40
-                                value: Math.round(appSettings.lowerBoundDb)
+                            LabeledSlider {
+                                Layout.fillWidth: true
                                 visible: !appSettings.automaticRange
-                                onValueModified: appSettings.lowerBoundDb = value
+                                caption: "Floor (dBFS)"
+                                from: -200; to: 40; stepSize: 1
+                                value: appSettings.lowerBoundDb
+                                onMoved: value => appSettings.lowerBoundDb = value
                             }
-                            Label { text: "Ceiling"; visible: !appSettings.automaticRange }
-                            SpinBox {
-                                editable: true
-                                from: -190
-                                to: 50
-                                value: Math.round(appSettings.upperBoundDb)
+                            LabeledSlider {
+                                Layout.fillWidth: true
                                 visible: !appSettings.automaticRange
-                                onValueModified: appSettings.upperBoundDb = value
+                                caption: "Ceiling (dBFS)"
+                                from: -190; to: 50; stepSize: 1
+                                value: appSettings.upperBoundDb
+                                onMoved: value => appSettings.upperBoundDb = value
                             }
-                            Label { text: "History" }
-                            SpinBox {
-                                editable: true
-                                from: 5
-                                to: 30
-                                value: appSettings.waterfallTimeSpanSeconds
-                                onValueModified: appSettings.waterfallTimeSpanSeconds = value
-                            }
-                            Label { text: "seconds"; color: "#8290a0" }
                             CheckBox {
                                 objectName: "liveCwGuideCheck"
-                                text: "Visual guide"
+                                text: "CW boundaries"
                                 checked: appSettings.showCwGuide
                                 onToggled: appSettings.showCwGuide = checked
                             }
-                            Label { text: "Tone"; enabled: appSettings.showCwGuide }
-                            SpinBox {
-                                editable: true
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "CW center (Hz)"
                                 from: 0
-                                to: 96000
-                                value: Math.round(appSettings.cwGuideCenterHz)
+                                to: Math.max(3000, spectrumDisplay.upperFrequencyHz)
+                                stepSize: 10
+                                value: appSettings.cwGuideCenterHz
                                 enabled: appSettings.showCwGuide
-                                onValueModified: appSettings.cwGuideCenterHz = value
+                                onMoved: value => appSettings.cwGuideCenterHz = value
                             }
-                            Label { text: "Width"; enabled: appSettings.showCwGuide }
-                            SpinBox {
-                                editable: true
-                                from: 10
-                                to: 5000
-                                value: Math.round(appSettings.cwGuideWidthHz)
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "CW width (Hz)"
+                                from: 10; to: 5000; stepSize: 10
+                                value: appSettings.cwGuideWidthHz
                                 enabled: appSettings.showCwGuide
-                                onValueModified: appSettings.cwGuideWidthHz = value
+                                onMoved: value => appSettings.cwGuideWidthHz = value
                             }
                             CheckBox {
                                 objectName: "liveNoiseSuppressionCheck"
-                                text: "Suppress noise"
+                                text: "Suppress audio noise"
                                 checked: appSettings.waterfallNoiseSuppression
+                                enabled: appSettings.spectrumDisplayMode === 0
                                 onToggled: appSettings.waterfallNoiseSuppression = checked
                             }
-                            Label { text: "Margin" }
-                            SpinBox {
-                                editable: true
-                                from: 0
-                                to: 30
-                                value: Math.round(appSettings.waterfallNoiseMarginDb)
-                                enabled: appSettings.waterfallNoiseSuppression
-                                onValueModified: appSettings.waterfallNoiseMarginDb = value
+                            LabeledSlider {
+                                Layout.fillWidth: true
+                                caption: "Audio margin (dB)"
+                                from: 0; to: 30; stepSize: 1
+                                value: appSettings.waterfallNoiseMarginDb
+                                enabled: appSettings.spectrumDisplayMode === 0
+                                         && appSettings.waterfallNoiseSuppression
+                                onMoved: value => appSettings.waterfallNoiseMarginDb = value
                             }
-                            Label { text: "dB  •  Noise " + spectrumDisplay.estimatedNoiseFloorDb.toFixed(0) + " dBFS"; color: "#8290a0" }
+                            Label {
+                                text: "Noise " + spectrumDisplay.estimatedNoiseFloorDb.toFixed(0)
+                                      + " dBFS"
+                                color: "#8290a0"
                             }
                         }
                     }

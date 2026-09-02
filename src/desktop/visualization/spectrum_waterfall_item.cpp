@@ -407,13 +407,20 @@ void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
 
 QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
     const QVector<float>& bins) {
+  if (display_mode_ == 1) {
+    const auto* replay = qobject_cast<ReplayController*>(source_);
+    return cwSymbolRow(
+        replay == nullptr ? QVariantList{} : replay->decoderChannels(),
+        bins.size(), lower_frequency_hz_, upper_frequency_hz_,
+        effective_lower_bound_db_, effective_upper_bound_db_);
+  }
   if (!noise_floor_initialized_) return bins;
   const double bin_width_hz = bins.size() > 1
       ? (upper_frequency_hz_ - lower_frequency_hz_) /
             static_cast<double>(bins.size() - 1)
       : 1.0;
   return conditioner_.process(
-      bins, display_mode_ == 1, noise_suppression_, noise_margin_db_,
+      bins, noise_suppression_, noise_margin_db_,
       effective_lower_bound_db_, effective_upper_bound_db_, bin_width_hz,
       estimated_noise_floor_db_);
 }

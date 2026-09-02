@@ -153,6 +153,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("liveNoiseSuppressionCheck"));
       auto* live_cw_guide_check = root_object->findChild<QQuickItem*>(
           QStringLiteral("liveCwGuideCheck"));
+      auto* cw_guide_boundaries = root_object->findChild<QQuickItem*>(
+          QStringLiteral("cwGuideBoundaryOverlay"));
       auto* decoder_channel_list = root_object->findChild<QQuickItem*>(
           QStringLiteral("decoderChannelList"));
       auto* about_version_label = root_object->findChild<QQuickItem*>(
@@ -169,7 +171,7 @@ int main(int argc, char* argv[]) {
           dc_rejection_check == nullptr || automatic_gain_check == nullptr ||
           automatic_bandwidth_check == nullptr ||
           live_levels_check == nullptr || live_noise_check == nullptr ||
-          live_cw_guide_check == nullptr ||
+          live_cw_guide_check == nullptr || cw_guide_boundaries == nullptr ||
           decoder_channel_list == nullptr ||
           about_version_label == nullptr ||
           about_version_label->property("text").toString() !=

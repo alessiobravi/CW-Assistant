@@ -12,8 +12,8 @@ hypothesis with safe-boundary winner selection, saturated-bank replacement,
 track identity jump rejection, adaptive key-envelope normalization, bounded
 coherence, and verification enter/exit hysteresis. Added a native private-WAV
 replay audit and selectable profile-persisted Audio spectrum/CW symbols views;
-the latter displays unaveraged acoustic keying evidence rather than inventing
-decoded glyphs. CW-001 and DSP-002 remain active for the full semi-Markov path,
+the latter displays verified-channel acoustic keying envelopes on a neutral
+background rather than inventing decoded glyphs. CW-001 and DSP-002 remain active for the full semi-Markov path,
 held-out calibration, and legally reusable real corpus.
 Last reviewed: 2026-09-02 — corrected the macOS bundle's required identity
 metadata and final resource-sealing order after a clean downloaded ARM64 build
@@ -30,6 +30,10 @@ Last reviewed: 2026-09-02 — anchored the five-minute color lease to the
 frequency that established it so a stale verified tracker cannot walk the
 remembered identity through nearby noise. Stabilized verified-marker geometry
 at a fixed presentation width; the adaptive decoder filter remains diagnostic.
+Inactive observations now reduce to an axis mark, stream labels enlarge on
+hover, and the CW receive guide uses two unfilled dashed width boundaries.
+Display values now use labeled sliders in a responsive multi-row layout rather
+than an overflowing row of number boxes.
 Last reviewed: 2026-09-02 — added independent bounded 1:3 mark / 1:3:7 gap
 cadence fitting and guarded decoder reacquisition for a cadence-confirmed
 carrier stuck in implausible unverified text. Replaced global waterfall gating
@@ -86,8 +90,8 @@ manifest, operator-confirmed download/checksum-verify/install/cleanup) per
 the documented safety policy; no implementation yet.
 Last reviewed: 2026-09-01 — swapped which spectrum overlay reads as an
 "area" to remove visual ambiguity: the CW
-pitch guide is now a bold line on the frequency axis only rather than a
-vertical band, and a verified CW track is now identified primarily by a
+pitch guide is now an unfilled pair of dashed vertical width boundaries, and
+an active verified CW track is identified primarily by a
 stable-width colored vertical area, with the keying-state line drawn thinner
 on top. The adaptive filter width remains available as decoder diagnostics.
 Last reviewed: 2026-09-01 — renamed the decoder panel from "Full-spectrum CW
@@ -254,8 +258,8 @@ translucent band rather than two signal-like lines.
 | UI-002 | active | Implement modular 2D scene-graph spectrum/waterfall | Public Qt scene-graph line/grid geometry and a backend-native, valid-texture-only waterfall image node render real replay FFT frames with bounded history; empty startup/reset regression tests pass; add palette shader/ring uploads, peak hold, overlays, metrics, and performance validation. |
 | UI-003 | active | Add clickable channel/callsign overlays | A stable-width colored area is the primary identification cue for each verified CW track, independent of adaptive decoder-filter changes, with a thinner keying-state line on top; confirmed callsign/frequency text belongs in the upper spectrum rather than over waterfall history. Marker click opens/reopens a session card, close leaves DSP active, and drag reorders cards. Pointer frequency movement is **not implemented yet**: add trace-area hit testing, normal-click local CW-slice centering, and a separate capability-checked, operator-confirmed radio RX retune action. |
 | UI-004 | todo | Add render-backend diagnostics and fallback tests | Active API, frame/upload metrics, and fallback reason are visible; replay smoke tests cover shader and CPU fallback paths. |
-| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, constant 5–30 second history, range bounds/mode, stable automatic span, waterfall noise suppression/margin, averaging, grid, red CW center/width guide, and seven-point frequency scale are configurable and persisted. A live profile-persisted selector switches between averaged Audio spectrum and a crisp CW symbols raster built from unaveraged acoustic FFT rows without resetting decoding. Both suppression paths use a slow per-bin baseline plus local side references; symbols add a stronger contrast floor and adjacent-bin narrow-ridge gate so broad texture and isolated noise stay dark while keyed energy remains visible. Startup, resize, and timestamp gaps cannot collapse or stretch time, and overlapping FFT hops provide real timing samples at the selected line rate; immediate Signal/Display controls sit below the spectrum with explicit profile saving; peak hold, time ticks, palette selection, zoom, and pan remain. |
-| UI-006 | done | Distinguish the CW guide from detected traces | The CW pitch guide is a bold line sitting on the boundary between the spectrum plot and the waterfall history (not a vertical band, and not at the very bottom of the waterfall), so it can no longer be mistaken for an identified signal and stays where frequency is actually read against traces; verified signal traces are the ones shown as a colored vertical area, remaining independently colored and clickable. |
+| UI-005 | active | Model configurable visualization | FPS, waterfall line rate, constant 5–30 second history, range bounds/mode, stable automatic span, waterfall noise suppression/margin, averaging, grid, red CW center/width guide, and seven-point frequency scale are configurable and persisted. A live profile-persisted selector switches between averaged Audio spectrum and a crisp CW symbols raster without resetting decoding. Audio suppression uses a slow per-bin baseline plus local side references; CW symbols instead draws only active verified channels' keying envelopes on a neutral background, leaving full-passband and unverified noise in Audio spectrum. Startup, resize, and timestamp gaps cannot collapse or stretch time, and overlapping FFT hops provide real timing samples at the selected line rate; immediate Signal/Display controls sit below the spectrum with explicit profile saving; peak hold, time ticks, palette selection, zoom, and pan remain. |
+| UI-006 | done | Distinguish the CW guide from detected traces | The CW pitch guide is an unfilled pair of dashed vertical boundaries at the configured center ± half-width, so it cannot be mistaken for an identified signal; active verified traces use a colored vertical area, while inactive retained traces reduce to a short identity-color axis mark. Stream labels are larger and magnify again on hover; every trace remains independently colored and clickable. |
 | CALL-002 | todo | Add delayed callsign detail card | Hover delay and press-hold show live signal/context plus asynchronous log and prefix enrichment without initiating QSO. |
 | CALL-003 | active | Persist and enforce exact callsign ignore list | Core normalization and TX denial are implemented; persistence and filtering in display/queue models remain. |
 | OBS-001 | active | Add pipeline telemetry | Pre-verification candidate/Morse-likely counts and a rejection-reason tally are exposed as an opt-in, once-per-second "Diagnostics" toggle (off by default) in the decoder panel after an always-visible version proved too flickering; overruns, sequence gaps, queue depths, DSP latency, and dropped display frames remain to add. |

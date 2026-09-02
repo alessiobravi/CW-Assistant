@@ -76,21 +76,24 @@ to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; rais
 it only when a steadier but less time-sharp display is more useful.
 
 For timing inspection, select **CW symbols**. Unlike **Audio spectrum**, this
-is intentionally sparse: it requires stronger local contrast and an
-adjacent-bin narrow ridge before drawing a high-contrast mark. Isolated FFT
-speckles remain dark, while carrier-on rows form sharp dit/dah segments.
-Increase **Margin** if receiver noise still appears; lower it cautiously for a
-weak carrier.
+is intentionally sparse: only active, verified channels' carrier-on states are
+drawn as high-contrast marks on a neutral background. Carrier-off rows form
+blank gaps, and full-passband/unverified noise remains exclusively in Audio
+spectrum. This makes dit/dah timing readable rather than presenting a second
+noise spectrogram.
 
-Enable **Visual guide** to draw a bold red line marking the desired receive
-tone, sitting exactly on the boundary between the spectrum plot and the
-waterfall history — where frequency is actually read against traces. The
-default is centered at 700 Hz with a 200 Hz width; both values update in
-real time and are stored per profile. It is deliberately kept to that
-boundary line rather than drawn as a vertical band, so it can never be
-mistaken for an identified signal — that treatment is reserved for verified
-CW tracks (see below). This guide is visual only: it does not select a
-decoder, limit decoding, change receiver tuning, or
+The Display controls are grouped into multiple responsive rows. Drag the
+labeled sliders for FPS, line rate, averaging, history, levels, CW center/width,
+and Audio-spectrum noise margin; each label shows the current numeric value.
+The full Settings → Display page offers the same slider interaction.
+
+Enable **Visual guide** to draw two dashed red boundaries around the desired
+receive region. Their positions are exactly the configured center minus/plus
+half the configured CW width. The default is centered at 700 Hz with a 200 Hz
+width; both values update in real time and are stored per profile. The region
+has no fill, so it cannot be mistaken for an identified signal — that treatment
+is reserved for active verified CW tracks (see below). This guide is visual
+only: it does not select a decoder, limit decoding, change receiver tuning, or
 change decoder bandwidth.
 
 Pointer tuning is planned, not active in this build. The defined behavior is:
@@ -128,8 +131,11 @@ adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
 default 30 seconds, configurable up to 300 seconds) so normal word and message
-gaps preserve identity. Silence makes the marker dim rather than invalidating
-the verified observation. If the marker eventually expires, its carrier keeps
+gaps preserve identity. Silence retains rather than invalidates the verified
+observation. The filled area and center line clear
+while inactive, leaving a short horizontal identity-color mark on the frequency
+axis. The larger stream label magnifies further while the marker is hovered.
+If the marker eventually expires, its carrier keeps
 the same reserved color for at least five minutes and reuses it when recognized
 again; a new track ID therefore does not make the same frequency look like a
 different station merely because one pass ended.
@@ -229,8 +235,9 @@ capture folder with anyone.
 2. Review the detected filename, sample rate, and duration.
 3. Select **Play**. The upper trace is the current Hann-windowed FFT; the lower
    panel is the scrolling waterfall. Select **Audio spectrum** for smoothed
-   spectral history or **CW symbols** for crisp, unaveraged acoustic dit/dah/gap
-   rows. The symbols view is received energy, not reconstructed decoder text.
+   spectral history or **CW symbols** for crisp verified-channel acoustic
+   dit/dah/gap rows on a neutral background. The symbols view is keyed envelope
+   evidence, not reconstructed decoder text.
 4. Use **Pause** to retain the current display or **Stop** to return to the
    beginning. Opening another file clears the previous display.
 

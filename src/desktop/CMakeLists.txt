@@ -61,6 +61,7 @@ if(APPLE)
 endif()
 
 set_source_files_properties(qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
+set_source_files_properties(qml/LabeledSlider.qml PROPERTIES QT_RESOURCE_ALIAS LabeledSlider.qml)
 set_source_files_properties(qml/ProfileChooser.qml PROPERTIES QT_RESOURCE_ALIAS ProfileChooser.qml)
 set_source_files_properties(qml/SetupWizard.qml PROPERTIES QT_RESOURCE_ALIAS SetupWizard.qml)
 set_source_files_properties(qml/SettingsPane.qml PROPERTIES QT_RESOURCE_ALIAS SettingsPane.qml)
@@ -70,6 +71,7 @@ qt_add_qml_module(cw-assistant-desktop
   VERSION 1.0
   QML_FILES
     qml/Main.qml
+    qml/LabeledSlider.qml
     qml/ProfileChooser.qml
     qml/SetupWizard.qml
     qml/SettingsPane.qml

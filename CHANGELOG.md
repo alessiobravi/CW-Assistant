@@ -10,9 +10,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 - The spectrum panel now offers two profile-persisted live views: **Audio
   spectrum** keeps the smoothed FFT waterfall, while **CW symbols** renders
-  unaveraged acoustic FFT rows with per-frequency/local-side noise conditioning
-  and nearest-neighbor texture sampling so dit, dah, and gap edges remain
-  visible without promoting broadband receiver texture into false marks. Both views use
+  only verified channels' keyed/unkeyed acoustic envelopes on a neutral
+  background with nearest-neighbor sampling, so dit, dah, and gap edges remain
+  visible without mixing full-passband receiver texture into the raster. Both views use
   the same live/replay stream and can be switched without resetting decoder
   state; the symbols view is raw keying evidence, not reconstructed text.
 - Added the native `cwa_capture_replay` audit executable. It replays one or
@@ -99,6 +99,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Verified-stream areas now use a stable 120 Hz presentation width instead of
   following the decoder's rapidly adaptive analysis filter, eliminating size
   flicker while the actual 60/120/240 Hz filter remains visible in diagnostics.
+  Inactive retained streams leave the plot empty except for a short horizontal
+  identity-color mark on the frequency axis. Stream labels use a larger base
+  font and magnify further while their marker is hovered.
+- Display timing, level, CW-guide, noise, averaging, and retention controls now
+  use labeled sliders with live numeric readouts. The receiver workspace lays
+  them out over multiple responsive rows instead of one overflowing strip of
+  number boxes; the Settings page uses the same interaction.
 - Fixed macOS development archives being rejected as damaged: their custom
   bundle metadata no longer expands the name, executable, identifier, and icon
   to empty values, and deployment now seals the bundle only after its canonical
@@ -114,11 +121,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Fixed Audio spectrum showing the receiver passband as a bright textured
   block and CW symbols turning instantaneous broadband fluctuations into
   horizontal confetti. Waterfall suppression now uses a slow per-bin baseline
-  plus 55–180 Hz local side references, while symbols mode maps only locally
-  prominent narrowband energy to crisp marks. CW symbols now applies an
-  additional contrast floor and adjacent-bin ridge test, suppressing isolated
-  FFT/noise speckles and drawing accepted marks with a sharper high-contrast
-  edge.
+  plus 55–180 Hz local side references. CW symbols no longer thresholds the
+  full FFT at all: it draws only active verified channels' keying envelopes as
+  sharp three-bin marks against a neutral background. Unverified/passband noise
+  remains available in Audio spectrum without obscuring Morse timing.
 - Fixed transient `latest.json`, checksum, or package HTTP 404/server failures
   surfacing immediately during continuous-release replacement. Publication
   now leaves the previous manifest available while binaries/checksums are
@@ -217,12 +223,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 ### Changed
 
 - Swapped which of the two spectrum overlays reads as an "area": the CW
-  pitch guide is now a bold line on the frequency axis only (no longer a
-  vertical band spanning the spectrum height), while a verified CW track is
-  now identified primarily by a colored vertical area sized to the
-  decoder's actual narrowband filter width (60/120/240 Hz mapped to pixels)
-  rather than a fixed-width sliver, with a thinner keying-state line drawn
-  on top. The two were easy to confuse with each other when both were
+  pitch guide is now a pair of dashed vertical boundaries at the configured
+  center ± half-width (no filled band), while an active verified CW track is
+  identified primarily by a stable-width colored vertical area with a thinner
+  keying-state line drawn on top. The two were easy to confuse when both were
   drawn as bands; only the identified-signal highlight is now an area.
 
 ### Added

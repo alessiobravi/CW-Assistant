@@ -81,10 +81,14 @@ constant history seconds, and the CW frequency guide.
 
 Changes are applied immediately to active live audio and WAV replay. Select
 **Save profile** to persist them. The default 60 dB automatic span anchors the
-palette well above the measured floor. Noise suppression compares every bin
-with a slow baseline and nearby side frequencies, darkening broad receiver
+palette well above the measured floor. Audio-spectrum noise suppression
+compares every bin with a slow baseline and nearby side frequencies, darkening broad receiver
 texture while retaining locally prominent narrowband signals. Raw spectrum bins are retained
 for future detection and decoding.
+
+Numeric visualization controls are labeled sliders with live value readouts.
+The receiver workspace arranges them over multiple responsive rows, and the
+Settings page uses the same controls for precise profile editing.
 
 **Waterfall history** selects a constant 5–30 second vertical time window. The
 default is 10 seconds. **Lines / second** changes temporal sampling density, not
@@ -97,21 +101,19 @@ for the sharpest element boundaries; higher averaging deliberately smooths time.
 
 **View** selects **Audio spectrum** or **CW symbols** and is saved per profile.
 Audio spectrum uses the configured FFT power averaging. CW symbols uses the
-same FFT timestamps but draws unaveraged, locally conditioned rows with crisp
-pixels so carrier-on intervals appear as dits/dahs and carrier-off intervals
-as gaps.
-Only narrow energy that exceeds both its per-frequency baseline and its
-55–180 Hz side references, a stronger symbol-mode contrast floor, and an
-adjacent-bin ridge check is promoted as a mark. Raising **Margin** rejects more
-weak texture but can hide weak CW. It is acoustic evidence rather than decoded
-characters. Switching is immediate and does not clear tracking, timing
-hypotheses, or decoded sessions.
+same timestamps but draws only active verified channels' carrier-on states as
+sharp three-bin marks on a neutral background; carrier-off intervals remain
+blank gaps. Full-passband and unverified receiver noise is intentionally absent
+and remains available in Audio spectrum. **Margin** controls Audio spectrum
+suppression, not this keyed raster. CW symbols is acoustic keying evidence
+rather than decoded characters. Switching is immediate and does not clear
+tracking, timing hypotheses, or decoded sessions.
 
-**Visual guide** draws a bold red line on the boundary between the spectrum
-plot and the waterfall history, not a band over the spectrum and history,
-so it is never mistaken for an identified signal (verified CW tracks are
-the ones shown as a colored area). It defaults to a 700 Hz center and
-200 Hz width and can be adjusted to match the receiver's preferred sidetone.
+**Visual guide** draws two dashed red vertical boundaries at the configured
+center minus/plus half-width, with no fill, so it is never mistaken for an
+identified signal (active verified CW tracks are the ones shown as a colored
+area). It defaults to a 700 Hz center and 200 Hz width and can be adjusted to
+match the receiver's preferred sidetone and CW passband.
 It does not select a decoder, limit channel detection, change decoder
 bandwidth, or retune the radio. Seven X-axis labels show the actual
 displayed audio or RF frequency.
@@ -135,6 +137,9 @@ then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 The verified stream marker also remains at a stable 120 Hz presentation width;
 adaptive filter changes are diagnostic and do not resize its clickable area.
+When retained but inactive, its filled area clears and only a short horizontal
+identity-color mark remains on the frequency axis. Its frequency/callsign label
+uses a larger font and magnifies again on hover.
 Up to 24 tracks are retained; nearby peaks inside the initial 45 Hz separation
 are treated as one track, numerical peaks more than 96 dB below the strongest
 current bin are excluded, and decoded tracks remain visible for the
@@ -260,7 +265,7 @@ can transmit through this path in the current build.
 ## Display page
 
 - **Spectrum view:** profile-persisted **Audio spectrum** (smoothed) or **CW
-  symbols** (unaveraged acoustic keying raster).
+  symbols** (verified-channel keying raster on a neutral background).
 - **Target FPS:** UI redraw target from 10 to 120.
 - **Waterfall lines/second:** independent scroll/update rate from 1 to 120.
 - **Automatic range:** adapts the visible dBFS range using smoothed robust
