@@ -73,6 +73,11 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- The hosted Windows MSI contract check now normalizes readable multiline
+  table queries into the single-line SQL form required by Windows Installer,
+  so verification reaches the installer assertions instead of failing while
+  opening the first query.
+
 - Verified stream markers now correct a biased initial acquisition from robust
   recent carrier evidence, then follow only sustained coherent motion through
   deadband, dispersion/drift, slew-rate, and immutable-origin bounds. Identity,

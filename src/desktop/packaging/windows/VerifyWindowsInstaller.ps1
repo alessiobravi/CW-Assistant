@@ -23,7 +23,11 @@ function Read-Record {
         [Parameter(Mandatory = $true)] [string] $Query
     )
 
-    $view = $Database.OpenView($Query)
+    # Windows Installer accepts a deliberately small SQL dialect. In
+    # particular, OpenView rejects embedded newlines even though PowerShell
+    # here-strings make multi-clause queries much easier to audit below.
+    $sql = ($Query -replace '\s+', ' ').Trim()
+    $view = $Database.OpenView($sql)
     try {
         $view.Execute()
         return $view.Fetch()
