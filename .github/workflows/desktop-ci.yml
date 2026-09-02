@@ -108,7 +108,10 @@ jobs:
         run: cmake --build build --config Release --parallel 2>&1 | tee build-output.log
       - name: Run dependency-free tests
         id: test
-        run: ctest --test-dir build -C Release --output-on-failure
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build -C Release --output-on-failure 2>&1 | tee test-output.log
       - name: Stage self-contained application
         id: install
         run: cmake --install build --config Release --prefix stage
@@ -256,6 +259,12 @@ jobs:
             build_log="$(tail -n 35 build-output.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
             if [[ -n "${build_log}" ]]; then
               status_message="${status_message}"$'\n'"build_log=${build_log}"
+            fi
+          fi
+          if [[ "${CWA_TEST_RESULT}" == "failure" ]]; then
+            test_log="$(tail -n 45 test-output.log 2>/dev/null | tr '\r\n' '  ' | tail -c 4000)"
+            if [[ -n "${test_log}" ]]; then
+              status_message="${status_message}"$'\n'"test_log=${test_log}"
             fi
           fi
           git config user.name "CW Assistant CI"

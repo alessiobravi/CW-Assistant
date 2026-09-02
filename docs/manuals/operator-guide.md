@@ -227,6 +227,10 @@ the **Author Website** button opens [https://iu0lfq.it/](https://iu0lfq.it/) in
 the system browser. The application, taskbar/dock entry, and installed shortcuts
 use the same Morse-key dot/dash mark.
 
+Continuous downloads are published only after every supported-platform build,
+test, staged-layout check, and native startup smoke test succeeds. A failed
+matrix does not replace the last fully verified download.
+
 The displayed version is the same `major.minor.revision` value embedded in the
 native installer/package and application metadata. Continuous builds use the
 GitHub workflow run number as the revision, so a hosted build may show, for

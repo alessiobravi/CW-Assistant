@@ -80,6 +80,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- SSH-queryable hosted job markers now retain the tail of `ctest` output when
+  the test stage fails, while preserving pipeline failure through `pipefail`;
+  cross-platform failures can therefore be diagnosed without privileged API
+  access instead of exposing only the word `failure`.
 - Fixed the bounded 24-track bank silently discarding every later carrier once
   full. Strong new candidates can now replace the weakest unmatched
   unverified occupancy, evidence decays while unmatched, and decoded or

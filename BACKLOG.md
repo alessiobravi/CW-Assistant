@@ -15,6 +15,10 @@ replay audit and selectable profile-persisted Audio spectrum/CW symbols views;
 the latter displays unaveraged acoustic keying evidence rather than inventing
 decoded glyphs. CW-001 and DSP-002 remain active for the full semi-Markov path,
 held-out calibration, and legally reusable real corpus.
+Last reviewed: 2026-09-02 — extended the SSH-queryable desktop CI status tag
+to include bounded `ctest --output-on-failure` diagnostics after the first
+hosted run compiled on both macOS architectures but failed in the test stage;
+the rerun retains the same implementation title and still fails closed.
 Last reviewed: 2026-09-01 — fixed `CwChannelBank::shiftTrackedFrequencies()`
 leaving a nonsensical negative-frequency track behind when a VFO retune (or
 several accumulating) carried a signal's audio frequency past 0 Hz, found
