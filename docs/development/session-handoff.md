@@ -427,6 +427,14 @@ cmake --build --preset dev
 ctest --preset dev --output-on-failure
 ```
 
+On the current maintainer workstation, an isolated Qt/CMake test toolchain may
+survive under `/private/tmp/cwa-qt`, `/private/tmp/cwa-python`, and
+`/private/tmp/cwa-build` even when `cmake` is absent from `PATH`. Inspect those
+project-scoped locations before declaring desktop tests unavailable. If the
+temporary Python launcher reports a missing `cmake` module, invoke the retained
+native binaries under `cwa-python/cmake/data/bin/` directly; do not reinstall or
+change project dependencies merely to repair an ephemeral wrapper.
+
 Dependency-free fallback when CMake is unavailable:
 
 ```sh
