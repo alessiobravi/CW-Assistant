@@ -1,4 +1,5 @@
 #include <QCoreApplication>
+#include <QDebug>
 #include <QFile>
 #include <QMetaObject>
 #include <QTemporaryDir>
@@ -35,6 +36,8 @@ int main(int argc, char* argv[]) {
                               frame.upper_frequency_hz == 24'000.0);
       });
   QString capture_base_path;
+  QVariantList last_channels;
+  QVariantMap last_diagnostics;
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::debugCaptureStateChanged,
       &application,
@@ -43,7 +46,9 @@ int main(int argc, char* argv[]) {
 
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::decoderProduced,
-      &application, [&application, worker](const QVariantList& channels) {
+      &application, [&application, worker, &last_channels](
+                        const QVariantList& channels) {
+        last_channels = channels;
         const auto channel = channels.isEmpty()
             ? QVariantMap{}
             : channels.front().toMap();
@@ -68,6 +73,11 @@ int main(int argc, char* argv[]) {
                                     Qt::BlockingQueuedConnection);
           application.exit(0);
         }
+      });
+  QObject::connect(
+      worker, &cwassistant::desktop::LiveAudioDspWorker::diagnosticsProduced,
+      &application, [&last_diagnostics](const QVariantMap& diagnostics) {
+        last_diagnostics = diagnostics;
       });
 
   constexpr double sample_rate_hz = 48'000.0;
@@ -147,7 +157,13 @@ int main(int argc, char* argv[]) {
   });
   feeder.start();
 
-  QTimer::singleShot(10'000, &application, [&application] {
+  QTimer::singleShot(10'000, &application,
+                     [&application, &last_channels, &last_diagnostics] {
+    qCritical().noquote()
+        << "live pipeline timeout: validFrame="
+        << application.property("validFrame").toBool()
+        << "channels=" << last_channels
+        << "diagnostics=" << last_diagnostics;
     application.exit(3);
   });
   const int result = application.exec();

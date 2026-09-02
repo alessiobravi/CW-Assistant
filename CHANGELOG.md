@@ -89,6 +89,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   instantaneous live spectrum bins, and retains a bounded 10-second internal
   failure deadline (15-second outer CTest limit). This corrects the obsolete
   two-repetition/5-second timeout without weakening decoder assertions.
+- Live-pipeline test timeouts now print the final frame-valid flag, published
+  channel model, and verification summary, making a fail-closed hosted result
+  actionable when the expected verified channel is absent.
 - Fixed the bounded 24-track bank silently discarding every later carrier once
   full. Strong new candidates can now replace the weakest unmatched
   unverified occupancy, evidence decays while unmatched, and decoded or

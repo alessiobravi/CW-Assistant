@@ -166,6 +166,9 @@ set remains valid for roughly half a second. Brief fades then receive a longer
 hold before removal, reducing both transient false markers and visible flapping.
 An extremely short fragment can therefore end while still provisional; this is
 an abstention, not evidence that its carrier was absent from the symbols view.
+Development builds also preserve the final verification summary when the
+hosted live-audio acceptance fixture fails, so a release is not advanced on an
+opaque or unexplained decoder result.
 
 The baseline handles letters, digits, common punctuation, selected prosigns,
 sub-bin drift tracking, and automatic filter width selection, but does not yet
