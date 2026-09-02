@@ -64,6 +64,10 @@ All notable changes to CW Assistant are recorded here. The format follows
   noise references. The bounded recent unknown-symbol allowance is 30%,
   calibrated so two uncertain characters in a short otherwise-valid segment
   do not erase a verified signal; the hard-negative corpus remains the guard.
+  The independent blended character-confidence floor is recalibrated to 0.40:
+  hosted live-pipeline evidence showed a valid 15-symbol/85-edge track with
+  passing 0.522 cadence and 0.546 pure timing was otherwise held out by the old
+  0.50 value. The separate timing gate and hard-negative corpus remain intact.
 - The VFO frequency readout is now a large, prominent display (RX in green,
   TX in yellow when split is active) with a distinct SPLIT badge, instead of
   a small single-line label — matching the visual weight of the decoder

@@ -164,6 +164,8 @@ certain.
 A colored verified marker is intentionally delayed until the complete evidence
 set remains valid for roughly half a second. Brief fades then receive a longer
 hold before removal, reducing both transient false markers and visible flapping.
+Cadence, pure timing, and blended character confidence remain separate gates;
+one strong metric cannot substitute for a failing one.
 An extremely short fragment can therefore end while still provisional; this is
 an abstention, not evidence that its carrier was absent from the symbols view.
 Development builds also preserve the final verification summary when the

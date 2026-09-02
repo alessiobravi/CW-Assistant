@@ -29,6 +29,11 @@ Last reviewed: 2026-09-02 — because the expanded live integration corpus still
 failed its internal deadline, the fixture now emits its final spectrum flag,
 channel model, and verification summary on failure so the next same-title run
 can isolate the actual gate without weakening or guessing around it.
+Last reviewed: 2026-09-02 — the captured hosted fixture state isolated the
+remaining failure to character confidence: a valid track had 15 symbols, 85
+edges, 0.522 cadence, and 0.546 independent timing but remained below the old
+0.50 blended-confidence floor. Recalibrated that independent floor to 0.40;
+the separate timing gate and full hard-negative corpus remain mandatory.
 Last reviewed: 2026-09-01 — fixed `CwChannelBank::shiftTrackedFrequencies()`
 leaving a nonsensical negative-frequency track behind when a VFO retune (or
 several accumulating) carried a signal's audio frequency past 0 Hz, found

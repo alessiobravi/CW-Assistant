@@ -117,8 +117,8 @@ spectral observations across normal key-up gaps, and exhibit at least six keyed
 transitions,
 three spacing observations, and narrowband coherence. It must then decode at
 least three known symbols with no more than 30% unknown output in the bounded
-recent evidence window and meet the
-cadence, timing, and mean-character-confidence floors before it becomes a
+recent evidence window and meet the independent cadence (0.42), pure timing
+(0.45), and blended mean-character-confidence (0.40) floors before it becomes a
 published CW track with a stable color. Each track
 maintains separate soft key evidence, timing, provisional text, stable text,
 WPM, SNR, verification/rejection reason, and bounded per-character evidence.

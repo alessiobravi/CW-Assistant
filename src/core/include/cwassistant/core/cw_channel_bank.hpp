@@ -79,7 +79,7 @@ struct CwChannelBankConfig {
   std::uint16_t minimum_cadence_observations{3};
   float minimum_verification_timing_quality{0.45F};
   float minimum_verification_cadence_quality{0.42F};
-  float minimum_character_confidence{0.50F};
+  float minimum_character_confidence{0.40F};
   // A long run of decoded text dominated by only the two single-element
   // characters (E, T) is the statistical signature of timing noise being
   // classified as Morse rather than genuine text: random on/off
