@@ -227,6 +227,13 @@ carriers may produce `?` or incorrect text. Changing the audio source or
 processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
+Treat `?` as retained acoustic uncertainty, not as a character that an online
+directory has disproved. The displayed transcript remains the receiver's raw
+stable result. When callsign alternatives are exposed in a later UI slice,
+they will appear separately with their acoustic cost and evidence provenance;
+a callbook, activity list, or cluster spot will never silently replace the raw
+text or confirm what this receiver heard.
+
 ## Debug capture
 
 When a visible signal will not decode and the on-demand **Diagnostics**

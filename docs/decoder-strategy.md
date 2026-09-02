@@ -184,7 +184,11 @@ fallback.
 
 Role inference operates on complete transmission segments and n-best decoded
 tokens; it must not concatenate every operator on a frequency into one asserted
-identity. The initial bounded state machine is:
+identity. It selects an explicit conversation profile rather than assuming all
+traffic is a contest. Profiles cover ordinary directed QSOs, general CQ,
+DX/pileup, special-event operation, beacons, and contest-specific exchanges;
+an unknown/free-text profile supplies no language prior. The following is the
+initial bounded runner/pileup state machine, not a universal grammar:
 
 1. a runner solicitation (`CQ`, optionally a contest qualifier, `DE`, a
    repeated self-callsign, or callsign followed by `UP`);
@@ -211,6 +215,16 @@ the exchange sequence is incomplete, or two simultaneous operators remain
 indistinguishable, the role stays unknown and competing calls remain visibly
 provisional. Context can rank acoustically possible hypotheses; it cannot split
 an inseparable waveform or replace incorrectly decoded dits and dahs.
+
+Each contest profile is separately versioned from its published rules and
+declares exchange fields, legal abbreviations, serial/report formats, role
+transitions, and optional operator-editable macros. Ordinary-QSO profiles allow
+open-ended name/QTH/rig/weather/conversation text and must avoid forcing it into
+a contest exchange. Suggested or automatic replies are a separate guarded
+action: exact counterpart identity and current context must be confirmed, the
+profile must explicitly enable automation, TX must be armed, the maximum-key-
+down and emergency-release paths remain active, and the operator receives a
+cancellable preview. Decoder confidence alone never triggers a reply.
 
 ## Stable text and uncertainty
 

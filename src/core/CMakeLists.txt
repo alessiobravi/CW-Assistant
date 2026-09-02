@@ -1,10 +1,13 @@
 add_library(cwa_core
   src/adif.cpp
+  src/callsign_evidence.cpp
   src/callsign_policy.cpp
   src/cat4om_protocol.cpp
   src/channel_scheduler.cpp
   src/cw_channel_bank.cpp
   src/cw_decoder.cpp
+  src/cw_event_lattice.cpp
+  src/conversation_profile.cpp
   src/frequency_plan.cpp
   src/reference_rig_profiles.cpp
   src/remote_control.cpp

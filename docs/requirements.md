@@ -13,6 +13,9 @@ The initial workflows are ordinary QSO, DX pileup, and contest. Workflows use
 editable structured panels rather than unrestricted scripts at first. A panel
 defines fields, exchange steps, macros, validation, and transitions; this makes
 operator behavior inspectable and prevents arbitrary code from controlling TX.
+Conversation profiles must be distinct: ordinary/general CW remains open-ended,
+while every contest profile versions its own rule-derived exchange grammar and
+decoding hints rather than sharing one assumed contest sequence.
 
 ## Functional requirements
 
@@ -192,6 +195,11 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Start disarmed on every launch and after every device reconnect.
 - Require operator confirmation of the exact selected callsign before the first
   transmission in a QSO.
+- Permit contest/profile macros and optional suggested or automatic replies only
+  after the active conversation profile and required exchange fields validate.
+  Automatic reply is separately enabled and armed, previews the exact message,
+  remains cancellable, and cannot bypass exact-call confirmation, maximum-key-
+  down, emergency release, or any other transmit guard.
 - Release KEY then PTT on timeout, adapter error, device removal, workflow
   failure, or emergency stop.
 - Never perform serial discovery by toggling RTS/DTR on unknown ports.

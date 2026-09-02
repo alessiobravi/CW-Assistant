@@ -2,6 +2,18 @@ add_executable(cwa_core_tests core_tests.cpp)
 target_link_libraries(cwa_core_tests PRIVATE cwa_core)
 add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 
+add_executable(cwa_callsign_evidence_tests callsign_evidence_tests.cpp)
+target_link_libraries(cwa_callsign_evidence_tests PRIVATE cwa_core)
+add_test(NAME cwa_callsign_evidence_tests COMMAND cwa_callsign_evidence_tests)
+
+add_executable(cwa_conversation_profile_tests conversation_profile_tests.cpp)
+target_link_libraries(cwa_conversation_profile_tests PRIVATE cwa_core)
+add_test(NAME cwa_conversation_profile_tests COMMAND cwa_conversation_profile_tests)
+
+add_executable(cwa_event_lattice_tests cw_event_lattice_tests.cpp)
+target_link_libraries(cwa_event_lattice_tests PRIVATE cwa_core)
+add_test(NAME cwa_event_lattice_tests COMMAND cwa_event_lattice_tests)
+
 add_executable(cwa_decoder_benchmark cw_decoder_benchmark.cpp)
 target_link_libraries(cwa_decoder_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_decoder_benchmark COMMAND cwa_decoder_benchmark)

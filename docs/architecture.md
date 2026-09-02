@@ -78,6 +78,16 @@ distinct from acoustic output. See
 [High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
 resource limits, training corpus, and benchmark gates.
 
+The first dependency-free ambiguity layer retains bounded, timestamped
+mark/gap observations and emits N-best acoustic segmentations with explicit
+unknown symbols. It has no callsign, language, provider, frequency, or QSO
+input. A separate ranker may attach capped, provenance-bearing callsign
+suggestions only to compatible acoustic alternatives; it cannot modify the raw
+span or claim that an external directory/spot proves what the local receiver
+heard. Conversation profiles are another independent core model: they describe
+neutral monitoring, ordinary free-text QSOs, or one rules-versioned contest
+exchange, but contain no decoder-to-PTT/KEY execution path.
+
 The delivered M2 baseline scans the complete processed FFT passband for local
 peaks, suppresses duplicate nearby candidates, and maintains a bounded
 independent state object for every tracked frequency. Candidate discovery uses

@@ -8,6 +8,15 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Added dependency-free decoder foundations for the next accuracy pass: a
+  bounded acoustic event lattice retains timestamped mark/gap evidence and
+  produces N-best Morse segmentations without callsign or language influence;
+  a separate callsign-evidence ranker preserves the raw span while scoring only
+  acoustically compatible suggestions with capped provider evidence; and
+  validated conversation profiles distinguish neutral monitoring, open-ended
+  ordinary QSOs, and rule-specific contest exchanges. These APIs do not replace
+  the live transcript or provide any path from decoder events to transmission.
+
 - Open decoder cards now follow newly appended text automatically unless the
   operator is selecting text. Confirmed remote callsigns are bold and
   color-emphasized; an exact match for the station profile's own callsign is
