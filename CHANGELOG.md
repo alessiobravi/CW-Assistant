@@ -88,10 +88,10 @@ All notable changes to CW Assistant are recorded here. The format follows
   line reflow as the transcript grows. Confirmed calls remain emphasized in
   the card header and own-call alerts remain unchanged.
 
-- The hosted Windows MSI contract check now normalizes readable multiline
-  table queries into the single-line SQL form required by Windows Installer,
-  so verification reaches the installer assertions instead of failing while
-  opening the first query.
+- The hosted Windows MSI contract check now accesses the legacy Windows
+  Installer automation API through explicit reflected method and indexed-field
+  calls, avoiding null results from late-bound COM dispatch under PowerShell 7
+  while retaining readable normalized queries and strict table assertions.
 
 - Verified stream markers now correct a biased initial acquisition from robust
   recent carrier evidence, then follow only sustained coherent motion through
