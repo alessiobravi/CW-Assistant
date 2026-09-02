@@ -154,8 +154,11 @@ at least five minutes and is reused if that carrier returns. Decoder filter
 width/evidence rate and these other
 starting limits are not yet exposed as profile controls. Click a colored marker
 to open only that decoded session in its larger scrollable/selectable wrapped text
-window, close it with **×** without stopping decode, reopen it from the marker,
-and drag open cards to reorder them. If the retained carrier is reacquired with
+window. It follows appended text unless a selection is active, bolds the
+confirmed remote call, and highlights an exact own-callsign match while flashing
+the card five times. Close with **×** without stopping decode, reopen from the
+marker, and use the adjacent arrow handle to drag open cards into another order.
+If the retained carrier is reacquired with
 a new internal ID, the open session follows the same frequency/color identity.
 The decoder pane preserves a bounded 2,048-character presentation transcript
 and any already-confirmed callsign across that replacement. Callsign extraction
@@ -197,8 +200,11 @@ AD2FC
 IU0LFQ/P
 ```
 
-The value will populate station logging data and is the exact-match source for
-the planned notification when your call is decoded. The future optional closing
+The value populates station logging data and is the exact-match source for the
+open decoder card's highlighted **YOUR CALL HEARD** visual notification. The
+match must appear as a complete token in stable decoded text; partial calls and
+provisional elements do not alert. Audio and remote notifications remain future
+optional additions. The future optional closing
 macro remains subject to explicit configuration, arming, QSO-context checks,
 and cancellation before transmission.
 

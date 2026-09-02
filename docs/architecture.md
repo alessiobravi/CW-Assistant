@@ -290,6 +290,16 @@ Ignored observations are removed before display and queue models. The QSO state
 machine and TX guard independently recheck the same current policy before any
 transition that can lead to keying.
 
+Acoustic decoding owns an immutable evidence transcript. A separate suggestion
+layer may retain alternative segmentations around `?` and uncertain gaps, then
+rank structurally valid calls against a versioned local contest list or an
+authenticated directory. A read-only DX-cluster/RBN adapter can contribute a
+time-bounded frequency/mode prior only when the radio-to-RF mapping is checked.
+Every suggestion carries its provider, dataset/version or spot age, frequency
+delta, and acoustic edit cost. No provider may rewrite raw evidence, promote an
+unverified carrier, resolve indistinguishable co-channel audio by assertion, or
+enter the transmit authorization path.
+
 ## Network receivers
 
 Directory providers produce normalized metadata but do not open streams.

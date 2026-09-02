@@ -8,6 +8,12 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Open decoder cards now follow newly appended text automatically unless the
+  operator is selecting text. Confirmed remote callsigns are bold and
+  color-emphasized; an exact match for the station profile's own callsign is
+  highlighted, displays **YOUR CALL HEARD**, and flashes the card five times.
+  This is a receive-only visual notification and cannot initiate transmission.
+
 - The spectrum panel now offers two profile-persisted live views: **Audio
   spectrum** keeps the smoothed FFT waterfall, while **CW symbols** renders
   only verified channels' keyed/unkeyed acoustic envelopes on a neutral
@@ -58,6 +64,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- A verified marker without a confirmed callsign now labels only its frequency,
+  avoiding repetitive vertical **CW stream** text. The confirmed callsign
+  replaces the frequency as soon as sufficient decode/context evidence exists.
+
 - The live spectrum controls now auto-collapse to their header when the
   pointer leaves the panel, reclaiming vertical space for the spectrum and
   waterfall. Hovering expands them immediately, and **Pin** keeps them open
@@ -100,6 +110,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Decoder-card dragging is now limited to a dedicated drag handle, so the
+  adjacent close button reliably dismisses the card while its stream continues
+  decoding and remains available to reopen from the spectrum marker.
+
 - Reference serial defaults and ADIF/equipment fixtures now initialize every
   aggregate field explicitly, keeping the dependency-free core warning-clean
   under real GCC as well as Clang/MSVC.
@@ -115,7 +129,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   structurally plausible token is promoted automatically
   only with decoded exchange evidence (`DE`, `CQ`, `TU`, or `UP`) or exact
   repetition, preventing a lone report-like fragment from becoming the stream
-  name. Until then the marker says **CW stream** plus its frequency. Labels use
+  name. Until then the marker shows only its frequency. Labels use
   an 18 px base size, enlarge to 32 px on hover, and confirmed callsigns also
   appear prominently in the open decoder-card header.
 - Retained stream identity no longer treats residual energy at the remembered

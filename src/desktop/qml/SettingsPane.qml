@@ -366,7 +366,7 @@ Pane {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
-                        text: "Saved per station profile. This exact normalized callsign will identify replies addressed to you, populate station logging fields, and drive the planned own-call notification and guarded closing macro."
+                        text: "Saved per station profile. An exact stable decode highlights your callsign and flashes its open decoder card. The value also populates station logging fields; any future closing macro remains separately guarded."
                     }
                     Label {
                         Layout.fillWidth: true

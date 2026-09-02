@@ -73,6 +73,11 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
   roles, precedence, update policy, and credentials so fast offline completion,
   jurisdiction-limited official validation, and optional directory enrichment
   can be combined without hard-coding a logger or service.
+- Permit a receive-only DX-cluster/RBN provider to rank callsign alternatives
+  when checked actual-RF frequency, mode, spot age, and acoustic edit cost all
+  agree. Display the provider, spotter, age, frequency delta, and rationale;
+  never let a spot overwrite raw text, independently verify a CW stream, resolve
+  an acoustically inseparable co-channel sender, post data, or authorize TX.
 - Replay WAV and SigMF/IQ recordings deterministically.
 - Provide configurable noise blanking, AGC, key-click suppression, audio mute,
   and a sharp continuously adjustable CW monitor filter without coupling these
@@ -107,6 +112,13 @@ operator behavior inspectable and prevents arbitrary code from controlling TX.
 - Clicking a trace opens its decoded-text session in the decoder pane. Keep an
   operator-opened session attached across a same-frequency/color tracker
   reacquisition; clicking a callsign opens the QSO confirmation panel.
+- Follow appended decoder text unless the operator is selecting earlier text,
+  emphasize a confirmed remote callsign, and raise a bounded visual alert when
+  stable text contains an exact complete-token match for the active profile's
+  own callsign. This receive alert must not initiate or arm transmission.
+- Card dismissal and card reordering must use independent pointer targets;
+  closing a session leaves its channel DSP active and the marker available for
+  reopening.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking the waterfall moves the local CW guide center to the pointed

@@ -307,6 +307,15 @@ gain is repeatable and its resource cost is within the published budget.
 7. Add two-source then bounded three-source joint co-channel separation.
 8. Add separately labeled QSO/callsign re-ranking and operator controls.
 
+The re-ranking stage operates only after acoustic alternatives exist. Unknown
+symbols and uncertain gap boundaries remain explicit lattice branches; a
+versioned callsign list can score compatible branches, while a recent
+frequency/mode-matched cluster or beacon spot supplies an additional prior.
+The UI must preserve the acoustic transcript and identify every proposed
+replacement, source, age/version, frequency delta, and score. A database hit is
+not acoustic proof, and a cluster spot cannot distinguish two stations sending
+on the same mono-audio carrier.
+
 ## Research basis
 
 - [Morse Code Datasets for Machine Learning](https://arxiv.org/abs/1807.04239)

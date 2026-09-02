@@ -69,6 +69,50 @@ ApplicationWindow {
         return text
     }
 
+    function escapeTranscriptHtml(value) {
+        return String(value).replace(/&/g, "&amp;")
+                            .replace(/</g, "&lt;")
+                            .replace(/>/g, "&gt;")
+                            .replace(/\n/g, "<br>")
+                            .replace(/ /g, "&nbsp;")
+    }
+
+    function exactCallCount(text, callsign) {
+        var wanted = String(callsign).trim().toUpperCase()
+        if (wanted.length === 0)
+            return 0
+        var tokens = String(text).toUpperCase().match(/[A-Z0-9/]+/g) || []
+        var count = 0
+        for (var index = 0; index < tokens.length; ++index) {
+            if (tokens[index] === wanted)
+                ++count
+        }
+        return count
+    }
+
+    function highlightedTranscript(text, confirmedCallsign, ownCallsign,
+                                   streamColor) {
+        var confirmed = String(confirmedCallsign).trim().toUpperCase()
+        var own = String(ownCallsign).trim().toUpperCase()
+        var parts = String(text).split(/([A-Za-z0-9/]+)/)
+        var rendered = ""
+        for (var index = 0; index < parts.length; ++index) {
+            var part = parts[index]
+            var normalized = part.toUpperCase()
+            var escaped = escapeTranscriptHtml(part)
+            if (own.length > 0 && normalized === own) {
+                rendered += "<span style='font-weight:700;color:#111720;" +
+                            "background-color:#ffd54f'>" + escaped + "</span>"
+            } else if (confirmed.length > 0 && normalized === confirmed) {
+                rendered += "<span style='font-weight:700;color:" +
+                            streamColor + "'>" + escaped + "</span>"
+            } else {
+                rendered += escaped
+            }
+        }
+        return rendered
+    }
+
     header: ToolBar {
         height: 64
         background: Rectangle { color: "#151b23" }
@@ -363,7 +407,7 @@ ApplicationWindow {
                             rotation: -90
                             text: modelData.callsign.length > 0
                                   ? modelData.callsign
-                                  : "CW stream  •  " + modelData.frequencyLabel
+                                  : modelData.frequencyLabel
                             color: modelData.color
                             font.pixelSize: channelHitArea.containsMouse ? 32 : 18
                             font.weight: Font.Bold
@@ -922,7 +966,6 @@ ApplicationWindow {
                         Drag.hotSpot.y: height / 2
                         z: sessionDrag.active ? 20 : 1
                         opacity: sessionDrag.active ? 0.78 : 1.0
-                        DragHandler { id: sessionDrag }
                         DropArea {
                             anchors.fill: parent
                             onEntered: function(drag) {
@@ -930,6 +973,48 @@ ApplicationWindow {
                                     replayController.moveDecoderSession(
                                                 drag.source.modelData.id,
                                                 sessionCard.index)
+                            }
+                        }
+                        property string rawDecodedText: modelData.text.length > 0
+                            ? modelData.text
+                            : (modelData.provisionalText.length > 0
+                               ? modelData.provisionalText
+                               : (modelData.elements.length > 0
+                                  ? modelData.elements : "Listening…"))
+                        property int ownCallMatches: window.exactCallCount(
+                            rawDecodedText, appSettings.ownCallsign)
+                        property int previousOwnCallMatches: 0
+                        onOwnCallMatchesChanged: {
+                            if (ownCallMatches > previousOwnCallMatches)
+                                ownCallFlashAnimation.restart()
+                            previousOwnCallMatches = ownCallMatches
+                        }
+                        Rectangle {
+                            id: ownCallFlash
+                            anchors.fill: parent
+                            radius: sessionCard.radius
+                            color: "transparent"
+                            border.color: "#ffd54f"
+                            border.width: 4
+                            opacity: 0
+                            z: 30
+                        }
+                        SequentialAnimation {
+                            id: ownCallFlashAnimation
+                            loops: 5
+                            NumberAnimation {
+                                target: ownCallFlash
+                                property: "opacity"
+                                from: 0
+                                to: 0.9
+                                duration: 160
+                            }
+                            NumberAnimation {
+                                target: ownCallFlash
+                                property: "opacity"
+                                from: 0.9
+                                to: 0
+                                duration: 240
                             }
                         }
                         ColumnLayout {
@@ -953,14 +1038,40 @@ ApplicationWindow {
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
                                 }
+                                Label {
+                                    visible: sessionCard.ownCallMatches > 0
+                                    text: "YOUR CALL HEARD"
+                                    color: "#ffd54f"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                }
                                 Item { Layout.fillWidth: true }
                                 Label {
                                     text: modelData.active ? "ACTIVE" : "HOLD"
                                     color: modelData.active ? modelData.color : "#718091"
                                     font.pixelSize: 10
                                 }
+                                Item {
+                                    implicitWidth: 28
+                                    implicitHeight: 28
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "↕"
+                                        color: "#8290a0"
+                                        font.pixelSize: 16
+                                    }
+                                    DragHandler {
+                                        id: sessionDrag
+                                        target: sessionCard
+                                    }
+                                    HoverHandler { id: sessionDragHover }
+                                    ToolTip.visible: sessionDragHover.hovered
+                                    ToolTip.text: "Drag to reorder"
+                                }
                                 ToolButton {
+                                    objectName: "closeDecoderSessionButton"
                                     text: "×"
+                                    z: 40
                                     Accessible.name: "Close decoded session"
                                     onClicked: replayController.closeDecoderSession(
                                                    modelData.id)
@@ -972,15 +1083,15 @@ ApplicationWindow {
                                 clip: true
                                 TextArea {
                                     id: decodedTextArea
+                                    objectName: "decodedSessionText"
                                     readOnly: true
                                     selectByMouse: true
-                                    text: modelData.text.length > 0
-                                          ? modelData.text
-                                          : (modelData.provisionalText.length > 0
-                                             ? modelData.provisionalText
-                                             : (modelData.elements.length > 0
-                                                ? modelData.elements
-                                                : "Listening…"))
+                                    text: window.highlightedTranscript(
+                                              sessionCard.rawDecodedText,
+                                              modelData.callsign,
+                                              appSettings.ownCallsign,
+                                              modelData.color)
+                                    textFormat: TextEdit.RichText
                                     color: modelData.text.length > 0
                                            ? "#edf3f8"
                                            : (modelData.provisionalText.length > 0
@@ -996,6 +1107,11 @@ ApplicationWindow {
                                         border.color: "#263241"
                                         border.width: 1
                                     }
+                                    function followLatestText() {
+                                        if (selectionStart === selectionEnd)
+                                            cursorPosition = length
+                                    }
+                                    onTextChanged: Qt.callLater(followLatestText)
                                 }
                             }
                             Label {

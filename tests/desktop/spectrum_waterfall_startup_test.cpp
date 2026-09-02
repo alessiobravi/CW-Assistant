@@ -36,6 +36,10 @@ int main(int argc, char* argv[]) {
           QList<qulonglong>{7}, QVariantList{previous_session},
           QVariantList{reacquired_channel});
   if (reconciled != QList<qulonglong>{19}) return 15;
+  const QList<qulonglong> dismissed =
+      cwassistant::desktop::reconcileDecoderSessionOrder(
+          {}, QVariantList{previous_session}, QVariantList{reacquired_channel});
+  if (!dismissed.isEmpty()) return 17;
 
   cwassistant::desktop::WaterfallConditioner conditioner;
   QVector<float> shaped_noise(128);
