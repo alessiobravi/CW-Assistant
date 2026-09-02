@@ -65,27 +65,41 @@ std::string trimSpaces(std::string value) {
 
 struct ReplayResult {
   std::string text;
+  std::string refined_text;
   double wpm{0.0};
   std::uint64_t updates{0};
   double simulated_seconds{0.0};
   std::size_t state_bytes{0};
+  bool refined_append_only{true};
+  std::string best_alternative;
+  float alternative_confidence{0.0F};
+  std::size_t maximum_alternatives{0};
 };
 
 ReplayResult replayMessage(const std::string_view message, const double wpm,
                            const float mark_snr_db,
-                           const double jitter_fraction) {
+                           const double jitter_fraction,
+                           const double character_gap_dots = 3.0) {
   cwassistant::core::CwMultiSpeedDecoder decoder;
   const double dot_ms = 1'200.0 / wpm;
   std::uint64_t now_ns = 0;
   std::uint64_t updates = 0;
   std::uint32_t jitter_state = 0x9e3779b9U;
   cwassistant::core::CwDecoderUpdate latest;
+  std::string previous_refined;
+  bool refined_append_only = true;
+  std::size_t maximum_alternatives = 0;
   const auto advance = [&](const double requested_ms, const float snr_db) {
     double remaining_ms = requested_ms;
     while (remaining_ms > 0.0) {
       const double step_ms = std::min(5.0, remaining_ms);
       now_ns += static_cast<std::uint64_t>(std::llround(step_ms * 1'000'000.0));
       latest = decoder.process(now_ns, snr_db);
+      refined_append_only = refined_append_only &&
+          latest.refined_text.starts_with(previous_refined);
+      previous_refined = latest.refined_text;
+      maximum_alternatives = std::max(maximum_alternatives,
+          latest.acoustic_alternatives.size());
       ++updates;
       remaining_ms -= step_ms;
     }
@@ -108,15 +122,24 @@ ReplayResult replayMessage(const std::string_view message, const double wpm,
     }
     const bool word_ends = index + 1 < message.size() &&
                            message[index + 1] == ' ';
-    advance(jittered((word_ends ? 7.0 : 3.0) * dot_ms), 0.0F);
+    advance(jittered((word_ends ? 7.0 : character_gap_dots) * dot_ms),
+            0.0F);
   }
   latest = decoder.flush(now_ns +
                          static_cast<std::uint64_t>(10.0 * dot_ms * 1'000'000.0));
   return {.text = trimSpaces(latest.text),
+          .refined_text = trimSpaces(latest.refined_text),
           .wpm = latest.wpm,
           .updates = updates,
           .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0,
-          .state_bytes = decoder.stateBytes()};
+          .state_bytes = decoder.stateBytes(),
+          .refined_append_only = refined_append_only,
+          .best_alternative = latest.acoustic_alternatives.empty()
+              ? std::string{} : latest.acoustic_alternatives.front().text,
+          .alternative_confidence = latest.acoustic_alternatives.empty()
+              ? 0.0F
+              : latest.acoustic_alternatives.front().evidence_confidence,
+          .maximum_alternatives = maximum_alternatives};
 }
 
 ReplayResult replaySpeedChange() {
@@ -151,10 +174,19 @@ ReplayResult replaySpeedChange() {
   advance(3'000.0, 0.0F);
   send("TEST", 40.0);
   latest = decoder.flush(now_ns + 1'000'000'000);
-  return {.text = trimSpaces(latest.text), .wpm = latest.wpm,
+  return {.text = trimSpaces(latest.text),
+          .refined_text = trimSpaces(latest.refined_text),
+          .wpm = latest.wpm,
           .updates = updates,
           .simulated_seconds = static_cast<double>(now_ns) / 1'000'000'000.0,
-          .state_bytes = decoder.stateBytes()};
+          .state_bytes = decoder.stateBytes(),
+          .refined_append_only = true,
+          .best_alternative = latest.acoustic_alternatives.empty()
+              ? std::string{} : latest.acoustic_alternatives.front().text,
+          .alternative_confidence = latest.acoustic_alternatives.empty()
+              ? 0.0F
+              : latest.acoustic_alternatives.front().evidence_confidence,
+          .maximum_alternatives = latest.acoustic_alternatives.size()};
 }
 
 }  // namespace
@@ -180,6 +212,9 @@ int main() {
   std::size_t expected_characters = 0;
   std::size_t edits = 0;
   std::size_t speed_failures = 0;
+  std::size_t refined_edits = 0;
+  bool refined_append_only = true;
+  bool alternatives_bounded = true;
   std::uint64_t updates = 0;
   double simulated_seconds = 0.0;
   std::size_t maximum_state_bytes = 0;
@@ -194,6 +229,10 @@ int main() {
     if (speed_error > 0.25) ++speed_failures;
     expected_characters += std::string_view(benchmark.message).size();
     edits += case_edits;
+    refined_edits += editDistance(benchmark.message, result.refined_text);
+    refined_append_only = refined_append_only && result.refined_append_only;
+    alternatives_bounded = alternatives_bounded &&
+                           result.maximum_alternatives <= 4U;
     updates += result.updates;
     simulated_seconds += result.simulated_seconds;
     maximum_state_bytes = std::max(maximum_state_bytes, result.state_bytes);
@@ -204,13 +243,60 @@ int main() {
               << " speed_error=" << speed_error
               << " edits=" << case_edits
               << " expected=\"" << benchmark.message
-              << "\" actual=\"" << result.text << "\"\n";
+              << "\" actual=\"" << result.text
+              << "\" refined=\"" << result.refined_text
+              << "\" alternative=\"" << result.best_alternative
+              << "\" alternative_confidence="
+              << result.alternative_confidence << '\n';
   }
+
+  const ReplayResult compressed_call = replayMessage(
+      "EA1EYL", 22.0, 14.0F, 0.08, 2.0);
+  const std::size_t compressed_refined_edits = editDistance(
+      "EA1EYL", compressed_call.refined_text);
+  refined_edits += compressed_refined_edits;
+  refined_append_only = refined_append_only &&
+                        compressed_call.refined_append_only;
+  alternatives_bounded = alternatives_bounded &&
+                         compressed_call.maximum_alternatives <= 4U;
+  updates += compressed_call.updates;
+  simulated_seconds += compressed_call.simulated_seconds;
+  maximum_state_bytes = std::max(maximum_state_bytes,
+                                 compressed_call.state_bytes);
+  std::cout << "case=compressed-callsign wpm=22"
+            << " primary=\"" << compressed_call.text
+            << "\" refined=\"" << compressed_call.refined_text
+            << "\" refined_edits=" << compressed_refined_edits << '\n';
+
+  std::string long_message;
+  for (std::size_t repeat = 0; repeat < 24U; ++repeat)
+    long_message += "EA1EYL";
+  const ReplayResult long_stream = replayMessage(
+      long_message, 30.0, 12.0F, 0.10);
+  const std::size_t long_primary_edits = editDistance(
+      long_message, long_stream.text);
+  const std::size_t long_refined_edits = editDistance(
+      long_message, long_stream.refined_text);
+  refined_edits += long_refined_edits;
+  refined_append_only = refined_append_only &&
+                        long_stream.refined_append_only;
+  alternatives_bounded = alternatives_bounded &&
+                         long_stream.maximum_alternatives <= 4U;
+  updates += long_stream.updates;
+  simulated_seconds += long_stream.simulated_seconds;
+  maximum_state_bytes = std::max(maximum_state_bytes,
+                                 long_stream.state_bytes);
+  std::cout << "case=long-append-only-stream characters="
+            << long_message.size() << " primary_edits="
+            << long_primary_edits << " refined_edits="
+            << long_refined_edits << " append_only="
+            << long_stream.refined_append_only << '\n';
 
   const ReplayResult speed_change = replaySpeedChange();
   const std::size_t speed_change_edits =
       editDistance("CQ TEST", speed_change.text);
   edits += speed_change_edits;
+  refined_edits += editDistance("CQ TEST", speed_change.refined_text);
   expected_characters += std::string_view("CQ TEST").size();
   updates += speed_change.updates;
   simulated_seconds += speed_change.simulated_seconds;
@@ -221,7 +307,8 @@ int main() {
             << " acquired_wpm=" << speed_change.wpm
             << " edits=" << speed_change_edits
             << " expected=\"CQ TEST\" actual=\""
-            << speed_change.text << "\"\n";
+            << speed_change.text << "\" refined=\""
+            << speed_change.refined_text << "\"\n";
 
   cwassistant::core::CwMultiSpeedDecoder silence_decoder;
   std::uint64_t silence_time_ns = 0;
@@ -238,6 +325,8 @@ int main() {
   }
   silence = silence_decoder.flush(silence_time_ns + 500'000'000);
   const std::size_t false_characters = trimSpaces(silence.text).size();
+  const std::size_t false_refined_characters =
+      trimSpaces(silence.refined_text).size();
   maximum_state_bytes = std::max(
       maximum_state_bytes, silence_decoder.stateBytes());
 
@@ -255,9 +344,14 @@ int main() {
   constexpr std::size_t maximum_decoder_state_bytes = 256U * 1'024U;
   std::cout << "summary expected_characters=" << expected_characters
             << " edits=" << edits
+            << " refined_edits=" << refined_edits
+            << " refined_append_only=" << refined_append_only
+            << " alternatives_bounded=" << alternatives_bounded
             << " speed_failures=" << speed_failures
             << " cer=" << character_error_rate
             << " false_characters_per_noise_minute=" << false_characters
+            << " false_refined_characters_per_noise_minute="
+            << false_refined_characters
             << " updates=" << (updates + silence_updates)
             << " simulated_seconds=" << total_simulated_seconds
             << " wall_seconds=" << wall_seconds
@@ -267,7 +361,10 @@ int main() {
             << " state_limit_bytes=" << maximum_decoder_state_bytes
             << '\n';
 
-  return edits == 0 && speed_failures == 0 && false_characters == 0 &&
+  return edits == 0 && refined_edits == 0 && refined_append_only &&
+      alternatives_bounded &&
+      speed_failures == 0 && false_characters == 0 &&
+      false_refined_characters == 0 &&
       maximum_state_bytes <= maximum_decoder_state_bytes
       ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -114,6 +114,7 @@ class ReplayController final : public QObject {
   Q_INVOKABLE void startLiveAudio();
   Q_INVOKABLE void stopLiveAudio();
   Q_INVOKABLE void openDecoderSession(qulonglong channel_id);
+  Q_INVOKABLE void openManualDecoderSession(double audio_frequency_hz);
   Q_INVOKABLE void closeDecoderSession(qulonglong channel_id);
   Q_INVOKABLE void moveDecoderSession(qulonglong channel_id, int new_index);
   // Operator-started, bounded diagnostic capture (OBS-003). Only available
@@ -155,6 +156,8 @@ class ReplayController final : public QObject {
   void decodedSignalTimeoutRequested(int seconds);
   void liveDecodedSignalTimeoutRequested(int seconds);
   void liveFrequencyShiftRequested(double audio_hz_delta);
+  void manualDecoderFrequencyRequested(double audio_frequency_hz);
+  void liveManualDecoderFrequencyRequested(double audio_frequency_hz);
   void liveRadioFrequencyContextRequested(bool available, qulonglong rx_rf_hz,
                                           qulonglong tx_rf_hz,
                                           bool split_active);

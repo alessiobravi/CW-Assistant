@@ -236,6 +236,15 @@ void LiveAudioDspWorker::stop() {
   }
 }
 
+void LiveAudioDspWorker::selectDecoderFrequency(
+    const double audio_frequency_hz) {
+  const std::uint64_t channel_id =
+      decoder_.selectFrequency(audio_frequency_hz);
+  if (channel_id == 0) return;
+  emit decoderProduced(decoderChannelModel(decoder_.channels()));
+  emit manualDecoderSelected(static_cast<qulonglong>(channel_id));
+}
+
 void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
   if (capture_active_) {
     finishDebugCapture(QStringLiteral("Restarted"));
@@ -359,6 +368,28 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("acousticCadenceConfidence"),
                 track.acoustic_cadence_confidence);
     item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
+    item.insert(QStringLiteral("refinedText"),
+                QString::fromStdString(track.refined_text));
+    QJsonArray alternatives;
+    for (const auto& alternative : track.acoustic_alternatives) {
+      QJsonObject candidate;
+      candidate.insert(QStringLiteral("text"),
+                       QString::fromStdString(alternative.text));
+      candidate.insert(QStringLiteral("provisionalElements"),
+                       QString::fromStdString(
+                           alternative.provisional_elements));
+      candidate.insert(QStringLiteral("wpm"), alternative.wpm);
+      candidate.insert(QStringLiteral("acousticCost"),
+                       alternative.acoustic_cost);
+      candidate.insert(QStringLiteral("evidenceConfidence"),
+                       alternative.evidence_confidence);
+      candidate.insert(QStringLiteral("firstObservationId"),
+                       static_cast<qint64>(alternative.first_observation_id));
+      candidate.insert(QStringLiteral("lastObservationId"),
+                       static_cast<qint64>(alternative.last_observation_id));
+      alternatives.push_back(candidate);
+    }
+    item.insert(QStringLiteral("acousticAlternatives"), alternatives);
     item.insert(QStringLiteral("provisionalText"),
                 QString::fromStdString(track.provisional_text));
     item.insert(QStringLiteral("matchAgeSeconds"), track.match_age_seconds);
@@ -367,6 +398,7 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("matched"), track.matched);
     item.insert(QStringLiteral("active"), track.active);
     item.insert(QStringLiteral("keyDown"), track.key_down);
+    item.insert(QStringLiteral("operatorSelected"), track.operator_selected);
     tracks.push_back(item);
   }
   root.insert(QStringLiteral("tracks"), tracks);

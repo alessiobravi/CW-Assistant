@@ -104,11 +104,15 @@ an unverified timing decoder only when this independent fit confirms regular
 Morse cadence; carrier identity, noise tracking, and verified text remain
 untouched.
 
-An explicit hidden semi-Markov timing model tracks dit length, key-down and
-key-up duration distributions, character spacing, word spacing, drift, and
-keying style. Viterbi/beam search produces several Morse-valid hypotheses with
-timestamps. This gives a low-resource baseline that can explain why a character
-was selected and can abstain instead of inventing text.
+The dependency-free event lattice now receives every immutable key-envelope
+mark/gap transition. At completed-gap checkpoints (bounded to at most once per
+500 ms) its beam search emits up to four time/observation-scoped acoustic
+alternatives. Characters and gap decisions common to all competitive paths are
+committed into a separate append-only refinement after sufficient timing
+evidence; the primary live transcript is not rewritten. The lattice tracks dit
+length, mark/gap duration distributions, character and word spacing, and
+manual-keying variance. This gives a low-resource baseline that can explain why
+a character was selected and can abstain instead of inventing text.
 
 The optional learned path should be deliberately small: compare a causal
 depthwise temporal convolution network, a compact CNN-GRU, and a compact causal
@@ -283,8 +287,11 @@ hypothesis count, and a conservative allocated-state estimate. Its cases cover
 8, 12, 20, 25, 40, and 55 WPM with fixed weak-SNR and timing-jitter sequences,
 plus a 12→40 WPM change across a transmission gap. The state estimate includes
 bounded character-evidence buffers and must stay below 256 KiB across this
-corpus. The current deterministic baseline has 0/49 edits, no speed-limit
-failures, and no false characters in the synthetic noise minute. This is a
+corpus. The deterministic baseline and acoustic consensus have zero edits on
+the 8--55 WPM timing corpus, the consensus repairs the included compressed-gap
+callsign case where the conservative primary path retains an unknown, and both
+remain append-only across the long-stream truncation case. There are no
+speed-limit failures and no false characters in the synthetic noise minute. This is a
 regression floor, not the final corpus or a claim of
 calibrated over-the-air performance. Separate core regressions drive two
 simultaneous original-sample tones through the channel bank, verify independent

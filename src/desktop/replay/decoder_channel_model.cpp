@@ -24,6 +24,7 @@ QVariantList decoderChannelModel(
   model.reserve(static_cast<qsizetype>(channels.size()));
   for (const auto& channel : channels) {
     QVariantMap item;
+    const bool expose_verified_content = channel.verified_cw;
     item.insert(QStringLiteral("id"),
                 QVariant::fromValue<qulonglong>(channel.id));
     item.insert(QStringLiteral("frequencyHz"), channel.frequency_hz);
@@ -40,6 +41,8 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("keyDown"), channel.key_down);
     item.insert(QStringLiteral("active"), channel.active);
     item.insert(QStringLiteral("verifiedCw"), channel.verified_cw);
+    item.insert(QStringLiteral("operatorSelected"),
+                channel.operator_selected);
     item.insert(QStringLiteral("verificationState"), QString::fromLatin1(
         cwassistant::core::cwTrackStateName(channel.verification_state)));
     item.insert(QStringLiteral("verificationReason"), QString::fromLatin1(
@@ -64,6 +67,7 @@ QVariantList decoderChannelModel(
     character_evidence.reserve(
         static_cast<qsizetype>(channel.characters.size()));
     for (const auto& character : channel.characters) {
+      if (!expose_verified_content) break;
       QVariantMap evidence;
       evidence.insert(QStringLiteral("symbol"),
                       QString::fromStdString(character.symbol));
@@ -75,15 +79,49 @@ QVariantList decoderChannelModel(
     }
     item.insert(QStringLiteral("characterEvidence"), character_evidence);
     item.insert(QStringLiteral("text"),
-                QString::fromStdString(channel.text));
+                expose_verified_content
+                    ? QString::fromStdString(channel.text) : QString{});
+    item.insert(QStringLiteral("refinedText"),
+                expose_verified_content
+                    ? QString::fromStdString(channel.refined_text)
+                    : QString{});
+    QVariantList acoustic_alternatives;
+    if (expose_verified_content) {
+      acoustic_alternatives.reserve(static_cast<qsizetype>(
+          channel.acoustic_alternatives.size()));
+      for (const auto& alternative : channel.acoustic_alternatives) {
+        QVariantMap candidate;
+        candidate.insert(QStringLiteral("text"),
+                         QString::fromStdString(alternative.text));
+        candidate.insert(QStringLiteral("elements"),
+                         QString::fromStdString(
+                             alternative.provisional_elements));
+        candidate.insert(QStringLiteral("wpm"), alternative.wpm);
+        candidate.insert(QStringLiteral("cost"),
+                         alternative.acoustic_cost);
+        candidate.insert(QStringLiteral("confidence"),
+                         alternative.evidence_confidence);
+        acoustic_alternatives.push_back(candidate);
+      }
+    }
+    item.insert(QStringLiteral("acousticAlternatives"),
+                acoustic_alternatives);
     item.insert(QStringLiteral("provisionalText"),
-                QString::fromStdString(channel.provisional_text));
+                expose_verified_content
+                    ? QString::fromStdString(channel.provisional_text)
+                    : QString{});
     item.insert(QStringLiteral("elements"),
-                QString::fromStdString(channel.pending_elements));
+                expose_verified_content
+                    ? QString::fromStdString(channel.pending_elements)
+                    : QString{});
     item.insert(QStringLiteral("callsign"),
-                QString::fromStdString(channel.callsign));
-    item.insert(QStringLiteral("color"), QString::fromLatin1(
-        kChannelColors[channel.color_index % kChannelColors.size()]));
+                expose_verified_content
+                    ? QString::fromStdString(channel.callsign) : QString{});
+    item.insert(QStringLiteral("color"),
+                expose_verified_content
+                    ? QString::fromLatin1(kChannelColors[
+                          channel.color_index % kChannelColors.size()])
+                    : QStringLiteral("#8d9aaa"));
     model.push_back(item);
   }
   return model;

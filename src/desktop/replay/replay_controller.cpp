@@ -180,6 +180,14 @@ class ReplayWorker final : public QObject {
                             static_cast<double>(std::clamp(seconds, 5, 120))});
   }
 
+  void selectDecoderFrequency(const double audio_frequency_hz) {
+    const std::uint64_t channel_id =
+        decoder_.selectFrequency(audio_frequency_hz);
+    if (channel_id == 0) return;
+    emit decoderProduced(decoderChannelModel(decoder_.channels()));
+    emit manualDecoderSelected(static_cast<qulonglong>(channel_id));
+  }
+
  signals:
   void opened(const QString& name, double sample_rate, double duration);
   void failed(const QString& message);
@@ -188,6 +196,7 @@ class ReplayWorker final : public QObject {
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
   void diagnosticsProduced(const QVariantMap& diagnostics);
+  void manualDecoderSelected(qulonglong channel_id);
   void ended();
 
  private slots:
@@ -267,6 +276,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::configure);
   connect(this, &ReplayController::decodedSignalTimeoutRequested, worker,
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::manualDecoderFrequencyRequested, worker,
+          &ReplayWorker::selectDecoderFrequency);
   connect(worker, &ReplayWorker::opened, this,
           [this](const QString& name, const double sample_rate,
                  const double duration) {
@@ -303,6 +314,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayController::frameReady);
   connect(worker, &ReplayWorker::decoderProduced, this,
           &ReplayController::acceptDecoderChannels);
+  connect(worker, &ReplayWorker::manualDecoderSelected, this,
+          &ReplayController::openDecoderSession);
   connect(worker, &ReplayWorker::diagnosticsProduced, this,
           [this](const QVariantMap& diagnostics) {
             verification_diagnostics_ = diagnostics;
@@ -341,6 +354,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
   connect(this, &ReplayController::liveFrequencyShiftRequested, dsp_worker,
           &LiveAudioDspWorker::shiftTrackedFrequencies);
+  connect(this, &ReplayController::liveManualDecoderFrequencyRequested,
+          dsp_worker, &LiveAudioDspWorker::selectDecoderFrequency);
   connect(this, &ReplayController::liveRadioFrequencyContextRequested,
           dsp_worker, &LiveAudioDspWorker::setRadioFrequencyContext);
   connect(this, &ReplayController::liveDebugCaptureStartRequested, dsp_worker,
@@ -401,6 +416,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayController::frameReady);
   connect(dsp_worker, &LiveAudioDspWorker::decoderProduced, this,
           &ReplayController::acceptDecoderChannels);
+  connect(dsp_worker, &LiveAudioDspWorker::manualDecoderSelected, this,
+          &ReplayController::openDecoderSession);
   connect(dsp_worker, &LiveAudioDspWorker::diagnosticsProduced, this,
           [this](const QVariantMap& diagnostics) {
             verification_diagnostics_ = diagnostics;
@@ -464,7 +481,11 @@ const QVariantList& ReplayController::decoderChannels() const noexcept {
   return decoder_channels_;
 }
 int ReplayController::decoderChannelCount() const noexcept {
-  return static_cast<int>(decoder_channels_.size());
+  return static_cast<int>(std::count_if(
+      decoder_channels_.cbegin(), decoder_channels_.cend(),
+      [](const QVariant& value) {
+        return value.toMap().value(QStringLiteral("verifiedCw")).toBool();
+      }));
 }
 const QVariantList& ReplayController::decoderSessions() const noexcept {
   return decoder_sessions_;
@@ -581,8 +602,14 @@ void ReplayController::rebuildDecoderModels() {
   for (const QVariant& value : raw_decoder_channels_) {
     QVariantMap item = value.toMap();
     const auto id = item.value(QStringLiteral("id")).toULongLong();
-    const double audio_hz = item.value(QStringLiteral("frequencyHz")).toDouble();
+    const double tracked_audio_hz =
+        item.value(QStringLiteral("frequencyHz")).toDouble();
+    const QVariant presentation =
+        item.value(QStringLiteral("presentationFrequencyHz"));
+    const double audio_hz = presentation.isValid()
+        ? presentation.toDouble() : tracked_audio_hz;
     item.insert(QStringLiteral("audioFrequencyHz"), audio_hz);
+    item.insert(QStringLiteral("trackedAudioFrequencyHz"), tracked_audio_hz);
     if (show_rf) {
       const auto resolved_rf = cwassistant::core::resolve_audio_tone_rf(
           radio_rx_rf_hz_, audio_hz, cw_reference_tone_hz_,
@@ -673,6 +700,16 @@ void ReplayController::openDecoderSession(const qulonglong channel_id) {
   if (!exists) return;
   decoder_session_order_.push_back(channel_id);
   rebuildDecoderModels();
+}
+
+void ReplayController::openManualDecoderSession(
+    const double audio_frequency_hz) {
+  if (!activeSource() || !std::isfinite(audio_frequency_hz)) return;
+  if (source_mode_ == 0) {
+    emit liveManualDecoderFrequencyRequested(audio_frequency_hz);
+  } else {
+    emit manualDecoderFrequencyRequested(audio_frequency_hz);
+  }
 }
 
 void ReplayController::closeDecoderSession(const qulonglong channel_id) {

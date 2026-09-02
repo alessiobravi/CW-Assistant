@@ -99,12 +99,16 @@ is reserved for active verified CW tracks (see below). This guide is visual
 only: it does not select a decoder, limit decoding, change receiver tuning, or
 change decoder bandwidth.
 
-Pointer tuning is planned, not active in this build. The defined behavior is:
-left-click a waterfall trace to move the local CW guide to it; right-click to
-request an RX-only CAT retune that places the pointed actual-RF signal at the
-configured CW pitch. Future decoded-call overlays will be anchored to absolute
-RF Hz and a stable track ID, updated as text improves, marked lost after a short
-silence, and removed from both waterfall and list after a configurable timeout.
+Left-click an unmarked spectrum or waterfall trace to move the local CW guide
+and immediately open a neutral manual decoder slice at that audio frequency.
+The slice uses real narrowband evidence but does not claim that the signal is
+CW: its text and callsign remain hidden and it is excluded from the detected
+count until the normal cadence, timing, symbol, and coherence gates pass. A
+verified slice becomes the ordinary colored stream with the same session; an
+unverified slice expires after 30 seconds. Click again to refresh it. Manual
+centers within 12 Hz reuse the slice, while more distant centers can remain
+separate for close pileup inspection. Radio retuning remains a separate,
+capability-checked operation rather than a consequence of this click.
 
 For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
 noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
@@ -148,6 +152,10 @@ stop its DSP; click the marker to reopen it. Use the arrow handle beside the
 close button to drag cards over one another and set the
 operator's preferred order. Stable text, amber provisional text/elements,
 adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
+When competitive acoustic timing paths disagree with the literal timing
+leader, the card also shows a separately labeled **Acoustic correction**. It is
+append-only agreement from the same received mark/gap evidence, not a
+dictionary or callbook replacement. The literal transcript remains visible.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
 default 30 seconds, configurable up to 300 seconds) so normal word and message
@@ -192,8 +200,9 @@ replaces it. Callsign text remains
 hidden until the track is verified, the decoder has promoted the text to stable,
 a word gap confirms that the structurally valid token is complete, and decoded
 exchange context (`DE`, `CQ`, `TU`, or `UP`) or exact repetition supports it.
-This is signal/timing and text-context evidence, not external directory
-validation. The marker
+The candidate may come from the literal path or the append-only acoustic
+consensus, but it must pass the same context/repetition policy. This is
+signal/timing and text-context evidence, not external directory validation. The marker
 tooltip exposes the same confirmed call, frequency, audio tone, filter width,
 and measured drift.
 
@@ -220,6 +229,14 @@ over bounded recent evidence, allowing a rough acquisition to recover. Short
 or ambiguous fragments may remain provisional rather than being presented as
 certain.
 
+In parallel, a bounded timing lattice revisits ambiguous dit/dah and
+character/word-gap boundaries every 500 ms and at completed gaps. It retains at
+most four competitive acoustic paths. Only a common prefix with sufficient
+evidence is appended to the correction stream, so later alternatives cannot
+rewrite already shown correction text. This specifically helps manual keying
+and compressed spacing; it cannot reconstruct two exactly co-channel stations
+whose simultaneous marks have already merged into one envelope.
+
 A colored verified marker is intentionally delayed until the complete evidence
 set remains valid for roughly half a second. Brief fades then receive a longer
 hold before removal, reducing both transient false markers and visible flapping.
@@ -243,11 +260,10 @@ processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
 Treat `?` as retained acoustic uncertainty, not as a character that an online
-directory has disproved. The displayed transcript remains the receiver's raw
-stable result. When callsign alternatives are exposed in a later UI slice,
-they will appear separately with their acoustic cost and evidence provenance;
-a callbook, activity list, or cluster spot will never silently replace the raw
-text or confirm what this receiver heard.
+directory has disproved. The card exposes acoustic consensus separately, while
+the displayed literal transcript remains the receiver's raw stable result. A
+future callbook, activity list, or cluster spot must never silently replace the
+raw text or confirm what this receiver heard.
 
 ## Debug capture
 

@@ -97,6 +97,7 @@ class LiveAudioDspWorker final : public QObject {
   // so an already-identified signal's tracking follows the retune instead
   // of being lost and re-acquired from scratch.
   void shiftTrackedFrequencies(double audio_hz_delta);
+  void selectDecoderFrequency(double audio_frequency_hz);
   // Mirrors the radio frequency context ReplayController tracks, purely so
   // a debug capture snapshot can record whether/how the RX (and TX, if
   // split) dial frequency moved during the capture window.
@@ -113,6 +114,7 @@ signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
   void diagnosticsProduced(const QVariantMap& diagnostics);
+  void manualDecoderSelected(qulonglong channel_id);
   void debugCaptureStateChanged(bool active, const QString& base_path,
                                 double elapsed_seconds, const QString& note);
 

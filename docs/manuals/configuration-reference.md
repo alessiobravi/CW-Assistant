@@ -166,6 +166,11 @@ requires a complete stable word, rejects noise-like separated digit runs while
 retaining contiguous multi-digit special-event calls, and
 requires decoded `DE`/`CQ`/`TU`/`UP` context or exact repetition before
 automatically naming a stream.
+Left-clicking an unmarked spectrum/waterfall position instead creates a neutral
+manual probe at that exact center and opens its card. It is not included in the
+detected count, exposes no decoded content before ordinary verification, reuses
+only another manual center within 12 Hz, and expires after 30 seconds if it
+cannot verify. Successful verification promotes the same session normally.
 Unverified candidates expire after 750 ms and never appear in the signal count.
 A callsign label additionally requires stable text and a completed word gap;
 partial, provisional, and unsupported one-off candidates remain hidden.
@@ -177,6 +182,11 @@ separation. After a locked track has been silent for 2.5 seconds, its stable
 text is retained and timing acquisition restarts for the next transmission.
 These acquisition thresholds are internal measured defaults in this build;
 profile controls will be added only with benchmark-backed safe ranges.
+The parallel acoustic lattice is evaluated at most every 500 ms and at a
+completed gap, retains at most four alternatives within 1.0 cost of the best
+path, and requires at least 0.40 timing evidence before appending consensus.
+Its **Acoustic correction** is displayed separately and never edits the literal
+stable transcript.
 
 The current deterministic qualification target is acquisition within six
 simulated seconds for clean, 30 WPM, and weak/fading/drifting CW, zero published

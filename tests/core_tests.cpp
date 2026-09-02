@@ -987,6 +987,87 @@ void test_cw_channel_bank_state_reason_consistency() {
          "least once, so the consistency checks above are not vacuous");
 }
 
+void test_operator_selected_cw_probe() {
+  using namespace cwassistant::core;
+  CwChannelBank bank({.decoded_track_retention_seconds = 30.0,
+                      .maximum_tracks = 2});
+  std::vector<float> quiet_spectrum(101, -100.0F);
+
+  expect(bank.selectFrequency(700.0) == 0,
+         "manual probe requires a current spectrum range");
+  static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 200.0, 1'200.0,
+                                        quiet_spectrum));
+  expect(bank.selectFrequency(150.0) == 0,
+         "manual probe rejects a frequency outside the displayed passband");
+
+  const std::uint64_t selected_id = bank.selectFrequency(700.0);
+  expect(selected_id != 0 && bank.channels().size() == 1,
+         "manual probe is published immediately for its operator session");
+  if (!bank.channels().empty()) {
+    const auto& selected = bank.channels().front();
+    expect(selected.id == selected_id && selected.operator_selected,
+           "manual probe retains its explicit operator-selected identity");
+    expect(!selected.verified_cw &&
+               selected.verification_state != CwTrackState::Verified,
+           "manual selection does not bypass CW verification");
+    expect(selected.callsign.empty() && selected.text.empty() &&
+               selected.provisional_text.empty(),
+           "a newly selected probe exposes no unverified decoded identity");
+  }
+
+  expect(bank.selectFrequency(710.0) == selected_id &&
+             bank.channels().size() == 1,
+         "nearby repeated clicks refresh one bounded probe");
+  const std::uint64_t close_pileup_id = bank.selectFrequency(739.0);
+  expect(close_pileup_id != 0 && close_pileup_id != selected_id &&
+             bank.channels().size() == 2,
+         "manual clicks create distinct probes for pileup lanes 29 Hz apart");
+
+  std::vector<float> weak_spectrum(101, -100.0F);
+  weak_spectrum[50] = -96.0F;  // 4 dB: below normal 7 dB acquisition.
+  static_cast<void>(bank.updateSpectrum(1'100'000'000ULL, 200.0, 1'200.0,
+                                        weak_spectrum));
+  const auto diagnostics = bank.allTrackDiagnostics();
+  const auto weak_probe = std::find_if(
+      diagnostics.cbegin(), diagnostics.cend(),
+      [selected_id](const CwTrackDiagnostic& diagnostic) {
+        return diagnostic.id == selected_id;
+      });
+  expect(diagnostics.size() == 2 && weak_probe != diagnostics.cend() &&
+             weak_probe->operator_selected && weak_probe->matched &&
+             weak_probe->spectral_observations == 1 &&
+             std::abs(weak_probe->frequency_hz - 710.0) < 0.1,
+         "manual probe accumulates measured sub-threshold center evidence");
+  expect(!bank.channels().empty() && !bank.channels().front().verified_cw,
+         "manual weak-signal priority still does not bypass verification");
+
+  static_cast<void>(bank.updateSpectrum(32'000'000'001ULL, 200.0, 1'200.0,
+                                        quiet_spectrum));
+  expect(bank.channels().empty(),
+         "an unverified manual probe expires after the bounded hold");
+
+  CwChannelBank close_lane_bank({.maximum_tracks = 3});
+  static_cast<void>(close_lane_bank.updateSpectrum(
+      1'000'000'000ULL, 200.0, 1'200.0, quiet_spectrum));
+  const std::uint64_t upper_lane_id =
+      close_lane_bank.selectFrequency(739.0);
+  std::vector<float> lower_lane_spectrum(101, -100.0F);
+  lower_lane_spectrum[51] = -80.0F;  // 710 Hz, 29 Hz below the click.
+  static_cast<void>(close_lane_bank.updateSpectrum(
+      1'100'000'000ULL, 200.0, 1'200.0, lower_lane_spectrum));
+  const auto close_lane_diagnostics = close_lane_bank.allTrackDiagnostics();
+  const auto upper_lane = std::find_if(
+      close_lane_diagnostics.cbegin(), close_lane_diagnostics.cend(),
+      [upper_lane_id](const CwTrackDiagnostic& diagnostic) {
+        return diagnostic.id == upper_lane_id;
+      });
+  expect(close_lane_diagnostics.size() == 2 &&
+             upper_lane != close_lane_diagnostics.cend() &&
+             std::abs(upper_lane->frequency_hz - 739.0) < 0.1 &&
+             !upper_lane->matched,
+         "manual probe cannot collapse onto a stronger lane 29 Hz away");
+}
+
 void test_cw_channel_presentation_frequency_model() {
   using namespace cwassistant::core;
   CwChannelBank bank({
@@ -1786,6 +1867,7 @@ int main() {
   test_cw_timing_decoder();
   test_cw_channel_bank();
   test_cw_channel_bank_state_reason_consistency();
+  test_operator_selected_cw_probe();
   test_cw_channel_presentation_frequency_model();
   test_cw_channel_bank_implausible_character_distribution();
   test_callsign_policy();

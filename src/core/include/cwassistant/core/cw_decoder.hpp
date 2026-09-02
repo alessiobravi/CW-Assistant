@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "cwassistant/core/cw_event_lattice.hpp"
+
 namespace cwassistant::core {
 
 struct CwCharacterEvidence {
@@ -13,6 +15,20 @@ struct CwCharacterEvidence {
   float confidence{0.0F};
   float timing_quality{0.0F};
   bool known{false};
+};
+
+// A segment-scoped acoustic alternative from the mark/gap timing lattice.
+// Unlike `text`, alternatives may change as more envelope evidence arrives.
+// Observation IDs let a consumer relate every suggestion back to immutable
+// physical runs without treating a plausible Morse string as ground truth.
+struct CwAcousticAlternative {
+  std::string text;
+  std::string provisional_elements;
+  double wpm{0.0};
+  double acoustic_cost{0.0};
+  float evidence_confidence{0.0F};
+  std::uint64_t first_observation_id{0};
+  std::uint64_t last_observation_id{0};
 };
 
 struct CwDecoderConfig {
@@ -44,6 +60,11 @@ struct CwDecoderUpdate {
   std::uint32_t key_transitions{0};
   std::uint32_t cadence_observations{0};
   std::vector<CwCharacterEvidence> characters;
+  // Append-only text agreed by every acoustically competitive lattice path at
+  // completed symbol boundaries. It is deliberately separate from `text`
+  // until capture-calibrated promotion into the primary decoder is proven.
+  std::string refined_text;
+  std::vector<CwAcousticAlternative> acoustic_alternatives;
   // Verification and hypothesis selection use this bounded recent window so
   // a track can recover from an earlier bad acquisition instead of carrying
   // lifetime-average evidence forever. The lifetime counters above remain
@@ -113,6 +134,9 @@ struct CwMultiSpeedConfig {
   double reacquire_after_silence_ms{2'500.0};
   std::uint8_t lock_after_symbols{2};
   float lock_score_margin{0.10F};
+  double lattice_checkpoint_ms{500.0};
+  double lattice_competitive_cost_margin{1.0};
+  float minimum_lattice_evidence_confidence{0.40F};
 };
 
 class CwMultiSpeedDecoder {
@@ -142,6 +166,10 @@ class CwMultiSpeedDecoder {
   void resetHypotheses();
   void observeCadence(bool key_down, std::uint64_t timestamp_ns);
   void recomputeCadenceEstimate();
+  void observeLattice(bool key_down, float key_down_probability,
+                      std::uint64_t timestamp_ns);
+  void refreshLattice(CwLatticeDecodeMode mode);
+  void resetLatticeSegment() noexcept;
 
   CwDecoderConfig decoder_config_;
   CwMultiSpeedConfig config_;
@@ -151,6 +179,17 @@ class CwMultiSpeedDecoder {
   std::uint64_t first_timestamp_ns_{0};
   std::uint64_t last_signal_timestamp_ns_{0};
   std::string committed_prefix_;
+  CwEventLattice event_lattice_;
+  std::string refined_text_;
+  std::vector<CwAcousticAlternative> acoustic_alternatives_;
+  std::uint64_t lattice_state_started_ns_{0};
+  std::uint64_t lattice_last_timestamp_ns_{0};
+  std::uint64_t lattice_last_decode_ns_{0};
+  std::uint64_t lattice_committed_observation_id_{0};
+  double lattice_confidence_sum_{0.0};
+  double lattice_confidence_duration_ms_{0.0};
+  bool lattice_initialized_{false};
+  bool lattice_key_down_{false};
   static constexpr std::size_t kCadenceDurationWindow = 64;
   std::array<double, kCadenceDurationWindow> recent_mark_ms_{};
   std::array<double, kCadenceDurationWindow> recent_gap_ms_{};

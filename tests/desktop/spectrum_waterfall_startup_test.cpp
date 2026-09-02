@@ -6,6 +6,7 @@
 #include "visualization/spectrum_waterfall_item.hpp"
 #include "visualization/waterfall_conditioner.hpp"
 #include "replay/replay_controller.hpp"
+#include "replay/decoder_channel_model.hpp"
 
 namespace {
 
@@ -19,6 +20,55 @@ class TestableSpectrumWaterfallItem final
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  cwassistant::core::CwChannelSnapshot selected_snapshot{
+      .id = 5,
+      .frequency_hz = 850.0,
+      .presentation_frequency_hz = 850.0,
+      .verified_cw = false,
+      .operator_selected = true,
+      .characters = {{.symbol = "A", .confidence = 0.8F,
+                      .timing_quality = 0.8F, .known = true}},
+      .text = "UNVERIFIED",
+      .refined_text = "EA1EYL ",
+      .provisional_text = "NO",
+      .pending_elements = ".-",
+      .callsign = "IU0LFQ",
+  };
+  QVariantMap selected_model =
+      cwassistant::desktop::decoderChannelModel(
+          std::span<const cwassistant::core::CwChannelSnapshot>{
+              &selected_snapshot, 1})
+          .front().toMap();
+  if (!selected_model.value(QStringLiteral("operatorSelected")).toBool() ||
+      selected_model.value(QStringLiteral("verifiedCw")).toBool() ||
+      !selected_model.value(QStringLiteral("text")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("refinedText")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("acousticAlternatives")).toList().isEmpty() ||
+      !selected_model.value(QStringLiteral("provisionalText")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("elements")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("callsign")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("characterEvidence")).toList().isEmpty() ||
+      selected_model.value(QStringLiteral("color")).toString() !=
+          QStringLiteral("#8d9aaa")) {
+    return 18;
+  }
+  selected_snapshot.verified_cw = true;
+  selected_model =
+      cwassistant::desktop::decoderChannelModel(
+          std::span<const cwassistant::core::CwChannelSnapshot>{
+              &selected_snapshot, 1})
+          .front().toMap();
+  if (selected_model.value(QStringLiteral("text")).toString() !=
+          QStringLiteral("UNVERIFIED") ||
+      selected_model.value(QStringLiteral("refinedText")).toString() !=
+          QStringLiteral("EA1EYL ") ||
+      selected_model.value(QStringLiteral("callsign")).toString() !=
+          QStringLiteral("IU0LFQ") ||
+      selected_model.value(QStringLiteral("characterEvidence")).toList().size() != 1 ||
+      selected_model.value(QStringLiteral("color")).toString() ==
+          QStringLiteral("#8d9aaa")) {
+    return 19;
+  }
   const QVariantMap previous_session{
       {QStringLiteral("id"), QVariant::fromValue<qulonglong>(7)},
       {QStringLiteral("color"), QStringLiteral("#4dd0e1")},

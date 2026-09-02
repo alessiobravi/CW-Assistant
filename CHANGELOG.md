@@ -8,14 +8,31 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Clicking an unmarked spectrum/waterfall frequency now opens a neutral manual
+  decoder slice at that exact audio center. The probe can accumulate measured
+  weak-signal evidence below automatic acquisition, keeps nearby manually
+  selected lanes distinct, and promotes into the normal colored stream only
+  after the unchanged acoustic verification gates pass; otherwise it expires
+  after 30 seconds and exposes no text or callsign.
+
+- The live timing decoder now feeds immutable mark/gap runs into its bounded
+  event lattice. At completed-gap checkpoints it publishes up to four acoustic
+  timing alternatives and a separate append-only correction containing only
+  characters and spaces on which competitive paths agree. Decoder cards keep
+  the literal transcript and label this consensus separately; a supported
+  complete callsign may be identified from either stream without silently
+  rewriting the received text.
+
 - Added dependency-free decoder foundations for the next accuracy pass: a
   bounded acoustic event lattice retains timestamped mark/gap evidence and
   produces N-best Morse segmentations without callsign or language influence;
   a separate callsign-evidence ranker preserves the raw span while scoring only
   acoustically compatible suggestions with capped provider evidence; and
   validated conversation profiles distinguish neutral monitoring, open-ended
-  ordinary QSOs, and rule-specific contest exchanges. These APIs do not replace
-  the live transcript or provide any path from decoder events to transmission.
+  ordinary QSOs, and rule-specific contest exchanges. The lattice now feeds a
+  separately labeled acoustic correction while the literal transcript remains
+  intact; none of these APIs provides a path from decoder events to
+  transmission.
 
 - Open decoder cards now follow newly appended text automatically unless the
   operator is selecting text. Confirmed remote callsigns are bold and
@@ -72,6 +89,10 @@ All notable changes to CW Assistant are recorded here. The format follows
   remaining scope of `PKG-004`).
 
 ### Changed
+
+- Stream labels and RF mapping now use the stabilized presentation frequency;
+  the adaptive DSP center remains available for diagnostics but small carrier
+  estimates no longer make the operator-facing frequency flicker.
 
 - A track now stops feeding its timing decoder after 750 ms without a matched
   spectral candidate. The boundary forces key-up and flushes pending acoustic

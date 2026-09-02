@@ -34,6 +34,9 @@ int main() {
       !contains(transcript, "decodedTextArea.selectionStart") ||
       !contains(transcript, "decodedTextArea.selectionEnd") ||
       !contains(transcript, "function applyDecodedText(nextText)") ||
+      !contains(qml, "property string correctedDecodedText:") ||
+      !contains(qml, "Acoustic correction:") ||
+      !contains(transcript, "onDisplayedDecodedTextChanged()") ||
       !contains(transcript, "select(Math.min(oldSelectionStart") ||
       !contains(transcript, "if (!followTail)") ||
       !contains(transcript, "function onMovementStarted()") ||
@@ -49,6 +52,30 @@ int main() {
       !contains(transcript, "ScrollBar.vertical: ScrollBar") ||
       !contains(transcript, "policy: ScrollBar.AlwaysOn")) {
     return 4;
+  }
+
+  const std::size_t manual_start = qml.find("id: manualSliceHitArea");
+  const std::size_t marker_start = qml.find("id: channelMarker");
+  const std::size_t marker_end = qml.find("ToolTip.text:", marker_start);
+  if (manual_start == std::string::npos || marker_start == std::string::npos ||
+      marker_end == std::string::npos || manual_start >= marker_start) {
+    return 5;
+  }
+  const std::string manual = qml.substr(manual_start,
+                                        marker_start - manual_start);
+  const std::string marker = qml.substr(marker_start,
+                                        marker_end - marker_start);
+  if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
+      !contains(manual, "z: 4") ||
+      !contains(manual, "onClicked: function(mouse)") ||
+      !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
+      !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
+      !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
+      !contains(marker, "z: 5") ||
+      !contains(marker, "id: channelHitArea") ||
+      !contains(marker, "onClicked: function(mouse)") ||
+      !contains(marker, "replayController.openDecoderSession(")) {
+    return 6;
   }
   return 0;
 }

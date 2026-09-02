@@ -148,6 +148,10 @@ struct CwChannelSnapshot {
   bool key_down{false};
   bool active{false};
   bool verified_cw{false};
+  // True while this channel is visible because the operator explicitly
+  // selected its frequency. Selection creates a bounded analysis probe; it
+  // never bypasses the ordinary acoustic verification gates.
+  bool operator_selected{false};
   CwTrackState verification_state{CwTrackState::Candidate};
   CwVerificationReason verification_reason{
       CwVerificationReason::NeedsSpectralPersistence};
@@ -161,6 +165,10 @@ struct CwChannelSnapshot {
   std::uint32_t key_transitions{0};
   std::vector<CwCharacterEvidence> characters;
   std::string text;
+  // Append-only text on which the competitive acoustic timing paths agree.
+  // It remains separate from the literal decoder output above.
+  std::string refined_text;
+  std::vector<CwAcousticAlternative> acoustic_alternatives;
   std::string provisional_text;
   std::string pending_elements;
   std::string callsign;
@@ -192,12 +200,15 @@ struct CwTrackDiagnostic {
   double acoustic_wpm{0.0};
   float acoustic_cadence_confidence{0.0F};
   std::string text;
+  std::string refined_text;
+  std::vector<CwAcousticAlternative> acoustic_alternatives;
   std::string provisional_text;
   double match_age_seconds{0.0};
   std::uint8_t color_index{0};
   bool matched{false};
   bool active{false};
   bool key_down{false};
+  bool operator_selected{false};
 };
 
 class CwChannelBank {
@@ -221,6 +232,10 @@ class CwChannelBank {
       double upper_frequency_hz, std::span<const float> bins_dbfs);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& processSamples(
       const RealtimeSampleBlock& block);
+  // Creates or refreshes a bounded analysis probe at an operator-selected
+  // frequency. Returns its track ID, or zero when no valid spectrum range is
+  // available or the frequency is outside that range.
+  [[nodiscard]] std::uint64_t selectFrequency(double frequency_hz) noexcept;
   [[nodiscard]] const std::vector<CwChannelSnapshot>& channels() const noexcept;
   [[nodiscard]] CwVerificationDiagnostics verificationDiagnostics() const;
   [[nodiscard]] std::vector<CwTrackDiagnostic> allTrackDiagnostics() const;
@@ -251,6 +266,8 @@ class CwChannelBank {
     // bounded hold expires, close the current timing segment exactly once and
     // stop feeding residual/adjacent audio until a real candidate matches.
     bool decoder_input_suspended{false};
+    bool operator_selected{false};
+    std::uint64_t operator_selected_ns{0};
     CwTrackState verification_state{CwTrackState::Candidate};
     CwVerificationReason verification_reason{
         CwVerificationReason::NeedsSpectralPersistence};
@@ -356,6 +373,10 @@ class CwChannelBank {
   std::uint64_t next_track_id_{1};
   StreamDescriptor stream_{};
   std::uint64_t expected_sample_timestamp_ns_{0};
+  std::uint64_t last_spectrum_timestamp_ns_{0};
+  double last_spectrum_lower_frequency_hz_{0.0};
+  double last_spectrum_upper_frequency_hz_{0.0};
+  bool spectrum_range_initialized_{false};
   bool stream_initialized_{false};
   bool sample_timing_initialized_{false};
   std::uint64_t verified_transitions_{0};

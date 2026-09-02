@@ -47,9 +47,18 @@ std::size_t characterEvidenceBytes(
 }
 
 std::size_t updateDynamicBytes(const CwDecoderUpdate& update) noexcept {
-  return update.text.capacity() + update.provisional_text.capacity() +
-         update.pending_elements.capacity() +
-         characterEvidenceBytes(update.characters);
+  std::size_t result = update.text.capacity() +
+                       update.provisional_text.capacity() +
+                       update.pending_elements.capacity() +
+                       update.refined_text.capacity() +
+                       characterEvidenceBytes(update.characters) +
+                       update.acoustic_alternatives.capacity() *
+                           sizeof(CwAcousticAlternative);
+  for (const auto& alternative : update.acoustic_alternatives) {
+    result += alternative.text.capacity() +
+              alternative.provisional_elements.capacity();
+  }
+  return result;
 }
 
 constexpr std::size_t kRecentCharacterWindow = 32;
@@ -82,6 +91,7 @@ void CwTimingDecoder::reset() noexcept {
   state_started_ns_ = 0; last_timestamp_ns_ = 0;
   last_snr_db_ = 0.0F; key_down_probability_ = 0.0F;
   confidence_ = 0.0F; element_confidence_sum_ = 0.0F;
+  timing_confidence_sum_ = 0.0F;
   mark_probability_sum_ = 0.0F; mark_probability_duration_ms_ = 0.0;
   decoded_symbol_count_ = 0;
   unknown_symbol_count_ = 0;
@@ -367,6 +377,8 @@ CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
           .key_transitions = key_transition_count_,
           .cadence_observations = cadence_observation_count_,
           .characters = characters_,
+          .refined_text = {},
+          .acoustic_alternatives = {},
           .recent_decoded_symbols =
               static_cast<std::uint32_t>(character_count),
           .recent_unknown_symbols = recent_unknown,
@@ -394,11 +406,26 @@ CwMultiSpeedDecoder::CwMultiSpeedDecoder(
       std::clamp<std::uint8_t>(config_.lock_after_symbols, 1, 8);
   config_.lock_score_margin =
       std::clamp(config_.lock_score_margin, 0.0F, 1.0F);
+  config_.lattice_checkpoint_ms = std::clamp(
+      std::isfinite(config_.lattice_checkpoint_ms)
+          ? config_.lattice_checkpoint_ms : 500.0,
+      100.0, 2'000.0);
+  config_.lattice_competitive_cost_margin = std::clamp(
+      std::isfinite(config_.lattice_competitive_cost_margin)
+          ? config_.lattice_competitive_cost_margin : 1.0,
+      0.10, 5.0);
+  config_.minimum_lattice_evidence_confidence = std::clamp(
+      std::isfinite(config_.minimum_lattice_evidence_confidence)
+          ? config_.minimum_lattice_evidence_confidence : 0.40F,
+      0.20F, 0.90F);
   reset();
 }
 
 void CwMultiSpeedDecoder::reset() {
   committed_prefix_.clear();
+  refined_text_.clear();
+  lattice_committed_observation_id_ = 0;
+  resetLatticeSegment();
   resetHypotheses();
 }
 
@@ -444,6 +471,9 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
       changed = changed || hypothesis.update.changed;
     }
     observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
+    observeLattice(hypotheses_.front().update.key_down,
+                   hypotheses_.front().update.key_down_probability,
+                   timestamp_ns);
     const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
     const double silence_ms = signal_seen_ &&
@@ -461,6 +491,10 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
         committed_prefix_.push_back(' ');
       if (committed_prefix_.size() > 4'096)
         committed_prefix_.erase(0, committed_prefix_.size() - 4'096);
+      refreshLattice(CwLatticeDecodeMode::Flush);
+      if (!refined_text_.empty() && refined_text_.back() != ' ')
+        refined_text_.push_back(' ');
+      resetLatticeSegment();
       resetHypotheses();
       return snapshot(true);
     }
@@ -473,6 +507,9 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     changed = changed || hypothesis.update.changed;
   }
   observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
+  observeLattice(hypotheses_.front().update.key_down,
+                 hypotheses_.front().update.key_down_probability,
+                 timestamp_ns);
   const std::size_t previous_leader = leader_index_;
   float margin = 0.0F;
   leader_index_ = selectLeader(&margin);
@@ -491,6 +528,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::flush(
   leader_index_ = selectLeader();
   locked_index_ = leader_index_;
   locked_ = true;
+  observeLattice(false, 0.0F, timestamp_ns);
+  refreshLattice(CwLatticeDecodeMode::Flush);
   return snapshot(true);
 }
 
@@ -501,7 +540,13 @@ std::size_t CwMultiSpeedDecoder::hypothesisCount() const noexcept {
 std::size_t CwMultiSpeedDecoder::stateBytes() const noexcept {
   std::size_t result = sizeof(*this) +
       hypotheses_.capacity() * sizeof(Hypothesis) +
-      committed_prefix_.capacity();
+      committed_prefix_.capacity() + refined_text_.capacity() +
+      acoustic_alternatives_.capacity() * sizeof(CwAcousticAlternative) +
+      event_lattice_.stateBytes() - sizeof(CwEventLattice);
+  for (const auto& alternative : acoustic_alternatives_) {
+    result += alternative.text.capacity() +
+              alternative.provisional_elements.capacity();
+  }
   for (const auto& hypothesis : hypotheses_) {
     result += hypothesis.decoder.stateBytes() - sizeof(CwTimingDecoder);
     result += updateDynamicBytes(hypothesis.update);
@@ -676,6 +721,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
   result.acoustic_wpm = cadence_dot_ms_ > 0.0
       ? 1'200.0 / cadence_dot_ms_ : 0.0;
   result.acoustic_cadence_confidence = cadence_confidence_;
+  result.refined_text = refined_text_;
+  result.acoustic_alternatives = acoustic_alternatives_;
   if (!locked_) {
     result.provisional_text = result.text + result.provisional_text;
     result.text = committed_prefix_;
@@ -683,6 +730,195 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
     result.text = committed_prefix_ + result.text;
   }
   return result;
+}
+
+void CwMultiSpeedDecoder::observeLattice(
+    const bool key_down, const float key_down_probability,
+    const std::uint64_t timestamp_ns) {
+  const float probability = std::clamp(key_down_probability, 0.0F, 1.0F);
+  if (!lattice_initialized_) {
+    lattice_initialized_ = true;
+    lattice_key_down_ = key_down;
+    lattice_state_started_ns_ = timestamp_ns;
+    lattice_last_timestamp_ns_ = timestamp_ns;
+    return;
+  }
+  if (timestamp_ns < lattice_last_timestamp_ns_ ||
+      timestamp_ns < lattice_state_started_ns_) {
+    resetLatticeSegment();
+    lattice_initialized_ = true;
+    lattice_key_down_ = key_down;
+    lattice_state_started_ns_ = timestamp_ns;
+    lattice_last_timestamp_ns_ = timestamp_ns;
+    return;
+  }
+
+  const double elapsed_ms = milliseconds(timestamp_ns -
+                                          lattice_last_timestamp_ns_);
+  const float state_confidence = lattice_key_down_ ? probability
+                                                    : 1.0F - probability;
+  lattice_confidence_sum_ += static_cast<double>(state_confidence) *
+                             elapsed_ms;
+  lattice_confidence_duration_ms_ += elapsed_ms;
+  lattice_last_timestamp_ns_ = timestamp_ns;
+  if (key_down == lattice_key_down_) return;
+
+  const double duration_ms = milliseconds(timestamp_ns -
+                                           lattice_state_started_ns_);
+  const float confidence = lattice_confidence_duration_ms_ > 0.0
+      ? static_cast<float>(std::clamp(
+            lattice_confidence_sum_ / lattice_confidence_duration_ms_,
+            0.0, 1.0))
+      : state_confidence;
+  const bool completed_gap = !lattice_key_down_;
+  // Ignore leading silence. The lattice starts with the first physical mark,
+  // so a recording or newly acquired track does not treat arbitrary pre-key
+  // time as Morse spacing evidence.
+  if (event_lattice_.observationCount() > 0U || lattice_key_down_) {
+    static_cast<void>(event_lattice_.append({
+        .keyed = lattice_key_down_,
+        .duration_ms = duration_ms,
+        .confidence = confidence,
+        .started_ns = lattice_state_started_ns_,
+        .ended_ns = timestamp_ns,
+    }));
+  }
+  lattice_key_down_ = key_down;
+  lattice_state_started_ns_ = timestamp_ns;
+  lattice_confidence_sum_ = 0.0;
+  lattice_confidence_duration_ms_ = 0.0;
+
+  // A completed gap is the only point at which another stable character can
+  // exist. Keep this bounded batch calculation off the per-sample path.
+  if (completed_gap &&
+      (lattice_last_decode_ns_ == 0U ||
+       milliseconds(timestamp_ns - lattice_last_decode_ns_) >=
+           config_.lattice_checkpoint_ms)) {
+    refreshLattice(CwLatticeDecodeMode::Provisional);
+    lattice_last_decode_ns_ = timestamp_ns;
+  }
+}
+
+void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
+  if (event_lattice_.observationCount() == 0U || hypotheses_.empty()) return;
+  // Every fixed timing anchor continues running after presentation lock. Use
+  // the currently strongest complete acoustic path, not the historical lock,
+  // so the refinement path can recover from an early cadence choice without
+  // rewriting the primary transcript.
+  const std::size_t lattice_leader = selectLeader();
+  double candidate_wpm = hypotheses_[lattice_leader].update.wpm;
+  const double cadence_wpm = cadence_dot_ms_ > 0.0
+      ? 1'200.0 / cadence_dot_ms_ : 0.0;
+  const double cadence_ratio = candidate_wpm > 0.0
+      ? cadence_wpm / candidate_wpm : 0.0;
+  // The independent estimator is deliberately a guard, not a broad override:
+  // noisy pileups can produce a confident-looking harmonic fit at roughly
+  // twice the selected speed. Use it only when strong evidence agrees with
+  // the continuously evaluated timing bank's neighborhood.
+  if (cadence_confidence_ >= 0.65F && cadence_wpm > 0.0 &&
+      cadence_ratio >= 0.75 && cadence_ratio <= 1.35) {
+    candidate_wpm = cadence_wpm;
+  }
+  if (!std::isfinite(candidate_wpm) || candidate_wpm <= 0.0) return;
+
+  const auto decoded = event_lattice_.decode(1'200.0 / candidate_wpm, mode);
+  acoustic_alternatives_.clear();
+  if (decoded.alternatives.empty()) return;
+  acoustic_alternatives_.reserve(decoded.alternatives.size());
+  for (const auto& alternative : decoded.alternatives) {
+    std::uint64_t first_id = alternative.provisional_first_observation_id;
+    std::uint64_t last_id = alternative.provisional_last_observation_id;
+    if (!alternative.symbols.empty()) {
+      first_id = alternative.symbols.front().first_observation_id;
+      last_id = alternative.symbols.back().last_observation_id;
+    }
+    last_id = std::max(last_id,
+                       alternative.provisional_last_observation_id);
+    acoustic_alternatives_.push_back({
+        .text = alternative.text(),
+        .provisional_elements = alternative.provisional_elements,
+        .wpm = candidate_wpm,
+        .acoustic_cost = alternative.acoustic_cost,
+        .evidence_confidence = alternative.evidence_confidence,
+        .first_observation_id = first_id,
+        .last_observation_id = last_id,
+    });
+  }
+
+  const double maximum_cost = decoded.alternatives.front().acoustic_cost +
+                              config_.lattice_competitive_cost_margin;
+  std::size_t competitive_count = 1U;
+  while (competitive_count < decoded.alternatives.size() &&
+         decoded.alternatives[competitive_count].acoustic_cost <=
+             maximum_cost) {
+    ++competitive_count;
+  }
+  // An early preferred-speed path can be internally self-consistent while it
+  // is still the wrong cadence (a slow dit resembles a faster dash). Expose
+  // its segment-scoped alternatives, but do not make them append-only until
+  // the multi-speed acquisition has settled or an explicit flush closes the
+  // segment.
+  if ((!locked_ && mode == CwLatticeDecodeMode::Provisional) ||
+      decoded.alternatives.front().evidence_confidence <
+          config_.minimum_lattice_evidence_confidence) {
+    return;
+  }
+
+  const auto& best_symbols = decoded.alternatives.front().symbols;
+  for (std::size_t symbol_index = 0; symbol_index < best_symbols.size();
+       ++symbol_index) {
+    const auto& candidate = best_symbols[symbol_index];
+    if (candidate.last_observation_id <= lattice_committed_observation_id_) {
+      continue;
+    }
+    // Never let a later best path reinterpret a run that has already crossed
+    // the append-only boundary. A newly agreed symbol must begin entirely to
+    // the right of the last committed physical observation.
+    if (candidate.first_observation_id <=
+        lattice_committed_observation_id_) {
+      break;
+    }
+    bool agreed = true;
+    for (std::size_t path_index = 1U; path_index < competitive_count;
+         ++path_index) {
+      const auto& symbols = decoded.alternatives[path_index].symbols;
+      if (symbol_index >= symbols.size()) {
+        agreed = false;
+        break;
+      }
+      const auto& compared = symbols[symbol_index];
+      if (candidate.symbol != compared.symbol ||
+          candidate.known != compared.known ||
+          candidate.word_boundary_after != compared.word_boundary_after ||
+          candidate.first_observation_id != compared.first_observation_id ||
+          candidate.last_observation_id != compared.last_observation_id) {
+        agreed = false;
+        break;
+      }
+    }
+    if (!agreed) break;
+    refined_text_ += candidate.known ? candidate.symbol : "?";
+    if (candidate.word_boundary_after &&
+        (refined_text_.empty() || refined_text_.back() != ' ')) {
+      refined_text_.push_back(' ');
+    }
+    lattice_committed_observation_id_ = candidate.last_observation_id;
+    if (refined_text_.size() > 4'096) {
+      refined_text_.erase(0, refined_text_.size() - 4'096);
+    }
+  }
+}
+
+void CwMultiSpeedDecoder::resetLatticeSegment() noexcept {
+  event_lattice_.reset();
+  acoustic_alternatives_.clear();
+  lattice_state_started_ns_ = 0;
+  lattice_last_timestamp_ns_ = 0;
+  lattice_last_decode_ns_ = 0;
+  lattice_confidence_sum_ = 0.0;
+  lattice_confidence_duration_ms_ = 0.0;
+  lattice_initialized_ = false;
+  lattice_key_down_ = false;
 }
 
 void CwMultiSpeedDecoder::considerLock(const float margin) {

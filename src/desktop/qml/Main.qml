@@ -315,6 +315,36 @@ ApplicationWindow {
                         }
                     }
                 }
+                MouseArea {
+                    id: manualSliceHitArea
+                    objectName: "manualSliceHitArea"
+                    x: spectrumDisplay.x
+                    y: spectrumDisplay.y
+                    width: spectrumDisplay.width
+                    height: spectrumDisplay.height
+                    z: 4
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton
+                    cursorShape: Qt.CrossCursor
+                    onClicked: function(mouse) {
+                        if (!replayController.activeSource || width <= 0
+                                || spectrumDisplay.upperFrequencyHz
+                                   <= spectrumDisplay.lowerFrequencyHz) {
+                            return
+                        }
+                        var fraction = Math.max(0, Math.min(1,
+                                                           mouse.x / width))
+                        var frequencyHz = spectrumDisplay.lowerFrequencyHz
+                                + fraction
+                                  * (spectrumDisplay.upperFrequencyHz
+                                     - spectrumDisplay.lowerFrequencyHz)
+                        appSettings.cwGuideCenterHz = frequencyHz
+                        replayController.openManualDecoderSession(frequencyHz)
+                    }
+                    ToolTip.visible: containsMouse
+                    ToolTip.delay: 650
+                    ToolTip.text: "Click an unmarked signal to open a manual decoding slice"
+                }
                 Repeater {
                     model: replayController.decoderChannels
                     delegate: Item {
@@ -332,7 +362,8 @@ ApplicationWindow {
                         property real areaWidthPx: Math.max(28,
                             window.hzToX(channelHz + markerWidthHz / 2)
                             - window.hzToX(channelHz - markerWidthHz / 2))
-                        visible: modelData.verifiedCw
+                        visible: (modelData.verifiedCw
+                                  || modelData.operatorSelected)
                                  && channelHz >= spectrumDisplay.lowerFrequencyHz
                                  && channelHz <= spectrumDisplay.upperFrequencyHz
                                  && spectrumDisplay.upperFrequencyHz
@@ -345,23 +376,26 @@ ApplicationWindow {
                         Rectangle {
                             anchors.fill: parent
                             color: modelData.color
-                            opacity: modelData.active ? 0.28 : 0.0
+                            opacity: modelData.verifiedCw
+                                     ? (modelData.active ? 0.28 : 0.0)
+                                     : 0.10
                             border.color: modelData.color
-                            border.width: modelData.active ? 1 : 0
+                            border.width: modelData.verifiedCw
+                                          ? (modelData.active ? 1 : 0) : 1
                         }
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: modelData.keyDown ? 3 : 1
                             height: parent.height
                             color: modelData.color
-                            visible: modelData.active
+                            visible: modelData.verifiedCw && modelData.active
                             opacity: 0.9
                         }
                         Rectangle {
                             // A retained but inactive stream leaves the plot
                             // clear and keeps only a short identity-colored
                             // mark on the frequency axis.
-                            visible: !modelData.active
+                            visible: modelData.verifiedCw && !modelData.active
                             y: parent.height * 0.36 - 1
                             width: parent.width
                             height: 3
@@ -374,7 +408,9 @@ ApplicationWindow {
                             y: spectrumDisplay.height * 0.36 - height - 12
                             transformOrigin: Item.BottomLeft
                             rotation: -90
-                            text: modelData.callsign.length > 0
+                            text: !modelData.verifiedCw
+                                  ? modelData.frequencyLabel + " • manual"
+                                  : modelData.callsign.length > 0
                                   ? modelData.callsign
                                   : modelData.frequencyLabel
                             color: modelData.color
@@ -403,7 +439,7 @@ ApplicationWindow {
                             preventStealing: true
                             z: 10
                             cursorShape: Qt.PointingHandCursor
-                            onPressed: function(mouse) {
+                            onClicked: function(mouse) {
                                 replayController.openDecoderSession(
                                             channelMarker.modelData.id)
                                 mouse.accepted = true
@@ -413,6 +449,9 @@ ApplicationWindow {
                             ToolTip.text: (modelData.callsign.length > 0
                                            ? modelData.callsign + "\n" : "")
                                           + modelData.frequencyLabel + "\n"
+                                          + (!modelData.verifiedCw
+                                             ? "Manual slice • awaiting ordinary CW verification\n"
+                                             : "")
                                           + modelData.audioFrequencyHz.toFixed(1)
                                             + " Hz audio • "
                                           + modelData.filterWidthHz.toFixed(0)
@@ -870,6 +909,8 @@ ApplicationWindow {
                             + " signal(s) detected • "
                             + replayController.decoderSessionCount
                             + " session(s) open"
+                          : replayController.decoderSessionCount > 0
+                            ? "Manual slice open • awaiting CW verification"
                           : "Scanning the complete processed passband"
                     color: "#8290a0"
                     wrapMode: Text.WordWrap
@@ -949,9 +990,21 @@ ApplicationWindow {
                             : (modelData.provisionalText.length > 0
                                ? modelData.provisionalText
                                : (modelData.elements.length > 0
-                                  ? modelData.elements : "Listening…"))
+                                  ? modelData.elements
+                                  : (!modelData.verifiedCw
+                                     ? "Analyzing the selected frequency…"
+                                     : "Listening…")))
+                        property string correctedDecodedText:
+                            modelData.refinedText.length > 0
+                            && modelData.refinedText !== modelData.text
+                            ? modelData.refinedText : ""
+                        property string displayedDecodedText:
+                            correctedDecodedText.length > 0
+                            ? rawDecodedText + "\n\nAcoustic correction:\n"
+                              + correctedDecodedText
+                            : rawDecodedText
                         property int ownCallMatches: window.exactCallCount(
-                            rawDecodedText, appSettings.ownCallsign)
+                            displayedDecodedText, appSettings.ownCallsign)
                         property int previousOwnCallMatches: 0
                         onOwnCallMatchesChanged: {
                             if (ownCallMatches > previousOwnCallMatches)
@@ -1016,7 +1069,9 @@ ApplicationWindow {
                                 }
                                 Item { Layout.fillWidth: true }
                                 Label {
-                                    text: modelData.active ? "ACTIVE" : "HOLD"
+                                    text: !modelData.verifiedCw
+                                          ? "MANUAL"
+                                          : (modelData.active ? "ACTIVE" : "HOLD")
                                     color: modelData.active ? modelData.color : "#718091"
                                     font.pixelSize: 10
                                 }
@@ -1142,12 +1197,12 @@ ApplicationWindow {
                                     }
                                     Component.onCompleted:
                                         applyDecodedText(
-                                            sessionCard.rawDecodedText)
+                                            sessionCard.displayedDecodedText)
                                     Connections {
                                         target: sessionCard
-                                        function onRawDecodedTextChanged() {
+                                        function onDisplayedDecodedTextChanged() {
                                             decodedTextArea.applyDecodedText(
-                                                sessionCard.rawDecodedText)
+                                                sessionCard.displayedDecodedText)
                                         }
                                     }
                                 }
