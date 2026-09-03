@@ -9,6 +9,9 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
 #include <unordered_map>
 
 #include "../visualization/spectrum_frame.hpp"
@@ -23,6 +26,12 @@ namespace cwassistant::desktop {
     const QList<qulonglong>& requested_order,
     const QVariantList& previous_sessions,
     const QVariantList& current_channels);
+
+// Returns only a callsign-bearing span whose stable consensus grew in the
+// current inference update. Older append-only text cannot be reused as fresh
+// verification evidence when unrelated later characters arrive.
+[[nodiscard]] std::optional<std::string> freshCharacterRefinementCallEvidence(
+    std::string_view stable_text, std::size_t previous_stable_size);
 
 class ReplayController final : public QObject {
   Q_OBJECT
@@ -182,6 +191,12 @@ class ReplayController final : public QObject {
                                                const QString& metadata_path);
   void replayCharacterFrontendEnabledRequested(bool enabled);
   void liveCharacterFrontendEnabledRequested(bool enabled);
+  void replayCharacterRefinementRequested(qulonglong channel_id,
+                                          const QString& stable_text,
+                                          qulonglong evidence_timestamp_ns);
+  void liveCharacterRefinementRequested(qulonglong channel_id,
+                                        const QString& stable_text,
+                                        qulonglong evidence_timestamp_ns);
   void localCharacterResetRequested();
 
  private:

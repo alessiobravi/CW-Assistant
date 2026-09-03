@@ -11,6 +11,7 @@
 #include <QVariantMap>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <utility>
@@ -77,6 +78,46 @@ QList<qulonglong> reconcileDecoderSessionOrder(
     if (replacement_id != 0) reconciled.push_back(replacement_id);
   }
   return reconciled;
+}
+
+std::optional<std::string> freshCharacterRefinementCallEvidence(
+    const std::string_view stable_text,
+    const std::size_t previous_stable_size) {
+  if (stable_text.size() <= previous_stable_size) return std::nullopt;
+
+  std::optional<std::string> fresh_call;
+  std::size_t token_start = 0U;
+  while (token_start < stable_text.size()) {
+    while (token_start < stable_text.size()) {
+      const auto character =
+          static_cast<unsigned char>(stable_text[token_start]);
+      if (std::isalnum(character) != 0 || character == '/') break;
+      ++token_start;
+    }
+    if (token_start == stable_text.size()) break;
+    std::size_t token_end = token_start;
+    while (token_end < stable_text.size()) {
+      const auto character = static_cast<unsigned char>(stable_text[token_end]);
+      if (std::isalnum(character) == 0 && character != '/') break;
+      ++token_end;
+    }
+
+    const std::string_view token =
+        stable_text.substr(token_start, token_end - token_start);
+    const auto candidate =
+        cwassistant::core::CallsignPolicy::latest_in_text(token);
+    if (candidate && token_end > previous_stable_size) {
+      const std::size_t previous_token_length = previous_stable_size > token_start
+          ? std::min(previous_stable_size, token_end) - token_start
+          : 0U;
+      const bool was_already_a_complete_call = previous_token_length > 0U &&
+          cwassistant::core::CallsignPolicy::latest_in_text(
+              token.substr(0U, previous_token_length)).has_value();
+      if (!was_already_a_complete_call) fresh_call = std::string(token);
+    }
+    token_start = token_end;
+  }
+  return fresh_call;
 }
 
 class ReplayWorker final : public QObject {
@@ -188,6 +229,16 @@ class ReplayWorker final : public QObject {
 
   void setLocalCharacterFrontendEnabled(const bool enabled) {
     character_frontends_.setEnabled(enabled);
+  }
+
+  void acceptCharacterRefinement(const qulonglong channel_id,
+                                 const QString& stable_text,
+                                 const qulonglong evidence_timestamp_ns) {
+    if (decoder_.acceptCharacterRefinement(
+            static_cast<std::uint64_t>(channel_id), stable_text.toStdString(),
+            static_cast<std::uint64_t>(evidence_timestamp_ns))) {
+      emit decoderProduced(decoderChannelModel(decoder_.channels()));
+    }
   }
 
   void selectDecoderFrequency(const double audio_frequency_hz) {
@@ -307,7 +358,24 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             const auto id = hypothesis->track.track_id;
             auto [entry, inserted] = local_character_consensus_.try_emplace(id);
             static_cast<void>(inserted);
+            const std::size_t previous_stable_size =
+                entry->second.stableText().size();
             const auto update = entry->second.process(*hypothesis);
+            const auto fresh_evidence = freshCharacterRefinementCallEvidence(
+                entry->second.stableText(), previous_stable_size);
+            if (fresh_evidence) {
+              const QString stable_text =
+                  QString::fromStdString(*fresh_evidence);
+              if (source_mode == 0) {
+                emit liveCharacterRefinementRequested(
+                    static_cast<qulonglong>(id), stable_text,
+                    static_cast<qulonglong>(hypothesis->window_ended_ns));
+              } else {
+                emit replayCharacterRefinementRequested(
+                    static_cast<qulonglong>(id), stable_text,
+                    static_cast<qulonglong>(hypothesis->window_ended_ns));
+              }
+            }
             if (update.changed) rebuildDecoderModels();
           });
   character_inference_thread_.setObjectName(
@@ -331,6 +399,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
   connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
           worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
+  connect(this, &ReplayController::replayCharacterRefinementRequested,
+          worker, &ReplayWorker::acceptCharacterRefinement);
   connect(worker, &ReplayWorker::characterWindowProduced, character_worker,
           &LocalCharacterInferenceWorker::submit, Qt::DirectConnection);
   connect(this, &ReplayController::manualDecoderFrequencyRequested, worker,
@@ -411,6 +481,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
+  connect(this, &ReplayController::liveCharacterRefinementRequested,
+          dsp_worker, &LiveAudioDspWorker::acceptCharacterRefinement);
   connect(dsp_worker, &LiveAudioDspWorker::characterWindowProduced,
           character_worker, &LocalCharacterInferenceWorker::submit,
           Qt::DirectConnection);
@@ -728,7 +800,7 @@ void ReplayController::rebuildDecoderModels() {
       item.insert(QStringLiteral("localModelText"),
                   QString::fromStdString(stable_text));
       const auto suggested_callsign =
-          cwassistant::core::CallsignPolicy::best_complete_in_text(stable_text);
+          cwassistant::core::CallsignPolicy::latest_in_text(stable_text);
       item.insert(QStringLiteral("localModelCallsign"),
                   suggested_callsign
                       ? QString::fromStdString(*suggested_callsign)

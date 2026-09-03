@@ -74,7 +74,10 @@ The association origin remains immutable except for a known receiver retune.
 The adaptive DSP center follows accepted peaks, while a separate display center
 is robustly reanchored at first verification and thereafter follows only
 sustained coherent, low-dispersion motion through bounded deadband and slew
-guards. Display correction never feeds association, decoding, or color leases.
+guards. Display correction never feeds classical association, decoding, or
+color leases; the optional narrow character-refinement lane uses this robust
+center specifically to reject short DSP-center excursions onto keyed
+sidelobes.
 
 Discovery and publication are separate. Broad shoulders fail a local-prominence
 test combining a permissive near check with hertz-scaled far references;
@@ -86,6 +89,9 @@ trace. Passing evidence must remain valid for an entry interval; a longer
 failure hold demotes a verified trace, with every gate continuously
 re-evaluated. Every pending track has an inspectable rejection reason. These
 defaults favor a delayed real signal over immediate false colored lines.
+An optional overlap-confirmed local-model callsign can satisfy the final
+symbol/timing/character checks for a track that already reached Morse-likely;
+it cannot bypass spectral, edge, cadence, coherence, or sustained-entry gates.
 
 Nine fixed 8–60 WPM timing anchors remain active for the entire segment. The
 initial leader remains stable for presentation, but every alternative keeps
@@ -149,11 +155,13 @@ slow model cannot back up capture or DSP queues. Timestamp-aware consensus
 accepts only repeated overlap evidence, rejects stale track/frontend
 generations, and appends stable text without revising its current generation.
 
-This refinement remains downstream of classical CW qualification. Its
-transcript is labeled separately, cannot verify or keep a track alive, cannot
-replace raw acoustic output, and has no TX path. A complete callsign may be
-shown only as a model suggestion when the ordinary track is already verified
-and the existing context/repetition policy accepts stable model text. No model
+This refinement remains downstream of carrier qualification. Its transcript is
+labeled separately and cannot create a track, keep a silent track alive,
+replace raw acoustic output, or reach TX. A structurally valid callsign
+confirmed by overlapping model windows may complete verification only after
+the same track has independently reached Morse-likely through spectral,
+keying, cadence, and coherence gates; the ordinary sustained-entry interval
+still applies. The confirmed model callsign is shown with explicit provenance. No model
 is bundled or downloaded; model accuracy, license, and provenance remain the
 operator's responsibility until an independently trained artifact passes the
 published corpus gates.

@@ -221,10 +221,12 @@ Bursts that never fill one complete eight-second window produce no local-model
 text; the deterministic decoder remains available for those shorter signals.
 
 Local-model output appears in a separate **LOCAL MODEL** section in the decoder
-card. It never replaces raw text, verifies a stream, keeps a silent stream
-active, or controls transmission. A repeated/context-supported complete call
-may be displayed in the card header with a **MODEL** badge after the ordinary
-signal path has already verified CW. Builds without the optional runtime show
+card. A structurally valid call confirmed across overlapping windows may
+complete verification only after the carrier has independently reached
+Morse-likely through spectral, keying, cadence, and coherence checks; the
+ordinary sustained-entry interval remains. It is displayed with a **MODEL**
+badge. The model never creates a carrier, replaces raw text, keeps a silent
+stream active, or controls transmission. Builds without the optional runtime show
 the setting as unavailable while retaining all deterministic decoding.
 
 ## Station page

@@ -338,6 +338,34 @@ void test_cw_channel_bank() {
     }
   }
 
+  {
+    CwChannelBank reservation_bank({
+        .minimum_separation_hz = 45.0,
+        .tracking_tolerance_hz = 70.0,
+        .empty_track_retention_seconds = 10.0,
+        .unverified_track_retention_seconds = 10.0,
+        .minimum_spectral_observations = 1,
+        .minimum_verification_symbols = 100,
+        .track_identity_tolerance_hz = 50.0,
+    });
+    std::vector<float> reservation_bins(1'001, -110.0F);
+    reservation_bins[500] = -55.0F;
+    static_cast<void>(reservation_bank.updateSpectrum(
+        0, 0.0, 1'000.0, reservation_bins));
+    reservation_bins.assign(reservation_bins.size(), -110.0F);
+    reservation_bins[460] = -55.0F;
+    reservation_bins[540] = -56.0F;
+    static_cast<void>(reservation_bank.updateSpectrum(
+        10'000'000, 0.0, 1'000.0, reservation_bins));
+    const auto diagnostics = reservation_bank.allTrackDiagnostics();
+    const auto matched = std::count_if(
+        diagnostics.cbegin(), diagnostics.cend(),
+        [](const auto& track) { return track.matched; });
+    expect(diagnostics.size() == 1 && matched == 1,
+           "changing sidelobes inside one identity cell cannot clone an "
+           "automatic carrier track");
+  }
+
   for (const bool keep_unverified : {false, true}) {
     CwChannelBank alternating_bank({
         .minimum_separation_hz = 45.0,
@@ -412,9 +440,24 @@ void test_cw_channel_bank() {
     const std::uint64_t first_id = first->id;
     const std::uint32_t symbols_before_gap = first->decoded_symbols;
     if (keep_unverified) {
-      expect(first->verification_state !=
-                 cwassistant::core::CwTrackState::Verified,
-             "unverified alternating-tone fixture stays private");
+      expect(first->verification_state ==
+                 cwassistant::core::CwTrackState::MorseLikely,
+             "unverified alternating-tone fixture reaches Morse-likely but "
+             "stays private");
+      alternating_bins.assign(alternating_bins.size(), -110.0F);
+      alternating_bins[500] = -62.0F;
+      alternating_bins[530] = -48.0F;
+      static_cast<void>(alternating_bank.updateSpectrum(
+          alternating_now, 0.0, 1'000.0, alternating_bins));
+      const auto skirt_diagnostics = alternating_bank.allTrackDiagnostics();
+      const auto protected_first = std::find_if(
+          skirt_diagnostics.cbegin(), skirt_diagnostics.cend(),
+          [first_id](const auto& track) { return track.id == first_id; });
+      expect(protected_first != skirt_diagnostics.cend() &&
+                 protected_first->matched &&
+                 std::abs(protected_first->frequency_hz - first_hz) < 10.0,
+             "a Morse-likely track reserves its carrier ahead of a stronger "
+             "within-cell skirt during model acquisition");
     } else {
       expect(first->verification_state ==
                  cwassistant::core::CwTrackState::Verified,
@@ -460,6 +503,36 @@ void test_cw_channel_bank() {
                !first->key_down,
            "verified and unverified tracks freeze all decoder output after "
            "the unmatched gap hold despite a stronger 85 Hz neighbor");
+
+    if (keep_unverified && first != diagnostics.end()) {
+      expect(!alternating_bank.acceptCharacterRefinement(
+                 first_id, "NOISE", alternating_now),
+             "local character evidence without a complete callsign cannot "
+             "confirm a stream");
+      expect(alternating_bank.acceptCharacterRefinement(
+                 first_id, "CQ DE 4X5LL ", alternating_now),
+             "overlap-confirmed local callsign evidence is accepted for an "
+             "already Morse-likely acoustic stream");
+      expect(!alternating_bank.acceptCharacterRefinement(
+                 first_id, "CQ DE 4X5LL ", alternating_now),
+             "retained model text cannot refresh the same acoustic evidence "
+             "timestamp");
+      expect(!alternating_bank.acceptCharacterRefinement(
+                 first_id, "CQ DE 4X5LL ",
+                 alternating_now + 2'000'000'000ULL),
+             "future model evidence cannot advance verification state");
+      feed(0, 700);
+      diagnostics = alternating_bank.allTrackDiagnostics();
+      first = std::find_if(diagnostics.begin(), diagnostics.end(),
+                           [first_id](const auto& track) {
+        return track.id == first_id;
+      });
+      expect(first != diagnostics.end() &&
+                 first->verification_state ==
+                     cwassistant::core::CwTrackState::Verified,
+             "local character evidence confirms only after the ordinary "
+             "sustained acoustic entry interval");
+    }
   }
 
   {

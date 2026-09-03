@@ -173,8 +173,29 @@ bool testLocalCharacterFrontendBank() {
   const auto likely_windows = feedFrontend(
       likely_bank, likely_track, likely_tone, 9U, sequence, timestamp_ns,
       sample_cursor);
-  return likely_windows.size() == 1U && likely_windows.front() &&
-      likely_windows.front()->track.track_id == 105U;
+  if (likely_windows.size() != 1U || !likely_windows.front() ||
+      likely_windows.front()->track.track_id != 105U) {
+    return false;
+  }
+
+  cwassistant::desktop::LocalCharacterFrontendBank centered_bank{1U};
+  centered_bank.setEnabled(true);
+  auto centered_track = channels[2];
+  centered_track.id = 106U;
+  centered_track.frequency_hz = 834.0;
+  centered_track.presentation_frequency_hz = 800.0;
+  centered_track.verification_state =
+      cwassistant::core::CwTrackState::MorseLikely;
+  const std::array<cwassistant::core::CwTrackDiagnostic, 1> centered_tracks{
+      centered_track};
+  const std::array<double, 1> centered_tone{800.0};
+  const auto centered_windows = feedFrontend(
+      centered_bank, centered_tracks, centered_tone, 9U, sequence,
+      timestamp_ns, sample_cursor);
+  if (centered_windows.size() != 1U || !centered_windows.front()) return false;
+  const auto peak = *std::max_element(centered_windows.front()->features.cbegin(),
+                                      centered_windows.front()->features.cend());
+  return std::isfinite(peak) && peak > -4.0F;
 }
 
 }  // namespace
@@ -182,6 +203,18 @@ bool testLocalCharacterFrontendBank() {
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
   if (!testLocalCharacterFrontendBank()) return 21;
+  using cwassistant::desktop::freshCharacterRefinementCallEvidence;
+  if (freshCharacterRefinementCallEvidence("NOISE", 0U) ||
+      !freshCharacterRefinementCallEvidence("4X5L", 0U) ||
+      freshCharacterRefinementCallEvidence("4X5LL ", 5U) ||
+      freshCharacterRefinementCallEvidence("4X5LL", 4U) ||
+      !freshCharacterRefinementCallEvidence("4X5L", 3U) ||
+      freshCharacterRefinementCallEvidence("4X5LL HEL", 6U) ||
+      freshCharacterRefinementCallEvidence("CQ 4X5LL A", 8U) ||
+      !freshCharacterRefinementCallEvidence("4X5LL 4X5L", 6U) ||
+      freshCharacterRefinementCallEvidence("4X5LL", 5U)) {
+    return 22;
+  }
   cwassistant::core::CwChannelSnapshot selected_snapshot{
       .id = 5,
       .frequency_hz = 850.0,

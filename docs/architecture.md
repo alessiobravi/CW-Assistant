@@ -87,11 +87,16 @@ resource limits, training corpus, and benchmark gates.
 The desktop may also compile an optional ONNX character-refinement adapter.
 This is a separate downstream observer, not the learned-likelihood component
 above. A bounded bank prepares 30–50 Hz lanes for at most four verified,
-Morse-likely, or manually selected tracks. Eight-second overlapping windows are
+Morse-likely, or manually selected tracks. Each lane follows the robust
+presentation center rather than the more responsive DSP center. Eight-second overlapping windows are
 coalesced into a bounded inference queue on its own thread; timestamp consensus
 rejects stale generations and exposes an append-only, separately labeled local
-transcript. The adapter cannot affect channel verification, carrier lifetime,
-raw decoder text, or transmission. Models and metadata are selected from local
+transcript. A structurally valid call confirmed by overlap consensus may
+complete verification only for a track that independently reached
+Morse-likely through carrier, keyed-edge, cadence, and coherence evidence; the
+ordinary sustained-entry interval still applies. The adapter cannot create a
+track, replace raw decoder text, keep a silent carrier alive, or affect
+transmission. Models and metadata are selected from local
 files and are never bundled or fetched by the application.
 
 The first dependency-free ambiguity layer retains bounded, timestamped
@@ -165,7 +170,10 @@ verification-exit hysteresis absorbs transient contest fades and timing errors. 
 saturated bank admits a stronger new carrier by evicting only the weakest
 unmatched unverified track; verified tracks are protected. Established tracks
 reject identity-breaking frequency innovations rather than carrying old text
-onto a new station.
+onto a new station. Across frames, one automatic identity owns each configured
+separation cell; changing FFT sidelobes reuse or defer to that identity instead
+of cloning the carrier. Explicit manual close-frequency probes retain their
+narrower association contract.
 Corpus-qualified configurable widths, robust noise quantiles, calibrated
 confidence, delayed multi-pass refinement, a bounded worker pool for those
 heavier passes, and co-channel source separation remain.
@@ -176,7 +184,9 @@ hertz-scaled references. Remaining tracks progress through candidate,
 Morse-likely, verified, and lost states. Repeated spectral persistence across
 normal key-up gaps, keyed edges, narrowband coherence, spacing cadence,
 known-symbol ratio, mark timing, and character confidence supply inspectable
-rejection reasons. Passing evidence must persist before publication, and a
+rejection reasons. Overlap-confirmed local-model callsign evidence may satisfy
+only the final symbol/timing/character portion after the same track has already
+reached Morse-likely on the other acoustic gates. Passing evidence must persist before publication, and a
 separate failure hold is required before demotion; every gate remains live
 after verification. Private states cannot consume UI colors,
 detected-signal count, or session rows. Stable characters carry bounded

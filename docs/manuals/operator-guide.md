@@ -276,10 +276,11 @@ validated, up to four verified, Morse-likely, or manually selected tracks are
 refined on a CPU worker. The card shows delayed append-only output in a separate
 **LOCAL MODEL** block; the first stable characters normally require two
 overlapping eight-second windows. Raw decoder text remains unchanged. A
-complete call supported by repetition or normal CW context may be shown in the
-header with a **MODEL** badge only after the ordinary path has verified the
-stream. Local-model output cannot verify a carrier, keep it alive, or initiate
-transmission.
+structurally valid call confirmed across overlapping model windows may complete
+verification after the carrier has independently passed the ordinary spectral,
+keying, cadence, and coherence checks and the sustained-entry interval. It then
+appears in the header with a **MODEL** badge. Model output cannot create a
+carrier, keep silence active, replace raw text, or initiate transmission.
 
 Treat `?` as retained acoustic uncertainty, not as a character that an online
 directory has disproved. Acoustic alternatives remain available in diagnostic

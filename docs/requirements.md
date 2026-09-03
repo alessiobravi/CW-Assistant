@@ -37,6 +37,12 @@ decoding hints rather than sharing one assumed contest sequence.
   evidence, require sustained entry, and continuously re-evaluate verified
   tracks with demotion hysteresis. Unverified candidates must not receive
   overlays, session rows, or a detected-signal count.
+- Permit overlap-confirmed local character-model evidence to satisfy the
+  symbol/timing/character portion of verification only after the same track
+  independently passes spectral persistence, narrowband coherence, keyed-edge,
+  and spacing-cadence gates. Require a structurally valid decoded callsign and
+  the ordinary sustained-entry interval; model output must not create a track,
+  keep silence active, replace raw text, or reach transmission control.
 - Track frequency drift and maintain separate timing/decoder state per channel.
 - Preserve soft tone/envelope/timing evidence and combine an explainable
   adaptive timing decoder with an optional compact causal learned likelihood
@@ -55,10 +61,12 @@ decoding hints rather than sharing one assumed contest sequence.
   selection. Manual selection always has a configurable priority boost.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
-- Display a callsign on a trace only after the CW track is verified and stable
-  text contains a structurally valid complete token terminated by a word gap,
-  with exchange-role context or exact repetition supporting automatic
-  promotion. A lone call-shaped token is not sufficient.
+- Display a callsign on a trace only after the CW track is verified. Classical
+  stable text requires a structurally valid complete token terminated by a
+  word gap plus exchange-role context or exact repetition. Separately labeled,
+  overlap-confirmed model consensus may expose its structurally valid call
+  without a language/context promotion. An unconfirmed lone call-shaped token
+  is not sufficient.
 - Distinguish raw evidence, provisional text, stable text, and context-derived
   suggestions. Store per-character pass/evidence provenance and calibrate
   confidence on held-out recordings.

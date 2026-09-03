@@ -15,6 +15,7 @@ constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
 constexpr double kCandidateMatchHoldSeconds = 0.75;
 constexpr double kManualSelectionReuseToleranceHz = 12.0;
 constexpr double kManualProbeLifetimeSeconds = 30.0;
+constexpr double kCharacterRefinementEvidenceSeconds = 3.0;
 constexpr std::size_t kMaximumPresentationText = 2'048;
 
 void trimPresentationText(std::string& text) {
@@ -341,12 +342,36 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   // peak inside minimum_separation_hz can suppress the real carrier, then
   // walk a verified track away through a sequence of individually small
   // innovations while a duplicate track is created on the actual signal.
+  std::vector<const Track*> established_tracks;
+  established_tracks.reserve(tracks_.size());
   for (const auto& track : tracks_) {
-    if (!track.operator_selected && !track.ever_verified &&
-        track.verification_state != CwTrackState::MorseLikely &&
-        track.verification_state != CwTrackState::Verified) {
-      continue;
+    if (track.operator_selected || track.ever_verified ||
+        track.verification_state == CwTrackState::MorseLikely ||
+        track.verification_state == CwTrackState::Verified) {
+      established_tracks.push_back(&track);
     }
+  }
+  std::stable_sort(established_tracks.begin(), established_tracks.end(),
+                   [](const Track* left, const Track* right) {
+    const auto priority = [](const Track& track) {
+      if (track.operator_selected) return 4;
+      if (track.verification_state == CwTrackState::Verified) return 3;
+      if (track.ever_verified) return 2;
+      if (track.verification_state == CwTrackState::MorseLikely) return 1;
+      return 0;
+    };
+    const int left_priority = priority(*left);
+    const int right_priority = priority(*right);
+    if (left_priority != right_priority)
+      return left_priority > right_priority;
+    if (left->spectral_observations != right->spectral_observations)
+      return left->spectral_observations > right->spectral_observations;
+    if (left->spectral_snr_db != right->spectral_snr_db)
+      return left->spectral_snr_db > right->spectral_snr_db;
+    return left->id < right->id;
+  });
+  for (const Track* track_pointer : established_tracks) {
+    const auto& track = *track_pointer;
     const double elapsed_seconds = timestamp_ns > track.last_frequency_update_ns
         ? static_cast<double>(timestamp_ns - track.last_frequency_update_ns) /
               1'000'000'000.0
@@ -392,6 +417,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     }
     if (nearest_index == candidates.size()) continue;
     Candidate protected_candidate = candidates[nearest_index];
+    const bool duplicates_reserved_identity = !track.operator_selected &&
+        std::any_of(separated.cbegin(), separated.cend(),
+                    [&](const Candidate& selected) {
+      return std::abs(protected_candidate.frequency_hz -
+                      selected.frequency_hz) <
+          config_.minimum_separation_hz;
+    });
+    if (duplicates_reserved_identity) continue;
     protected_candidate.preferred_track_id = track.id;
     separated.push_back(protected_candidate);
     reserved[nearest_index] = true;
@@ -455,6 +488,42 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       if (distance <= nearest_distance) {
         nearest = track;
         nearest_distance = distance;
+      }
+    }
+    if (nearest == tracks_.end()) {
+      // A retained automatic identity owns its configured separation cell
+      // across spectrum frames. Reuse an unmatched occupant (including a
+      // short-lived acquisition candidate) or suppress the second ridge when
+      // that occupant already consumed a stronger candidate this frame. This
+      // prevents one keyed carrier's changing FFT sidelobes from spawning a
+      // bank full of decoders without preventing explicit close manual probes.
+      auto cell_occupant = tracks_.end();
+      double cell_distance = config_.minimum_separation_hz;
+      bool occupied_by_matched_track = false;
+      for (auto track = tracks_.begin(); track != tracks_.end(); ++track) {
+        if (track->operator_selected ||
+            track->verification_state == CwTrackState::Lost) {
+          continue;
+        }
+        const double distance = std::min(
+            std::abs(candidate.frequency_hz -
+                     track->identity_origin_frequency_hz),
+            std::abs(candidate.frequency_hz -
+                     track->presentation_frequency_hz));
+        if (distance >= config_.minimum_separation_hz) continue;
+        if (track->matched) {
+          occupied_by_matched_track = true;
+          continue;
+        }
+        if (distance <= cell_distance) {
+          cell_distance = distance;
+          cell_occupant = track;
+        }
+      }
+      if (cell_occupant != tracks_.end()) {
+        nearest = cell_occupant;
+      } else if (occupied_by_matched_track) {
+        continue;
       }
     }
     if (nearest == tracks_.end()) {
@@ -1124,6 +1193,12 @@ void CwChannelBank::updateVerification(Track& track,
           ? track.update.recent_cadence_observations
           : track.update.cadence_observations;
   const auto known = symbols - unknown;
+  const bool character_refinement_current =
+      track.character_refinement_timestamp_ns != 0U &&
+      timestamp_ns >= track.character_refinement_timestamp_ns &&
+      static_cast<double>(timestamp_ns -
+                          track.character_refinement_timestamp_ns) /
+              1'000'000'000.0 <= kCharacterRefinementEvidenceSeconds;
   const float unknown_fraction = symbols == 0
       ? 1.0F
       : static_cast<float>(unknown) / static_cast<float>(symbols);
@@ -1168,15 +1243,18 @@ void CwChannelBank::updateVerification(Track& track,
     failure_reason = CwVerificationReason::LowCadenceQuality;
   } else {
     eligible_state = CwTrackState::MorseLikely;
-    if (known < config_.minimum_verification_symbols) {
+    track.ever_morse_likely = true;
+    if (!character_refinement_current &&
+        known < config_.minimum_verification_symbols) {
       failure_reason = CwVerificationReason::NeedsDecodedSymbols;
-    } else if (unknown_fraction >
+    } else if (!character_refinement_current && unknown_fraction >
                config_.maximum_verification_unknown_fraction) {
       failure_reason = CwVerificationReason::TooManyUnknownSymbols;
-    } else if (track.update.timing_quality <
+    } else if (!character_refinement_current && track.update.timing_quality <
                config_.minimum_verification_timing_quality) {
       failure_reason = CwVerificationReason::LowTimingQuality;
-    } else if (track.update.mean_character_confidence <
+    } else if (!character_refinement_current &&
+               track.update.mean_character_confidence <
                config_.minimum_character_confidence) {
       failure_reason = CwVerificationReason::LowCharacterConfidence;
     } else {
@@ -1250,6 +1328,36 @@ void CwChannelBank::updateVerification(Track& track,
   if (!was_verified) {
     ++verified_transitions_;
   }
+}
+
+bool CwChannelBank::acceptCharacterRefinement(
+    const std::uint64_t track_id, const std::string& stable_text,
+    const std::uint64_t evidence_timestamp_ns) {
+  auto track = std::find_if(tracks_.begin(), tracks_.end(),
+                            [track_id](const Track& candidate) {
+    return candidate.id == track_id;
+  });
+  if (track == tracks_.end()) return false;
+  const std::uint64_t current_timestamp_ns = expected_sample_timestamp_ns_ != 0U
+      ? expected_sample_timestamp_ns_ : evidence_timestamp_ns;
+  const bool timestamp_is_current = evidence_timestamp_ns != 0U &&
+      evidence_timestamp_ns > track->character_refinement_timestamp_ns &&
+      (evidence_timestamp_ns <= current_timestamp_ns ||
+       evidence_timestamp_ns - current_timestamp_ns <= 1'000'000'000ULL) &&
+      (current_timestamp_ns <= evidence_timestamp_ns ||
+       current_timestamp_ns - evidence_timestamp_ns <=
+           static_cast<std::uint64_t>(
+               kCharacterRefinementEvidenceSeconds * 1'000'000'000.0));
+  if (!timestamp_is_current || !track->ever_morse_likely ||
+      track->verification_state == CwTrackState::Lost ||
+      track->spectral_observations < config_.minimum_spectral_observations ||
+      track->update.key_transitions < config_.minimum_key_transitions ||
+      !CallsignPolicy::latest_in_text(stable_text)) {
+    return false;
+  }
+  track->character_refinement_timestamp_ns = evidence_timestamp_ns;
+  updateVerification(*track, current_timestamp_ns);
+  return true;
 }
 
 bool CwChannelBank::colorLeaseIsCurrent(

@@ -1,6 +1,7 @@
 #include "local_character_decoder.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <exception>
 #include <utility>
 
@@ -9,6 +10,18 @@
 #endif
 
 namespace cwassistant::desktop {
+
+namespace {
+
+double stableLaneCenter(
+    const cwassistant::core::CwTrackDiagnostic& track) noexcept {
+  return std::isfinite(track.presentation_frequency_hz) &&
+          track.presentation_frequency_hz > 0.0
+      ? track.presentation_frequency_hz
+      : track.frequency_hz;
+}
+
+}  // namespace
 
 LocalCharacterFrontendBank::Lane::Lane(
     const cwassistant::core::CwCharacterTrackKey key,
@@ -99,12 +112,16 @@ std::vector<CwCharacterFeatureWindowPtr> LocalCharacterFrontendBank::process(
                   .track_generation = generation_,
                   .frontend_generation = lane_generation,
               },
-              track->frequency_hz)).first;
+              stableLaneCenter(*track))).first;
     }
     lane->second.last_seen_sequence = input_sequence_;
     if (track->active || lane->second.last_active_timestamp_ns == 0U)
       lane->second.last_active_timestamp_ns = block.timestamp_ns;
-    lane->second.frontend.setCenterFrequency(track->frequency_hz);
+    // The classical track center is intentionally adaptive and may briefly
+    // follow a keyed carrier's FFT sidelobe. Character refinement uses the
+    // robust presentation center so that those excursions cannot move its
+    // narrow 40 Hz lane away from the actual carrier.
+    lane->second.frontend.setCenterFrequency(stableLaneCenter(*track));
     lane->second.frontend.process(block);
     cwassistant::core::CwCharacterFeatureWindow window;
     if (lane->second.frontend.takeWindow(window)) {

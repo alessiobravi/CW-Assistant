@@ -94,6 +94,9 @@ class LiveAudioDspWorker final : public QObject {
                  double upper_frequency_hz);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setLocalCharacterFrontendEnabled(bool enabled);
+  void acceptCharacterRefinement(qulonglong channel_id,
+                                 const QString& stable_text,
+                                 qulonglong evidence_timestamp_ns);
   // Re-centers every currently tracked signal by a known audio-domain shift
   // (the shift implied by an operator retuning the linked radio's RX VFO),
   // so an already-identified signal's tracking follows the retune instead

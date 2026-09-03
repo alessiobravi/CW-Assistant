@@ -236,6 +236,12 @@ class CwChannelBank {
   // frequency. Returns its track ID, or zero when no valid spectrum range is
   // available or the frequency is outside that range.
   [[nodiscard]] std::uint64_t selectFrequency(double frequency_hz) noexcept;
+  // Supplies append-only, overlap-confirmed output from the optional local
+  // character model. It may confirm an already Morse-likely acoustic track,
+  // but cannot create a track or bypass carrier/keying/cadence qualification.
+  [[nodiscard]] bool acceptCharacterRefinement(
+      std::uint64_t track_id, const std::string& stable_text,
+      std::uint64_t evidence_timestamp_ns);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& channels() const noexcept;
   [[nodiscard]] CwVerificationDiagnostics verificationDiagnostics() const;
   [[nodiscard]] std::vector<CwTrackDiagnostic> allTrackDiagnostics() const;
@@ -282,6 +288,8 @@ class CwChannelBank {
     std::uint16_t verification_fail_samples{0};
     std::uint16_t decoder_rejection_samples{0};
     bool ever_verified{false};
+    bool ever_morse_likely{false};
+    std::uint64_t character_refinement_timestamp_ns{0};
     float keying_snr_db{0.0F};
     float keying_floor_db{0.0F};
     float keying_peak_db{0.0F};

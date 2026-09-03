@@ -13,11 +13,18 @@ All notable changes to CW Assistant are recorded here. The format follows
   Morse-likely, or manually selected tracks receive independent 30–50 Hz
   lanes; eight-second overlapping feature windows run on a bounded,
   coalescing inference worker and timestamp consensus produces a separate
-  append-only transcript. Model text cannot verify a stream, replace raw
-  decoder text, or initiate transmission. Repeated/context-supported complete
-  calls may appear as an explicitly marked model suggestion after ordinary CW
-  verification. Bounded silence grace preserves slow manual word gaps, while
+  append-only transcript. An overlap-confirmed structurally valid callsign may
+  complete verification of a carrier that already passed spectral, keying,
+  cadence, coherence, and sustained-entry qualification; it cannot create a
+  carrier from model text, replace raw decoder text, or initiate transmission.
+  The separately marked model call may appear on the verified decoder card.
+  Bounded silence grace preserves slow manual word gaps, while
   reset/reconfiguration cancels stale inference and clears retained card text.
+- Automatic peak tracking now reserves at most one decoder identity in each
+  configured separation cell across spectrum frames. Keying sidelobes reuse or
+  defer to that identity instead of filling the bounded bank with clones, and
+  verified identities take reservation priority. Local character lanes follow
+  the robust presentation center rather than instantaneous DSP-center walks.
 - Added strict optional ONNX Runtime 1.28.2 packaging for native Windows,
   Linux, and macOS builds, including platform runtime layout, license/notices,
   model/metadata/tensor validation, malformed-output bounds, and deterministic

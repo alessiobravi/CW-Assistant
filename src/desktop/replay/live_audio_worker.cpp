@@ -446,6 +446,16 @@ void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
   character_frontends_.setEnabled(enabled);
 }
 
+void LiveAudioDspWorker::acceptCharacterRefinement(
+    const qulonglong channel_id, const QString& stable_text,
+    const qulonglong evidence_timestamp_ns) {
+  if (decoder_.acceptCharacterRefinement(
+          static_cast<std::uint64_t>(channel_id), stable_text.toStdString(),
+          static_cast<std::uint64_t>(evidence_timestamp_ns))) {
+    emit decoderProduced(decoderChannelModel(decoder_.channels()));
+  }
+}
+
 void LiveAudioDspWorker::shiftTrackedFrequencies(const double audio_hz_delta) {
   decoder_.shiftTrackedFrequencies(audio_hz_delta);
 }
