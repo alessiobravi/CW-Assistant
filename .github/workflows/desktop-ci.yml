@@ -550,7 +550,11 @@ jobs:
             fi
           fi
           if [[ "${CWA_BUILD_RESULT}" == "failure" ]]; then
-            build_log="$(tail -n 35 build-output.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            build_errors="$(grep -Ei 'error (C|LNK)[0-9]+:|fatal error:|CMake Error|undefined reference|ninja: build stopped|MSB[0-9]+: error' build-output.log 2>/dev/null | tail -n 24 | tr '\r\n' '  ' | tail -c 3000 || true)"
+            if [[ -n "${build_errors}" ]]; then
+              status_message="${status_message}"$'\n'"build_errors=${build_errors}"
+            fi
+            build_log="$(tail -n 20 build-output.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${build_log}" ]]; then
               status_message="${status_message}"$'\n'"build_log=${build_log}"
             fi

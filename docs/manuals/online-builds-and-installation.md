@@ -39,8 +39,9 @@ configure, build, test, staging, archive, upload, and package steps. A release
 failure publishes the same kind of marker. Successful release publication
 removes those diagnostic tags and advances `continuous`.
 When Qt installation or compilation fails, the status annotation also carries
-a bounded tail of the relevant log so authorized Git-only automation can
-diagnose the cause.
+bounded compiler/linker error lines plus a shorter trailing log excerpt, so
+interleaved output from a later successful parallel target cannot hide the
+actual failure from authorized Git-only automation.
 Qt SDK downloads are retried once from a clean uncached directory with the
 runner's external 7-Zip binary when the hosted Python extractor fails.
 

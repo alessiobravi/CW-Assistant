@@ -37,6 +37,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   began and include local-model/database state plus each callsign suggestion or
   its rejection reason, without publishing that diagnostic traffic while
   capture is inactive.
+- Hosted build-failure markers now preserve bounded compiler/linker error lines
+  separately from the trailing parallel-build output, so a later successful
+  target cannot hide the actual failing target from Git-only diagnostics.
 - The managed-database startup contract test now normalizes Windows CRLF
   checkouts before matching its network-suppression guard.
 - Decoder cards now show the append-only phase/timing consensus as soon as it

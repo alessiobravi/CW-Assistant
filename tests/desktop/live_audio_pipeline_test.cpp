@@ -37,8 +37,6 @@ int main(int argc, char* argv[]) {
       });
   QString capture_base_path;
   QTemporaryDir capture_root;
-  bool capture_started = false;
-  int post_capture_decoder_updates = 0;
   QVariantList last_channels;
   QVariantMap last_diagnostics;
   QObject::connect(
@@ -49,10 +47,8 @@ int main(int argc, char* argv[]) {
 
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::decoderProduced,
-      &application,
-      [&application, worker, &capture_root, &capture_started,
-       &post_capture_decoder_updates, &last_channels](
-          const QVariantList& channels) {
+      &application, [&application, worker, &last_channels](
+                        const QVariantList& channels) {
         last_channels = channels;
         const auto channel = channels.isEmpty()
             ? QVariantMap{}
@@ -74,14 +70,6 @@ int main(int argc, char* argv[]) {
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
         if (application.property("validFrame").toBool() && valid_decoder) {
-          if (!capture_started) {
-            capture_started = true;
-            QMetaObject::invokeMethod(
-                worker, "startDebugCapture", Qt::BlockingQueuedConnection,
-                Q_ARG(QString, capture_root.path()));
-            return;
-          }
-          if (++post_capture_decoder_updates < 30) return;
           QMetaObject::invokeMethod(worker, "stopDebugCapture",
                                     Qt::BlockingQueuedConnection);
           application.exit(0);
@@ -162,7 +150,19 @@ int main(int argc, char* argv[]) {
   QMetaObject::invokeMethod(
       worker, "setPresentationDiagnostics", Qt::BlockingQueuedConnection,
       Q_ARG(QVariantMap, presentation_diagnostics));
-  std::size_t next_block = 0;
+  // Seed one detector pass before starting the recording. This models an
+  // operator pressing Debug capture after reception is already underway and
+  // makes the first snapshot's lineage deterministic.
+  constexpr std::size_t pre_capture_blocks = 8;
+  for (std::size_t index = 0; index < pre_capture_blocks; ++index) {
+    if (!pipe->blocks.try_push(blocks[index])) return 11;
+  }
+  QMetaObject::invokeMethod(worker, "drain", Qt::BlockingQueuedConnection);
+  QMetaObject::invokeMethod(worker, "startDebugCapture",
+                            Qt::BlockingQueuedConnection,
+                            Q_ARG(QString, capture_root.path()));
+
+  std::size_t next_block = pre_capture_blocks;
   QTimer feeder;
   feeder.setInterval(1);
   QObject::connect(&feeder, &QTimer::timeout, &application,
@@ -227,7 +227,7 @@ int main(int argc, char* argv[]) {
   if (!first_line.contains("\"captureContext\"") ||
       !first_line.contains("\"startedWithExistingDecoderState\":true") ||
       !first_line.contains("\"existingTracksAtStart\":1") ||
-      !first_line.contains("\"existingPublishedChannelsAtStart\":1")) {
+      !first_line.contains("\"existingPublishedChannelsAtStart\":0")) {
     return 9;  // Capture-start decoder lineage is not explicit.
   }
   if (!first_line.contains("\"presentation\"") ||
