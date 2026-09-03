@@ -92,6 +92,26 @@ void test_only_unknown_substitution_is_allowed() {
   expect(ranked.size() == 1 && ranked.front().candidate == "EA1EYL",
          "known characters, length, and slash positions cannot be rewritten");
 
+  CallsignRankConfig fuzzy_config;
+  fuzzy_config.maximum_span_edit_distance = 2;
+  const auto fuzzy_ranked =
+      rank_callsign_suggestions(raw, hypotheses, {}, fuzzy_config);
+  expect(fuzzy_ranked.size() == 4 &&
+             std::any_of(fuzzy_ranked.cbegin(), fuzzy_ranked.cend(),
+                         [](const auto& suggestion) {
+               return suggestion.candidate == "EB1EYL";
+             }) &&
+             std::any_of(fuzzy_ranked.cbegin(), fuzzy_ranked.cend(),
+                         [](const auto& suggestion) {
+               return suggestion.candidate == "EA11EYL";
+             }) &&
+             std::any_of(fuzzy_ranked.cbegin(), fuzzy_ranked.cend(),
+                         [](const auto& suggestion) {
+               return suggestion.candidate == "EA1EY";
+             }),
+         "explicit bounded alignment admits acoustic substitutions, "
+         "insertions, and deletions without changing the exact default");
+
   const std::string compound_raw = "EA8/W?AW";
   const auto compound = rank_callsign_suggestions(
       compound_raw,

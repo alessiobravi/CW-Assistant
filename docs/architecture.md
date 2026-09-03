@@ -103,9 +103,13 @@ The first dependency-free ambiguity layer retains bounded, timestamped
 mark/gap observations and emits N-best acoustic segmentations with explicit
 unknown symbols. It has no callsign, language, provider, frequency, or QSO
 input. A separate ranker may attach capped, provenance-bearing callsign
-suggestions only to compatible acoustic alternatives; it cannot modify the raw
-span or claim that an external directory/spot proves what the local receiver
-heard. Conversation profiles are another independent core model: they describe
+suggestions only when current N-best acoustic paths agree on the winner. Its
+alignment permits at most two wildcard-aware substitutions, insertions, or
+deletions against a completed uncertain span. Ambiguity abstains; a stronger
+acoustic winner absent from the list remains explicitly acoustic-only rather
+than being displaced by a weaker directory candidate. It cannot modify the raw span or claim that an
+external directory/spot proves what the local receiver heard. Conversation
+profiles are another independent core model: they describe
 neutral monitoring, ordinary free-text QSOs, or one rules-versioned contest
 exchange, but contain no decoder-to-PTT/KEY execution path.
 
@@ -212,8 +216,10 @@ is no longer concurrently published; this prevents two nearby verified tracks
 from overwriting one observation. A genuine same-identity replacement freezes
 the predecessor transcript exactly once, then replaces only the new source
 suffix on later refreshes. The presentation layer retains at most 2,048 stable
-text characters and an already-confirmed callsign across that replacement;
-only raw source text is evaluated for new callsign evidence, never the composed
+text characters across that replacement, but clears the confirmed callsign
+because a frequency/color lease is not proof of station identity. The
+replacement must establish its own call from its acoustic suffix. Only raw
+source text is evaluated for new callsign evidence, never the composed
 presentation text. Concurrent identities own distinct colors, while a later
 reacquisition may reuse an unoccupied retained color lease. This does not
 rewrite decoder state. Closing or reordering a card cannot mutate DSP state.

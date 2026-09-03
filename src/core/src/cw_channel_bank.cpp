@@ -1852,8 +1852,11 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       retained->inherited_text_prefix = retained->snapshot.text;
       trimPresentationText(retained->inherited_text_prefix);
       retained->source_track_id = track.id;
-      if (snapshot.callsign.empty())
-        snapshot.callsign = retained->confirmed_callsign;
+      // A color/frequency lease preserves visual session continuity, not
+      // acoustic station identity. The replacement decoder must establish a
+      // callsign from its own suffix; otherwise a different station appearing
+      // on the same frequency inherits the predecessor's label indefinitely.
+      retained->confirmed_callsign.clear();
     }
     if (snapshot.callsign.empty()) {
       snapshot.callsign = retained->confirmed_callsign;

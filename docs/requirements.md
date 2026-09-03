@@ -78,7 +78,9 @@ decoding hints rather than sharing one assumed contest sequence.
 - Optionally predict and validate partial decoded callsigns against a pinned,
   checksummed list. The main decoding workspace controls this in real time;
   suggestions must remain visibly separate from raw decoder output and expose
-  confidence and list provenance. Absence from a list is never proof of an
+  confidence and list provenance. Bound acoustic-to-span substitutions,
+  insertions, and deletions; abstain on ambiguity and never let list membership
+  displace stronger acoustic evidence. Absence from a list is never proof of an
   invalid callsign.
 - Permit an explicitly enabled managed offline list to discover provider
   metadata over HTTPS, check no more than daily unless requested by the
@@ -169,8 +171,9 @@ decoding hints rather than sharing one assumed contest sequence.
   retune; a later pass at that carrier must reuse the color.
 - Bound drift extrapolation across missing evidence, bridge ordinary Morse word
   gaps with short presentation hysteresis, and preserve bounded decoded text
-  plus a confirmed callsign when the same retained identity receives a new
-  internal tracker ID.
+  when the same retained identity receives a new internal tracker ID. Clear
+  the confirmed callsign on source-track replacement until the replacement's
+  own acoustic evidence establishes the station identity.
 - Rendering is independently rate-limited (initial target 30 or 60 FPS) and may
   drop display frames. DSP sample blocks must not be dropped to keep UI current.
 - Zoom, dynamic range, palette, averaging, CW filter width, and tone pitch are

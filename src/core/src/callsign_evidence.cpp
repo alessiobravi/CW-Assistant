@@ -165,20 +165,33 @@ bool sameRawSpan(const std::string_view expected,
 }
 
 bool candidateMatchesRawSpan(const std::string_view raw_span,
-                             const std::string_view candidate) {
+                             const std::string_view candidate,
+                             const std::size_t maximum_edit_distance) {
   const std::string raw = uppercase(trim(raw_span));
   const std::string normalized_candidate = uppercase(trim(candidate));
-  if (raw.size() != normalized_candidate.size()) return false;
-  for (std::size_t index = 0; index < raw.size(); ++index) {
-    if (raw[index] == '?') {
-      const auto replacement =
-          static_cast<unsigned char>(normalized_candidate[index]);
-      if (std::isalnum(replacement) == 0) return false;
-    } else if (raw[index] != normalized_candidate[index]) {
-      return false;
-    }
+  if (std::max(raw.size(), normalized_candidate.size()) -
+          std::min(raw.size(), normalized_candidate.size()) >
+      maximum_edit_distance) {
+    return false;
   }
-  return true;
+  std::vector<std::size_t> previous(normalized_candidate.size() + 1U);
+  std::vector<std::size_t> current(normalized_candidate.size() + 1U);
+  for (std::size_t index = 0; index <= normalized_candidate.size(); ++index)
+    previous[index] = index;
+  for (std::size_t left = 1; left <= raw.size(); ++left) {
+    current[0] = left;
+    for (std::size_t right = 1; right <= normalized_candidate.size(); ++right) {
+      const bool same = raw[left - 1U] == '?' ||
+          raw[left - 1U] == normalized_candidate[right - 1U];
+      current[right] = std::min({
+          previous[right - 1U] + (same ? 0U : 1U),
+          previous[right] + 1U,
+          current[right - 1U] + 1U,
+      });
+    }
+    previous.swap(current);
+  }
+  return previous.back() <= maximum_edit_distance;
 }
 
 bool validProviderEvidence(
@@ -289,6 +302,8 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
                               kAbsoluteProvenanceLimit);
   config.maximum_unknown_characters =
       std::clamp<std::size_t>(config.maximum_unknown_characters, 0, 4);
+  config.maximum_span_edit_distance =
+      std::clamp<std::size_t>(config.maximum_span_edit_distance, 0, 4);
   config.minimum_acoustic_support =
       std::clamp(config.minimum_acoustic_support, 0.0F, 1.0F);
   config.maximum_acoustic_edit_cost =
@@ -316,7 +331,8 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
   for (std::size_t index = 0; index < hypothesis_count; ++index) {
     const auto& hypothesis = hypotheses[index];
     if (!sameRawSpan(raw_span, hypothesis.raw_span) ||
-        !candidateMatchesRawSpan(raw_span, hypothesis.candidate) ||
+        !candidateMatchesRawSpan(raw_span, hypothesis.candidate,
+                                 config.maximum_span_edit_distance) ||
         !std::isfinite(hypothesis.acoustic_support) ||
         !std::isfinite(hypothesis.acoustic_edit_cost) ||
         hypothesis.acoustic_edit_cost < 0.0F ||
@@ -378,7 +394,8 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
       const auto& evidence = provider_evidence[index];
       if (!validProviderEvidence(evidence, config) ||
           uppercase(trim(evidence.candidate)) != hypothesis.candidate ||
-          !candidateMatchesRawSpan(raw_span, evidence.candidate)) {
+          !candidateMatchesRawSpan(raw_span, evidence.candidate,
+                                   config.maximum_span_edit_distance)) {
         continue;
       }
       CallsignProviderEvidence canonical = evidence;

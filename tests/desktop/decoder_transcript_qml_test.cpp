@@ -82,10 +82,11 @@ int main() {
                 "callsignEvidenceText + \" \" + localModelStableText") ||
       !contains(qml, "property string localModelCallsign:") ||
       !contains(qml, "text: \"MODEL\"") ||
-      !contains(qml, "objectName: \"offlineCallsignSuggestionBadge\"") ||
-      !contains(qml, "property string offlineCallsignSuggestion:") ||
-      !contains(qml, "\"≈ \" + sessionCard.offlineCallsignSuggestion") ||
-      !contains(qml, "Advisory offline-directory match") ||
+      !contains(qml, "objectName: \"advisoryCallsignSuggestionBadge\"") ||
+      !contains(qml, "property string advisoryCallsignSuggestion:") ||
+      !contains(qml, "property string callsignSuggestionSource:") ||
+      !contains(qml, "\"≈ \" + sessionCard.advisoryCallsignSuggestion") ||
+      !contains(qml, "Advisory acoustic consensus") ||
       !contains(qml, "sessionCard.localModelCallsign") ||
       !contains(qml, "function applyStableText(nextText)") ||
       !contains(qml, "function onLocalModelStateChanged()") ||

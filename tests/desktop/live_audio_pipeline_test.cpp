@@ -36,6 +36,9 @@ int main(int argc, char* argv[]) {
                               frame.upper_frequency_hz == 24'000.0);
       });
   QString capture_base_path;
+  QTemporaryDir capture_root;
+  bool capture_started = false;
+  int post_capture_decoder_updates = 0;
   QVariantList last_channels;
   QVariantMap last_diagnostics;
   QObject::connect(
@@ -46,8 +49,10 @@ int main(int argc, char* argv[]) {
 
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::decoderProduced,
-      &application, [&application, worker, &last_channels](
-                        const QVariantList& channels) {
+      &application,
+      [&application, worker, &capture_root, &capture_started,
+       &post_capture_decoder_updates, &last_channels](
+          const QVariantList& channels) {
         last_channels = channels;
         const auto channel = channels.isEmpty()
             ? QVariantMap{}
@@ -69,6 +74,14 @@ int main(int argc, char* argv[]) {
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
         if (application.property("validFrame").toBool() && valid_decoder) {
+          if (!capture_started) {
+            capture_started = true;
+            QMetaObject::invokeMethod(
+                worker, "startDebugCapture", Qt::BlockingQueuedConnection,
+                Q_ARG(QString, capture_root.path()));
+            return;
+          }
+          if (++post_capture_decoder_updates < 30) return;
           QMetaObject::invokeMethod(worker, "stopDebugCapture",
                                     Qt::BlockingQueuedConnection);
           application.exit(0);
@@ -138,12 +151,17 @@ int main(int argc, char* argv[]) {
       worker, "setRadioFrequencyContext", Qt::BlockingQueuedConnection,
       Q_ARG(bool, true), Q_ARG(qulonglong, 7'016'450ULL),
       Q_ARG(qulonglong, 0ULL), Q_ARG(bool, false));
-
-  QTemporaryDir capture_root;
-  QMetaObject::invokeMethod(worker, "startDebugCapture",
-                            Qt::BlockingQueuedConnection,
-                            Q_ARG(QString, capture_root.path()));
-
+  const QVariantMap presentation_diagnostics{
+      {QStringLiteral("offlineCallsignDatabaseState"),
+       QStringLiteral("ready")},
+      {QStringLiteral("offlineCallsignDatabaseEntries"), 42},
+      {QStringLiteral("localCharacterModelState"),
+       QStringLiteral("disabled")},
+      {QStringLiteral("channels"), QVariantList{}},
+  };
+  QMetaObject::invokeMethod(
+      worker, "setPresentationDiagnostics", Qt::BlockingQueuedConnection,
+      Q_ARG(QVariantMap, presentation_diagnostics));
   std::size_t next_block = 0;
   QTimer feeder;
   feeder.setInterval(1);
@@ -205,6 +223,18 @@ int main(int argc, char* argv[]) {
       !first_line.contains("7016450") ||
       !first_line.contains("\"available\":true")) {
     return 8;  // Radio frequency context missing from the diagnostics log.
+  }
+  if (!first_line.contains("\"captureContext\"") ||
+      !first_line.contains("\"startedWithExistingDecoderState\":true") ||
+      !first_line.contains("\"existingTracksAtStart\":1") ||
+      !first_line.contains("\"existingPublishedChannelsAtStart\":1")) {
+    return 9;  // Capture-start decoder lineage is not explicit.
+  }
+  if (!first_line.contains("\"presentation\"") ||
+      !first_line.contains("\"offlineCallsignDatabaseState\":\"ready\"") ||
+      !first_line.contains("\"offlineCallsignDatabaseEntries\":42") ||
+      !first_line.contains("\"localCharacterModelState\":\"disabled\"")) {
+    return 10;  // Callsign/model presentation context is not captured.
   }
   return 0;
 }

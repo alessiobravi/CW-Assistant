@@ -66,6 +66,10 @@ struct CallsignRankConfig {
   std::size_t maximum_provider_records{256};
   std::size_t maximum_provenance_per_suggestion{16};
   std::size_t maximum_unknown_characters{2};
+  // Wildcards are free. Any known-character substitution, insertion, or
+  // deletion consumes one edit. Exact matching remains the default so each
+  // presentation/provider boundary must opt in deliberately.
+  std::size_t maximum_span_edit_distance{0};
   float minimum_acoustic_support{0.20F};
   float maximum_acoustic_edit_cost{2.0F};
   float acoustic_edit_cost_weight{0.10F};
@@ -81,9 +85,10 @@ struct CallsignRankConfig {
                                          std::size_t maximum_unknowns = 2);
 
 // Ranks already-generated acoustic alternatives. It does not generate missing
-// letters beyond literal '?' substitution, query providers, mutate raw text,
-// or treat absence as negative evidence. Provider evidence only supplies a
-// capped positive weight.
+// letters without an acoustic candidate, query providers, mutate raw text, or
+// treat absence as negative evidence. A caller may explicitly permit a bounded
+// wildcard-aware edit distance between the raw span and an acoustic candidate.
+// Provider evidence only supplies a capped positive weight.
 [[nodiscard]] std::vector<CallsignSuggestion> rank_callsign_suggestions(
     const std::string& raw_span,
     const std::vector<CallsignRawHypothesis>& hypotheses,

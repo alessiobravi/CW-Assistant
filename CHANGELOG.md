@@ -24,6 +24,19 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Offline callsign suggestions now tolerate at most two acoustically supported
+  substitutions, insertions, or deletions between a completed uncertain span
+  and the current N-best callsign winner. Two current paths must still agree,
+  ambiguity causes abstention, and a stronger acoustic winner absent from the
+  database is labeled `AUDIO` instead of being displaced by a weaker database
+  entry. Decoded text remains unchanged.
+- Replacement trackers retain bounded transcript and color continuity but no
+  longer inherit the predecessor's confirmed callsign. The new acoustic source
+  must establish its own station identity.
+- Debug captures now state whether decoder tracks existed before recording
+  began and include local-model/database state plus each callsign suggestion or
+  its rejection reason, without publishing that diagnostic traffic while
+  capture is inactive.
 - The managed-database startup contract test now normalizes Windows CRLF
   checkouts before matching its network-suppression guard.
 - Decoder cards now show the append-only phase/timing consensus as soon as it
@@ -333,7 +346,8 @@ All notable changes to CW Assistant are recorded here. The format follows
   in the decoder pane. An operator-opened session follows the retained
   frequency/color identity if the tracker reacquires it under a new internal
   ID, instead of silently closing the card. Its bounded presentation
-  transcript and an already-confirmed callsign also survive that replacement.
+  transcript survives that replacement; later lifecycle hardening clears the
+  confirmed callsign so a new acoustic source cannot inherit an old station.
 - Callsign labels now reject noise-like alphanumeric tokens with separated
   digit runs after an ordinary letter prefix, while retaining international,
   portable, numeric-prefix, and contiguous multi-digit special-event calls. A

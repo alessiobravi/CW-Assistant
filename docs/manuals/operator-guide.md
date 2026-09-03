@@ -148,8 +148,9 @@ callsign**, the card displays **YOUR CALL HEARD** and its border flashes five
 times. This notification is visual and receive-only;
 it never arms or starts transmission. The session remains selected if the same frequency/color is
 reacquired under a replacement tracker ID. Up to 2,048 stable text characters
-and an already-confirmed structurally plausible callsign remain visible across
-that replacement. The prior transcript is carried forward once rather than
+remain visible across that replacement, but the confirmed callsign is cleared
+until the replacement's own acoustic suffix establishes it. The prior
+transcript is carried forward once rather than
 being appended repeatedly during live refreshes. Simultaneous nearby decoded
 signals keep separate cards and colors; only a later return after the previous
 track has ended inherits that track's retained identity. Closing a card with **×** does not
@@ -302,15 +303,23 @@ and is preserved after any network, validation, or write failure. SCP is an
 activity-derived contesting aid maintained by W9KKN, not an official callsign
 register, and is not bundled with CW Assistant.
 
-If a completed uncertain call-shaped span agrees with the same known call in at
-least two competitive acoustic paths, the marker/card may show `≈ CALL` with
-a **DB** badge. The approximation sign is intentional: the transcript keeps its
-`?`, and the suggestion cannot confirm the callsign, verify a stream, trigger
-the own-call alert, or control transmission. Acoustic alternatives remain
+If at least two current competitive acoustic paths agree on the same strongest
+complete callsign, and it is within two wildcard-aware substitutions,
+insertions, or deletions of a completed uncertain call-shaped span, the
+marker/card may show `≈ CALL`. An exact list hit carries a **DB** badge; if the
+stronger acoustic winner is absent from the list it remains visible as
+**AUDIO** instead of being displaced by a weaker database candidate. Ambiguous
+evidence causes abstention. The
+approximation sign is intentional: the transcript remains unchanged, and the
+suggestion cannot confirm the callsign, verify a stream, trigger the own-call
+alert, or control transmission. Acoustic alternatives remain
 available in diagnostic capture, while the card
 shows the deterministic phase/timing consensus when available and falls back
 to the literal acquisition path otherwise. A future online callbook, activity
 list, or cluster spot must preserve the same separation and provenance.
+**AUDIO** suggestions remain available without downloading a callsign list;
+the list only changes the badge to **DB** when it independently contains the
+same acoustic winner.
 
 ## Debug capture
 
@@ -326,8 +335,11 @@ starts a bounded recording:
   verification state and reason, spectral observations, key transitions,
   decoded/unknown symbol counts, timing/cadence quality, WPM, both provisional
   and stable decoded text, and the presented callsign with
-  phase-consensus/literal/retained provenance. Each line also records the linked
-  radio's RX/TX frequency and split state at that instant, so reviewing the
+  phase-consensus/literal/retained provenance. Capture context states whether
+  decoder tracks existed before recording began. Presentation diagnostics show
+  local-model/offline-database state and each callsign suggestion or its
+  rejection reason. Each line also records the linked radio's RX/TX frequency
+  and split state at that instant, so reviewing the
   file shows whether (and exactly when) the VFO moved during the capture —
   a common explanation for a signal that stops decoding partway through.
 

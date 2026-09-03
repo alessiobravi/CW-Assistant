@@ -206,7 +206,7 @@ int main(int argc, char* argv[]) {
   if (!testLocalCharacterFrontendBank()) return 21;
   cwassistant::core::OfflineCallsignDatabase callsign_database;
   const auto callsign_import =
-      callsign_database.importText("EM90ZMV\nEA1EYL\n");
+      callsign_database.importText("EM90ZMV\nEA1EYL\nSV2HQL\nNV2HQD\n");
   QVariantMap acoustic_channel{
       {QStringLiteral("verifiedCw"), true},
       {QStringLiteral("callsign"), QString{}},
@@ -231,14 +231,17 @@ int main(int argc, char* argv[]) {
                        {QStringLiteral("lastObservationId"),
                         QVariant::fromValue<qulonglong>(30)}}}},
   };
+  QString suggestion_diagnostic;
   const auto offline_suggestion =
-      cwassistant::desktop::offlineCallsignPresentation(
-          acoustic_channel, callsign_database);
-  if (!callsign_import.accepted || callsign_import.inserted_records != 2U ||
+      cwassistant::desktop::advisoryCallsignPresentation(
+          acoustic_channel, callsign_database, &suggestion_diagnostic);
+  if (!callsign_import.accepted || callsign_import.inserted_records != 4U ||
       !offline_suggestion ||
       offline_suggestion->callsign != QStringLiteral("EM90ZMV") ||
       offline_suggestion->raw_span != QStringLiteral("EM?0ZMV") ||
-      offline_suggestion->agreeing_alternatives != 2) {
+      !offline_suggestion->database_match ||
+      offline_suggestion->agreeing_alternatives != 2 ||
+      suggestion_diagnostic != QStringLiteral("suggested-database")) {
     return 23;
   }
   if (acoustic_channel.value(QStringLiteral("refinedText")).toString() !=
@@ -249,14 +252,14 @@ int main(int argc, char* argv[]) {
   }
   QVariantMap ineligible_channel = acoustic_channel;
   ineligible_channel.insert(QStringLiteral("verifiedCw"), false);
-  if (cwassistant::desktop::offlineCallsignPresentation(
+  if (cwassistant::desktop::advisoryCallsignPresentation(
           ineligible_channel, callsign_database)) {
     return 25;
   }
   ineligible_channel = acoustic_channel;
   ineligible_channel.insert(QStringLiteral("callsign"),
                             QStringLiteral("EM90ZMV"));
-  if (cwassistant::desktop::offlineCallsignPresentation(
+  if (cwassistant::desktop::advisoryCallsignPresentation(
           ineligible_channel, callsign_database)) {
     return 26;
   }
@@ -292,9 +295,90 @@ int main(int argc, char* argv[]) {
                        QVariant::fromValue<qulonglong>(31)},
                       {QStringLiteral("lastObservationId"),
                        QVariant::fromValue<qulonglong>(50)}}});
-  if (cwassistant::desktop::offlineCallsignPresentation(
-          stronger_unknown, callsign_database)) {
+  const auto stronger_acoustic =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          stronger_unknown, callsign_database);
+  if (!stronger_acoustic ||
+      stronger_acoustic->callsign != QStringLiteral("EM80ZMV") ||
+      stronger_acoustic->database_match) {
     return 27;
+  }
+  QVariantMap corrected_fixed_character = acoustic_channel;
+  corrected_fixed_character.insert(QStringLiteral("refinedText"),
+                                   QStringLiteral("CQ DE SV2?L? "));
+  corrected_fixed_character.insert(
+      QStringLiteral("acousticAlternatives"),
+      QVariantList{
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("SV2HQL AIPX")},
+                      {QStringLiteral("cost"), 38.68},
+                      {QStringLiteral("confidence"), 0.482},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(61)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(80)}},
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("DV2HQL AIPX")},
+                      {QStringLiteral("cost"), 38.91},
+                      {QStringLiteral("confidence"), 0.482},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(61)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(80)}},
+          QVariantMap{{QStringLiteral("text"),
+                       QStringLiteral("SV2HQL AIPX NV?HQD")},
+                      {QStringLiteral("cost"), 38.99},
+                      {QStringLiteral("confidence"), 0.482},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(61)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(80)}},
+          QVariantMap{{QStringLiteral("text"),
+                       QStringLiteral("SV2HQLAIPX NV2HQD")},
+                      {QStringLiteral("cost"), 39.21},
+                      {QStringLiteral("confidence"), 0.482},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(61)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(80)}}});
+  const auto corrected_fixed_suggestion =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          corrected_fixed_character, callsign_database);
+  if (!corrected_fixed_suggestion ||
+      corrected_fixed_suggestion->callsign != QStringLiteral("SV2HQL") ||
+      corrected_fixed_suggestion->raw_span != QStringLiteral("SV2?L?") ||
+      !corrected_fixed_suggestion->database_match) {
+    return 33;
+  }
+  cwassistant::core::OfflineCallsignDatabase empty_callsign_database;
+  suggestion_diagnostic.clear();
+  const auto acoustic_only_suggestion =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          corrected_fixed_character, empty_callsign_database,
+          &suggestion_diagnostic);
+  if (!acoustic_only_suggestion ||
+      acoustic_only_suggestion->callsign != QStringLiteral("SV2HQL") ||
+      acoustic_only_suggestion->database_match ||
+      suggestion_diagnostic != QStringLiteral("suggested-acoustic")) {
+    return 35;
+  }
+  QVariantMap recovered_boundary = corrected_fixed_character;
+  recovered_boundary.insert(QStringLiteral("refinedText"),
+                            QStringLiteral("CQ NV?D "));
+  QVariantList boundary_alternatives =
+      recovered_boundary.value(QStringLiteral("acousticAlternatives")).toList();
+  for (QVariant& value : boundary_alternatives) {
+    QVariantMap alternative = value.toMap();
+    alternative.insert(QStringLiteral("text"), QStringLiteral("NV2HQD"));
+    value = alternative;
+  }
+  recovered_boundary.insert(QStringLiteral("acousticAlternatives"),
+                            boundary_alternatives);
+  const auto boundary_suggestion =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          recovered_boundary, callsign_database);
+  if (!boundary_suggestion ||
+      boundary_suggestion->callsign != QStringLiteral("NV2HQD") ||
+      boundary_suggestion->raw_span != QStringLiteral("NV?D")) {
+    return 34;
   }
   QVariantMap old_span = acoustic_channel;
   old_span.insert(QStringLiteral("refinedText"),
@@ -316,14 +400,17 @@ int main(int argc, char* argv[]) {
                        QVariant::fromValue<qulonglong>(51)},
                       {QStringLiteral("lastObservationId"),
                        QVariant::fromValue<qulonglong>(60)}}});
-  if (cwassistant::desktop::offlineCallsignPresentation(
+  if (cwassistant::desktop::advisoryCallsignPresentation(
           old_span, callsign_database)) {
     return 29;
   }
   acoustic_channel.insert(QStringLiteral("acousticAlternatives"),
                           QVariantList{});
-  if (cwassistant::desktop::offlineCallsignPresentation(
-          acoustic_channel, callsign_database)) {
+  suggestion_diagnostic.clear();
+  if (cwassistant::desktop::advisoryCallsignPresentation(
+          acoustic_channel, callsign_database, &suggestion_diagnostic) ||
+      suggestion_diagnostic !=
+          QStringLiteral("fewer-than-two-acoustic-alternatives")) {
     return 28;
   }
   QTemporaryFile local_callsign_file;
@@ -333,6 +420,13 @@ int main(int argc, char* argv[]) {
     return 30;
   }
   cwassistant::desktop::ReplayController controller;
+  int inactive_presentation_publications = 0;
+  QObject::connect(
+      &controller,
+      &cwassistant::desktop::ReplayController::livePresentationDiagnosticsRequested,
+      &controller, [&inactive_presentation_publications](const QVariantMap&) {
+        ++inactive_presentation_publications;
+      });
   controller.configureOfflineCallsignDatabase(
       true, local_callsign_file.fileName());
   if (controller.offlineCallsignDatabaseState() != QStringLiteral("ready") ||
@@ -342,7 +436,8 @@ int main(int argc, char* argv[]) {
   controller.configureOfflineCallsignDatabase(false, QString{});
   if (controller.offlineCallsignDatabaseState() !=
           QStringLiteral("disabled") ||
-      controller.offlineCallsignDatabaseEntries() != 0) {
+      controller.offlineCallsignDatabaseEntries() != 0 ||
+      inactive_presentation_publications != 0) {
     return 32;
   }
   using cwassistant::desktop::freshCharacterRefinementCallEvidence;

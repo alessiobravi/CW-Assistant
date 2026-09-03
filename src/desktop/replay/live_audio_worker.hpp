@@ -108,6 +108,7 @@ class LiveAudioDspWorker final : public QObject {
   // split) dial frequency moved during the capture window.
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active);
+  void setPresentationDiagnostics(const QVariantMap& diagnostics);
   // Operator-started, bounded diagnostic capture (OBS-003): records the raw
   // audio feeding the decoder plus periodic per-track private diagnostic
   // snapshots to help debug why a visible signal is not decoding. Never
@@ -145,6 +146,8 @@ signals:
   QString capture_wav_path_;
   std::uint64_t capture_start_ns_{0};
   std::uint64_t capture_last_snapshot_ns_{0};
+  std::size_t capture_existing_track_count_{0};
+  std::size_t capture_existing_published_count_{0};
   bool capture_active_{false};
   bool capture_writer_pending_{false};
   bool capture_have_start_{false};
@@ -152,6 +155,7 @@ signals:
   qulonglong radio_rx_rf_hz_{0};
   qulonglong radio_tx_rf_hz_{0};
   bool radio_split_active_{false};
+  QVariantMap presentation_diagnostics_;
   static constexpr double kMaximumCaptureSeconds = 300.0;
   static constexpr double kSnapshotIntervalSeconds = 1.0;
 };

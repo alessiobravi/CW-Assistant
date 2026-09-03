@@ -283,6 +283,8 @@ void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
   capture_writer_pending_ = true;
   capture_start_ns_ = 0;
   capture_last_snapshot_ns_ = 0;
+  capture_existing_track_count_ = decoder_.allTrackDiagnostics().size();
+  capture_existing_published_count_ = decoder_.channels().size();
   capture_have_start_ = false;
   capture_active_ = true;
   emit debugCaptureStateChanged(true, capture_base_path_, 0.0,
@@ -292,6 +294,11 @@ void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
 void LiveAudioDspWorker::stopDebugCapture() {
   if (!capture_active_) return;
   finishDebugCapture(QStringLiteral("Stopped by operator"));
+}
+
+void LiveAudioDspWorker::setPresentationDiagnostics(
+    const QVariantMap& diagnostics) {
+  presentation_diagnostics_ = diagnostics;
 }
 
 void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
@@ -315,6 +322,22 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
   root.insert(QStringLiteral("elapsedSeconds"),
               static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
                   1'000'000'000.0);
+
+  // A diagnostic capture deliberately does not reset the live decoder: doing
+  // so would interrupt open sessions merely because the operator requested a
+  // recording. Make that provenance explicit so inherited tracks/callsigns in
+  // the first JSON snapshot are not mistaken for evidence found in audio.wav.
+  QJsonObject capture_context;
+  capture_context.insert(QStringLiteral("startedWithExistingDecoderState"),
+                         capture_existing_track_count_ != 0U);
+  capture_context.insert(QStringLiteral("existingTracksAtStart"),
+                         static_cast<qint64>(capture_existing_track_count_));
+  capture_context.insert(
+      QStringLiteral("existingPublishedChannelsAtStart"),
+      static_cast<qint64>(capture_existing_published_count_));
+  root.insert(QStringLiteral("captureContext"), capture_context);
+  root.insert(QStringLiteral("presentation"),
+              QJsonObject::fromVariantMap(presentation_diagnostics_));
   const auto diagnostics = decoder_.verificationDiagnostics();
   QJsonObject summary;
   summary.insert(QStringLiteral("candidateTracks"),

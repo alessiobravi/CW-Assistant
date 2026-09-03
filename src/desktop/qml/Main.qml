@@ -546,7 +546,10 @@ ApplicationWindow {
                         ToolTip.text: (modelData.callsign.length > 0
                                        ? modelData.callsign + "\n"
                                        : (modelData.callsignSuggestion.length > 0
-                                          ? "Offline suggestion: "
+                                          ? (modelData.callsignSuggestionSource
+                                             === "offline-directory"
+                                             ? "Offline suggestion: "
+                                             : "Acoustic suggestion: ")
                                             + modelData.callsignSuggestion
                                             + " from "
                                             + modelData.callsignSuggestionRawSpan
@@ -1276,8 +1279,10 @@ ApplicationWindow {
                             modelData.localModelText
                         property string localModelCallsign:
                             modelData.localModelCallsign
-                        property string offlineCallsignSuggestion:
+                        property string advisoryCallsignSuggestion:
                             modelData.callsignSuggestion
+                        property string callsignSuggestionSource:
+                            modelData.callsignSuggestionSource
                         property bool localModelHasText:
                             localModelState === "ready"
                             && localModelStableText.length > 0
@@ -1336,15 +1341,15 @@ ApplicationWindow {
                                            ? modelData.callsign
                                            : (sessionCard.localModelCallsign.length > 0
                                               ? sessionCard.localModelCallsign
-                                              : (sessionCard.offlineCallsignSuggestion.length > 0
-                                                 ? "≈ " + sessionCard.offlineCallsignSuggestion
+                                              : (sessionCard.advisoryCallsignSuggestion.length > 0
+                                                 ? "≈ " + sessionCard.advisoryCallsignSuggestion
                                                  : "")))
                                           .length > 0
                                           ? (modelData.callsign.length > 0
                                              ? modelData.callsign
                                              : (sessionCard.localModelCallsign.length > 0
                                                 ? sessionCard.localModelCallsign
-                                                : "≈ " + sessionCard.offlineCallsignSuggestion))
+                                                : "≈ " + sessionCard.advisoryCallsignSuggestion))
                                             + "  •  "
                                             + modelData.frequencyLabel
                                           : modelData.frequencyLabel
@@ -1362,21 +1367,27 @@ ApplicationWindow {
                                     font.weight: Font.Bold
                                 }
                                 Label {
-                                    objectName: "offlineCallsignSuggestionBadge"
+                                    objectName: "advisoryCallsignSuggestionBadge"
                                     visible: modelData.callsign.length === 0
                                              && sessionCard.localModelCallsign.length === 0
-                                             && sessionCard.offlineCallsignSuggestion.length > 0
-                                    text: "DB"
-                                    color: "#f3bd55"
+                                             && sessionCard.advisoryCallsignSuggestion.length > 0
+                                    text: sessionCard.callsignSuggestionSource
+                                          === "offline-directory" ? "DB" : "AUDIO"
+                                    color: sessionCard.callsignSuggestionSource
+                                           === "offline-directory"
+                                           ? "#f3bd55" : "#80cbc4"
                                     font.pixelSize: 9
                                     font.weight: Font.Bold
-                                    Accessible.name: "Offline callsign suggestion"
+                                    Accessible.name: "Advisory callsign suggestion"
                                     Accessible.description: "Advisory match "
-                                                            + sessionCard.offlineCallsignSuggestion
+                                                            + sessionCard.advisoryCallsignSuggestion
                                                             + " for decoded span "
                                                             + modelData.callsignSuggestionRawSpan
                                     ToolTip.visible: hovered
-                                    ToolTip.text: "Advisory offline-directory match for "
+                                    ToolTip.text: (sessionCard.callsignSuggestionSource
+                                                   === "offline-directory"
+                                                   ? "Advisory offline-directory match for "
+                                                   : "Advisory acoustic consensus for ")
                                                   + modelData.callsignSuggestionRawSpan
                                                   + "; decoded text is unchanged"
                                 }

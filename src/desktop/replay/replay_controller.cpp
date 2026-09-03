@@ -18,6 +18,7 @@
 #include <limits>
 #include <map>
 #include <utility>
+#include <vector>
 
 #include "cwassistant/core/callsign_evidence.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
@@ -124,14 +125,19 @@ std::optional<std::string> freshCharacterRefinementCallEvidence(
   return fresh_call;
 }
 
-std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
+std::optional<AdvisoryCallsignPresentation> advisoryCallsignPresentation(
     const QVariantMap& channel,
-    const cwassistant::core::OfflineCallsignDatabase& database) {
-  if (database.size() == 0U ||
-      !channel.value(QStringLiteral("verifiedCw")).toBool() ||
-      !channel.value(QStringLiteral("callsign")).toString().isEmpty()) {
-    return std::nullopt;
-  }
+    const cwassistant::core::OfflineCallsignDatabase& database,
+    QString* diagnostic_reason) {
+  const auto reject = [diagnostic_reason](const char* reason) {
+    if (diagnostic_reason != nullptr)
+      *diagnostic_reason = QString::fromLatin1(reason);
+    return std::optional<AdvisoryCallsignPresentation>{};
+  };
+  if (!channel.value(QStringLiteral("verifiedCw")).toBool())
+    return reject("stream-not-verified");
+  if (!channel.value(QStringLiteral("callsign")).toString().isEmpty())
+    return reject("callsign-already-confirmed");
 
   const auto latest_mask = [](const QString& source) {
     const std::string text = source.right(2'048).toStdString();
@@ -158,24 +164,48 @@ std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
   if (!mask) {
     mask = latest_mask(channel.value(QStringLiteral("text")).toString());
   }
-  if (!mask) return std::nullopt;
+  if (!mask) return reject("no-completed-uncertain-span");
   std::ranges::transform(*mask, mask->begin(), [](const unsigned char value) {
     return static_cast<char>(std::toupper(value));
   });
 
-  const auto compatible_with_mask = [&mask](const std::string& candidate) {
-    if (mask->size() != candidate.size()) return false;
-    for (std::size_t index = 0; index < mask->size(); ++index) {
-      if ((*mask)[index] != '?' && (*mask)[index] != candidate[index]) {
-        return false;
-      }
+  // Compare the completed transcript span with a current acoustic candidate,
+  // not with character positions in the cumulative transcript. A wildcard is
+  // free, while a substitution/insertion/deletion consumes one of the two
+  // bounded edits. This admits the observed "SV2?L?" -> "SV2HQL" and
+  // short boundary-loss cases without turning the directory into a decoder.
+  const auto mask_distance = [&mask](const std::string& candidate) {
+    constexpr std::size_t kMaximumDistance = 2U;
+    if (std::max(mask->size(), candidate.size()) -
+            std::min(mask->size(), candidate.size()) >
+        kMaximumDistance) {
+      return kMaximumDistance + 1U;
     }
-    return true;
+    std::vector<std::size_t> previous(candidate.size() + 1U);
+    std::vector<std::size_t> current(candidate.size() + 1U);
+    for (std::size_t index = 0; index <= candidate.size(); ++index) {
+      previous[index] = index;
+    }
+    for (std::size_t left = 1; left <= mask->size(); ++left) {
+      current[0] = left;
+      for (std::size_t right = 1; right <= candidate.size(); ++right) {
+        const bool same = (*mask)[left - 1U] == '?' ||
+            (*mask)[left - 1U] == candidate[right - 1U];
+        current[right] = std::min({
+            previous[right - 1U] + (same ? 0U : 1U),
+            previous[right] + 1U,
+            current[right - 1U] + 1U,
+        });
+      }
+      previous.swap(current);
+    }
+    return previous.back();
   };
 
   const QVariantList alternatives =
       channel.value(QStringLiteral("acousticAlternatives")).toList();
-  if (alternatives.size() < 2) return std::nullopt;
+  if (alternatives.size() < 2)
+    return reject("fewer-than-two-acoustic-alternatives");
   std::uint64_t newest_observation_id = 0;
   for (const QVariant& value : alternatives) {
     const auto alternative = value.toMap();
@@ -186,7 +216,8 @@ std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
     if (first != 0U && last >= first) newest_observation_id = std::max(
         newest_observation_id, static_cast<std::uint64_t>(last));
   }
-  if (newest_observation_id == 0U) return std::nullopt;
+  if (newest_observation_id == 0U)
+    return reject("missing-acoustic-observation-identity");
   double best_cost = std::numeric_limits<double>::infinity();
   for (const QVariant& value : alternatives) {
     const auto alternative = value.toMap();
@@ -200,7 +231,8 @@ std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
       best_cost = std::min(best_cost, cost);
     }
   }
-  if (!std::isfinite(best_cost)) return std::nullopt;
+  if (!std::isfinite(best_cost))
+    return reject("missing-current-acoustic-cost");
 
   struct CandidateEvidence {
     int alternatives{0};
@@ -231,7 +263,10 @@ std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
       std::ranges::transform(token, token.begin(), [](const unsigned char item) {
         return static_cast<char>(std::toupper(item));
       });
-      if (compatible_with_mask(token)) matches.push_back(token);
+      if (cwassistant::core::is_callsign_like_span(token, 0U) &&
+          mask_distance(token) <= 2U) {
+        matches.push_back(token);
+      }
       token.clear();
     };
     for (const unsigned char character : text) {
@@ -252,35 +287,74 @@ std::optional<OfflineCallsignPresentation> offlineCallsignPresentation(
         item.relative_cost, static_cast<float>(cost - best_cost));
   }
 
-  std::vector<cwassistant::core::CallsignRawHypothesis> hypotheses;
+  // The acoustics choose the candidate. The directory may only annotate the
+  // acoustic winner; it cannot promote a weaker database entry over a better
+  // non-directory hypothesis. Requiring two current paths retains the prior
+  // conservative evidence floor.
+  const auto ranks_before = [](const auto& left, const auto& right) {
+    if (left.second.alternatives != right.second.alternatives) {
+      return left.second.alternatives > right.second.alternatives;
+    }
+    const float left_score = left.second.support -
+        0.20F * left.second.relative_cost;
+    const float right_score = right.second.support -
+        0.20F * right.second.relative_cost;
+    if (left_score != right_score) return left_score > right_score;
+    return left.first < right.first;
+  };
+  std::vector<std::pair<std::string, CandidateEvidence>> eligible;
+  for (const auto& item : evidence) {
+    if (item.second.alternatives >= 2) eligible.push_back(item);
+  }
+  if (eligible.empty())
+    return reject("insufficient-current-acoustic-agreement");
+  std::ranges::sort(eligible, ranks_before);
+  const auto& winner = eligible.front();
+  if (eligible.size() > 1U) {
+    const auto& runner_up = eligible[1];
+    const float winner_score = winner.second.support -
+        0.20F * winner.second.relative_cost;
+    const float runner_up_score = runner_up.second.support -
+        0.20F * runner_up.second.relative_cost;
+    if (winner.second.alternatives == runner_up.second.alternatives &&
+        std::abs(winner_score - runner_up_score) < 0.02F) {
+      return reject("ambiguous-acoustic-winner");
+    }
+  }
+  const bool database_match = database.contains(winner.first);
+  const std::vector<cwassistant::core::CallsignRawHypothesis> hypotheses{{
+      .raw_span = *mask,
+      .candidate = winner.first,
+      .acoustic_support = winner.second.support,
+      .acoustic_edit_cost = winner.second.relative_cost,
+  }};
   std::vector<cwassistant::core::CallsignProviderEvidence> providers;
-  for (const auto& [callsign, item] : evidence) {
-    if (item.alternatives < 2) continue;
-    hypotheses.push_back({.raw_span = *mask,
-                          .candidate = callsign,
-                          .acoustic_support = item.support,
-                          .acoustic_edit_cost = item.relative_cost});
-    if (!database.contains(callsign)) continue;
+  if (database_match) {
     providers.push_back({
-        .candidate = callsign,
+        .candidate = winner.first,
         .provider_id = "offline-directory",
         .provider_label = "Offline callsign list",
         .kind = cwassistant::core::CallsignEvidenceKind::DirectoryListing,
         .requested_weight = 0.06F,
         .retrieved_at = std::chrono::system_clock::time_point{
             std::chrono::seconds{1}},
-        .rationale = "Exact local-list entry matching the acoustic mask",
+        .rationale = "Exact local-list entry supporting the acoustic winner",
     });
   }
   const auto ranked = cwassistant::core::rank_callsign_suggestions(
-      *mask, hypotheses, providers);
-  if (ranked.empty() || ranked.front().provenance.empty()) return std::nullopt;
-  const auto found = evidence.find(ranked.front().candidate);
-  if (found == evidence.end()) return std::nullopt;
-  return OfflineCallsignPresentation{
+      *mask, hypotheses, providers,
+      {.maximum_span_edit_distance = 2U});
+  if (ranked.empty())
+    return reject("bounded-ranker-rejected");
+  if (diagnostic_reason != nullptr)
+    *diagnostic_reason = database_match
+        ? QStringLiteral("suggested-database")
+        : QStringLiteral("suggested-acoustic");
+  return AdvisoryCallsignPresentation{
       .callsign = QString::fromStdString(ranked.front().candidate),
       .raw_span = QString::fromStdString(*mask),
-      .agreeing_alternatives = found->second.alternatives,
+      .database_match = database_match,
+      .agreeing_alternatives = winner.second.alternatives,
       .acoustic_support = ranked.front().acoustic_support,
       .relative_cost = ranked.front().acoustic_edit_cost,
   };
@@ -662,6 +736,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::startDebugCapture);
   connect(this, &ReplayController::liveDebugCaptureStopRequested, dsp_worker,
           &LiveAudioDspWorker::stopDebugCapture);
+  connect(this, &ReplayController::livePresentationDiagnosticsRequested,
+          dsp_worker, &LiveAudioDspWorker::setPresentationDiagnostics);
   connect(dsp_worker, &LiveAudioDspWorker::debugCaptureStateChanged, this,
           [this](const bool active, const QString& path,
                  const double elapsed_seconds, const QString& note) {
@@ -1048,14 +1124,16 @@ void ReplayController::rebuildDecoderModels() {
     item.insert(QStringLiteral("callsignSuggestionAgreeingAlternatives"), 0);
     item.insert(QStringLiteral("callsignSuggestionSupport"), 0.0);
     item.insert(QStringLiteral("callsignSuggestionRelativeCost"), 0.0);
-    if (item.value(QStringLiteral("callsign")).toString().isEmpty() &&
-        offline_callsign_database_state_ == QStringLiteral("ready")) {
-      if (const auto suggestion = offlineCallsignPresentation(
-              item, offline_callsign_database_)) {
+    QString suggestion_diagnostic = QStringLiteral("not-evaluated");
+    if (item.value(QStringLiteral("callsign")).toString().isEmpty()) {
+      if (const auto suggestion = advisoryCallsignPresentation(
+              item, offline_callsign_database_, &suggestion_diagnostic)) {
         item.insert(QStringLiteral("callsignSuggestion"), suggestion->callsign);
         item.insert(QStringLiteral("callsignSuggestionRawSpan"), suggestion->raw_span);
         item.insert(QStringLiteral("callsignSuggestionSource"),
-                    QStringLiteral("offline-directory"));
+                    suggestion->database_match
+                        ? QStringLiteral("offline-directory")
+                        : QStringLiteral("acoustic-consensus"));
         item.insert(QStringLiteral("callsignSuggestionAgreeingAlternatives"),
                     suggestion->agreeing_alternatives);
         item.insert(QStringLiteral("callsignSuggestionSupport"),
@@ -1063,7 +1141,11 @@ void ReplayController::rebuildDecoderModels() {
         item.insert(QStringLiteral("callsignSuggestionRelativeCost"),
                     suggestion->relative_cost);
       }
+    } else {
+      suggestion_diagnostic = QStringLiteral("callsign-already-confirmed");
     }
+    item.insert(QStringLiteral("callsignSuggestionDiagnostic"),
+                suggestion_diagnostic);
     decoder_channels_.push_back(item);
     by_id.insert(id, item);
   }
@@ -1083,7 +1165,49 @@ void ReplayController::rebuildDecoderModels() {
     item.insert(QStringLiteral("sessionOpen"), true);
     decoder_sessions_.push_back(item);
   }
+  publishLivePresentationDiagnostics(false);
   emit decoderChanged();
+}
+
+void ReplayController::publishLivePresentationDiagnostics(const bool force) {
+  if (!force && !debug_capture_active_) return;
+
+  QVariantList presentation_channels;
+  presentation_channels.reserve(decoder_channels_.size());
+  for (const QVariant& value : decoder_channels_) {
+    const QVariantMap channel = value.toMap();
+    presentation_channels.push_back(QVariantMap{
+        {QStringLiteral("id"), channel.value(QStringLiteral("id"))},
+        {QStringLiteral("callsign"),
+         channel.value(QStringLiteral("callsign"))},
+        {QStringLiteral("callsignSuggestion"),
+         channel.value(QStringLiteral("callsignSuggestion"))},
+        {QStringLiteral("callsignSuggestionRawSpan"),
+         channel.value(QStringLiteral("callsignSuggestionRawSpan"))},
+        {QStringLiteral("callsignSuggestionSource"),
+         channel.value(QStringLiteral("callsignSuggestionSource"))},
+        {QStringLiteral("callsignSuggestionAgreeingAlternatives"),
+         channel.value(QStringLiteral("callsignSuggestionAgreeingAlternatives"))},
+        {QStringLiteral("callsignSuggestionSupport"),
+         channel.value(QStringLiteral("callsignSuggestionSupport"))},
+        {QStringLiteral("callsignSuggestionRelativeCost"),
+         channel.value(QStringLiteral("callsignSuggestionRelativeCost"))},
+        {QStringLiteral("callsignSuggestionDiagnostic"),
+         channel.value(QStringLiteral("callsignSuggestionDiagnostic"))},
+    });
+  }
+  const QVariantMap presentation_diagnostics{
+      {QStringLiteral("offlineCallsignDatabaseState"),
+       offline_callsign_database_state_},
+      {QStringLiteral("offlineCallsignDatabaseEntries"),
+       static_cast<qulonglong>(offline_callsign_database_.size())},
+      {QStringLiteral("localCharacterModelState"), local_character_state_},
+      {QStringLiteral("channels"), presentation_channels},
+  };
+  if (presentation_diagnostics != last_live_presentation_diagnostics_) {
+    last_live_presentation_diagnostics_ = presentation_diagnostics;
+    emit livePresentationDiagnosticsRequested(presentation_diagnostics);
+  }
 }
 
 void ReplayController::setRadioFrequencyContext(
@@ -1271,6 +1395,11 @@ void ReplayController::startDebugCapture() {
   const QString base = QStandardPaths::writableLocation(
       QStandardPaths::AppDataLocation);
   const QString directory = QDir(base).filePath(QStringLiteral("diagnostics"));
+  // Queued delivery to the DSP worker preserves signal order, so refresh the
+  // presentation context immediately before recording starts. The first JSON
+  // snapshot can then explain database/model availability and every advisory
+  // callsign decision without resetting the live decoder.
+  publishLivePresentationDiagnostics(true);
   emit liveDebugCaptureStartRequested(directory);
 }
 

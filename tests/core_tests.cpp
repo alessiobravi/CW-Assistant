@@ -566,10 +566,37 @@ void test_cw_channel_bank() {
       static_cast<void>(replacement_bank.processSamples(block));
       replacement_now += 10'000'000;
     };
-    for (int symbol = 0; symbol < 12; ++symbol) {
-      for (int step = 0; step < 7; ++step) replacement_step(true);
-      for (int step = 0; step < 30; ++step) replacement_step(false);
-    }
+    const auto replacement_mark = [&](const int steps) {
+      for (int step = 0; step < steps; ++step) replacement_step(true);
+    };
+    const auto replacement_gap = [&](const int steps) {
+      for (int step = 0; step < steps; ++step) replacement_step(false);
+    };
+    const auto replacement_character = [&](const std::string_view elements) {
+      for (std::size_t index = 0; index < elements.size(); ++index) {
+        replacement_mark(elements[index] == '.' ? 6 : 18);
+        if (index + 1U < elements.size()) replacement_gap(6);
+      }
+      replacement_gap(30);
+    };
+    const auto replacement_word_gap = [&] { replacement_gap(30); };
+    // Establish an acoustic callsign on the predecessor so the replacement
+    // lifecycle test can distinguish transcript continuity from station-name
+    // continuity. A new tracker may inherit readable session history, but it
+    // must earn its own callsign from its own acoustic suffix.
+    replacement_character("-.-.");  // C
+    replacement_character("--.-");  // Q
+    replacement_word_gap();
+    replacement_character("-..");   // D
+    replacement_character(".");     // E
+    replacement_word_gap();
+    replacement_character("-..");   // D
+    replacement_character("-.-");   // K
+    replacement_character("--..."); // 7
+    replacement_character("...");   // S
+    replacement_character("...");   // S
+    replacement_word_gap();
+    replacement_character(".");     // Close the preceding callsign token.
     const auto predecessor = replacement_bank.channels();
     expect(predecessor.size() == 1 && !predecessor.front().text.empty(),
            "replacement fixture starts with stable predecessor text");
@@ -577,6 +604,8 @@ void test_cw_channel_bank() {
       const auto predecessor_id = predecessor.front().id;
       const auto predecessor_color = predecessor.front().color_index;
       const std::string predecessor_text = predecessor.front().text;
+      expect(predecessor.front().callsign == "DK7SS",
+             "replacement fixture confirms a predecessor callsign");
 
       replacement_bank.configure({
           .empty_track_retention_seconds = 0.5,
@@ -603,14 +632,17 @@ void test_cw_channel_bank() {
       expect(replacement.size() == 1 &&
                  replacement.front().id != predecessor_id &&
                  replacement.front().color_index == predecessor_color &&
-                 replacement.front().text == predecessor_text,
+                 replacement.front().text == predecessor_text &&
+                 replacement.front().callsign.empty(),
              "genuine replacement inherits its predecessor text exactly "
-             "once and reuses the identity color");
+             "once and reuses the identity color without inheriting its "
+             "callsign");
       replacement_step(true);
       expect(replacement_bank.channels().size() == 1 &&
-                 replacement_bank.channels().front().text == predecessor_text,
+                 replacement_bank.channels().front().text == predecessor_text &&
+                 replacement_bank.channels().front().callsign.empty(),
              "refreshing a replacement cannot append its inherited prefix "
-             "again");
+             "again or restore a predecessor callsign");
     }
   }
 

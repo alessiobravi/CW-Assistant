@@ -162,7 +162,8 @@ and reorder act on press so decoder-model refresh cannot cancel the operation.
 If the retained carrier is reacquired with
 a new internal ID, the open session follows the same frequency/color identity.
 The decoder pane preserves a bounded 2,048-character presentation transcript
-and any already-confirmed callsign across that replacement. Callsign extraction
+across that replacement, but clears the confirmed callsign until the new
+acoustic source establishes it independently. Callsign extraction
 requires a complete stable word, rejects noise-like separated digit runs while
 retaining contiguous multi-digit special-event calls, and
 requires decoded `DE`/`CQ`/`TU`/`UP` context or exact repetition before
@@ -251,12 +252,18 @@ version but never send received audio, decoded text, station identity, or a
 callsign query. Absence from SCP never makes a decoded call invalid.
 
 A directory match is eligible only for an already verified CW channel, a
-completed call-shaped transcript span containing at most two `?` characters,
-and agreement from at least two competitive acoustic alternatives within the
-bounded cost/confidence window. The card and marker prefix it with `≈` and show
-a **DB** badge. This is an advisory hypothesis: it does not alter the decoded
-text, confirm the callsign, verify a stream, trigger an own-call alert, or
-control transmission.
+completed uncertain call-shaped transcript span, and agreement by at least two
+current competitive acoustic alternatives on the strongest complete call.
+The acoustic candidate may differ from that span by no more than two
+wildcard-aware substitutions, insertions, or deletions. An ambiguous result
+causes abstention. The card and marker prefix an eligible result with `≈`; an
+exact list hit shows **DB**, while an absent stronger winner shows **AUDIO**
+and cannot be displaced by a weaker database candidate. This is an
+advisory hypothesis: it does not alter decoded text, confirm the callsign,
+verify a stream, trigger an own-call alert, or control transmission.
+An **AUDIO** suggestion uses only current decoder alternatives and therefore
+does not require a local list. Enabling a list adds **DB** provenance when that
+same acoustic winner is present; it does not replace the acoustic choice.
 
 Local-model output appears in a separate **LOCAL MODEL** section in the decoder
 card. A structurally valid call confirmed across overlapping windows may

@@ -34,21 +34,24 @@ namespace cwassistant::desktop {
 [[nodiscard]] std::optional<std::string> freshCharacterRefinementCallEvidence(
     std::string_view stable_text, std::size_t previous_stable_size);
 
-struct OfflineCallsignPresentation {
+struct AdvisoryCallsignPresentation {
   QString callsign;
   QString raw_span;
+  bool database_match{false};
   int agreeing_alternatives{0};
   double acoustic_support{0.0};
   double relative_cost{0.0};
 };
 
-// Selects only a database entry already present in at least two bounded
-// acoustic alternatives and compatible with a completed '?' span in received
-// text. It never mutates the decoder transcript or verification result.
-[[nodiscard]] std::optional<OfflineCallsignPresentation>
-offlineCallsignPresentation(const QVariantMap& channel,
-                            const cwassistant::core::OfflineCallsignDatabase&
-                                database);
+// Selects only the acoustically strongest callsign present in at least two
+// current bounded alternatives and within two wildcard-aware edits of the
+// latest completed '?' span. The database can annotate that winner but cannot
+// promote a weaker candidate, mutate the transcript, or affect verification.
+[[nodiscard]] std::optional<AdvisoryCallsignPresentation>
+advisoryCallsignPresentation(const QVariantMap& channel,
+                             const cwassistant::core::OfflineCallsignDatabase&
+                                 database,
+                             QString* diagnostic_reason = nullptr);
 
 class ReplayController final : public QObject {
   Q_OBJECT
@@ -214,6 +217,7 @@ class ReplayController final : public QObject {
   void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);
   void liveDebugCaptureStopRequested();
+  void livePresentationDiagnosticsRequested(const QVariantMap& diagnostics);
   void localCharacterDecoderConfigureRequested(bool enabled,
                                                const QString& model_path,
                                                const QString& metadata_path);
@@ -233,6 +237,7 @@ class ReplayController final : public QObject {
   void publishSpectrumConfiguration();
   void acceptDecoderChannels(const QVariantList& channels);
   void rebuildDecoderModels();
+  void publishLivePresentationDiagnostics(bool force);
   void resetDecoder();
 
   QThread worker_thread_;
@@ -279,6 +284,7 @@ class ReplayController final : public QObject {
   QString offline_callsign_database_state_{QStringLiteral("disabled")};
   QString offline_callsign_database_status_{
       QStringLiteral("Offline callsign suggestions disabled.")};
+  QVariantMap last_live_presentation_diagnostics_;
   bool debug_capture_active_{false};
   QString debug_capture_path_;
   double debug_capture_elapsed_seconds_{0.0};
