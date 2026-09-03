@@ -188,6 +188,13 @@ jobs:
             "${CWA_ONNXRUNTIME_ROOT}/include"
           cmake -E copy "${runtime_files[0]}" \
             "${CWA_ONNXRUNTIME_ROOT}/lib/${runtime_pattern}"
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            cmake -E create_symlink "${runtime_pattern}" \
+              "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.1.dylib"
+          else
+            cmake -E create_symlink "${runtime_pattern}" \
+              "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.1"
+          fi
 
           provider_files=()
           while IFS= read -r provider_path; do
@@ -293,11 +300,17 @@ jobs:
               ;;
             macOS)
               test -s "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.${CWA_ONNXRUNTIME_VERSION}.dylib"
+              test -L "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.1.dylib"
+              test "$(readlink "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.1.dylib")" \
+                = "libonnxruntime.${CWA_ONNXRUNTIME_VERSION}.dylib"
               test "$(lipo -archs "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.${CWA_ONNXRUNTIME_VERSION}.dylib")" \
                 = "${{ matrix.ort_arch }}"
               ;;
             Linux)
               test -s "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.${CWA_ONNXRUNTIME_VERSION}"
+              test -L "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.1"
+              test "$(readlink "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.1")" \
+                = "libonnxruntime.so.${CWA_ONNXRUNTIME_VERSION}"
               file "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.${CWA_ONNXRUNTIME_VERSION}" \
                 | grep -F 'x86-64'
               ;;

@@ -22,8 +22,9 @@ All notable changes to CW Assistant are recorded here. The format follows
   Linux, and macOS builds, including platform runtime layout, license/notices,
   model/metadata/tensor validation, malformed-output bounds, and deterministic
   enabled/disabled integration tests. Runtime telemetry is explicitly disabled,
-  and source-built packages retain the upstream privacy notice; no character
-  model is bundled or downloaded by the application.
+  source-built packages retain the upstream privacy notice and required
+  major-version runtime aliases, and no character model is bundled or
+  downloaded by the application.
 
 - Added an independently implemented experimental CW likelihood toolchain:
   deterministic synthetic receiver audio with exact key-run labels and
