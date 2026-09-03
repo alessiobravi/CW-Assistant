@@ -205,7 +205,7 @@ jobs:
           fi
           cmake -E copy \
             "${CWA_ONNXRUNTIME_SOURCE}/LICENSE" \
-            "${CWA_ONNXRUNTIME_SOURCE}/Privacy.md" \
+            "${CWA_ONNXRUNTIME_SOURCE}/docs/Privacy.md" \
             "${CWA_ONNXRUNTIME_SOURCE}/ThirdPartyNotices.txt" \
             "${CWA_ONNXRUNTIME_SOURCE}/VERSION_NUMBER" \
             "${CWA_ONNXRUNTIME_ROOT}/"

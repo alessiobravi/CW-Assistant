@@ -15,10 +15,10 @@ cannot verify a stream or control transmission. Native runtime packaging and
 strict model/metadata validation are covered on every desktop architecture.
 Windows consumes a checksum-pinned official runtime distribution and disables
 runtime telemetry in the application before creating a session; POSIX builds
-retain the telemetry-disabled source build. No character model is bundled or
-downloaded. CW-002 remains active for corpus qualification, measured
-error/resource gates, noise rejection, and a fully independent trained
-artifact.
+retain the telemetry-disabled source build and package its upstream privacy
+notice. No character model is bundled or downloaded. CW-002 remains active for
+corpus qualification, measured error/resource gates, noise rejection, and a
+fully independent trained artifact.
 
 Last reviewed: 2026-09-03 — added the first independently generated synthetic
 CW corpus/tooling slice and a dependency-free streaming probability-to-event
