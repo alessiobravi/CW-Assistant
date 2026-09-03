@@ -248,6 +248,10 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- The spectrum signal-picker layer is disabled while no live/replay source is
+  active, so it no longer shows a cross cursor or intercepts the central
+  **Start live RX** / **Choose WAV recording** empty-state action.
+
 - Decoder cards no longer place a bounded acoustic-consensus transcript below
   the live literal text, where a valid consensus abstention made auto-scroll
   appear to stop decoding. Close and explicit up/down reorder controls now act

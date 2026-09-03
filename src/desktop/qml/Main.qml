@@ -328,6 +328,7 @@ ApplicationWindow {
                     width: spectrumDisplay.width
                     height: spectrumDisplay.height
                     z: 6
+                    enabled: replayController.activeSource
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     function frequencyAtX(positionX) {
@@ -528,6 +529,7 @@ ApplicationWindow {
                         color: "#8290a0"
                     }
                     Button {
+                        objectName: "emptyStateStartButton"
                         Layout.alignment: Qt.AlignHCenter
                         text: replayController.sourceMode === 0 ? "Start live RX" : "Choose WAV recording"
                         onClicked: replayController.sourceMode === 0 ? replayController.startLiveAudio() : wavDialog.open()

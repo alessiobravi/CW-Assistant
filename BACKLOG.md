@@ -6,6 +6,10 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-03 — disabled the plot-level signal picker until a
+receive/replay source is active, restoring the central empty-state start action
+and normal cursor. UI-003 remains active for its documented wider scope.
+
 Last reviewed: 2026-09-03 — added a bounded optional local character-refinement
 path for operator-supplied ONNX models. It isolates up to four verified,
 Morse-likely, or manually selected lanes at 30–50 Hz, performs asynchronous

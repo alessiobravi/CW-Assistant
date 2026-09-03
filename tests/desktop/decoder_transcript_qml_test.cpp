@@ -96,6 +96,7 @@ int main() {
                                         marker_end - marker_start);
   if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
       !contains(manual, "z: 6") ||
+      !contains(manual, "enabled: replayController.activeSource") ||
       !contains(manual, "acceptedButtons: Qt.LeftButton | Qt.RightButton") ||
       !contains(manual, "function streamIdAtX(positionX)") ||
       !contains(manual, "replayController.openDecoderSession(streamId)") ||
@@ -128,6 +129,7 @@ int main() {
       !contains(toolbar, "z: 21") ||
       !contains(spectrum_panel, "clip: true") ||
       !contains(spectrum_panel, "z: 0") ||
+      !contains(qml, "objectName: \"emptyStateStartButton\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionDownButton\"") ||
       !contains(qml, "onPressed: replayController.moveDecoderSession(") ||

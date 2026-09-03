@@ -32,8 +32,10 @@ a deterministic test spectrum to exercise waterfall texture creation.
 1. Open **Settings → Audio**, select the sound-card input connected to the
    receiver, and select **Apply**.
 2. In the Receiver workspace, choose **Live audio** instead of **WAV replay**.
-3. Select **Start live RX**. On macOS, approve microphone/audio-input access the
-   first time; the application requests this only when live RX is started.
+3. Select **Start live RX** from either the centre of the empty receiver pane or
+   the receiver toolbar. The signal-selection cursor activates only after a
+   source starts. On macOS, approve microphone/audio-input access the first
+   time; the application requests this only when live RX is started.
 4. Confirm the status line names the device and sample rate. Spectrum and
    waterfall frames now come from that device.
 5. Select **Stop live RX** before changing cables or audio routing.
