@@ -10,6 +10,10 @@ bool contains(const std::string& value, const std::string& expected) {
   return value.find(expected) != std::string::npos;
 }
 
+void normalizeLineEndings(std::string& value) {
+  value.erase(std::remove(value.begin(), value.end(), '\r'), value.end());
+}
+
 }  // namespace
 
 int main() {
@@ -19,7 +23,7 @@ int main() {
                   std::istreambuf_iterator<char>{}};
   // Git may materialize text files with CRLF on Windows. The QML contract is
   // line-ending independent, so normalize before matching its bounded block.
-  qml.erase(std::remove(qml.begin(), qml.end(), '\r'), qml.end());
+  normalizeLineEndings(qml);
   const std::size_t start = qml.find("id: transcriptScroll");
   const std::size_t end = qml.find("Layout.fillWidth: true\n                                text: modelData.wpm", start);
   const std::size_t session_card_start = qml.find("id: sessionCard");
@@ -266,9 +270,13 @@ int main() {
 
   std::ifstream main_source(CWA_DESKTOP_MAIN_CPP_PATH, std::ios::binary);
   if (!main_source) return 12;
-  const std::string main_cpp{
+  std::string main_cpp{
       std::istreambuf_iterator<char>{main_source},
       std::istreambuf_iterator<char>{}};
+  normalizeLineEndings(main_cpp);
+  std::string crlf_probe{"guard\r\ncheck\r\n"};
+  normalizeLineEndings(crlf_probe);
+  if (crlf_probe != "guard\ncheck\n") return 14;
   if (!contains(main_cpp,
                 "QStringLiteral(\"callsignDatabaseUpdater\")") ||
       !contains(main_cpp,

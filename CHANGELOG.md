@@ -24,6 +24,8 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- The managed-database startup contract test now normalizes Windows CRLF
+  checkouts before matching its network-suppression guard.
 - Decoder cards now show the append-only phase/timing consensus as soon as it
   is available, retain the literal decoder only as an acquisition fallback,
   wrap at decoded word boundaries, and derive their clipped height from their
