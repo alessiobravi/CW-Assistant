@@ -12,6 +12,7 @@ add_library(cwa_core
   src/cw_probabilistic_decoder.cpp
   src/conversation_profile.cpp
   src/frequency_plan.cpp
+  src/offline_callsign_database.cpp
   src/reference_rig_profiles.cpp
   src/remote_control.cpp
   src/station_equipment.cpp

@@ -1575,6 +1575,12 @@ void test_callsign_policy() {
   expect(CallsignPolicy::best_complete_in_text("IK3EYN UP ") ==
              std::optional<std::string>("IK3EYN"),
          "a split runner callsign before UP is identified");
+  expect(CallsignPolicy::best_complete_in_text("EM90ZMV PSE K ") ==
+             std::optional<std::string>("EM90ZMV"),
+         "an ordinary-QSO callsign before PSE K is identified");
+  expect(CallsignPolicy::best_complete_in_text("K3YL K3YL AR ") ==
+             std::optional<std::string>("K3YL"),
+         "a repeated ordinary-QSO callsign before AR is identified");
   expect(CallsignPolicy::best_complete_in_text("W1AW W1AW ") ==
              std::optional<std::string>("W1AW"),
          "an exactly repeated standalone caller callsign is identified");

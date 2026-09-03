@@ -22,12 +22,24 @@ int main() {
   qml.erase(std::remove(qml.begin(), qml.end(), '\r'), qml.end());
   const std::size_t start = qml.find("id: transcriptScroll");
   const std::size_t end = qml.find("Layout.fillWidth: true\n                                text: modelData.wpm", start);
-  if (start == std::string::npos || end == std::string::npos) return 2;
+  const std::size_t session_card_start = qml.find("id: sessionCard");
+  const std::size_t local_panel_start = qml.find(
+      "id: localModelTranscriptPanel", start);
+  if (start == std::string::npos || end == std::string::npos ||
+      session_card_start == std::string::npos ||
+      local_panel_start == std::string::npos || session_card_start >= start ||
+      local_panel_start >= end) {
+    return 2;
+  }
   const std::string transcript = qml.substr(start, end - start);
+  const std::string session_header = qml.substr(
+      session_card_start, start - session_card_start);
+  const std::string local_panel = qml.substr(
+      local_panel_start, end - local_panel_start);
   const std::size_t callsign_start = qml.find(
       "property string callsignEvidenceText:");
   const std::size_t callsign_end = qml.find(
-      "property string localModelState:", callsign_start);
+      "property string ownCallEvidenceText:", callsign_start);
 
   // Appends may move only the viewport. Moving the TextEdit cursor caused
   // Qt to repeatedly ensure it was visible, disturbing selection and making
@@ -39,8 +51,9 @@ int main() {
       !contains(transcript, "decodedTextArea.selectionStart") ||
       !contains(transcript, "decodedTextArea.selectionEnd") ||
       !contains(transcript, "function applyDecodedText(nextText)") ||
-      !contains(qml, "property string displayedDecodedText: rawDecodedText") ||
       contains(qml, "Acoustic correction:") ||
+      !contains(qml, "modelData.refinedText.length > 0") ||
+      !contains(qml, "? modelData.refinedText : rawDecodedText") ||
       !contains(transcript, "onDisplayedDecodedTextChanged()") ||
       !contains(transcript, "select(Math.min(oldSelectionStart") ||
       !contains(transcript, "if (!followTail)") ||
@@ -52,14 +65,23 @@ int main() {
       callsign_end == std::string::npos ||
       contains(qml.substr(callsign_start, callsign_end - callsign_start),
                "localModel") ||
+      contains(qml.substr(callsign_start, callsign_end - callsign_start),
+               "callsignSuggestion") ||
       !contains(qml, "objectName: \"localModelTranscriptPanel\"") ||
       !contains(qml, "objectName: \"localModelStateLabel\"") ||
       !contains(qml, "objectName: \"localModelStatusLabel\"") ||
       !contains(qml, "objectName: \"localModelTranscriptText\"") ||
       !contains(qml, "id: localModelTranscriptScroll") ||
       !contains(qml, "property string localModelStableText:") ||
+      !contains(qml, "property string ownCallEvidenceText:") ||
+      !contains(qml,
+                "callsignEvidenceText + \" \" + localModelStableText") ||
       !contains(qml, "property string localModelCallsign:") ||
       !contains(qml, "text: \"MODEL\"") ||
+      !contains(qml, "objectName: \"offlineCallsignSuggestionBadge\"") ||
+      !contains(qml, "property string offlineCallsignSuggestion:") ||
+      !contains(qml, "\"≈ \" + sessionCard.offlineCallsignSuggestion") ||
+      !contains(qml, "Advisory offline-directory match") ||
       !contains(qml, "sessionCard.localModelCallsign") ||
       !contains(qml, "function applyStableText(nextText)") ||
       !contains(qml, "function onLocalModelStateChanged()") ||
@@ -73,13 +95,22 @@ int main() {
   // Keep wrapping width independent of scrollbar visibility, with no
   // horizontal scrollbar and a permanently reserved vertical gutter.
   if (!contains(transcript, "width: transcriptScroll.availableWidth") ||
+      !contains(transcript,
+                "wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere") ||
       !contains(transcript, "height: Math.max(") ||
       !contains(transcript, "transcriptScroll.availableHeight") ||
       !contains(transcript, "implicitHeight)") ||
       !contains(transcript, "ScrollBar.horizontal: ScrollBar") ||
       !contains(transcript, "policy: ScrollBar.AlwaysOff") ||
       !contains(transcript, "ScrollBar.vertical: ScrollBar") ||
-      !contains(transcript, "policy: ScrollBar.AlwaysOn")) {
+      !contains(transcript, "policy: ScrollBar.AlwaysOn") ||
+      !contains(session_header,
+                "height: Math.ceil(sessionCardLayout.implicitHeight + 20)") ||
+      !contains(session_header, "id: sessionCardLayout") ||
+      !contains(session_header, "clip: true") ||
+      !contains(session_header, "elide: Text.ElideRight") ||
+      !contains(local_panel, "sessionCard.localModelHasText ? 88 : 50") ||
+      !contains(local_panel, "clip: true")) {
     return 4;
   }
 
@@ -202,6 +233,16 @@ int main() {
       !contains(settings_qml, "appSettings.selectLocalDecoderMetadata(selectedFile)") ||
       !contains(settings_qml, "objectName: \"localDecoderStatusLabel\"") ||
       !contains(settings_qml, "appSettings.localDecoderStatus") ||
+      !contains(settings_qml, "objectName: \"localCallsignDatabaseEnabledCheck\"") ||
+      !contains(settings_qml, "objectName: \"localCallsignDatabasePathField\"") ||
+      !contains(settings_qml, "objectName: \"reloadLocalCallsignDatabaseButton\"") ||
+      !contains(settings_qml, "appSettings.reloadLocalCallsignDatabase()") ||
+      !contains(settings_qml, "objectName: \"localCallsignDatabaseStatusLabel\"") ||
+      !contains(settings_qml, "replayController.offlineCallsignDatabaseStatus") ||
+      !contains(settings_qml, "objectName: \"localCallsignDatabaseDialog\"") ||
+      !contains(settings_qml, "appSettings.selectLocalCallsignDatabase(selectedFile)") ||
+      !contains(settings_qml, "Files are never downloaded or queried over the network") ||
+      !contains(settings_qml, "never confirms a stream or replaces decoded text") ||
       !contains(settings_qml, "replayController.localCharacterStatus") ||
       !contains(settings_qml, "replayController.localCharacterState") ||
       !contains(settings_qml, "objectName: \"radioTuningStepSlider\"") ||

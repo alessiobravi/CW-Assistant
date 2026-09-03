@@ -1,5 +1,6 @@
 #include <QGuiApplication>
 #include <QSGNode>
+#include <QTemporaryFile>
 
 #include <algorithm>
 #include <array>
@@ -203,6 +204,147 @@ bool testLocalCharacterFrontendBank() {
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
   if (!testLocalCharacterFrontendBank()) return 21;
+  cwassistant::core::OfflineCallsignDatabase callsign_database;
+  const auto callsign_import =
+      callsign_database.importText("EM90ZMV\nEA1EYL\n");
+  QVariantMap acoustic_channel{
+      {QStringLiteral("verifiedCw"), true},
+      {QStringLiteral("callsign"), QString{}},
+      {QStringLiteral("refinedText"), QStringLiteral("CQ DE EM?0ZMV ")},
+      {QStringLiteral("text"), QString{}},
+      {QStringLiteral("acousticAlternatives"),
+       QVariantList{
+           QVariantMap{{QStringLiteral("text"),
+                       QStringLiteral("CQ DE EM90ZMV")},
+                       {QStringLiteral("cost"), 1.0},
+                       {QStringLiteral("confidence"), 0.68},
+                       {QStringLiteral("firstObservationId"),
+                        QVariant::fromValue<qulonglong>(10)},
+                       {QStringLiteral("lastObservationId"),
+                        QVariant::fromValue<qulonglong>(30)}},
+           QVariantMap{{QStringLiteral("text"),
+                        QStringLiteral("DE EM90ZMV")},
+                       {QStringLiteral("cost"), 1.2},
+                       {QStringLiteral("confidence"), 0.61},
+                       {QStringLiteral("firstObservationId"),
+                        QVariant::fromValue<qulonglong>(10)},
+                       {QStringLiteral("lastObservationId"),
+                        QVariant::fromValue<qulonglong>(30)}}}},
+  };
+  const auto offline_suggestion =
+      cwassistant::desktop::offlineCallsignPresentation(
+          acoustic_channel, callsign_database);
+  if (!callsign_import.accepted || callsign_import.inserted_records != 2U ||
+      !offline_suggestion ||
+      offline_suggestion->callsign != QStringLiteral("EM90ZMV") ||
+      offline_suggestion->raw_span != QStringLiteral("EM?0ZMV") ||
+      offline_suggestion->agreeing_alternatives != 2) {
+    return 23;
+  }
+  if (acoustic_channel.value(QStringLiteral("refinedText")).toString() !=
+          QStringLiteral("CQ DE EM?0ZMV ") ||
+      !acoustic_channel.value(QStringLiteral("callsign")).toString().isEmpty() ||
+      !acoustic_channel.value(QStringLiteral("verifiedCw")).toBool()) {
+    return 24;
+  }
+  QVariantMap ineligible_channel = acoustic_channel;
+  ineligible_channel.insert(QStringLiteral("verifiedCw"), false);
+  if (cwassistant::desktop::offlineCallsignPresentation(
+          ineligible_channel, callsign_database)) {
+    return 25;
+  }
+  ineligible_channel = acoustic_channel;
+  ineligible_channel.insert(QStringLiteral("callsign"),
+                            QStringLiteral("EM90ZMV"));
+  if (cwassistant::desktop::offlineCallsignPresentation(
+          ineligible_channel, callsign_database)) {
+    return 26;
+  }
+  QVariantMap stronger_unknown = acoustic_channel;
+  stronger_unknown.insert(
+      QStringLiteral("acousticAlternatives"),
+      QVariantList{
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EM80ZMV")},
+                      {QStringLiteral("cost"), 0.0},
+                      {QStringLiteral("confidence"), 0.92},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(31)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(50)}},
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EM80ZMV")},
+                      {QStringLiteral("cost"), 0.1},
+                      {QStringLiteral("confidence"), 0.88},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(31)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(50)}},
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EM90ZMV")},
+                      {QStringLiteral("cost"), 0.4},
+                      {QStringLiteral("confidence"), 0.55},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(31)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(50)}},
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EM90ZMV")},
+                      {QStringLiteral("cost"), 0.5},
+                      {QStringLiteral("confidence"), 0.52},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(31)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(50)}}});
+  if (cwassistant::desktop::offlineCallsignPresentation(
+          stronger_unknown, callsign_database)) {
+    return 27;
+  }
+  QVariantMap old_span = acoustic_channel;
+  old_span.insert(QStringLiteral("refinedText"),
+                  QStringLiteral("EA?EYL EM?0ZMV "));
+  old_span.insert(
+      QStringLiteral("acousticAlternatives"),
+      QVariantList{
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EA1EYL")},
+                      {QStringLiteral("cost"), 0.0},
+                      {QStringLiteral("confidence"), 0.9},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(51)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(60)}},
+          QVariantMap{{QStringLiteral("text"), QStringLiteral("EA1EYL")},
+                      {QStringLiteral("cost"), 0.1},
+                      {QStringLiteral("confidence"), 0.85},
+                      {QStringLiteral("firstObservationId"),
+                       QVariant::fromValue<qulonglong>(51)},
+                      {QStringLiteral("lastObservationId"),
+                       QVariant::fromValue<qulonglong>(60)}}});
+  if (cwassistant::desktop::offlineCallsignPresentation(
+          old_span, callsign_database)) {
+    return 29;
+  }
+  acoustic_channel.insert(QStringLiteral("acousticAlternatives"),
+                          QVariantList{});
+  if (cwassistant::desktop::offlineCallsignPresentation(
+          acoustic_channel, callsign_database)) {
+    return 28;
+  }
+  QTemporaryFile local_callsign_file;
+  if (!local_callsign_file.open() ||
+      local_callsign_file.write("EM90ZMV\nEA1EYL\n") <= 0 ||
+      !local_callsign_file.flush()) {
+    return 30;
+  }
+  cwassistant::desktop::ReplayController controller;
+  controller.configureOfflineCallsignDatabase(
+      true, local_callsign_file.fileName());
+  if (controller.offlineCallsignDatabaseState() != QStringLiteral("ready") ||
+      controller.offlineCallsignDatabaseEntries() != 2) {
+    return 31;
+  }
+  controller.configureOfflineCallsignDatabase(false, QString{});
+  if (controller.offlineCallsignDatabaseState() !=
+          QStringLiteral("disabled") ||
+      controller.offlineCallsignDatabaseEntries() != 0) {
+    return 32;
+  }
   using cwassistant::desktop::freshCharacterRefinementCallEvidence;
   if (freshCharacterRefinementCallEvidence("NOISE", 0U) ||
       !freshCharacterRefinementCallEvidence("4X5L", 0U) ||

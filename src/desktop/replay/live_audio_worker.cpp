@@ -1,6 +1,7 @@
 #include "live_audio_worker.hpp"
 
 #include "decoder_channel_model.hpp"
+#include "cwassistant/core/callsign_policy.hpp"
 
 #include <QAudioDevice>
 #include <QAudioSource>
@@ -338,6 +339,7 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
   root.insert(QStringLiteral("radio"), radio);
 
   QJsonArray tracks;
+  const auto published_channels = decoder_.channels();
   for (const auto& track : decoder_.allTrackDiagnostics()) {
     QJsonObject item;
     item.insert(QStringLiteral("id"), static_cast<qint64>(track.id));
@@ -372,6 +374,28 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
     item.insert(QStringLiteral("refinedText"),
                 QString::fromStdString(track.refined_text));
+    const auto published = std::find_if(
+        published_channels.begin(), published_channels.end(),
+        [&track](const cwassistant::core::CwChannelSnapshot& channel) {
+          return channel.id == track.id;
+        });
+    const std::string presented_callsign = published == published_channels.end()
+        ? std::string{} : published->callsign;
+    QString callsign_source = QStringLiteral("none");
+    if (!presented_callsign.empty()) {
+      if (cwassistant::core::CallsignPolicy::best_complete_in_text(
+              track.refined_text) == presented_callsign) {
+        callsign_source = QStringLiteral("phase-consensus");
+      } else if (cwassistant::core::CallsignPolicy::best_complete_in_text(
+                     track.text) == presented_callsign) {
+        callsign_source = QStringLiteral("literal-decoder");
+      } else {
+        callsign_source = QStringLiteral("retained");
+      }
+    }
+    item.insert(QStringLiteral("presentedCallsign"),
+                QString::fromStdString(presented_callsign));
+    item.insert(QStringLiteral("presentedCallsignSource"), callsign_source);
     QJsonArray alternatives;
     for (const auto& alternative : track.acoustic_alternatives) {
       QJsonObject candidate;

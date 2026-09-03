@@ -16,6 +16,7 @@
 
 #include "../visualization/spectrum_frame.hpp"
 #include "cwassistant/core/cw_character_decoder.hpp"
+#include "cwassistant/core/offline_callsign_database.hpp"
 
 namespace cwassistant::desktop {
 
@@ -32,6 +33,22 @@ namespace cwassistant::desktop {
 // verification evidence when unrelated later characters arrive.
 [[nodiscard]] std::optional<std::string> freshCharacterRefinementCallEvidence(
     std::string_view stable_text, std::size_t previous_stable_size);
+
+struct OfflineCallsignPresentation {
+  QString callsign;
+  QString raw_span;
+  int agreeing_alternatives{0};
+  double acoustic_support{0.0};
+  double relative_cost{0.0};
+};
+
+// Selects only a database entry already present in at least two bounded
+// acoustic alternatives and compatible with a completed '?' span in received
+// text. It never mutates the decoder transcript or verification result.
+[[nodiscard]] std::optional<OfflineCallsignPresentation>
+offlineCallsignPresentation(const QVariantMap& channel,
+                            const cwassistant::core::OfflineCallsignDatabase&
+                                database);
 
 class ReplayController final : public QObject {
   Q_OBJECT
@@ -61,6 +78,12 @@ class ReplayController final : public QObject {
   Q_PROPERTY(QString localCharacterState READ localCharacterState
                  NOTIFY decoderChanged)
   Q_PROPERTY(QString localCharacterStatus READ localCharacterStatus
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(QString offlineCallsignDatabaseState READ offlineCallsignDatabaseState
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(QString offlineCallsignDatabaseStatus READ offlineCallsignDatabaseStatus
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(int offlineCallsignDatabaseEntries READ offlineCallsignDatabaseEntries
                  NOTIFY decoderChanged)
   Q_PROPERTY(bool debugCaptureActive READ debugCaptureActive
                  NOTIFY debugCaptureChanged)
@@ -102,6 +125,9 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
   [[nodiscard]] const QString& localCharacterState() const noexcept;
   [[nodiscard]] const QString& localCharacterStatus() const noexcept;
+  [[nodiscard]] const QString& offlineCallsignDatabaseState() const noexcept;
+  [[nodiscard]] const QString& offlineCallsignDatabaseStatus() const noexcept;
+  [[nodiscard]] int offlineCallsignDatabaseEntries() const noexcept;
   [[nodiscard]] bool debugCaptureActive() const noexcept;
   [[nodiscard]] const QString& debugCapturePath() const noexcept;
   [[nodiscard]] double debugCaptureElapsedSeconds() const noexcept;
@@ -122,6 +148,8 @@ class ReplayController final : public QObject {
   void setDecodedSignalTimeoutSeconds(int seconds);
   void configureLocalCharacterDecoder(bool enabled, const QString& model_path,
                                       const QString& metadata_path);
+  void configureOfflineCallsignDatabase(bool enabled,
+                                        const QString& database_path);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active,
@@ -247,6 +275,10 @@ class ReplayController final : public QObject {
       local_character_consensus_;
   QString local_character_state_{QStringLiteral("disabled")};
   QString local_character_status_{QStringLiteral("Local model disabled.")};
+  cwassistant::core::OfflineCallsignDatabase offline_callsign_database_;
+  QString offline_callsign_database_state_{QStringLiteral("disabled")};
+  QString offline_callsign_database_status_{
+      QStringLiteral("Offline callsign suggestions disabled.")};
   bool debug_capture_active_{false};
   QString debug_capture_path_;
   double debug_capture_elapsed_seconds_{0.0};

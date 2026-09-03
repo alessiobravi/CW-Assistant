@@ -155,11 +155,14 @@ signals keep separate cards and colors; only a later return after the previous
 track has ended inherits that track's retained identity. Closing a card with **×** does not
 stop its DSP; click the marker to reopen it. Use the **↑** and **↓** buttons
 beside the close button to set the operator's preferred order. These controls
-act on press so a live decoder refresh cannot cancel them. Stable text, amber provisional text/elements,
-adaptive WPM, SNR, confidence, drift, and selected filter width update in place.
-Competitive acoustic timing paths remain internal evidence for callsign
-selection and debug capture. They are not appended below the live card text,
-because consensus can correctly abstain while the literal decoder continues.
+act on press so a live decoder refresh cannot cancel them. The card prefers
+the append-only phase/timing consensus once it has stable content and uses the
+literal greedy decoder only while that consensus is unavailable. This makes
+compressed manual character and word gaps easier to read. Stable text, amber
+provisional text/elements, adaptive WPM, SNR, confidence, drift, and selected
+filter width update in place. Competitive acoustic timing paths remain
+available for callsign selection and debug capture; they are not appended as a
+second competing transcript.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
 default 30 seconds, configurable up to 300 seconds) so normal word and message
@@ -203,7 +206,8 @@ confirmed the label contains only its frequency; the confirmed callsign then
 replaces it. Callsign text remains
 hidden until the track is verified, the decoder has promoted the text to stable,
 a word gap confirms that the structurally valid token is complete, and decoded
-exchange context (`DE`, `CQ`, `TU`, or `UP`) or exact repetition supports it.
+exchange context (`DE`, `CQ`, `TU`, `UP`, `PSE K`, `K`, `KN`, `AR`, or `SK`)
+or exact repetition supports it.
 The candidate may come from the literal path or the append-only acoustic
 consensus, but it must pass the same context/repetition policy. This is
 signal/timing and text-context evidence, not external directory validation. The marker
@@ -233,12 +237,13 @@ over bounded recent evidence, allowing a rough acquisition to recover. Short
 or ambiguous fragments may remain provisional rather than being presented as
 certain.
 
-In parallel, a bounded timing lattice revisits ambiguous dit/dah and
+In parallel, a bounded timing lattice uses shared cadence evidence to revisit ambiguous dit/dah and
 character/word-gap boundaries every 500 ms and at completed gaps. It retains at
 most four competitive acoustic paths. Only a common prefix with sufficient
-evidence is appended to the correction stream, so later alternatives cannot
-rewrite already shown correction text. This specifically helps manual keying
-and compressed spacing; it cannot reconstruct two exactly co-channel stations
+evidence crosses the append-only boundary during continuous reception. At an
+explicit completed-transmission boundary, the best bounded path finalizes a
+remaining ambiguous suffix instead of losing it. This specifically helps
+manual keying and compressed spacing; it cannot reconstruct two exactly co-channel stations
 whose simultaneous marks have already merged into one envelope.
 
 A colored verified marker is intentionally delayed until the complete evidence
@@ -276,20 +281,28 @@ operator-supplied ONNX character model selected under **Settings → Decoder**.
 The application supplies no model and performs no download. Once enabled and
 validated, up to four verified, Morse-likely, or manually selected tracks are
 refined on a CPU worker. The card shows delayed append-only output in a separate
-**LOCAL MODEL** block; the first stable characters normally require two
-overlapping eight-second windows. Raw decoder text remains unchanged. A
+**LOCAL MODEL** block. Strong characters normally require two overlapping
+eight-second windows; a moderate-confidence character needs three aligned
+windows and remains provisional with only two. Deterministic text remains
+separate. A
 structurally valid call confirmed across overlapping model windows may complete
 verification after the carrier has independently passed the ordinary spectral,
 keying, cadence, and coherence checks and the sustained-entry interval. It then
 appears in the header with a **MODEL** badge. Model output cannot create a
 carrier, keep silence active, replace raw text, or initiate transmission.
 
-Treat `?` as retained acoustic uncertainty, not as a character that an online
-directory has disproved. Acoustic alternatives remain available in diagnostic
-capture, while the card remains the receiver's continuously updated literal
-stable result. A
-future callbook, activity list, or cluster spot must never silently replace the
-raw text or confirm what this receiver heard.
+Treat `?` as retained acoustic uncertainty, not as a character that a directory
+has disproved. Settings → Decoder can load an operator-supplied offline
+`master.scp` or Call History text file. If a completed uncertain call-shaped
+span agrees with the same known call in at least two competitive acoustic
+paths, the marker/card may show `≈ CALL` with a **DB** badge. The approximation
+sign is intentional: the transcript keeps its `?`, and the suggestion cannot
+confirm the callsign, verify a stream, trigger the own-call alert, or control
+transmission. The application neither supplies nor downloads a callsign list.
+Acoustic alternatives remain available in diagnostic capture, while the card
+shows the deterministic phase/timing consensus when available and falls back
+to the literal acquisition path otherwise. A future online callbook, activity
+list, or cluster spot must preserve the same separation and provenance.
 
 ## Debug capture
 
@@ -303,8 +316,9 @@ starts a bounded recording:
   second listing every currently tracked frequency — including tracks that
   never become visible — with its SNR, narrowband coherence, filter width,
   verification state and reason, spectral observations, key transitions,
-  decoded/unknown symbol counts, timing/cadence quality, WPM, and both
-  provisional and stable decoded text. Each line also records the linked
+  decoded/unknown symbol counts, timing/cadence quality, WPM, both provisional
+  and stable decoded text, and the presented callsign with
+  phase-consensus/literal/retained provenance. Each line also records the linked
   radio's RX/TX frequency and split state at that instant, so reviewing the
   file shows whether (and exactly when) the VFO moved during the capture —
   a common explanation for a signal that stops decoding partway through.

@@ -858,14 +858,27 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
              maximum_cost) {
     ++competitive_count;
   }
+  // A caller-requested flush closes this acoustic segment. No later evidence
+  // can resolve an N-best disagreement to the left of the boundary, and
+  // dropping that suffix would permanently stall the append-only transcript.
+  // Finalize the MAP path while retaining every bounded alternative above so
+  // residual uncertainty remains observable to diagnostics.
+  if (mode == CwLatticeDecodeMode::Flush) competitive_count = 1U;
   // An early preferred-speed path can be internally self-consistent while it
   // is still the wrong cadence (a slow dit resembles a faster dash). Expose
   // its segment-scoped alternatives, but do not make them append-only until
   // the multi-speed acquisition has settled or an explicit flush closes the
   // segment.
+  // A completed transmission provides a strong temporal boundary even when
+  // hand keying widens the timing distribution. Permit a modestly lower
+  // acoustic-confidence floor only at that boundary; provisional output keeps
+  // the stricter gate so noise cannot continuously manufacture characters.
+  const float evidence_floor = mode == CwLatticeDecodeMode::Flush
+      ? std::max(0.30F,
+                 config_.minimum_lattice_evidence_confidence - 0.10F)
+      : config_.minimum_lattice_evidence_confidence;
   if ((!locked_ && mode == CwLatticeDecodeMode::Provisional) ||
-      decoded.alternatives.front().evidence_confidence <
-          config_.minimum_lattice_evidence_confidence) {
+      decoded.alternatives.front().evidence_confidence < evidence_floor) {
     return;
   }
 

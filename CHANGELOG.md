@@ -6,8 +6,35 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Settings can load an operator-supplied offline `master.scp` or Call History
+  text file. A database call is shown only as an explicitly marked advisory
+  suggestion when at least two current bounded acoustic alternatives contain
+  that call and it fits a completed uncertain call-shaped span. It
+  never replaces transcript text, confirms a stream, or performs a network
+  query.
+
 ### Fixed
 
+- Decoder cards now show the append-only phase/timing consensus as soon as it
+  is available, retain the literal decoder only as an acquisition fallback,
+  wrap at decoded word boundaries, and derive their clipped height from their
+  real content so transcripts and local-model status cannot escape the card.
+- Completed transmissions now finalize the timing lattice's best bounded path
+  instead of dropping an unresolved competitive suffix. A modestly lower
+  evidence floor is permitted only at that explicit boundary; continuous
+  noise keeps the stricter gate. On the reported receiver capture this changes
+  the deterministic correction from `T90 ` to a spaced transcript containing
+  `T90ZMV PSE K`, `DF6`, and both `5NN` reports.
+- Overlapping local character-model windows may now confirm a moderately
+  confident character after three independently aligned windows. This recovers
+  repeated model evidence such as `EM90ZMV` without duplicating the overlap as
+  `EM9090ZMV`, while two moderate windows remain provisional.
+- Ordinary-QSO callsign labeling now recognizes a complete acoustically
+  decoded call before `PSE K`, `K`, `KN`, `AR`, or `SK` as supporting context,
+  in addition to CQ/DE/TU/UP and exact repetition. Context ranks existing text;
+  it never invents or replaces decoded characters.
 - Fixed the RX-frequency editor reopening or remaining active after Enter or
   Escape. Losing focus now cancels editing, and the display/edit states use a
   dark, high-contrast monospaced LCD-style panel.
@@ -149,6 +176,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Changed
 
+- Debug-capture track records now include the callsign actually presented to
+  the operator and whether it came from phase consensus, the literal decoder,
+  or retained same-stream identity, making label provenance auditable.
 - Established operator-selected, Morse-likely, and verified streams now reserve
   their nearest raw spectral ridge before global peak-separation ranking. A
   stable presentation-center tie-break lets a returning true carrier reclaim

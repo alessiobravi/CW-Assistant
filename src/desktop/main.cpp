@@ -78,10 +78,17 @@ int main(int argc, char* argv[]) {
         settings.localDecoderEnabled(), settings.localDecoderModelPath(),
         settings.localDecoderMetadataPath());
   };
+  const auto apply_offline_callsign_database = [&settings,
+                                                &replay_controller] {
+    replay_controller.configureOfflineCallsignDatabase(
+        settings.localCallsignDatabaseEnabled(),
+        settings.localCallsignDatabasePath());
+  };
   apply_spectrum_processing();
   apply_radio_frequency();
   apply_decoded_signal_timeout();
   apply_local_character_decoder();
+  apply_offline_callsign_database();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   QObject::connect(
@@ -99,6 +106,13 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::radioFrequencyChanged,
       &replay_controller, apply_radio_frequency);
+  QObject::connect(
+      &settings,
+      &cwassistant::desktop::AppSettings::localCallsignDatabaseConfigurationCommitted,
+      &replay_controller,
+      [&replay_controller](const bool enabled, const QString& path) {
+        replay_controller.configureOfflineCallsignDatabase(enabled, path);
+      });
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::audioInputsChanged,
       &replay_controller, [&settings, &replay_controller] {

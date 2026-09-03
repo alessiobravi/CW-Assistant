@@ -135,6 +135,12 @@ QVariantList decoderChannelModel(
                          alternative.acoustic_cost);
         candidate.insert(QStringLiteral("confidence"),
                          alternative.evidence_confidence);
+        candidate.insert(QStringLiteral("firstObservationId"),
+                         QVariant::fromValue<qulonglong>(
+                             alternative.first_observation_id));
+        candidate.insert(QStringLiteral("lastObservationId"),
+                         QVariant::fromValue<qulonglong>(
+                             alternative.last_observation_id));
         acoustic_alternatives.push_back(candidate);
       }
     }

@@ -80,8 +80,9 @@ struct ReplayResult {
 ReplayResult replayMessage(const std::string_view message, const double wpm,
                            const float mark_snr_db,
                            const double jitter_fraction,
-                           const double character_gap_dots = 3.0) {
-  cwassistant::core::CwMultiSpeedDecoder decoder;
+                           const double character_gap_dots = 3.0,
+                           cwassistant::core::CwMultiSpeedConfig config = {}) {
+  cwassistant::core::CwMultiSpeedDecoder decoder({}, config);
   const double dot_ms = 1'200.0 / wpm;
   std::uint64_t now_ns = 0;
   std::uint64_t updates = 0;
@@ -278,6 +279,17 @@ int main() {
             << "\" refined=\"" << compressed_call.refined_text
             << "\" refined_edits=" << compressed_refined_edits << '\n';
 
+  auto boundary_config = cwassistant::core::CwMultiSpeedConfig{};
+  boundary_config.minimum_lattice_evidence_confidence = 0.80F;
+  const ReplayResult boundary_finalized = replayMessage(
+      "AD2FC/P", 25.0, 9.0F, 0.12, 3.0, boundary_config);
+  const bool boundary_flush_committed =
+      boundary_finalized.refined_text == "AD2FC/P";
+  std::cout << "case=boundary-finalizes-moderate-evidence"
+            << " refined=\"" << boundary_finalized.refined_text
+            << "\" confidence=" << boundary_finalized.alternative_confidence
+            << " committed=" << boundary_flush_committed << '\n';
+
   std::string long_message;
   for (std::size_t repeat = 0; repeat < 24U; ++repeat)
     long_message += "EA1EYL";
@@ -381,6 +393,7 @@ int main() {
       alternatives_bounded && refined_segments_terminated &&
       speed_failures == 0 && false_characters == 0 &&
       false_refined_characters == 0 &&
+      boundary_flush_committed &&
       maximum_state_bytes <= maximum_decoder_state_bytes
       ? EXIT_SUCCESS : EXIT_FAILURE;
 }

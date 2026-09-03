@@ -190,6 +190,8 @@ int main(int argc, char* argv[]) {
       !first_line.contains("\"candidateTracks\"") ||
       !first_line.contains("\"acousticWpm\"") ||
       !first_line.contains("\"acousticCadenceConfidence\"") ||
+      !first_line.contains("\"presentedCallsign\"") ||
+      !first_line.contains("\"presentedCallsignSource\"") ||
       !first_line.contains("\"identityOriginFrequencyHz\"") ||
       !first_line.contains("\"presentationFrequencyHz\"") ||
       !first_line.contains("\"matchAgeSeconds\"") ||

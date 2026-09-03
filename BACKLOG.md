@@ -12,6 +12,27 @@ actual-RF-to-dial conversion preserves transverter offsets, and the active RX
 VFO is changed without touching split TX, mode, PTT, or KEY. UI-003, CAT-002,
 CAT-003, and CAT-004 remain active for the wider scope recorded below.
 
+Last reviewed: 2026-09-03 — a new field capture confirmed correct carrier lock
+and roughly 20 WPM cadence but exposed two downstream losses: competitive
+timing suffixes were discarded at closed transmission boundaries, and repeated
+moderate-confidence character-model overlaps split/duplicated a callsign. The
+timing path now finalizes a bounded MAP suffix only at explicit flush, the card
+prefers its spaced append-only consensus, and three aligned model windows can
+confirm moderate characters. Ordinary-QSO PSE K/K/KN/AR/SK context may rank an
+already complete call. Diagnostics record presented-call provenance. CW-001,
+CW-002, CALL-006, and OBS-003 remain active for held-out calibration,
+contextual N-best rescoring, per-sender cadence, and model qualification.
+
+Last reviewed: 2026-09-03 — added explicit IC-7300 and IC-7610 support scope
+under CAT-005. The implementation must stay behind the provider-neutral radio
+boundary, retain configurable CI-V addressing, and pass mocked plus documented
+hardware acceptance before either rig is advertised as supported.
+
+Last reviewed: 2026-09-03 — added CAT-006 for a runtime, data-driven radio
+catalog. Hamlib's own model/status/capability enumeration is the canonical
+direct-CAT list; network control programs such as rigctld and Flrig remain
+provider entries rather than duplicated radio models.
+
 Last reviewed: 2026-09-03 — disabled the plot-level signal picker until a
 receive/replay source is active, restoring the central empty-state start action
 and normal cursor. UI-003 remains active for its documented wider scope.
@@ -380,7 +401,7 @@ translucent band rather than two signal-like lines.
 | DSP-004 | todo | Add operational DSP conditioning | Configurable noise blanker, AGC, key-click suppression, mute, and 20–700 Hz monitor filter have replay tests and bypass paths. |
 | DSP-005 | todo | Add frequency and I/Q calibration | Manual/automatic correction, reset, diagnostics, and deterministic imbalance fixtures pass. |
 | CALL-004 | todo | Add validation, watch, and band-plan policies | Configurable validation levels, allocation/pattern checks, master-call data, watch list, and CW-segment filtering are independently testable. |
-| CALL-005 | active | Add optional provider-based callsign prediction and validation | The dependency-free core now models immutable raw hypotheses, separately labeled suggestions and provider provenance, and a deterministic bounded ranker that accepts only acoustically compatible candidates, caps external priors, and never penalizes database absence. Remaining: expose N-best acoustic candidates, add the workspace toggle and Settings → Decoding provider controls, implement checksummed local-list import/cache, then bounded authenticated directory lookup where current terms permit it. Raw decoder output remains visible and immutable; every completion shows confidence, source/version, acoustic cost, and rationale. |
+| CALL-005 | active | Add optional provider-based callsign prediction and validation | The dependency-free core models immutable raw hypotheses and a bounded local `master.scp`/Call History index. Settings load up to 32 MiB/one million unique records without network access; a separately marked `≈`/`DB` suggestion appears only when at least two competitive acoustic paths independently contain the database call and it matches a completed uncertain call-shaped span. It never changes transcript text or verifies CW. Remaining: checksummed source/version metadata, richer character-difference rationale, indexed fuzzy lookup outside the refresh path, and then bounded authenticated directory lookup where terms permit it. Database absence never penalizes a valid acoustic candidate. |
 | CALL-007 | todo | Correlate read-only DX-cluster/RBN evidence | A profile-configured receive-only provider ingests documented DXSpider-style spots or a documented HTTPS activity API, normalizes callsign/frequency/time/mode, expires stale data, and ranks a decoder candidate only when checked RF frequency, age, mode, and acoustic edit distance agree. Show source, spotter, age, frequency delta, and confidence beside—not inside—the immutable raw transcript. Cluster evidence cannot by itself verify CW, confirm a callsign, distinguish two iso-frequency senders, post a spot, or initiate TX. Use TLS where the provider supports it; legacy Telnet requires explicit opt-in, bounded reconnect/rate limits, credential-safe diagnostics, and no commands beyond login/read filtering. |
 
 ## P2 — M3 radio and guarded transmission
@@ -391,6 +412,8 @@ translucent band rather than two signal-like lines.
 | CAT-002 | active | Implement Windows OmniRig frequency adapter | Settings select Rig 1/2, open native configuration, and poll online RX frequency through COM for evidence-gated live RF labels. RX tuning now requires online/receive state plus the advertised writable mask and selects active `FreqA`/`FreqB` where available, falling back to writable `Freq`; it never invokes simplex/split/mode/TX operations. Richer authoritative split/TX/PTT diagnostics and both-radio hardware tests remain. |
 | CAT-003 | active | Implement split and transverter frequency domain | Checked integer-Hz RX/TX resolution, signed offsets, profile persistence, and CAT split contract are implemented; a large decoder-panel VFO readout shows resolved actual RF. Exact RX entry and configurable stepping use a checked inverse RX offset before sending the provider dial frequency; split TX and mode remain unchanged. Retuning live RX re-centers tracked signals with sideband-aware mapping. OmniRig still lacks authoritative split/TX display, and setup preview, Doppler/satellite tracking, and hardware tests remain. |
 | CAT-004 | active | Implement CAT4OM network frequency provider | Native 1.x handshake, observer/control connection, password proof, pushed state, ownership, capability checks, reconnect, Settings fields, and core protocol tests exist. Operating-panel RX tuning now requires master ownership plus advertised `SetFrequency` and explicitly targets the opaque active RX VFO while pushed state remains authoritative. Split command UI/sequencing, live service integration tests, and a protocol extension for actual transmit/PTT state remain. |
+| CAT-005 | todo | Add Icom IC-7300 and IC-7610 radio support | Add both rigs through the provider-neutral CAT boundary (Hamlib/direct CI-V and compatible external providers), with configurable CI-V address/baud, USB audio-link guidance, online/capability discovery, RX/TX frequency, mode and split readback/control, and safe inactive PTT/KEY initialization. Unit tests use protocol mocks; documented hardware acceptance verifies reconnect, VFO selection, split operation, and read/write behavior without unintended transmission before either model is listed as supported. |
+| CAT-006 | todo | Populate a data-driven catalog of well-known radios | Enumerate manufacturer, model, backend version, support status, and advertised capabilities from the bundled/selected Hamlib release at runtime, with searchable selection and stable saved model identity. Treat Hamlib NET rigctl, Flrig, OmniRig, CAT4OM, and future control programs as provider backends rather than duplicating static rig lists. Never claim that catalog presence proves every command works: capability-gate frequency/mode/split/PTT/KEY, preserve safe inactive serial lines, show backend status, allow tested per-model overrides, and maintain mocked plus representative hardware acceptance results. |
 | RIG-001 | active | Persist multiple named rig profiles | CAT/keying/framing/poll/display settings are isolated by station profile; full device settings and safe live switching remain. |
 | KEY-001 | todo | Implement cross-platform RTS/DTR adapter | Line loopback tests pass on Windows, macOS, and Linux without discovery toggles. |
 | QSO-001 | active | Define declarative workflow/panel schema | A dependency-free validated profile model now separates neutral monitoring, open-ended ordinary/general CW, and individually defined rule-derived contest exchanges, with typed fields, role transitions, field-scoped aliases, and inert macro metadata rather than executable scripts. Remaining profiles include DX pileup, special events, and beacons; application/UI state and runtime trust must keep acoustic, provider-suggested, operator-accepted, and exact-TX-confirmed calls distinct. Suggested/automatic replies require explicit per-profile enablement, exact-call/context confirmation, armed TX, cancellable preview, maximum-key-down, and emergency release. |

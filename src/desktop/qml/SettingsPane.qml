@@ -225,6 +225,70 @@ Pane {
                                : (appSettings.localDecoderBackendAvailable
                                   ? "#43c6ac" : "#f3bd55")
                     }
+                    Rectangle {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        height: 1
+                        color: "#2b3541"
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Optional offline callsign suggestions from an operator-supplied master.scp or Call History text export. The list only ranks calls already present in multiple acoustic alternatives; it never confirms a stream or replaces decoded text. Files are never downloaded or queried over the network."
+                    }
+                    Label { text: "Local callsign suggestions" }
+                    CheckBox {
+                        objectName: "localCallsignDatabaseEnabledCheck"
+                        text: "Enable operator-supplied local file"
+                        checked: appSettings.localCallsignDatabaseEnabled
+                        onToggled: appSettings.localCallsignDatabaseEnabled = checked
+                    }
+                    Label { text: "Callsign-list file" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        TextField {
+                            objectName: "localCallsignDatabasePathField"
+                            Layout.fillWidth: true
+                            readOnly: true
+                            text: appSettings.localCallsignDatabasePath
+                            placeholderText: "No local callsign list selected"
+                            ToolTip.visible: hovered && text.length > 0
+                            ToolTip.text: text
+                        }
+                        Button {
+                            objectName: "browseLocalCallsignDatabaseButton"
+                            text: "Browse…"
+                            onClicked: localCallsignDatabaseDialog.open()
+                        }
+                        Button {
+                            text: "Clear"
+                            enabled: appSettings.localCallsignDatabasePath.length > 0
+                            onClicked: appSettings.clearLocalCallsignDatabase()
+                        }
+                    }
+                    Label { text: "Local-list state" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            objectName: "localCallsignDatabaseStatusLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: replayController.offlineCallsignDatabaseStatus
+                            color: replayController.offlineCallsignDatabaseState
+                                   === "error" ? "#ef7d85"
+                                   : (replayController.offlineCallsignDatabaseState
+                                      === "ready" ? "#80cbc4" : "#8290a0")
+                        }
+                        Button {
+                            objectName: "reloadLocalCallsignDatabaseButton"
+                            text: "Reload local file"
+                            enabled: appSettings.localCallsignDatabaseEnabled
+                                     && appSettings.localCallsignDatabasePath.length > 0
+                            onClicked: appSettings.reloadLocalCallsignDatabase()
+                        }
+                    }
                 }
             }
 
@@ -603,5 +667,15 @@ Pane {
         fileMode: FileDialog.OpenFile
         nameFilters: ["JSON metadata (*.json)", "All files (*)"]
         onAccepted: appSettings.selectLocalDecoderMetadata(selectedFile)
+    }
+
+    FileDialog {
+        id: localCallsignDatabaseDialog
+        objectName: "localCallsignDatabaseDialog"
+        title: "Select local callsign list"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Callsign lists (master.scp *.scp *.txt *.csv)",
+                      "All files (*)"]
+        onAccepted: appSettings.selectLocalCallsignDatabase(selectedFile)
     }
 }

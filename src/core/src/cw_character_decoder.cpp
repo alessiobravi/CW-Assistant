@@ -77,6 +77,15 @@ bool usableCharacter(const CwTimedCharacter& character,
          character.confidence >= minimum_confidence;
 }
 
+bool characterInsideUsableContext(
+    const CwTimedCharacter& character,
+    const CwCharacterHypothesis& hypothesis) noexcept {
+  return character.started_ns >= hypothesis.valid_started_ns &&
+         character.ended_ns <= hypothesis.valid_ended_ns &&
+         character.ended_ns >= character.started_ns &&
+         std::isfinite(character.confidence);
+}
+
 bool newerGeneration(const CwCharacterTrackKey& candidate,
                      const CwCharacterTrackKey& current) noexcept {
   return candidate.track_id == current.track_id &&
@@ -169,6 +178,16 @@ CwCharacterConsensusUpdate CwCharacterConsensusMerger::process(
 
   bool changed = false;
   std::size_t first_uncommitted = newest.characters.size();
+  // Overlapping CTC windows are correlated, so preserve the ordinary
+  // two-window confidence gate. One additional time-aligned agreement may
+  // recover a consistently moderate-confidence character without using
+  // language or callsign context.
+  const float repeated_confidence =
+      config_.minimum_character_confidence * 0.70F;
+  const std::size_t repeated_confirmation_windows =
+      config_.confirmation_windows + 1U;
+  const bool repeated_confirmation_available =
+      repeated_confirmation_windows <= config_.retained_windows;
   for (std::size_t index = 0; index < newest.characters.size(); ++index) {
     const auto& character = newest.characters[index];
     bool already_committed = character.ended_ns <= last_committed_end_ns_;
@@ -182,11 +201,13 @@ CwCharacterConsensusUpdate CwCharacterConsensusMerger::process(
     }
     if (already_committed) continue;
     first_uncommitted = index;
-    if (!usableCharacter(character, newest,
-                         config_.minimum_character_confidence)) {
+    if (!characterInsideUsableContext(character, newest) ||
+        character.confidence < repeated_confidence) {
       break;
     }
-    std::size_t confirmations = 1U;
+    std::size_t strong_confirmations =
+        character.confidence >= config_.minimum_character_confidence ? 1U : 0U;
+    std::size_t repeated_confirmations = 1U;
     for (std::size_t window = 0; window < mappings.size(); ++window) {
       const int compared_index = mappings[window][index];
       if (compared_index < 0) continue;
@@ -194,10 +215,18 @@ CwCharacterConsensusUpdate CwCharacterConsensusMerger::process(
           windows_[window].characters[static_cast<std::size_t>(compared_index)];
       if (usableCharacter(compared, windows_[window],
                           config_.minimum_character_confidence)) {
-        ++confirmations;
+        ++strong_confirmations;
+      }
+      if (characterInsideUsableContext(compared, windows_[window]) &&
+          compared.confidence >= repeated_confidence) {
+        ++repeated_confirmations;
       }
     }
-    if (confirmations < config_.confirmation_windows) break;
+    const bool strongly_confirmed =
+        strong_confirmations >= config_.confirmation_windows;
+    const bool repeatedly_confirmed = repeated_confirmation_available &&
+        repeated_confirmations >= repeated_confirmation_windows;
+    if (!strongly_confirmed && !repeatedly_confirmed) break;
     if (stable_text_.size() >= config_.maximum_stable_characters) break;
     stable_text_.push_back(character.symbol);
     last_committed_end_ns_ = character.ended_ns;

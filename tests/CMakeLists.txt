@@ -19,6 +19,12 @@ add_executable(cwa_callsign_evidence_tests callsign_evidence_tests.cpp)
 target_link_libraries(cwa_callsign_evidence_tests PRIVATE cwa_core)
 add_test(NAME cwa_callsign_evidence_tests COMMAND cwa_callsign_evidence_tests)
 
+add_executable(cwa_offline_callsign_database_tests
+  offline_callsign_database_tests.cpp)
+target_link_libraries(cwa_offline_callsign_database_tests PRIVATE cwa_core)
+add_test(NAME cwa_offline_callsign_database_tests
+  COMMAND cwa_offline_callsign_database_tests)
+
 add_executable(cwa_conversation_profile_tests conversation_profile_tests.cpp)
 target_link_libraries(cwa_conversation_profile_tests PRIVATE cwa_core)
 add_test(NAME cwa_conversation_profile_tests COMMAND cwa_conversation_profile_tests)

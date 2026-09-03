@@ -213,6 +213,30 @@ void testConsensusRejectsUncertainAndStaleResults() {
          "oversized backend output is rejected before alignment allocation");
 }
 
+void testRepeatedModerateConfidenceCallsignCharacters() {
+  using cwassistant::core::CwCharacterConsensusMerger;
+  CwCharacterConsensusMerger merger;
+  auto first = hypothesis(1, 0, "EM90ZMV");
+  auto second = hypothesis(2, 10'000'000ULL, "EM90ZMV");
+  auto third = hypothesis(3, 20'000'000ULL, "EM90ZMV");
+  for (auto* candidate : {&first, &second, &third}) {
+    candidate->characters[4].confidence = 0.63F;
+    candidate->characters[5].confidence = 0.58F;
+  }
+
+  static_cast<void>(merger.process(std::move(first)));
+  const auto held = merger.process(std::move(second));
+  expect(held.stable_text == "EM90" && held.provisional_text == "ZMV",
+         "two moderate-confidence windows do not prematurely commit a call");
+  const auto committed = merger.process(std::move(third));
+  expect(committed.stable_text == "EM90ZMV" &&
+             committed.provisional_text.empty(),
+         "three time-aligned windows recover repeated moderate-confidence "
+         "callsign characters without splitting the token");
+  expect(committed.stable_text.find("EM9090ZMV") == std::string::npos,
+         "overlap consensus does not duplicate a confirmed callsign prefix");
+}
+
 void testConsensusGenerationOrdering() {
   using cwassistant::core::CwCharacterConsensusMerger;
   const CwCharacterTrackKey original{
@@ -262,6 +286,7 @@ int main() {
   testFrontendNarrowLaneAndBackpressure();
   testTimestampConsensusAndAppendOnlyText();
   testConsensusRejectsUncertainAndStaleResults();
+  testRepeatedModerateConfidenceCallsignCharacters();
   testConsensusGenerationOrdering();
   if (failures == 0) {
     std::cout << "CW character refinement tests passed\n";

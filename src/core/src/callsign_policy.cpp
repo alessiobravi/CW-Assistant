@@ -185,6 +185,18 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
     if (index > 2 && words[index - 3] == "CQ") candidate.score += 3;
     if (index + 1 < words.size() && words[index + 1] == "UP")
       candidate.score += 5;
+    // Ordinary hand-sent QSOs often close an identification with PSE K, K,
+    // KN, AR, or SK rather than repeating CQ/DE. These are role/boundary
+    // clues only: the token must already be a complete acoustically decoded
+    // callsign before any of these weights apply.
+    if (index + 2 < words.size() && words[index + 1] == "PSE" &&
+        words[index + 2] == "K") {
+      candidate.score += 6;
+    } else if (index + 1 < words.size() &&
+               (words[index + 1] == "K" || words[index + 1] == "KN" ||
+                words[index + 1] == "AR" || words[index + 1] == "SK")) {
+      candidate.score += 4;
+    }
     if (candidate.occurrences > 1) candidate.score += 4;
   }
 

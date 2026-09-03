@@ -639,6 +639,15 @@ QString AppSettings::localDecoderStatus() const {
   }
   return QStringLiteral("Configuration ready to validate and load.");
 }
+bool AppSettings::localCallsignDatabaseEnabled() const noexcept {
+  return local_callsign_database_enabled_;
+}
+const QString& AppSettings::localCallsignDatabasePath() const noexcept {
+  return local_callsign_database_path_;
+}
+const QString& AppSettings::localCallsignDatabaseStatus() const noexcept {
+  return local_callsign_database_status_;
+}
 const QString& AppSettings::statusMessage() const noexcept { return status_message_; }
 
 #define CWA_SETTER(Method, Member, Type)            \
@@ -704,6 +713,19 @@ CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
+
+void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
+  if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
+  local_callsign_database_status_ = value
+      ? (local_callsign_database_path_.isEmpty()
+             ? QStringLiteral("Select a local master.scp or Call History text file.")
+             : QStringLiteral("Loading the selected local callsign list."))
+      : QStringLiteral("Disabled. No local callsign list is in use.");
+  emit settingsChanged();
+  emit localCallsignDatabaseChanged();
+  emit localCallsignDatabaseConfigurationCommitted(
+      local_callsign_database_enabled_, local_callsign_database_path_);
+}
 
 void AppSettings::setRadioTuningStepHz(const int value) {
   const int clamped = std::clamp(value, 1'000, 100'000);
@@ -779,6 +801,59 @@ void AppSettings::clearLocalDecoderModel() {
 void AppSettings::clearLocalDecoderMetadata() {
   if (assign_if_changed(local_decoder_metadata_path_, QString{}))
     emit settingsChanged();
+}
+
+bool AppSettings::selectLocalCallsignDatabase(const QUrl& url) {
+  QString path;
+  if (!selectLocalFile(url, path)) {
+    local_callsign_database_status_ =
+        QStringLiteral("Select a readable local text callsign-list file.");
+    emit localCallsignDatabaseChanged();
+    setStatusMessage(local_callsign_database_status_);
+    return false;
+  }
+  if (assign_if_changed(local_callsign_database_path_, path))
+    emit settingsChanged();
+  local_callsign_database_status_ = QStringLiteral(
+      "Local file selected; suggestions remain separate from decoded text.");
+  emit localCallsignDatabaseChanged();
+  if (local_callsign_database_enabled_) {
+    emit localCallsignDatabaseConfigurationCommitted(
+        true, local_callsign_database_path_);
+  }
+  setStatusMessage(QStringLiteral("Local callsign-list file selected. Apply to save."));
+  return true;
+}
+
+void AppSettings::clearLocalCallsignDatabase() {
+  if (assign_if_changed(local_callsign_database_path_, QString{}))
+    emit settingsChanged();
+  local_callsign_database_status_ = local_callsign_database_enabled_
+      ? QStringLiteral("Select a local master.scp or Call History text file.")
+      : QStringLiteral("Disabled. No local callsign list is in use.");
+  emit localCallsignDatabaseChanged();
+  emit localCallsignDatabaseConfigurationCommitted(
+      local_callsign_database_enabled_, QString{});
+}
+
+bool AppSettings::reloadLocalCallsignDatabase() {
+  if (!local_callsign_database_enabled_) {
+    local_callsign_database_status_ =
+        QStringLiteral("Enable the local callsign suggestion source before reloading it.");
+    emit localCallsignDatabaseChanged();
+    return false;
+  }
+  if (local_callsign_database_path_.isEmpty()) {
+    local_callsign_database_status_ = QStringLiteral(
+        "Select a local callsign-list file before reloading.");
+    emit localCallsignDatabaseChanged();
+    return false;
+  }
+  local_callsign_database_status_ = QStringLiteral("Reloading local callsign list.");
+  emit localCallsignDatabaseChanged();
+  emit localCallsignDatabaseConfigurationCommitted(
+      true, local_callsign_database_path_);
+  return true;
 }
 
 void AppSettings::selectReferenceRig(const int index) {
@@ -1069,6 +1144,10 @@ bool AppSettings::apply() {
                     local_decoder_model_path_);
   settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
                     local_decoder_metadata_path_);
+  settings.setValue(storageKey(QStringLiteral("decoder/localCallsignDatabaseEnabled")),
+                    local_callsign_database_enabled_);
+  settings.setValue(storageKey(QStringLiteral("decoder/localCallsignDatabasePath")),
+                    local_callsign_database_path_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -1185,6 +1264,18 @@ void AppSettings::load() {
       .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
   local_decoder_metadata_path_ = settings
       .value(storageKey(QStringLiteral("decoder/localMetadataPath"))).toString();
+  local_callsign_database_enabled_ = settings
+      .value(storageKey(QStringLiteral("decoder/localCallsignDatabaseEnabled")),
+             false)
+      .toBool();
+  local_callsign_database_path_ = settings
+      .value(storageKey(QStringLiteral("decoder/localCallsignDatabasePath")))
+      .toString();
+  local_callsign_database_status_ = !local_callsign_database_enabled_
+      ? QStringLiteral("Disabled. No local callsign list is in use.")
+      : (local_callsign_database_path_.isEmpty()
+             ? QStringLiteral("Select a local master.scp or Call History text file.")
+             : QStringLiteral("Saved local callsign list configured."));
 }
 
 bool AppSettings::completeSetup() {
@@ -1232,6 +1323,9 @@ bool AppSettings::selectProfile(const QString& profile_name) {
   emit localDecoderConfigurationCommitted(
       local_decoder_enabled_, local_decoder_model_path_,
       local_decoder_metadata_path_);
+  emit localCallsignDatabaseChanged();
+  emit localCallsignDatabaseConfigurationCommitted(
+      local_callsign_database_enabled_, local_callsign_database_path_);
   setStatusMessage(QStringLiteral("Station profile selected. Transmit remains disarmed."));
   return true;
 }
@@ -1271,6 +1365,9 @@ bool AppSettings::createProfile(const QString& profile_name) {
   emit localDecoderConfigurationCommitted(
       local_decoder_enabled_, local_decoder_model_path_,
       local_decoder_metadata_path_);
+  emit localCallsignDatabaseChanged();
+  emit localCallsignDatabaseConfigurationCommitted(
+      local_callsign_database_enabled_, local_callsign_database_path_);
   setStatusMessage(QStringLiteral("New station profile created. Complete its setup."));
   return true;
 }
@@ -1356,6 +1453,10 @@ void AppSettings::resetInMemorySettings() {
   local_decoder_enabled_ = false;
   local_decoder_model_path_.clear();
   local_decoder_metadata_path_.clear();
+  local_callsign_database_enabled_ = false;
+  local_callsign_database_path_.clear();
+  local_callsign_database_status_ =
+      QStringLiteral("Disabled. No local callsign list is in use.");
   applyReferenceDefaults(0);
 }
 

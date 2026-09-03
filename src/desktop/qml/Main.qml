@@ -520,6 +520,8 @@ ApplicationWindow {
                                   ? modelData.frequencyLabel + " • manual"
                                   : modelData.callsign.length > 0
                                   ? modelData.callsign
+                                  : modelData.callsignSuggestion.length > 0
+                                  ? "≈ " + modelData.callsignSuggestion
                                   : modelData.frequencyLabel
                             color: modelData.color
                             font.pixelSize: channelMarker.pointerHovered ? 32 : 18
@@ -542,7 +544,13 @@ ApplicationWindow {
                         ToolTip.visible: channelMarker.pointerHovered
                         ToolTip.delay: 450
                         ToolTip.text: (modelData.callsign.length > 0
-                                       ? modelData.callsign + "\n" : "")
+                                       ? modelData.callsign + "\n"
+                                       : (modelData.callsignSuggestion.length > 0
+                                          ? "Offline suggestion: "
+                                            + modelData.callsignSuggestion
+                                            + " from "
+                                            + modelData.callsignSuggestionRawSpan
+                                            + "\n" : ""))
                                       + modelData.frequencyLabel + "\n"
                                       + (!modelData.verifiedCw
                                          ? "Manual slice • awaiting ordinary CW verification\n"
@@ -1229,11 +1237,16 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         width: decoderChannelList.width
-                        height: localModelHasText ? 302 : 258
+                        // Derive the delegate height from its actual rows. A
+                        // fixed card height let platform font/control metrics
+                        // push the transcript, local-model status, or footer
+                        // through the rounded border.
+                        height: Math.ceil(sessionCardLayout.implicitHeight + 20)
                         radius: 7
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
                         border.color: modelData.color
+                        clip: true
                         z: 1
                         property string rawDecodedText: modelData.text.length > 0
                             ? modelData.text
@@ -1244,15 +1257,17 @@ ApplicationWindow {
                                   : (!modelData.verifiedCw
                                      ? "Analyzing the selected frequency…"
                                      : "Listening…")))
-                        // Acoustic alternatives remain available to callsign
-                        // evidence and diagnostics, but do not sit below the
-                        // continuously growing literal transcript. A bounded
-                        // consensus can legitimately abstain while raw text
-                        // continues, which otherwise makes the viewport look
-                        // frozen at the older consensus tail.
-                        property string displayedDecodedText: rawDecodedText
+                        // Prefer the append-only phase/timing consensus once
+                        // it has produced text. The literal greedy stream is a
+                        // useful acquisition fallback, but is less readable
+                        // for hand-sent spacing and noisy edges.
+                        property string displayedDecodedText:
+                            modelData.refinedText.length > 0
+                            ? modelData.refinedText : rawDecodedText
                         property string callsignEvidenceText:
                             rawDecodedText + " " + modelData.refinedText
+                        property string ownCallEvidenceText:
+                            callsignEvidenceText + " " + localModelStableText
                         property string localModelState:
                             modelData.localModelState
                         property string localModelStatus:
@@ -1261,11 +1276,13 @@ ApplicationWindow {
                             modelData.localModelText
                         property string localModelCallsign:
                             modelData.localModelCallsign
+                        property string offlineCallsignSuggestion:
+                            modelData.callsignSuggestion
                         property bool localModelHasText:
                             localModelState === "ready"
                             && localModelStableText.length > 0
                         property int ownCallMatches: window.exactCallCount(
-                            callsignEvidenceText, appSettings.ownCallsign)
+                            ownCallEvidenceText, appSettings.ownCallsign)
                         property int previousOwnCallMatches: 0
                         onOwnCallMatchesChanged: {
                             if (ownCallMatches > previousOwnCallMatches)
@@ -1301,6 +1318,7 @@ ApplicationWindow {
                             }
                         }
                         ColumnLayout {
+                            id: sessionCardLayout
                             anchors.fill: parent
                             anchors.margins: 10
                             spacing: 4
@@ -1313,19 +1331,27 @@ ApplicationWindow {
                                     color: modelData.color
                                 }
                                 Label {
+                                    Layout.fillWidth: true
                                     text: (modelData.callsign.length > 0
                                            ? modelData.callsign
-                                           : sessionCard.localModelCallsign)
+                                           : (sessionCard.localModelCallsign.length > 0
+                                              ? sessionCard.localModelCallsign
+                                              : (sessionCard.offlineCallsignSuggestion.length > 0
+                                                 ? "≈ " + sessionCard.offlineCallsignSuggestion
+                                                 : "")))
                                           .length > 0
                                           ? (modelData.callsign.length > 0
                                              ? modelData.callsign
-                                             : sessionCard.localModelCallsign)
+                                             : (sessionCard.localModelCallsign.length > 0
+                                                ? sessionCard.localModelCallsign
+                                                : "≈ " + sessionCard.offlineCallsignSuggestion))
                                             + "  •  "
                                             + modelData.frequencyLabel
                                           : modelData.frequencyLabel
                                     color: modelData.color
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
+                                    elide: Text.ElideRight
                                 }
                                 Label {
                                     visible: modelData.callsign.length === 0
@@ -1336,13 +1362,31 @@ ApplicationWindow {
                                     font.weight: Font.Bold
                                 }
                                 Label {
+                                    objectName: "offlineCallsignSuggestionBadge"
+                                    visible: modelData.callsign.length === 0
+                                             && sessionCard.localModelCallsign.length === 0
+                                             && sessionCard.offlineCallsignSuggestion.length > 0
+                                    text: "DB"
+                                    color: "#f3bd55"
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                    Accessible.name: "Offline callsign suggestion"
+                                    Accessible.description: "Advisory match "
+                                                            + sessionCard.offlineCallsignSuggestion
+                                                            + " for decoded span "
+                                                            + modelData.callsignSuggestionRawSpan
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Advisory offline-directory match for "
+                                                  + modelData.callsignSuggestionRawSpan
+                                                  + "; decoded text is unchanged"
+                                }
+                                Label {
                                     visible: sessionCard.ownCallMatches > 0
                                     text: "YOUR CALL HEARD"
                                     color: "#ffd54f"
                                     font.pixelSize: 11
                                     font.weight: Font.Bold
                                 }
-                                Item { Layout.fillWidth: true }
                                 Label {
                                     text: !modelData.verifiedCw
                                           ? "MANUAL"
@@ -1456,7 +1500,7 @@ ApplicationWindow {
                                               ? "#e3ad55" : "#8290a0")
                                     font.pixelSize: 18
                                     font.italic: modelData.text.length === 0
-                                    wrapMode: TextEdit.WrapAnywhere
+                                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
                                     padding: 8
                                     background: Rectangle {
                                         radius: 4
@@ -1491,16 +1535,18 @@ ApplicationWindow {
                                 }
                             }
                             Rectangle {
+                                id: localModelTranscriptPanel
                                 objectName: "localModelTranscriptPanel"
                                 Layout.fillWidth: true
                                 Layout.preferredHeight:
-                                    sessionCard.localModelHasText ? 82 : 38
+                                    sessionCard.localModelHasText ? 88 : 50
                                 radius: 4
                                 color: "#101820"
                                 border.color: sessionCard.localModelState
                                               === "error"
                                               ? "#c75b62" : "#263241"
                                 border.width: 1
+                                clip: true
                                 ColumnLayout {
                                     anchors.fill: parent
                                     anchors.margins: 7

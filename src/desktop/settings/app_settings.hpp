@@ -92,6 +92,9 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath NOTIFY settingsChanged)
   Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable CONSTANT)
   Q_PROPERTY(QString localDecoderStatus READ localDecoderStatus NOTIFY settingsChanged)
+  Q_PROPERTY(bool localCallsignDatabaseEnabled READ localCallsignDatabaseEnabled WRITE setLocalCallsignDatabaseEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(QString localCallsignDatabasePath READ localCallsignDatabasePath NOTIFY settingsChanged)
+  Q_PROPERTY(QString localCallsignDatabaseStatus READ localCallsignDatabaseStatus NOTIFY localCallsignDatabaseChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
  public:
@@ -175,6 +178,9 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& localDecoderMetadataPath() const noexcept;
   [[nodiscard]] bool localDecoderBackendAvailable() const noexcept;
   [[nodiscard]] QString localDecoderStatus() const;
+  [[nodiscard]] bool localCallsignDatabaseEnabled() const noexcept;
+  [[nodiscard]] const QString& localCallsignDatabasePath() const noexcept;
+  [[nodiscard]] const QString& localCallsignDatabaseStatus() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -227,6 +233,7 @@ class AppSettings final : public QObject {
   void setShowGrid(bool value);
   void setDecodedSignalTimeoutSeconds(int value);
   void setLocalDecoderEnabled(bool value);
+  void setLocalCallsignDatabaseEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -240,6 +247,9 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool selectLocalDecoderMetadata(const QUrl& url);
   Q_INVOKABLE void clearLocalDecoderModel();
   Q_INVOKABLE void clearLocalDecoderMetadata();
+  Q_INVOKABLE bool selectLocalCallsignDatabase(const QUrl& url);
+  Q_INVOKABLE void clearLocalCallsignDatabase();
+  Q_INVOKABLE bool reloadLocalCallsignDatabase();
   Q_INVOKABLE bool completeSetup();
   Q_INVOKABLE bool selectProfile(const QString& profile_name);
   Q_INVOKABLE bool createProfile(const QString& profile_name);
@@ -268,6 +278,9 @@ class AppSettings final : public QObject {
   void localDecoderConfigurationCommitted(bool enabled,
                                           const QString& model_path,
                                           const QString& metadata_path);
+  void localCallsignDatabaseChanged();
+  void localCallsignDatabaseConfigurationCommitted(
+      bool enabled, const QString& database_path);
 
  private:
   void load();
@@ -353,6 +366,10 @@ class AppSettings final : public QObject {
   bool local_decoder_enabled_{false};
   QString local_decoder_model_path_;
   QString local_decoder_metadata_path_;
+  bool local_callsign_database_enabled_{false};
+  QString local_callsign_database_path_;
+  QString local_callsign_database_status_{
+      QStringLiteral("Disabled. No local callsign list is in use.")};
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

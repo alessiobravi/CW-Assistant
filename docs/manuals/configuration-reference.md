@@ -187,8 +187,8 @@ profile controls will be added only with benchmark-backed safe ranges.
 The parallel acoustic lattice is evaluated at most every 500 ms and at a
 completed gap, retains at most four alternatives within 1.0 cost of the best
 path, and requires at least 0.40 timing evidence before appending consensus.
-Its consensus remains separate internal callsign/debug evidence and never edits
-or displaces the continuously updating literal transcript in the decoder card.
+The consensus is append-only and is the card's preferred deterministic text
+once available; the literal acquisition path remains its fallback.
 
 The current deterministic qualification target is acquisition within six
 simulated seconds for clean, 30 WPM, and weak/fading/drifting CW, zero published
@@ -209,9 +209,11 @@ normal deterministic decoder running and shows an error instead.
 
 The supported feature contract is 3200 Hz audio, FFT length 256, hop length 48,
 and 65 frequency bins covering 400–1200 Hz. Inference is CPU-only and limited
-to four active verified, Morse-likely, or manually selected lanes. The first
-stable output normally needs two overlapping eight-second windows, so it is a
-delayed refinement rather than an instant character display. When processing
+to four active verified, Morse-likely, or manually selected lanes. A strong
+character normally needs two overlapping eight-second windows; a moderately
+confident character needs three time-aligned windows and remains provisional
+with only two. This is a delayed refinement rather than an instant character
+display. When processing
 falls behind, older pending windows for the same lane are replaced instead of
 allowing an unbounded queue to interfere with live reception.
 Automatically qualified lanes continue through a bounded two-second silence
@@ -219,6 +221,21 @@ grace so slow manual word gaps do not reset their feature history; an
 operator-selected lane receives up to ten seconds for initial acquisition.
 Bursts that never fill one complete eight-second window produce no local-model
 text; the deterministic decoder remains available for those shorter signals.
+
+**Local callsign suggestions** accepts an operator-supplied N1MM-compatible
+`master.scp` or Call History text export. The file must be readable, non-empty,
+and no larger than 32 MiB; import is capped at one million unique calls and
+ignores comments, directives, duplicates, overlong lines, and structurally
+invalid calls. Selection is profile-persistent. **Reload local file** rereads
+the file after an external update. Nothing is downloaded or queried online.
+
+A directory match is eligible only for an already verified CW channel, a
+completed call-shaped transcript span containing at most two `?` characters,
+and agreement from at least two competitive acoustic alternatives within the
+bounded cost/confidence window. The card and marker prefix it with `≈` and show
+a **DB** badge. This is an advisory hypothesis: it does not alter the decoded
+text, confirm the callsign, verify a stream, trigger an own-call alert, or
+control transmission.
 
 Local-model output appears in a separate **LOCAL MODEL** section in the decoder
 card. A structurally valid call confirmed across overlapping windows may
