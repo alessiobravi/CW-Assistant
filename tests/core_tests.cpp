@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <numbers>
 #include <string>
 #include <vector>
@@ -1921,6 +1922,77 @@ void test_negative_transverter_offset_and_invalid_frequency() {
          "CW-L audio offset maps downward from the actual-RF reference");
   expect(!resolve_audio_tone_rf(10, 800.0, 700.0, false),
          "audio-to-RF mapping rejects an underflow below zero hertz");
+  expect(resolve_dial_frequency(145'900'000, 116'000'000) ==
+             std::optional<std::uint64_t>(29'900'000),
+         "actual RF is converted back to a positive-offset radio dial value");
+  expect(resolve_dial_frequency(14'000'000, -116'000'000) ==
+             std::optional<std::uint64_t>(130'000'000),
+         "actual RF is converted back through a negative transverter offset");
+  expect(!resolve_dial_frequency(116'000'000, 116'000'000),
+         "inverse offset rejects a zero dial frequency");
+  expect(!resolve_dial_frequency(
+             std::numeric_limits<std::uint64_t>::max(), -1),
+         "inverse offset rejects unsigned overflow");
+  expect(resolve_dial_frequency(
+             1, std::numeric_limits<std::int64_t>::min()) ==
+             std::optional<std::uint64_t>(9'223'372'036'854'775'809ULL) &&
+             resolve_dial_frequency(
+                 9'223'372'036'854'775'808ULL,
+                 std::numeric_limits<std::int64_t>::max()) ==
+                 std::optional<std::uint64_t>(1),
+         "inverse offset handles both signed limits without overflow");
+  expect(parse_frequency_value("14040.49", 1'000) ==
+             std::optional<std::uint64_t>(14'040'490) &&
+             parse_frequency_value(" 7010,5 ", 1'000) ==
+                 std::optional<std::uint64_t>(7'010'500) &&
+             parse_frequency_value("1", 1'000) ==
+                 std::optional<std::uint64_t>(1'000),
+         "operator kHz entry accepts exact dot/comma fractional values");
+  expect(parse_frequency_value("144.300025", 1'000'000) ==
+             std::optional<std::uint64_t>(144'300'025),
+         "operator MHz entry preserves exact integer-hertz precision");
+  expect(!parse_frequency_value("14,040.5", 1'000) &&
+             !parse_frequency_value("14040.1234", 1'000) &&
+             !parse_frequency_value("0", 1'000) &&
+             !parse_frequency_value("14 MHz", 1'000) &&
+             !parse_frequency_value("14.1", 60),
+         "operator kHz entry rejects grouping, excessive precision, zero, and units");
+
+  using Target = OmniRigRxFrequencyTarget;
+  expect(select_omnirig_rx_frequency_target(true, true, 0x04, 0x80) ==
+                 Target::FrequencyA &&
+             select_omnirig_rx_frequency_target(true, true, 0x04, 0x100) ==
+                 Target::FrequencyA &&
+             select_omnirig_rx_frequency_target(true, true, 0x04, 0x800) ==
+                 Target::FrequencyA,
+         "OmniRig A/AA/AB receive states select a writable FreqA property");
+  expect(select_omnirig_rx_frequency_target(true, true, 0x08, 0x200) ==
+                 Target::FrequencyB &&
+             select_omnirig_rx_frequency_target(true, true, 0x08, 0x400) ==
+                 Target::FrequencyB &&
+             select_omnirig_rx_frequency_target(true, true, 0x08, 0x1000) ==
+                 Target::FrequencyB,
+         "OmniRig B/BA/BB receive states select a writable FreqB property");
+  expect(select_omnirig_rx_frequency_target(true, true, 0x02, 0x80) ==
+                 Target::Frequency &&
+             select_omnirig_rx_frequency_target(false, true, 0x0e, 0x80) ==
+                 Target::None &&
+             select_omnirig_rx_frequency_target(true, false, 0x0e, 0x80) ==
+                 Target::None &&
+             select_omnirig_rx_frequency_target(true, true, 0, 0x80) ==
+                 Target::None,
+         "OmniRig uses generic Freq only when writable and blocks offline, TX, and read-only states");
+
+  const auto first_step = step_rx_frequency(14'040'000, std::nullopt,
+                                            1'000, 1);
+  const auto second_step = step_rx_frequency(14'040'000, first_step,
+                                             1'000, 1);
+  expect(first_step == std::optional<std::uint64_t>(14'041'000) &&
+             second_step == std::optional<std::uint64_t>(14'042'000),
+         "accepted RX steps accumulate while provider readback is pending");
+  expect(!step_rx_frequency(500, std::nullopt, 1'000, -1) &&
+             !step_rx_frequency(14'040'000, std::nullopt, 1'000, 0),
+         "RX stepping rejects underflow and invalid direction");
 }
 
 void test_band_selected_station_equipment_adif() {

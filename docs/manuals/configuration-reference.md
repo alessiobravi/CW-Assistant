@@ -287,6 +287,11 @@ reference profile does not guess a physical port.
 - **CAT4OM network service:** connect to a group-specific Control WebSocket and
   select a radio ID. See [CAT4OM setup](cat4om-setup.md).
 
+**RX tuning step** is stored per station profile as a whole-kHz value from 1 to
+100 kHz (default 1 kHz). It controls the waterfall-edge `<` / `>` RX buttons;
+changing it does not tune the radio until one of those buttons is activated.
+Exact readout entry is not rounded to this step.
+
 ### Serial CAT values
 
 The port, baud rate, data bits, parity, stop bits, RTS flow-control mode,

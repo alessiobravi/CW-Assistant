@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QElapsedTimer>
 #include <QObject>
 #include <QList>
 #include <QMediaDevices>
@@ -44,6 +45,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int detectedRadioIndex READ detectedRadioIndex NOTIFY settingsChanged)
   Q_PROPERTY(int referenceRigIndex READ referenceRigIndex NOTIFY settingsChanged)
   Q_PROPERTY(int frequencyBackendIndex READ frequencyBackendIndex WRITE setFrequencyBackendIndex NOTIFY settingsChanged)
+  Q_PROPERTY(int radioTuningStepHz READ radioTuningStepHz WRITE setRadioTuningStepHz NOTIFY settingsChanged)
+  Q_PROPERTY(bool radioFrequencyWritable READ radioFrequencyWritable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omRadioId READ cat4omRadioId WRITE setCat4omRadioId NOTIFY settingsChanged)
@@ -122,6 +125,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] int detectedRadioIndex() const noexcept;
   [[nodiscard]] int referenceRigIndex() const noexcept;
   [[nodiscard]] int frequencyBackendIndex() const noexcept;
+  [[nodiscard]] int radioTuningStepHz() const noexcept;
+  [[nodiscard]] bool radioFrequencyWritable() const noexcept;
   [[nodiscard]] int omniRigSlot() const noexcept;
   [[nodiscard]] const QString& cat4omUrl() const noexcept;
   [[nodiscard]] const QString& cat4omRadioId() const noexcept;
@@ -173,6 +178,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
+  void setRadioTuningStepHz(int value);
   void setAudioDcRejection(bool value);
   void setAudioAutomaticGain(bool value);
   void setAudioGainDb(double value);
@@ -242,6 +248,9 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void connectCat4omControl();
   Q_INVOKABLE void disconnectCat4om();
   Q_INVOKABLE void requestCat4omOwnership();
+  Q_INVOKABLE bool setControlledRxFrequency(const QString& value,
+                                            qulonglong unit_hz);
+  Q_INVOKABLE bool stepControlledRxFrequency(int direction);
 
  signals:
   void settingsChanged();
@@ -254,6 +263,7 @@ class AppSettings final : public QObject {
   void profileSelectionRequiredChanged();
   void cat4omChanged();
   void radioFrequencyChanged();
+  void radioFrequencyControlChanged();
   void detectedRadiosChanged();
   void localDecoderConfigurationCommitted(bool enabled,
                                           const QString& model_path,
@@ -268,10 +278,14 @@ class AppSettings final : public QObject {
   void refreshProfiles();
   void resetInMemorySettings();
   void refreshControlledFrequency();
+  void reconcilePendingRxFrequency();
+  void rememberPendingRxFrequency(std::uint64_t frequency_hz);
   [[nodiscard]] std::optional<cwassistant::core::ResolvedFrequencies>
   resolvedControlledFrequencies() const noexcept;
+  bool writeControlledRxDialFrequency(std::uint64_t dial_frequency_hz);
 #ifdef Q_OS_WIN
   [[nodiscard]] bool ensureOmniRigAutomation();
+  bool writeOmniRigRxFrequency(std::uint64_t dial_frequency_hz);
 #endif
 
   QString profile_name_;
@@ -298,6 +312,7 @@ class AppSettings final : public QObject {
   QList<int> detected_radio_slots_;
   int reference_rig_index_{0};
   int frequency_backend_index_{0};
+  int radio_tuning_step_hz_{1'000};
   int omnirig_slot_{1};
   QString cat4om_url_{QStringLiteral("ws://127.0.0.1:5001/")};
   QString cat4om_radio_id_;
@@ -345,7 +360,13 @@ class AppSettings final : public QObject {
   std::unique_ptr<Cat4OmClient> cat4om_client_;
   std::unique_ptr<QMediaDevices> media_devices_;
   QTimer radio_frequency_timer_;
+  QTimer radio_frequency_request_timer_;
+  QElapsedTimer omnirig_capability_refresh_clock_;
+  std::optional<std::uint64_t> pending_rx_rf_hz_;
+  int pending_frequency_backend_index_{-1};
   std::optional<std::uint64_t> omnirig_rx_dial_hz_;
+  cwassistant::core::OmniRigRxFrequencyTarget omnirig_rx_write_target_{
+      cwassistant::core::OmniRigRxFrequencyTarget::None};
 };
 
 }  // namespace cwassistant::desktop

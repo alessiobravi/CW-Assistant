@@ -84,16 +84,26 @@ int main() {
   }
 
   const std::size_t manual_start = qml.find("id: manualSliceHitArea");
+  const std::size_t tune_down_start = qml.find("id: tuneRxDownButton");
+  const std::size_t tune_up_start = qml.find("id: tuneRxUpButton");
   const std::size_t marker_start = qml.find("id: channelMarker");
   const std::size_t marker_end = qml.find("ToolTip.text:", marker_start);
-  if (manual_start == std::string::npos || marker_start == std::string::npos ||
-      marker_end == std::string::npos || manual_start >= marker_start) {
+  if (manual_start == std::string::npos ||
+      tune_down_start == std::string::npos ||
+      tune_up_start == std::string::npos ||
+      marker_start == std::string::npos ||
+      marker_end == std::string::npos || manual_start >= tune_down_start ||
+      tune_down_start >= tune_up_start || tune_up_start >= marker_start) {
     return 5;
   }
   const std::string manual = qml.substr(manual_start,
                                         marker_start - manual_start);
   const std::string marker = qml.substr(marker_start,
                                         marker_end - marker_start);
+  const std::string tune_down = qml.substr(
+      tune_down_start, tune_up_start - tune_down_start);
+  const std::string tune_up = qml.substr(tune_up_start,
+                                         marker_start - tune_up_start);
   if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
       !contains(manual, "z: 6") ||
       !contains(manual, "enabled: replayController.activeSource") ||
@@ -105,6 +115,16 @@ int main() {
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
+      !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
+      !contains(tune_down, "appSettings.radioFrequencyWritable") ||
+      !contains(tune_down, "z: 8") ||
+      !contains(tune_down, "appSettings.stepControlledRxFrequency(-1)") ||
+      !contains(tune_down, "Accessible.name: \"Tune RX down\"") ||
+      !contains(tune_up, "objectName: \"tuneRxUpButton\"") ||
+      !contains(tune_up, "appSettings.radioFrequencyWritable") ||
+      !contains(tune_up, "z: 8") ||
+      !contains(tune_up, "appSettings.stepControlledRxFrequency(1)") ||
+      !contains(tune_up, "Accessible.name: \"Tune RX up\"") ||
       !contains(marker, "z: 5") ||
       contains(marker, "id: channelHitArea") ||
       !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
@@ -124,12 +144,29 @@ int main() {
                                          spectrum_start - toolbar_start);
   const std::string spectrum_panel = qml.substr(
       spectrum_start, display_start - spectrum_start);
+  const std::size_t vfo_editor_start = qml.find("id: vfoRxEditor");
+  const std::size_t vfo_badge_start = qml.find("objectName: \"vfoSplitBadge\"",
+                                               vfo_editor_start);
+  if (vfo_editor_start == std::string::npos ||
+      vfo_badge_start == std::string::npos) {
+    return 8;
+  }
+  const std::string vfo_editor = qml.substr(
+      vfo_editor_start, vfo_badge_start - vfo_editor_start);
   if (!contains(toolbar, "z: 20") ||
       !contains(toolbar, "objectName: \"startLiveAudioButton\"") ||
       !contains(toolbar, "z: 21") ||
       !contains(spectrum_panel, "clip: true") ||
       !contains(spectrum_panel, "z: 0") ||
       !contains(qml, "objectName: \"emptyStateStartButton\"") ||
+      !contains(vfo_editor, "objectName: \"vfoRxEditor\"") ||
+      !contains(vfo_editor, "objectName: \"vfoRxEditHitArea\"") ||
+      !contains(vfo_editor, "objectName: \"vfoRxFrequencyField\"") ||
+      !contains(vfo_editor, "appSettings.setControlledRxFrequency(") ||
+      !contains(vfo_editor, "function onRadioFrequencyControlChanged()") ||
+      !contains(vfo_editor, "Keys.onEscapePressed: function(event)") ||
+      !contains(vfo_editor, "Accessible.name: \"Edit RX frequency\"") ||
+      !contains(qml, "objectName: \"vfoRxEditErrorLabel\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionDownButton\"") ||
       !contains(qml, "onPressed: replayController.moveDecoderSession(") ||
@@ -156,7 +193,11 @@ int main() {
       !contains(settings_qml, "objectName: \"localDecoderStatusLabel\"") ||
       !contains(settings_qml, "appSettings.localDecoderStatus") ||
       !contains(settings_qml, "replayController.localCharacterStatus") ||
-      !contains(settings_qml, "replayController.localCharacterState")) {
+      !contains(settings_qml, "replayController.localCharacterState") ||
+      !contains(settings_qml, "objectName: \"radioTuningStepSlider\"") ||
+      !contains(settings_qml, "value: appSettings.radioTuningStepHz / 1000") ||
+      !contains(settings_qml,
+                "appSettings.radioTuningStepHz = Math.round(value * 1000)")) {
     return 10;
   }
   return 0;

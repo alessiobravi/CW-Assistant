@@ -1,6 +1,7 @@
 #include "cwassistant/core/frequency_plan.hpp"
 
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -93,6 +94,150 @@ std::optional<ResolvedFrequencies> resolve_frequencies(
       .tx_rf_hz = *tx_rf,
       .split_enabled = plan.split_enabled,
   };
+}
+
+std::optional<std::uint64_t> resolve_dial_frequency(
+    const std::uint64_t actual_rf_hz,
+    const std::int64_t transverter_offset_hz) noexcept {
+  if (actual_rf_hz == 0) {
+    return std::nullopt;
+  }
+  if (transverter_offset_hz >= 0) {
+    const auto offset = static_cast<std::uint64_t>(transverter_offset_hz);
+    if (actual_rf_hz <= offset) {
+      return std::nullopt;
+    }
+    return actual_rf_hz - offset;
+  }
+
+  const auto magnitude =
+      static_cast<std::uint64_t>(-(transverter_offset_hz + 1)) + 1;
+  if (actual_rf_hz > std::numeric_limits<std::uint64_t>::max() - magnitude) {
+    return std::nullopt;
+  }
+  return actual_rf_hz + magnitude;
+}
+
+std::optional<std::uint64_t> parse_frequency_value(
+    std::string_view text, const std::uint64_t unit_hz) noexcept {
+  if (unit_hz == 0) {
+    return std::nullopt;
+  }
+  auto precision_scale = unit_hz;
+  unsigned int maximum_fractional_digits = 0;
+  while (precision_scale > 1 && precision_scale % 10 == 0) {
+    precision_scale /= 10;
+    ++maximum_fractional_digits;
+  }
+  if (precision_scale != 1) {
+    return std::nullopt;
+  }
+  while (!text.empty() &&
+         std::isspace(static_cast<unsigned char>(text.front())) != 0) {
+    text.remove_prefix(1);
+  }
+  while (!text.empty() &&
+         std::isspace(static_cast<unsigned char>(text.back())) != 0) {
+    text.remove_suffix(1);
+  }
+  if (text.empty()) {
+    return std::nullopt;
+  }
+
+  std::uint64_t whole_units = 0;
+  std::uint64_t fractional_hz = 0;
+  unsigned int fractional_digits = 0;
+  bool saw_digit = false;
+  bool saw_separator = false;
+  for (const char character : text) {
+    if (character >= '0' && character <= '9') {
+      saw_digit = true;
+      const auto digit = static_cast<std::uint64_t>(character - '0');
+      if (!saw_separator) {
+        if (whole_units >
+            (std::numeric_limits<std::uint64_t>::max() - digit) / 10) {
+          return std::nullopt;
+        }
+        whole_units = whole_units * 10 + digit;
+      } else {
+        if (fractional_digits >= maximum_fractional_digits) {
+          return std::nullopt;
+        }
+        fractional_hz = fractional_hz * 10 + digit;
+        ++fractional_digits;
+      }
+      continue;
+    }
+    if ((character == '.' || character == ',') && !saw_separator &&
+        saw_digit) {
+      saw_separator = true;
+      continue;
+    }
+    return std::nullopt;
+  }
+  if (!saw_digit || (saw_separator && fractional_digits == 0)) {
+    return std::nullopt;
+  }
+  while (fractional_digits < maximum_fractional_digits) {
+    fractional_hz *= 10;
+    ++fractional_digits;
+  }
+  if (whole_units >
+      (std::numeric_limits<std::uint64_t>::max() - fractional_hz) / unit_hz) {
+    return std::nullopt;
+  }
+  const auto frequency_hz = whole_units * unit_hz + fractional_hz;
+  return frequency_hz == 0 ? std::nullopt
+                           : std::optional<std::uint64_t>{frequency_hz};
+}
+
+OmniRigRxFrequencyTarget select_omnirig_rx_frequency_target(
+    const bool online, const bool receiving,
+    const std::uint32_t writable_parameters, const std::uint32_t vfo) noexcept {
+  constexpr std::uint32_t kFrequency = 0x00000002;
+  constexpr std::uint32_t kFrequencyA = 0x00000004;
+  constexpr std::uint32_t kFrequencyB = 0x00000008;
+  constexpr std::uint32_t kVfoAa = 0x00000080;
+  constexpr std::uint32_t kVfoAb = 0x00000100;
+  constexpr std::uint32_t kVfoBa = 0x00000200;
+  constexpr std::uint32_t kVfoBb = 0x00000400;
+  constexpr std::uint32_t kVfoA = 0x00000800;
+  constexpr std::uint32_t kVfoB = 0x00001000;
+  if (!online || !receiving) {
+    return OmniRigRxFrequencyTarget::None;
+  }
+  const bool receives_on_a =
+      vfo == kVfoAa || vfo == kVfoAb || vfo == kVfoA;
+  const bool receives_on_b =
+      vfo == kVfoBa || vfo == kVfoBb || vfo == kVfoB;
+  if (receives_on_a && (writable_parameters & kFrequencyA) != 0) {
+    return OmniRigRxFrequencyTarget::FrequencyA;
+  }
+  if (receives_on_b && (writable_parameters & kFrequencyB) != 0) {
+    return OmniRigRxFrequencyTarget::FrequencyB;
+  }
+  if ((writable_parameters & kFrequency) != 0) {
+    return OmniRigRxFrequencyTarget::Frequency;
+  }
+  return OmniRigRxFrequencyTarget::None;
+}
+
+std::optional<std::uint64_t> step_rx_frequency(
+    const std::uint64_t reported_rf_hz,
+    const std::optional<std::uint64_t> pending_rf_hz,
+    const std::uint64_t step_hz, const int direction) noexcept {
+  if (reported_rf_hz == 0 || step_hz == 0 ||
+      (direction != -1 && direction != 1)) {
+    return std::nullopt;
+  }
+  const auto base = pending_rf_hz.value_or(reported_rf_hz);
+  if (direction < 0) {
+    return base > step_hz ? std::optional<std::uint64_t>(base - step_hz)
+                          : std::nullopt;
+  }
+  return base <= std::numeric_limits<std::uint64_t>::max() - step_hz
+             ? std::optional<std::uint64_t>(base + step_hz)
+             : std::nullopt;
 }
 
 std::optional<std::uint64_t> resolve_audio_tone_rf(

@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 #ifdef Q_OS_WIN
 #include <Windows.h>
@@ -28,6 +29,7 @@ constexpr auto kSchemaVersion = 1;
 
 #ifdef Q_OS_WIN
 constexpr long kOmniRigOnlineStatus = 4;
+constexpr long kOmniRigReceiveState = 0x00200000;
 
 bool automation_property(IDispatch* object, const wchar_t* name,
                          VARIANT* value) {
@@ -69,6 +71,75 @@ std::optional<std::uint64_t> automation_frequency(const VARIANT& value) {
       return std::nullopt;
   }
 }
+
+std::optional<long> automation_integer(const VARIANT& value) {
+  switch (value.vt) {
+    case VT_I4:
+    case VT_INT:
+      return value.lVal;
+    case VT_UI4:
+    case VT_UINT:
+      return value.ulVal <=
+                     static_cast<unsigned long>(std::numeric_limits<LONG>::max())
+                 ? std::optional<long>(static_cast<long>(value.ulVal))
+                 : std::nullopt;
+    default:
+      return std::nullopt;
+  }
+}
+
+cwassistant::core::OmniRigRxFrequencyTarget omni_rig_rx_write_target(
+    IDispatch* rig) {
+  VARIANT status_value;
+  VARIANT writable_value;
+  VARIANT vfo_value;
+  VARIANT tx_value;
+  const bool has_status = automation_property(rig, L"Status", &status_value);
+  const bool has_writable =
+      automation_property(rig, L"WriteableParams", &writable_value);
+  const bool has_vfo = automation_property(rig, L"Vfo", &vfo_value);
+  const bool has_tx = automation_property(rig, L"Tx", &tx_value);
+  const auto status = has_status ? automation_integer(status_value)
+                                 : std::nullopt;
+  const auto writable = has_writable ? automation_integer(writable_value)
+                                     : std::nullopt;
+  const auto vfo = has_vfo ? automation_integer(vfo_value) : std::nullopt;
+  const auto tx = has_tx ? automation_integer(tx_value) : std::nullopt;
+  if (has_status) VariantClear(&status_value);
+  if (has_writable) VariantClear(&writable_value);
+  if (has_vfo) VariantClear(&vfo_value);
+  if (has_tx) VariantClear(&tx_value);
+
+  return cwassistant::core::select_omnirig_rx_frequency_target(
+      status && *status == kOmniRigOnlineStatus,
+      tx && *tx == kOmniRigReceiveState,
+      writable ? static_cast<std::uint32_t>(*writable) : 0U,
+      vfo ? static_cast<std::uint32_t>(*vfo) : 0U);
+}
+
+bool automation_put_frequency(IDispatch* object, const wchar_t* name,
+                              const std::uint64_t frequency_hz) {
+  if (frequency_hz == 0 ||
+      frequency_hz >
+          static_cast<std::uint64_t>(std::numeric_limits<LONG>::max())) {
+    return false;
+  }
+  OLECHAR* property_name = const_cast<OLECHAR*>(name);
+  DISPID property_id{};
+  if (FAILED(object->GetIDsOfNames(IID_NULL, &property_name, 1,
+                                   LOCALE_USER_DEFAULT, &property_id))) {
+    return false;
+  }
+  VARIANT value;
+  VariantInit(&value);
+  value.vt = VT_I4;
+  value.lVal = static_cast<LONG>(frequency_hz);
+  DISPID named_argument = DISPID_PROPERTYPUT;
+  DISPPARAMS parameters{&value, &named_argument, 1, 1};
+  return SUCCEEDED(object->Invoke(property_id, IID_NULL, LOCALE_USER_DEFAULT,
+                                  DISPATCH_PROPERTYPUT, &parameters, nullptr,
+                                  nullptr, nullptr));
+}
 #endif
 
 template <typename T>
@@ -105,15 +176,29 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   connect(cat4om_client_.get(), &Cat4OmClient::statusChanged, this, [this] {
     setStatusMessage(cat4om_client_->statusText());
     emit cat4omChanged();
+    emit radioFrequencyChanged();
+    emit radioFrequencyControlChanged();
   });
-  connect(cat4om_client_.get(), &Cat4OmClient::radioStateChanged, this,
-          &AppSettings::cat4omChanged);
+  connect(cat4om_client_.get(), &Cat4OmClient::radioStateChanged, this, [this] {
+    reconcilePendingRxFrequency();
+    emit cat4omChanged();
+    emit radioFrequencyChanged();
+    emit radioFrequencyControlChanged();
+  });
   radio_frequency_timer_.setInterval(200);
   connect(&radio_frequency_timer_, &QTimer::timeout, this,
           &AppSettings::refreshControlledFrequency);
   connect(this, &AppSettings::settingsChanged, this,
           &AppSettings::refreshControlledFrequency);
+  connect(this, &AppSettings::settingsChanged, this,
+          &AppSettings::radioFrequencyControlChanged);
   radio_frequency_timer_.start();
+  radio_frequency_request_timer_.setSingleShot(true);
+  radio_frequency_request_timer_.setInterval(2'000);
+  connect(&radio_frequency_request_timer_, &QTimer::timeout, this, [this] {
+    pending_rx_rf_hz_.reset();
+    pending_frequency_backend_index_ = -1;
+  });
   refreshControlledFrequency();
 }
 
@@ -220,6 +305,21 @@ int AppSettings::detectedRadioIndex() const noexcept {
 
 int AppSettings::referenceRigIndex() const noexcept { return reference_rig_index_; }
 int AppSettings::frequencyBackendIndex() const noexcept { return frequency_backend_index_; }
+int AppSettings::radioTuningStepHz() const noexcept {
+  return radio_tuning_step_hz_;
+}
+bool AppSettings::radioFrequencyWritable() const noexcept {
+  if (!radio_enabled_ || !audio_input_radio_linked_ ||
+      !controlledRxRfHz().has_value()) {
+    return false;
+  }
+  if (frequency_backend_index_ == 0) {
+    return omnirig_rx_write_target_ !=
+           cwassistant::core::OmniRigRxFrequencyTarget::None;
+  }
+  return frequency_backend_index_ == 2 && cat4om_client_ &&
+         cat4om_client_->canSetFrequency();
+}
 int AppSettings::omniRigSlot() const noexcept { return omnirig_slot_; }
 const QString& AppSettings::cat4omUrl() const noexcept { return cat4om_url_; }
 const QString& AppSettings::cat4omRadioId() const noexcept { return cat4om_radio_id_; }
@@ -299,6 +399,7 @@ bool AppSettings::controlledSplitActive() const noexcept {
 
 void AppSettings::refreshControlledFrequency() {
   std::optional<std::uint64_t> frequency;
+  auto write_target = cwassistant::core::OmniRigRxFrequencyTarget::None;
 #ifdef Q_OS_WIN
   if (radio_enabled_ && audio_input_radio_linked_ &&
       frequency_backend_index_ == 0 && ensureOmniRigAutomation()) {
@@ -309,6 +410,17 @@ void AppSettings::refreshControlledFrequency() {
       IDispatch* rig = rig_value.vt == VT_DISPATCH
           ? rig_value.pdispVal : nullptr;
       if (rig != nullptr) {
+        // Frequency readback stays responsive at 5 Hz. Capability/VFO
+        // discovery crosses the out-of-process COM boundary four more times,
+        // so cache that UI hint for one second. Every actual write performs a
+        // fresh complete check and never relies on this cache for safety.
+        if (omnirig_capability_refresh_clock_.isValid() &&
+            omnirig_capability_refresh_clock_.elapsed() < 1'000) {
+          write_target = omnirig_rx_write_target_;
+        } else {
+          write_target = omni_rig_rx_write_target(rig);
+          omnirig_capability_refresh_clock_.restart();
+        }
         VARIANT status_value;
         VARIANT frequency_value;
         const bool has_status =
@@ -327,12 +439,140 @@ void AppSettings::refreshControlledFrequency() {
       }
       VariantClear(&rig_value);
     }
+  } else {
+    omnirig_capability_refresh_clock_.invalidate();
   }
 #endif
-  if (frequency != omnirig_rx_dial_hz_) {
+  if (frequency != omnirig_rx_dial_hz_ ||
+      write_target != omnirig_rx_write_target_) {
     omnirig_rx_dial_hz_ = frequency;
+    omnirig_rx_write_target_ = write_target;
     emit radioFrequencyChanged();
+    emit radioFrequencyControlChanged();
   }
+  reconcilePendingRxFrequency();
+}
+
+void AppSettings::reconcilePendingRxFrequency() {
+  if (!pending_rx_rf_hz_ ||
+      pending_frequency_backend_index_ != frequency_backend_index_) {
+    return;
+  }
+  const auto reported = controlledRxRfHz();
+  if (reported && *reported == *pending_rx_rf_hz_) {
+    pending_rx_rf_hz_.reset();
+    pending_frequency_backend_index_ = -1;
+    radio_frequency_request_timer_.stop();
+  }
+}
+
+void AppSettings::rememberPendingRxFrequency(
+    const std::uint64_t frequency_hz) {
+  pending_rx_rf_hz_ = frequency_hz;
+  pending_frequency_backend_index_ = frequency_backend_index_;
+  radio_frequency_request_timer_.start();
+}
+
+bool AppSettings::setControlledRxFrequency(const QString& value,
+                                           const qulonglong unit_hz) {
+  if (unit_hz != 1'000 && unit_hz != 1'000'000) {
+    setStatusMessage(QStringLiteral("Choose a frequency in kHz or MHz."));
+    return false;
+  }
+  const auto requested_rf = cwassistant::core::parse_frequency_value(
+      value.toStdString(), static_cast<std::uint64_t>(unit_hz));
+  if (!requested_rf) {
+    setStatusMessage(
+        unit_hz == 1'000
+            ? QStringLiteral("Enter a positive frequency in kHz, with at most three decimal places.")
+            : QStringLiteral("Enter a positive frequency in MHz, with at most six decimal places."));
+    return false;
+  }
+  const auto dial_frequency = cwassistant::core::resolve_dial_frequency(
+      *requested_rf, rx_transverter_offset_hz_);
+  if (!dial_frequency) {
+    setStatusMessage(QStringLiteral(
+        "That actual RF frequency cannot be represented with the configured RX transverter offset."));
+    return false;
+  }
+  if (!writeControlledRxDialFrequency(*dial_frequency)) {
+    return false;
+  }
+  rememberPendingRxFrequency(*requested_rf);
+  setStatusMessage(QStringLiteral(
+      "RX frequency requested; provider readback remains authoritative. Split TX frequency and mode were not changed."));
+  return true;
+}
+
+bool AppSettings::stepControlledRxFrequency(const int direction) {
+  if (direction != -1 && direction != 1) {
+    setStatusMessage(QStringLiteral("Frequency step direction must be down or up."));
+    return false;
+  }
+  const auto current_rf = controlledRxRfHz();
+  if (!current_rf || !radioFrequencyWritable()) {
+    setStatusMessage(QStringLiteral(
+        "RX frequency control requires a linked, online, writable radio provider."));
+    return false;
+  }
+  const auto pending = pending_frequency_backend_index_ ==
+                               frequency_backend_index_
+                           ? pending_rx_rf_hz_
+                           : std::nullopt;
+  const auto requested_rf = cwassistant::core::step_rx_frequency(
+      *current_rf, pending,
+      static_cast<std::uint64_t>(radio_tuning_step_hz_), direction);
+  if (!requested_rf) {
+    setStatusMessage(direction < 0
+                         ? QStringLiteral("The requested RX step would reach or cross zero hertz.")
+                         : QStringLiteral("The requested RX step exceeds the supported frequency range."));
+    return false;
+  }
+  const auto dial_frequency = cwassistant::core::resolve_dial_frequency(
+      *requested_rf, rx_transverter_offset_hz_);
+  if (!dial_frequency || !writeControlledRxDialFrequency(*dial_frequency)) {
+    if (!dial_frequency) {
+      setStatusMessage(QStringLiteral(
+          "That RX step cannot be represented with the configured transverter offset."));
+    }
+    return false;
+  }
+  rememberPendingRxFrequency(*requested_rf);
+  setStatusMessage(QStringLiteral(
+      "RX stepped by %1 kHz; provider readback remains authoritative and split TX was not changed.")
+                       .arg(radio_tuning_step_hz_ / 1'000));
+  return true;
+}
+
+bool AppSettings::writeControlledRxDialFrequency(
+    const std::uint64_t dial_frequency_hz) {
+  if (!radioFrequencyWritable()) {
+    setStatusMessage(QStringLiteral(
+        "RX frequency control requires a linked, online, writable radio provider."));
+    return false;
+  }
+  if (frequency_backend_index_ == 0) {
+#ifdef Q_OS_WIN
+    if (!writeOmniRigRxFrequency(dial_frequency_hz)) {
+      setStatusMessage(QStringLiteral(
+          "OmniRig did not accept the RX-frequency request. Confirm that the radio is online, receiving, and exposes a writable RX VFO."));
+      return false;
+    }
+    return true;
+#else
+    setStatusMessage(QStringLiteral("OmniRig frequency control is available only on Windows."));
+    return false;
+#endif
+  }
+  if (frequency_backend_index_ == 2 && cat4om_client_ &&
+      cat4om_client_->setRxFrequency(dial_frequency_hz)) {
+    return true;
+  }
+  setStatusMessage(
+      frequency_backend_index_ == 1
+          ? QStringLiteral("Hamlib frequency control is not implemented yet.")
+          : QStringLiteral("CAT4OM did not accept the RX-frequency request."));
+  return false;
 }
 const QString& AppSettings::keyingPort() const noexcept { return keying_port_; }
 int AppSettings::pttLineIndex() const noexcept { return ptt_line_index_; }
@@ -408,7 +648,14 @@ const QString& AppSettings::statusMessage() const noexcept { return status_messa
     }                                               \
   }
 
-CWA_SETTER(setFrequencyBackendIndex, frequency_backend_index_, int)
+void AppSettings::setFrequencyBackendIndex(const int value) {
+  if (assign_if_changed(frequency_backend_index_, value)) {
+    pending_rx_rf_hz_.reset();
+    pending_frequency_backend_index_ = -1;
+    radio_frequency_request_timer_.stop();
+    emit settingsChanged();
+  }
+}
 CWA_SETTER(setAudioDcRejection, audio_dc_rejection_, bool)
 CWA_SETTER(setAudioAutomaticGain, audio_automatic_gain_, bool)
 CWA_SETTER(setAudioGainDb, audio_gain_db_, double)
@@ -457,6 +704,13 @@ CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
+
+void AppSettings::setRadioTuningStepHz(const int value) {
+  const int clamped = std::clamp(value, 1'000, 100'000);
+  if (assign_if_changed(radio_tuning_step_hz_, clamped)) {
+    emit settingsChanged();
+  }
+}
 
 #undef CWA_SETTER
 
@@ -719,6 +973,8 @@ bool AppSettings::apply() {
         std::min(audio_lower_frequency_hz_, audio_upper_frequency_hz_ - 50.0);
   }
   frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 2);
+  radio_tuning_step_hz_ =
+      std::clamp(radio_tuning_step_hz_, 1'000, 100'000);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
   cat_baud_rate_ = std::clamp(cat_baud_rate_, 300, 1'000'000);
   cat_data_bits_ = std::clamp(cat_data_bits_, 5, 8);
@@ -768,6 +1024,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
   settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
+  settings.setValue(storageKey(QStringLiteral("radio/tuningStepHz")),
+                    radio_tuning_step_hz_);
   settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
   settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")), cat4om_radio_id_.trimmed());
@@ -862,6 +1120,10 @@ void AppSettings::load() {
   reference_rig_index_ = std::clamp(saved_index, 0, std::max(0, profile_count - 1));
   applyReferenceDefaults(reference_rig_index_);
   frequency_backend_index_ = settings.value(storageKey(QStringLiteral("radio/frequencyBackendIndex")), 0).toInt();
+  radio_tuning_step_hz_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("radio/tuningStepHz")), 1'000)
+          .toInt(),
+      1'000, 100'000);
   omnirig_slot_ = settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1).toInt();
   cat4om_url_ = settings
                     .value(storageKey(QStringLiteral("radio/cat4omUrl")),
@@ -1064,6 +1326,7 @@ void AppSettings::resetInMemorySettings() {
   radio_enabled_ = false;
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;
+  radio_tuning_step_hz_ = 1'000;
   omnirig_slot_ = 1;
   cat4om_url_ = QStringLiteral("ws://127.0.0.1:5001/");
   cat4om_radio_id_.clear();
@@ -1156,6 +1419,36 @@ bool AppSettings::ensureOmniRigAutomation() {
   }
   omnirig_automation_ = automation;
   return true;
+}
+
+bool AppSettings::writeOmniRigRxFrequency(
+    const std::uint64_t dial_frequency_hz) {
+  if (!ensureOmniRigAutomation()) {
+    return false;
+  }
+  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+  VARIANT rig_value;
+  const auto rig_property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
+  if (!automation_property(automation, rig_property, &rig_value)) {
+    return false;
+  }
+  IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+  bool written = false;
+  if (rig != nullptr) {
+    const auto target = omni_rig_rx_write_target(rig);
+    const wchar_t* property =
+        target == cwassistant::core::OmniRigRxFrequencyTarget::FrequencyA
+                                  ? L"FreqA"
+        : target == cwassistant::core::OmniRigRxFrequencyTarget::FrequencyB
+                                  ? L"FreqB"
+        : target == cwassistant::core::OmniRigRxFrequencyTarget::Frequency
+                                  ? L"Freq"
+                                  : nullptr;
+    written = property != nullptr &&
+              automation_put_frequency(rig, property, dial_frequency_hz);
+  }
+  VariantClear(&rig_value);
+  return written;
 }
 #endif
 

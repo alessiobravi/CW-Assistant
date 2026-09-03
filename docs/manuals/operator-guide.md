@@ -468,6 +468,23 @@ that showing this readout at all requires **both** Settings → Radio
 **Radio enabled** and the **audio input linked to radio** toggle — enabling
 the radio alone is not enough.
 
+When the linked provider is writable, click the green **RX** frequency to edit
+it in the displayed unit. Press Enter to request the exact value or Escape to
+cancel. The `<` and `>` controls at the left and right edges of the waterfall
+tune RX down or up by the profile's **RX tuning step**; the default is 1 kHz.
+Settings → Radio allows whole-kHz steps from 1 to 100 kHz. The controls are
+hidden for WAV/SWL operation and read-only, disconnected, non-master, or
+otherwise incapable providers.
+
+The entered value is actual RF, not necessarily the radio dial. CW Assistant
+removes the configured RX transverter offset with checked integer-Hz arithmetic
+before sending the provider request. In split operation only the receive VFO is
+targeted: TX frequency and mode are left unchanged. The provider's subsequent
+poll/pushed state remains authoritative, so the display changes only when the
+radio reports the new frequency. Windows OmniRig tuning is enabled only while
+the radio reports online receive state and a writable active RX-frequency
+property; its authoritative split/TX display remains future work.
+
 Retuning the linked radio's RX VFO while live audio is running follows any
 already-identified signal rather than losing it: every tracked signal is
 re-centered by the exact amount the RX dial moved (translated to audio Hz
@@ -476,9 +493,11 @@ verification carry over across the retune instead of restarting.
 
 Next to the VFO readout is an **ON AIR** indicator. It is a placeholder
 only: it never lights, because no currently supported radio backend
-reports live transmit/PTT state (OmniRig's own status property is not yet
-polled for it, and CAT4OM's protocol has no such field). It will start
-reflecting real state once that telemetry is added.
+exposes live transmit/PTT state to the interface. OmniRig's receive/transmit
+flag is consulted transiently to block unsafe frequency writes while
+transmitting, but it is not yet retained as authoritative ON AIR telemetry;
+CAT4OM's protocol has no such field. The indicator will start reflecting real
+state once that telemetry is added.
 
 Example satellite station:
 

@@ -135,11 +135,17 @@ decoding hints rather than sharing one assumed contest sequence.
   reopening.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
-- Left-clicking the waterfall moves the local CW guide center to the pointed
-  signal. Right-clicking is a distinct RX-only CAT tuning request that maps the
-  pointed actual RF frequency to the configured CW pitch using current
-  sideband, dial frequency, split state, and transverter offset; unavailable or
-  ambiguous mappings are rejected visibly.
+- Left-clicking an identified stream opens its decoder card. Right-clicking an
+  unmarked spectrum/waterfall frequency moves the local guide and starts a
+  neutral manual decoder probe; neither action retunes the radio.
+- Permit exact RX-frequency entry by activating the live VFO readout and
+  provide stable down/up controls at the waterfall edges using a configurable,
+  persisted step (1 kHz default). Enable them only for a linked provider with
+  valid state and explicit frequency-write capability. Map displayed actual RF
+  back to the provider's dial domain with checked transverter-offset arithmetic,
+  target only the receive VFO, preserve split TX and mode, and leave provider
+  readback authoritative. Reject invalid, unavailable, or ambiguous requests
+  visibly.
 - Permit an explicit operator-selected decoder probe at a pointed audio
   frequency. It opens a clearly identified manual session but does not assign
   a verified color/callsign, increment detected-signal counts, or expose text

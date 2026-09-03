@@ -55,6 +55,12 @@ Frequency and split writes are capability-gated by the selected radio's
 pushed `stateUpdate` remains the authoritative displayed value. VFO identifiers
 are treated as opaque names rather than assuming only A and B.
 
+With a control connection holding master ownership and `SetFrequency`
+advertised, the main RX readout becomes editable and the waterfall-edge tuning
+buttons appear. CW Assistant explicitly names the pushed active RX VFO in each
+frequency request. A split radio's TX VFO and mode are not changed; split
+control remains a separate operation.
+
 CW Assistant's CAT4OM adapter intentionally does not expose PTT or CW commands.
 Transmission remains behind the application's independent confirmation,
 interlock, watchdog, and station-server architecture.

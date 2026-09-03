@@ -270,6 +270,18 @@ Pane {
                         currentIndex: appSettings.frequencyBackendIndex
                         onActivated: appSettings.frequencyBackendIndex = currentIndex
                     }
+                    Label { text: "RX tuning step" }
+                    LabeledSlider {
+                        objectName: "radioTuningStepSlider"
+                        Layout.fillWidth: true
+                        caption: "kHz"
+                        from: 1
+                        to: 100
+                        stepSize: 1
+                        decimals: 0
+                        value: appSettings.radioTuningStepHz / 1000
+                        onMoved: value => appSettings.radioTuningStepHz = Math.round(value * 1000)
+                    }
                     Label { text: "OmniRig radio slot" }
                     SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
                     Label { text: "CAT4OM Control URL"; visible: appSettings.frequencyBackendIndex === 2 }

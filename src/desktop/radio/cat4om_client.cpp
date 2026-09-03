@@ -124,6 +124,14 @@ bool Cat4OmClient::canWrite() const noexcept {
          role_ == cwassistant::core::Cat4OmRole::Master;
 }
 
+bool Cat4OmClient::canSetFrequency() const noexcept {
+  return canWrite() && selected_radio_.connection_status == "connected" &&
+         !selected_radio_.active_vfo.empty() &&
+         cwassistant::core::cat4om_has_command(selected_radio_,
+                                               "SetFrequency") &&
+         frequencyPlan().has_value();
+}
+
 QString Cat4OmClient::statusText() const { return status_; }
 QString Cat4OmClient::radioId() const {
   return QString::fromStdString(selected_radio_.radio_id);
@@ -158,6 +166,18 @@ bool Cat4OmClient::setFrequency(const std::uint64_t frequency_hz,
     parameters.insert(QStringLiteral("vfo"), vfo);
   }
   return sendRequest(QStringLiteral("setFrequency"), parameters, true);
+}
+
+bool Cat4OmClient::setRxFrequency(const std::uint64_t frequency_hz) {
+  if (!canSetFrequency()) {
+    setStatus(QStringLiteral("RX frequency write is unavailable for this connection/radio."));
+    return false;
+  }
+  // The active VFO is the protocol's RX VFO. Naming it explicitly prevents a
+  // split radio's independent TX VFO from being changed by this RX-only UI.
+  return setFrequency(
+      frequency_hz,
+      QString::fromStdString(selected_radio_.active_vfo));
 }
 
 bool Cat4OmClient::setSplit(const bool enabled, const QString& tx_vfo) {

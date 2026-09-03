@@ -35,6 +35,12 @@ ApplicationWindow {
         return (hz / 1000).toFixed(2) + " kHz"
     }
 
+    function formatVfoInput(hz, unitHz) {
+        var decimals = unitHz === 1000000 ? 6 : 3
+        return (hz / unitHz).toFixed(decimals)
+                .replace(/0+$/, "").replace(/\.$/, "")
+    }
+
     // Maps a spectrum frequency to its horizontal pixel position within the
     // spectrumDisplay item, shared by the CW guide axis marker and the
     // verified-signal area highlights so both stay pixel-aligned.
@@ -394,6 +400,56 @@ ApplicationWindow {
                     ToolTip.text: hoveredStreamId !== 0
                                   ? "Left-click to open this decoded stream"
                                   : "Right-click an unmarked signal to open a manual decoding slice"
+                }
+                ToolButton {
+                    id: tuneRxDownButton
+                    objectName: "tuneRxDownButton"
+                    visible: replayController.sourceMode === 0
+                             && replayController.radioFrequencyAvailable
+                             && appSettings.radioFrequencyWritable
+                    anchors.left: spectrumDisplay.left
+                    y: spectrumDisplay.y + spectrumDisplay.height * 0.68
+                       - height / 2
+                    width: 38
+                    height: 58
+                    z: 8
+                    text: "<"
+                    font.pixelSize: 24
+                    Accessible.name: "Tune RX down"
+                    Accessible.description: "Decrease the receive frequency by "
+                                            + (appSettings.radioTuningStepHz / 1000)
+                                            + " kilohertz"
+                    onClicked: appSettings.stepControlledRxFrequency(-1)
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 250
+                    ToolTip.text: "Tune RX down "
+                                  + (appSettings.radioTuningStepHz / 1000)
+                                  + " kHz. Split TX and mode stay unchanged."
+                }
+                ToolButton {
+                    id: tuneRxUpButton
+                    objectName: "tuneRxUpButton"
+                    visible: replayController.sourceMode === 0
+                             && replayController.radioFrequencyAvailable
+                             && appSettings.radioFrequencyWritable
+                    anchors.right: spectrumDisplay.right
+                    y: spectrumDisplay.y + spectrumDisplay.height * 0.68
+                       - height / 2
+                    width: 38
+                    height: 58
+                    z: 8
+                    text: ">"
+                    font.pixelSize: 24
+                    Accessible.name: "Tune RX up"
+                    Accessible.description: "Increase the receive frequency by "
+                                            + (appSettings.radioTuningStepHz / 1000)
+                                            + " kilohertz"
+                    onClicked: appSettings.stepControlledRxFrequency(1)
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 250
+                    ToolTip.text: "Tune RX up "
+                                  + (appSettings.radioTuningStepHz / 1000)
+                                  + " kHz. Split TX and mode stay unchanged."
                 }
                 Repeater {
                     model: replayController.decoderChannels
@@ -846,16 +902,128 @@ ApplicationWindow {
                              && replayController.sourceMode === 0
                     Layout.fillWidth: true
                     spacing: 2
+                    Item {
+                            id: vfoRxEditor
+                            objectName: "vfoRxEditor"
+                            property bool editing: false
+                            property bool invalidEntry: false
+                            property int inputUnitHz: 1000
+                            property string inputUnitLabel: inputUnitHz === 1000000
+                                                            ? "MHz" : "kHz"
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: Math.max(
+                                                       vfoRxLabel.implicitWidth,
+                                                       vfoRxEditRow.implicitWidth)
+                            Layout.preferredHeight: Math.max(
+                                                        vfoRxLabel.implicitHeight,
+                                                        vfoRxEditRow.implicitHeight)
+                            activeFocusOnTab: !editing
+                                              && appSettings.radioFrequencyWritable
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Edit RX frequency"
+                            Accessible.description: "Enter an exact receive frequency"
+                            Keys.onReturnPressed: beginEdit()
+                            Keys.onEnterPressed: beginEdit()
+                            Keys.onSpacePressed: beginEdit()
+                            function beginEdit() {
+                                if (!appSettings.radioFrequencyWritable)
+                                    return
+                                inputUnitHz = replayController.radioRxFrequencyHz
+                                              >= 30000000 ? 1000000 : 1000
+                                vfoRxFrequencyField.text = window.formatVfoInput(
+                                            replayController.radioRxFrequencyHz,
+                                            inputUnitHz)
+                                invalidEntry = false
+                                editing = true
+                                vfoRxFrequencyField.forceActiveFocus()
+                                vfoRxFrequencyField.selectAll()
+                            }
+                            function acceptEdit() {
+                                if (appSettings.setControlledRxFrequency(
+                                            vfoRxFrequencyField.text,
+                                            inputUnitHz)) {
+                                    invalidEntry = false
+                                    editing = false
+                                    window.contentItem.forceActiveFocus()
+                                } else {
+                                    invalidEntry = true
+                                    vfoRxFrequencyField.forceActiveFocus()
+                                    vfoRxFrequencyField.selectAll()
+                                }
+                            }
+                            Label {
+                                id: vfoRxLabel
+                                objectName: "vfoRxLabel"
+                                visible: !vfoRxEditor.editing
+                                text: "RX  " + window.formatVfoFrequency(
+                                                   replayController.radioRxFrequencyHz)
+                                color: "#4dff88"
+                                font.pixelSize: 28
+                                font.weight: Font.Bold
+                                font.letterSpacing: 1
+                            }
+                            MouseArea {
+                                id: vfoRxEditHitArea
+                                objectName: "vfoRxEditHitArea"
+                                anchors.fill: vfoRxLabel
+                                visible: !vfoRxEditor.editing
+                                enabled: appSettings.radioFrequencyWritable
+                                hoverEnabled: true
+                                cursorShape: enabled ? Qt.IBeamCursor
+                                                     : Qt.ArrowCursor
+                                onClicked: {
+                                    vfoRxEditor.forceActiveFocus()
+                                    vfoRxEditor.beginEdit()
+                                }
+                            }
+                            RowLayout {
+                                id: vfoRxEditRow
+                                visible: vfoRxEditor.editing
+                                spacing: 6
+                                Label {
+                                    text: "RX"
+                                    color: "#4dff88"
+                                    font.pixelSize: 22
+                                    font.weight: Font.Bold
+                                }
+                                TextField {
+                                    id: vfoRxFrequencyField
+                                    objectName: "vfoRxFrequencyField"
+                                    Layout.preferredWidth: 190
+                                    selectByMouse: true
+                                    color: vfoRxEditor.invalidEntry
+                                           ? "#ff7b84" : "#4dff88"
+                                    font.pixelSize: 22
+                                    font.weight: Font.Bold
+                                    onAccepted: vfoRxEditor.acceptEdit()
+                                    Keys.onEscapePressed: function(event) {
+                                        vfoRxEditor.invalidEntry = false
+                                        vfoRxEditor.editing = false
+                                        window.contentItem.forceActiveFocus()
+                                        event.accepted = true
+                                    }
+                                }
+                                Label {
+                                    text: vfoRxEditor.inputUnitLabel
+                                    color: "#91a0b1"
+                                    font.pixelSize: 16
+                                }
+                            }
+                            ToolTip.visible: vfoRxEditHitArea.containsMouse
+                            ToolTip.delay: 300
+                            ToolTip.text: "Click to enter an exact RX frequency"
+                            Connections {
+                                target: appSettings
+                                function onRadioFrequencyControlChanged() {
+                                    if (!appSettings.radioFrequencyWritable) {
+                                        vfoRxEditor.invalidEntry = false
+                                        vfoRxEditor.editing = false
+                                    }
+                                }
+                            }
+                    }
                     RowLayout {
                         spacing: 10
-                        Label {
-                            objectName: "vfoRxLabel"
-                            text: "RX  " + window.formatVfoFrequency(replayController.radioRxFrequencyHz)
-                            color: "#4dff88"
-                            font.pixelSize: 28
-                            font.weight: Font.Bold
-                            font.letterSpacing: 1
-                        }
                         Rectangle {
                             objectName: "vfoSplitBadge"
                             visible: replayController.radioSplitActive
@@ -878,13 +1046,13 @@ ApplicationWindow {
                             id: onAirIndicator
                             objectName: "onAirIndicator"
                             // Placeholder only: no backend currently reports
-                            // live PTT/transmit state (neither the CAT4OM
-                            // protocol nor the OmniRig properties this app
-                            // polls expose it, and local keying/PTT hardware
-                            // control is not implemented yet — see KEY-001,
-                            // SAFE-001 in BACKLOG.md). "active" is wired up
-                            // for real once that telemetry exists; until
-                            // then this always renders unlit.
+                            // live PTT/transmit state. OmniRig's Tx flag is
+                            // consulted only as a transient RX-write safety
+                            // gate, not retained as authoritative UI telemetry;
+                            // CAT4OM has no such field. Local key/PTT hardware
+                            // control is also not implemented — see KEY-001 and
+                            // SAFE-001. "active" remains false until an
+                            // authoritative provider is wired here.
                             property bool active: false
                             radius: 6
                             implicitWidth: onAirRow.implicitWidth + 16
@@ -921,6 +1089,15 @@ ApplicationWindow {
                                 hoverEnabled: true
                             }
                         }
+                    }
+                    Label {
+                        objectName: "vfoRxEditErrorLabel"
+                        visible: vfoRxEditor.invalidEntry
+                        text: appSettings.statusMessage
+                        color: "#ff7b84"
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
                     }
                     Label {
                         objectName: "vfoTxLabel"

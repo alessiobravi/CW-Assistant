@@ -292,6 +292,23 @@ ownership. The adapter may read/set frequency and split when advertised, but it
 does not route network PTT or CW around CW Assistant's station-local transmit
 guard. Profile passwords are never persisted.
 
+The operating panel expresses tuning requests in displayed actual RX RF. A
+dependency-free checked inverse removes the configured RX transverter offset
+before any provider sees a dial frequency. The UI calls one provider-neutral
+RX-frequency boundary; current OmniRig and CAT4OM adapters implement it, and
+the planned direct serial/Hamlib adapter must implement that same contract
+without adding provider-specific operating controls. CAT4OM names its pushed active VFO
+explicitly; its next pushed snapshot remains authoritative. Windows OmniRig
+selects the active receive-side `FreqA`/`FreqB` property when advertised, or
+writable generic `Freq`, and refuses the write unless the rig is online and in
+receive state. These RX-only paths issue no split, mode, TX, PTT, or KEY command.
+OmniRig frequency readback remains on the normal poll cadence, while its extra
+capability/VFO discovery is cached for one second to reduce out-of-process COM
+traffic. That cache controls only UI availability: every requested write reads
+and validates the complete live state again before changing frequency.
+OmniRig split/TX readback remains future work, so preserving rig state is not a
+claim that the current OmniRig display can describe that state.
+
 A network SDR is a receive-only source with its own tuned frequency. It is not a
 CAT rig and cannot acquire TX ownership. Any action that copies its frequency to
 a local rig crosses an explicit operator-confirmation boundary.

@@ -31,6 +31,7 @@ class Cat4OmClient final : public QObject {
 
   [[nodiscard]] bool connected() const noexcept;
   [[nodiscard]] bool canWrite() const noexcept;
+  [[nodiscard]] bool canSetFrequency() const noexcept;
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] QString radioId() const;
   [[nodiscard]] std::optional<cwassistant::core::VfoFrequencyPlan>
@@ -38,6 +39,7 @@ class Cat4OmClient final : public QObject {
 
   bool requestOwnership();
   bool setFrequency(std::uint64_t frequency_hz, const QString& vfo = {});
+  bool setRxFrequency(std::uint64_t frequency_hz);
   bool setSplit(bool enabled, const QString& tx_vfo = {});
 
  signals:

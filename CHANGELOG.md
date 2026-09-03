@@ -8,6 +8,19 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Added operator-controlled RX tuning for linked writable radios. Click the
+  large RX readout to enter an exact frequency, or use stable `<` / `>`
+  controls at the waterfall edges to move by a profile-persisted 1–100 kHz
+  step (1 kHz default). Actual RF entries are converted back through the
+  configured RX transverter offset with checked integer arithmetic. CAT4OM
+  explicitly targets its active RX VFO; Windows OmniRig selects its writable
+  active `Freq`, `FreqA`, or `FreqB` property only while the rig is online and
+  receiving. Split TX frequency, mode, PTT, and KEY are never changed by these
+  controls, and read-only or unavailable providers expose no active tuning
+  target. OmniRig frequency readback stays responsive while its additional
+  capability/VFO discovery is rate-limited; every write still rechecks the
+  complete live safety state immediately.
+
 - Added an optional, CPU-only local character-refinement decoder for
   operator-supplied ONNX models and metadata. Up to four verified,
   Morse-likely, or manually selected tracks receive independent 30–50 Hz
