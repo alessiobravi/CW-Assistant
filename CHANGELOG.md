@@ -6,6 +6,12 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the RX-frequency editor reopening or remaining active after Enter or
+  Escape. Losing focus now cancels editing, and the display/edit states use a
+  dark, high-contrast monospaced LCD-style panel.
+
 ### Added
 
 - Added operator-controlled RX tuning for linked writable radios. Click the

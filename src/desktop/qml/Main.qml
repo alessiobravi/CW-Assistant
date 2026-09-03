@@ -903,124 +903,172 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     spacing: 2
                     Item {
-                            id: vfoRxEditor
-                            objectName: "vfoRxEditor"
-                            property bool editing: false
-                            property bool invalidEntry: false
-                            property int inputUnitHz: 1000
-                            property string inputUnitLabel: inputUnitHz === 1000000
-                                                            ? "MHz" : "kHz"
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: Math.max(
-                                                       vfoRxLabel.implicitWidth,
-                                                       vfoRxEditRow.implicitWidth)
-                            Layout.preferredHeight: Math.max(
-                                                        vfoRxLabel.implicitHeight,
-                                                        vfoRxEditRow.implicitHeight)
-                            activeFocusOnTab: !editing
-                                              && appSettings.radioFrequencyWritable
-                            Accessible.role: Accessible.Button
-                            Accessible.name: "Edit RX frequency"
-                            Accessible.description: "Enter an exact receive frequency"
-                            Keys.onReturnPressed: beginEdit()
-                            Keys.onEnterPressed: beginEdit()
-                            Keys.onSpacePressed: beginEdit()
-                            function beginEdit() {
-                                if (!appSettings.radioFrequencyWritable)
-                                    return
-                                inputUnitHz = replayController.radioRxFrequencyHz
-                                              >= 30000000 ? 1000000 : 1000
-                                vfoRxFrequencyField.text = window.formatVfoInput(
-                                            replayController.radioRxFrequencyHz,
-                                            inputUnitHz)
+                        id: vfoRxEditor
+                        objectName: "vfoRxEditor"
+                        property bool editing: false
+                        property bool invalidEntry: false
+                        property int inputUnitHz: 1000
+                        property string inputUnitLabel: inputUnitHz === 1000000
+                                                        ? "MHz" : "kHz"
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: Math.max(
+                                                   vfoRxLabel.implicitWidth + 24,
+                                                   vfoRxEditRow.implicitWidth + 20)
+                        Layout.preferredHeight: Math.max(
+                                                    vfoRxLabel.implicitHeight + 12,
+                                                    vfoRxEditRow.implicitHeight + 10)
+                        function beginEdit() {
+                            if (!appSettings.radioFrequencyWritable)
+                                return
+                            inputUnitHz = replayController.radioRxFrequencyHz
+                                          >= 30000000 ? 1000000 : 1000
+                            vfoRxFrequencyField.text = window.formatVfoInput(
+                                        replayController.radioRxFrequencyHz,
+                                        inputUnitHz)
+                            invalidEntry = false
+                            editing = true
+                            vfoRxFrequencyField.forceActiveFocus()
+                            vfoRxFrequencyField.selectAll()
+                        }
+                        function dismissEdit() {
+                            invalidEntry = false
+                            editing = false
+                        }
+                        function cancelEdit() {
+                            dismissEdit()
+                            window.contentItem.forceActiveFocus()
+                        }
+                        function acceptEdit() {
+                            if (appSettings.setControlledRxFrequency(
+                                        vfoRxFrequencyField.text,
+                                        inputUnitHz)) {
                                 invalidEntry = false
-                                editing = true
+                                editing = false
+                                window.contentItem.forceActiveFocus()
+                            } else {
+                                invalidEntry = true
                                 vfoRxFrequencyField.forceActiveFocus()
                                 vfoRxFrequencyField.selectAll()
                             }
-                            function acceptEdit() {
-                                if (appSettings.setControlledRxFrequency(
-                                            vfoRxFrequencyField.text,
-                                            inputUnitHz)) {
-                                    invalidEntry = false
-                                    editing = false
-                                    window.contentItem.forceActiveFocus()
-                                } else {
-                                    invalidEntry = true
-                                    vfoRxFrequencyField.forceActiveFocus()
-                                    vfoRxFrequencyField.selectAll()
-                                }
-                            }
-                            Label {
-                                id: vfoRxLabel
-                                objectName: "vfoRxLabel"
-                                visible: !vfoRxEditor.editing
-                                text: "RX  " + window.formatVfoFrequency(
-                                                   replayController.radioRxFrequencyHz)
-                                color: "#4dff88"
-                                font.pixelSize: 28
-                                font.weight: Font.Bold
-                                font.letterSpacing: 1
-                            }
-                            MouseArea {
-                                id: vfoRxEditHitArea
-                                objectName: "vfoRxEditHitArea"
-                                anchors.fill: vfoRxLabel
-                                visible: !vfoRxEditor.editing
-                                enabled: appSettings.radioFrequencyWritable
-                                hoverEnabled: true
-                                cursorShape: enabled ? Qt.IBeamCursor
-                                                     : Qt.ArrowCursor
-                                onClicked: {
-                                    vfoRxEditor.forceActiveFocus()
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 5
+                            color: "#06130e"
+                            border.color: vfoRxEditor.invalidEntry
+                                          ? "#ff7b84" : "#2dd4a7"
+                            border.width: vfoRxEditor.editing ? 2 : 1
+                        }
+                        Label {
+                            id: vfoRxLabel
+                            objectName: "vfoRxLabel"
+                            anchors.left: parent.left
+                            anchors.leftMargin: 12
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: !vfoRxEditor.editing
+                            text: "RX  " + window.formatVfoFrequency(
+                                               replayController.radioRxFrequencyHz)
+                            color: "#62ffa2"
+                            font.family: "monospace"
+                            font.pixelSize: 28
+                            font.weight: Font.Bold
+                            font.letterSpacing: 2
+                        }
+                        MouseArea {
+                            id: vfoRxEditHitArea
+                            objectName: "vfoRxEditHitArea"
+                            anchors.fill: parent
+                            visible: !vfoRxEditor.editing
+                            enabled: appSettings.radioFrequencyWritable
+                            hoverEnabled: true
+                            activeFocusOnTab: enabled
+                            cursorShape: enabled ? Qt.IBeamCursor
+                                                 : Qt.ArrowCursor
+                            Accessible.role: Accessible.Button
+                            Accessible.name: "Edit RX frequency"
+                            Accessible.description: "Enter an exact receive frequency"
+                            Keys.onPressed: function(event) {
+                                if (event.key === Qt.Key_Return
+                                        || event.key === Qt.Key_Enter
+                                        || event.key === Qt.Key_Space) {
                                     vfoRxEditor.beginEdit()
+                                    event.accepted = true
                                 }
                             }
-                            RowLayout {
-                                id: vfoRxEditRow
-                                visible: vfoRxEditor.editing
-                                spacing: 6
-                                Label {
-                                    text: "RX"
-                                    color: "#4dff88"
-                                    font.pixelSize: 22
-                                    font.weight: Font.Bold
+                            onClicked: {
+                                forceActiveFocus()
+                                vfoRxEditor.beginEdit()
+                            }
+                        }
+                        RowLayout {
+                            id: vfoRxEditRow
+                            anchors.left: parent.left
+                            anchors.leftMargin: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: vfoRxEditor.editing
+                            spacing: 6
+                            Label {
+                                text: "RX"
+                                color: "#4dff88"
+                                font.family: "monospace"
+                                font.pixelSize: 22
+                                font.weight: Font.Bold
+                                font.letterSpacing: 2
+                            }
+                            TextField {
+                                id: vfoRxFrequencyField
+                                objectName: "vfoRxFrequencyField"
+                                Layout.preferredWidth: 190
+                                selectByMouse: true
+                                color: vfoRxEditor.invalidEntry
+                                       ? "#ff7b84" : "#62ffa2"
+                                selectionColor: "#2dd4a7"
+                                selectedTextColor: "#03100b"
+                                font.family: "monospace"
+                                font.pixelSize: 22
+                                font.weight: Font.Bold
+                                font.letterSpacing: 2
+                                background: Rectangle {
+                                    radius: 3
+                                    color: "#020a07"
+                                    border.color: vfoRxEditor.invalidEntry
+                                                  ? "#ff7b84" : "#226b55"
+                                    border.width: 1
                                 }
-                                TextField {
-                                    id: vfoRxFrequencyField
-                                    objectName: "vfoRxFrequencyField"
-                                    Layout.preferredWidth: 190
-                                    selectByMouse: true
-                                    color: vfoRxEditor.invalidEntry
-                                           ? "#ff7b84" : "#4dff88"
-                                    font.pixelSize: 22
-                                    font.weight: Font.Bold
-                                    onAccepted: vfoRxEditor.acceptEdit()
-                                    Keys.onEscapePressed: function(event) {
-                                        vfoRxEditor.invalidEntry = false
-                                        vfoRxEditor.editing = false
-                                        window.contentItem.forceActiveFocus()
+                                Keys.onPressed: function(event) {
+                                    if (event.key === Qt.Key_Escape) {
+                                        vfoRxEditor.cancelEdit()
+                                        event.accepted = true
+                                    } else if (event.key === Qt.Key_Return
+                                               || event.key === Qt.Key_Enter) {
+                                        vfoRxEditor.acceptEdit()
                                         event.accepted = true
                                     }
                                 }
-                                Label {
-                                    text: vfoRxEditor.inputUnitLabel
-                                    color: "#91a0b1"
-                                    font.pixelSize: 16
+                                onActiveFocusChanged: {
+                                    if (!activeFocus && vfoRxEditor.editing)
+                                        vfoRxEditor.dismissEdit()
                                 }
                             }
-                            ToolTip.visible: vfoRxEditHitArea.containsMouse
-                            ToolTip.delay: 300
-                            ToolTip.text: "Click to enter an exact RX frequency"
-                            Connections {
-                                target: appSettings
-                                function onRadioFrequencyControlChanged() {
-                                    if (!appSettings.radioFrequencyWritable) {
-                                        vfoRxEditor.invalidEntry = false
-                                        vfoRxEditor.editing = false
-                                    }
+                            Label {
+                                text: vfoRxEditor.inputUnitLabel
+                                color: "#83d9bc"
+                                font.family: "monospace"
+                                font.pixelSize: 16
+                            }
+                        }
+                        ToolTip.visible: vfoRxEditHitArea.containsMouse
+                        ToolTip.delay: 300
+                        ToolTip.text: "Click to enter an exact RX frequency"
+                        Connections {
+                            target: appSettings
+                            function onRadioFrequencyControlChanged() {
+                                if (!appSettings.radioFrequencyWritable) {
+                                    vfoRxEditor.invalidEntry = false
+                                    vfoRxEditor.editing = false
                                 }
                             }
+                        }
                     }
                     RowLayout {
                         spacing: 10

@@ -163,8 +163,18 @@ int main() {
       !contains(vfo_editor, "objectName: \"vfoRxEditHitArea\"") ||
       !contains(vfo_editor, "objectName: \"vfoRxFrequencyField\"") ||
       !contains(vfo_editor, "appSettings.setControlledRxFrequency(") ||
+      !contains(vfo_editor, "function dismissEdit()") ||
+      !contains(vfo_editor, "function cancelEdit()") ||
       !contains(vfo_editor, "function onRadioFrequencyControlChanged()") ||
-      !contains(vfo_editor, "Keys.onEscapePressed: function(event)") ||
+      !contains(vfo_editor, "onActiveFocusChanged:") ||
+      !contains(vfo_editor, "event.key === Qt.Key_Escape") ||
+      !contains(vfo_editor, "event.key === Qt.Key_Return") ||
+      !contains(vfo_editor, "event.accepted = true") ||
+      !contains(vfo_editor, "vfoRxEditor.dismissEdit()") ||
+      contains(vfo_editor, "Keys.onReturnPressed:") ||
+      contains(vfo_editor, "Keys.onEnterPressed:") ||
+      !contains(vfo_editor, "font.family: \"monospace\"") ||
+      !contains(vfo_editor, "color: \"#06130e\"") ||
       !contains(vfo_editor, "Accessible.name: \"Edit RX frequency\"") ||
       !contains(qml, "objectName: \"vfoRxEditErrorLabel\"") ||
       !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||

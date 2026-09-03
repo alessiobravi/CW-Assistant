@@ -468,9 +468,10 @@ that showing this readout at all requires **both** Settings → Radio
 **Radio enabled** and the **audio input linked to radio** toggle — enabling
 the radio alone is not enough.
 
-When the linked provider is writable, click the green **RX** frequency to edit
-it in the displayed unit. Press Enter to request the exact value or Escape to
-cancel. The `<` and `>` controls at the left and right edges of the waterfall
+When the linked provider is writable, click the green LCD-style **RX**
+frequency to edit it in the displayed unit. Press Enter to request the exact
+value; press Escape or click elsewhere to cancel and restore the readout. The
+`<` and `>` controls at the left and right edges of the waterfall
 tune RX down or up by the profile's **RX tuning step**; the default is 1 kHz.
 Settings → Radio allows whole-kHz steps from 1 to 100 kHz. The controls are
 hidden for WAV/SWL operation and read-only, disconnected, non-master, or
