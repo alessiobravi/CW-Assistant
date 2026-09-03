@@ -40,6 +40,9 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Hosted build-failure markers now preserve bounded compiler/linker error lines
   separately from the trailing parallel-build output, so a later successful
   target cannot hide the actual failing target from Git-only diagnostics.
+- The callsign-evidence regression test now includes its standard algorithm
+  dependency directly, restoring MSVC compilation without relying on
+  toolchain-specific transitive headers.
 - The managed-database startup contract test now normalizes Windows CRLF
   checkouts before matching its network-suppression guard.
 - Decoder cards now show the append-only phase/timing consensus as soon as it

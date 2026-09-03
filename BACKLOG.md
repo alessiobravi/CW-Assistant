@@ -23,7 +23,9 @@ state and callsign/model presentation diagnostics only while recording.
 CALL-005, CALL-006, CW-001, and OBS-003 remain active for indexed candidate
 lookup, acoustic accuracy, and full observation-aligned lattice scoring. The
 hosted failure marker now retains compiler errors independently of interleaved
-parallel-build tail output after the Windows leg hid its failing target.
+parallel-build tail output after the Windows leg hid its failing target. That
+diagnostic exposed and the follow-up fixes the missing direct standard-library
+include in the callsign-evidence MSVC test.
 
 Last reviewed: 2026-09-03 — a new field capture confirmed correct carrier lock
 and roughly 20 WPM cadence but exposed two downstream losses: competitive
