@@ -1,6 +1,7 @@
 #include "local_character_decoder.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <utility>
 
 #if defined(CWA_HAVE_ONNX_RUNTIME) && CWA_HAVE_ONNX_RUNTIME
@@ -149,8 +150,21 @@ void LocalCharacterInferenceWorker::configure(
   CwCharacterBackendConfig config;
   config.model_path = model_path.toStdString();
   config.metadata_path = metadata_path.toStdString();
-  auto backend =
-      std::make_shared<CwOnnxCharacterDecoderBackend>(std::move(config));
+  std::shared_ptr<CwOnnxCharacterDecoderBackend> backend;
+  try {
+    backend =
+        std::make_shared<CwOnnxCharacterDecoderBackend>(std::move(config));
+  } catch (const std::exception& exception) {
+    emit statusChanged(
+        QStringLiteral("error"),
+        QStringLiteral("Local model setup failed: %1")
+            .arg(QString::fromUtf8(exception.what()).left(400)));
+    return;
+  } catch (...) {
+    emit statusChanged(QStringLiteral("error"),
+                       QStringLiteral("Local model setup failed."));
+    return;
+  }
   const auto& diagnostics = backend->diagnostics();
   if (!backend->ready()) {
     emit statusChanged(QStringLiteral("error"),

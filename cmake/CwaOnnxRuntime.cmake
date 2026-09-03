@@ -13,6 +13,7 @@ function(cwa_configure_onnx_runtime)
   set(cwa_ort_include "${cwa_ort_root}/include")
   set(cwa_ort_license "${cwa_ort_root}/LICENSE")
   set(cwa_ort_notices "${cwa_ort_root}/ThirdPartyNotices.txt")
+  set(cwa_ort_privacy "${cwa_ort_root}/Privacy.md")
   set(cwa_ort_version_file "${cwa_ort_root}/VERSION_NUMBER")
   set(cwa_ort_commit_file "${cwa_ort_root}/GIT_COMMIT_ID")
 
@@ -21,6 +22,7 @@ function(cwa_configure_onnx_runtime)
       "${cwa_ort_include}/onnxruntime_cxx_api.h"
       "${cwa_ort_license}"
       "${cwa_ort_notices}"
+      "${cwa_ort_privacy}"
       "${cwa_ort_version_file}"
       "${cwa_ort_commit_file}")
     if(NOT EXISTS "${cwa_required_path}")
@@ -31,6 +33,8 @@ function(cwa_configure_onnx_runtime)
 
   file(STRINGS "${cwa_ort_version_file}" cwa_ort_version LIMIT_COUNT 1)
   file(STRINGS "${cwa_ort_commit_file}" cwa_ort_commit LIMIT_COUNT 1)
+  string(STRIP "${cwa_ort_version}" cwa_ort_version)
+  string(STRIP "${cwa_ort_commit}" cwa_ort_commit)
   if(NOT cwa_ort_version STREQUAL CWA_ONNXRUNTIME_VERSION)
     message(FATAL_ERROR
       "CWA_ONNXRUNTIME_ROOT must contain ONNX Runtime ${CWA_ONNXRUNTIME_VERSION}")
@@ -100,6 +104,7 @@ function(cwa_configure_onnx_runtime)
   endif()
 
   install(FILES "${cwa_ort_license}" "${cwa_ort_notices}"
+    "${cwa_ort_privacy}"
     DESTINATION
       "${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/third-party/onnxruntime")
 

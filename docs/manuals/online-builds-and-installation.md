@@ -16,8 +16,9 @@ and uploads one artifact for each platform:
 Hosted packages include the CPU-only ONNX Runtime needed by the optional local
 character-refinement decoder. No decoding model or model metadata is bundled or
 downloaded; the Decoder settings page accepts compatible operator-supplied
-files stored on the local machine. Packages include the runtime's MIT license
-and third-party notices.
+files stored on the local machine. The application explicitly disables runtime
+telemetry. Packages include the runtime's MIT license, privacy notice, and
+third-party notices.
 
 For the simplest download, open the repository's root
 [`binaries/`](../../binaries/README.md) index. It points to stable asset names in

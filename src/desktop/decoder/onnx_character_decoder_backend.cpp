@@ -199,6 +199,10 @@ struct CwOnnxCharacterDecoderBackend::Impl {
 
   void load() noexcept {
     try {
+      // Official Windows distributions enable platform trace events by
+      // default. Keep local decoding private regardless of how the pinned
+      // runtime was produced; private source builds treat this as a no-op.
+      environment.DisableTelemetryEvents();
       if (config.maximum_input_frames == 0 ||
           config.maximum_input_frames > 4'096 ||
           config.maximum_output_steps == 0 ||
