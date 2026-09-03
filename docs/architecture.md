@@ -109,6 +109,14 @@ heard. Conversation profiles are another independent core model: they describe
 neutral monitoring, ordinary free-text QSOs, or one rules-versioned contest
 exchange, but contain no decoder-to-PTT/KEY execution path.
 
+Managed callsign data is a desktop update adapter, not part of the acoustic
+decoder. It discovers one named provider artifact over HTTPS, uses conditional
+requests at a bounded cadence, verifies the advertised SHA-256 identity and
+bounded text import, then atomically replaces a local cache. The replay
+controller sees only the last validated local path. Network, metadata, parse,
+or storage failure therefore cannot remove the previous usable cache or feed
+untrusted content directly into an active decoder.
+
 The delivered M2 baseline scans the complete processed FFT passband for local
 peaks, suppresses duplicate nearby candidates, and maintains a bounded
 independent state object for every tracked frequency. Candidate discovery uses

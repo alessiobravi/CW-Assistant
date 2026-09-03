@@ -21,6 +21,13 @@ The build installs the matching license, third-party notice, and privacy notice
 beside the runtime. CW Assistant explicitly disables runtime telemetry and does
 not bundle, download, or redistribute a model or model metadata.
 
+The optional managed callsign cache downloads `MASTER.SCP` at runtime directly
+from the [Super Check Partial Database](https://www.supercheckpartial.com/),
+maintained by W9KKN. No explicit redistribution grant is published for that
+dataset, so CW Assistant does not bundle or republish it. The integration uses
+the provider's documented updater interface and keeps the downloaded data in
+the user's application-data directory.
+
 Release builds will generate a software bill of materials and third-party
 notices. CI will add automated license-policy checks after dependency manifests
 are introduced; a human review remains required for new licenses and exceptions.

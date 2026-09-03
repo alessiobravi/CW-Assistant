@@ -11,7 +11,8 @@ add_test(NAME cwa_character_refinement_tests
 add_executable(cwa_decoder_transcript_qml_test
   desktop/decoder_transcript_qml_test.cpp)
 target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE
-  CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml")
+  CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml"
+  CWA_DESKTOP_MAIN_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/main.cpp")
 add_test(NAME cwa_decoder_transcript_qml_test
   COMMAND cwa_decoder_transcript_qml_test)
 

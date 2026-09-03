@@ -8,6 +8,13 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Local callsign suggestions can maintain an optional cached `MASTER.SCP`
+  directly from the Super Check Partial Database. Provider discovery and
+  conditional HTTPS checks run no more than daily unless requested by the
+  operator, changed data is validated before atomic replacement, and every
+  failure preserves the last valid offline copy. Operator-selected files remain
+  supported, while suggestions retain separate advisory-only `≈`/`DB`
+  provenance.
 - Settings can load an operator-supplied offline `master.scp` or Call History
   text file. A database call is shown only as an explicitly marked advisory
   suggestion when at least two current bounded acoustic alternatives contain

@@ -36,6 +36,8 @@ qt_add_executable(cw-assistant-desktop
   settings/app_settings.hpp
   updates/update_checker.cpp
   updates/update_checker.hpp
+  updates/callsign_database_updater.cpp
+  updates/callsign_database_updater.hpp
   visualization/spectrum_frame.hpp
   visualization/waterfall_conditioner.cpp
   visualization/waterfall_conditioner.hpp
@@ -172,6 +174,19 @@ if(CWA_BUILD_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_update_checker_test COMMAND cwa_update_checker_test)
   set_tests_properties(cwa_update_checker_test PROPERTIES TIMEOUT 10)
+
+  qt_add_executable(cwa_callsign_database_updater_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/callsign_database_updater_test.cpp
+    updates/callsign_database_updater.cpp
+    updates/callsign_database_updater.hpp
+  )
+  target_link_libraries(cwa_callsign_database_updater_test PRIVATE
+    cwa_core Qt6::Core Qt6::Network)
+  target_include_directories(cwa_callsign_database_updater_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_callsign_database_updater_test
+    COMMAND cwa_callsign_database_updater_test)
+  set_tests_properties(cwa_callsign_database_updater_test PROPERTIES TIMEOUT 15)
 
   if(CWA_ENABLE_ONNX_CHARACTER_DECODER)
     qt_add_executable(cwa_onnx_character_decoder_backend_test

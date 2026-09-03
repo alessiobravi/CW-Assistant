@@ -292,14 +292,22 @@ appears in the header with a **MODEL** badge. Model output cannot create a
 carrier, keep silence active, replace raw text, or initiate transmission.
 
 Treat `?` as retained acoustic uncertainty, not as a character that a directory
-has disproved. Settings → Decoder can load an operator-supplied offline
-`master.scp` or Call History text file. If a completed uncertain call-shaped
-span agrees with the same known call in at least two competitive acoustic
-paths, the marker/card may show `≈ CALL` with a **DB** badge. The approximation
-sign is intentional: the transcript keeps its `?`, and the suggestion cannot
-confirm the callsign, verify a stream, trigger the own-call alert, or control
-transmission. The application neither supplies nor downloads a callsign list.
-Acoustic alternatives remain available in diagnostic capture, while the card
+has disproved. Settings → Decoder can use an operator-selected offline
+`master.scp`/Call History file or an optional managed `MASTER.SCP` copy
+downloaded directly from the Super Check Partial (SCP) Database. Managed use
+and automatic checking are independently switchable. Automatic checks run at
+most daily and download only a changed release; **Check for updates** starts an
+immediate operator-requested check. The last valid copy remains usable offline
+and is preserved after any network, validation, or write failure. SCP is an
+activity-derived contesting aid maintained by W9KKN, not an official callsign
+register, and is not bundled with CW Assistant.
+
+If a completed uncertain call-shaped span agrees with the same known call in at
+least two competitive acoustic paths, the marker/card may show `≈ CALL` with
+a **DB** badge. The approximation sign is intentional: the transcript keeps its
+`?`, and the suggestion cannot confirm the callsign, verify a stream, trigger
+the own-call alert, or control transmission. Acoustic alternatives remain
+available in diagnostic capture, while the card
 shows the deterministic phase/timing consensus when available and falls back
 to the literal acquisition path otherwise. A future online callbook, activity
 list, or cluster spot must preserve the same separation and provenance.
@@ -393,9 +401,10 @@ installer or package manager
 (the Windows MSI installer, the Linux package tool, or an archive tool on
 the portable builds) so you complete the install the normal way; **Show in
 Finder**, **Show in File Explorer**, or **Show in Folder** reveals it instead.
-The
-application never downloads or installs anything without you clicking
-these buttons, and never silently replaces itself while running.
+The application never downloads or installs an application update without you
+clicking these buttons, and never silently replaces itself while running. This
+is separate from an explicitly enabled callsign-database refresh, which only
+replaces its validated local data cache.
 
 ## First launch
 

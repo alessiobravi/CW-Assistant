@@ -236,12 +236,67 @@ Pane {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
-                        text: "Optional offline callsign suggestions from an operator-supplied master.scp or Call History text export. The list only ranks calls already present in multiple acoustic alternatives; it never confirms a stream or replaces decoded text. Files are never downloaded or queried over the network."
+                        text: "Optional offline callsign suggestions can use a managed Super Check Partial MASTER.SCP cache or an operator-supplied file. Matches only rank calls already present in multiple acoustic alternatives; they never confirm a stream, replace decoded text, alert on your call, or control transmission."
+                    }
+                    Label { text: "Managed SCP database" }
+                    CheckBox {
+                        objectName: "managedCallsignDatabaseEnabledCheck"
+                        text: "Use managed offline cache"
+                        checked: callsignDatabaseUpdater.managedEnabled
+                        onToggled: callsignDatabaseUpdater.managedEnabled = checked
+                    }
+                    Label { text: "Managed updates" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        CheckBox {
+                            objectName: "managedCallsignDatabaseAutoUpdateCheck"
+                            text: "Automatically check at most daily"
+                            enabled: callsignDatabaseUpdater.managedEnabled
+                            checked: callsignDatabaseUpdater.autoUpdateEnabled
+                            onToggled: callsignDatabaseUpdater.autoUpdateEnabled = checked
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Button {
+                                objectName: "managedCallsignDatabaseUpdateButton"
+                                enabled: callsignDatabaseUpdater.managedEnabled
+                                         && !callsignDatabaseUpdater.checking
+                                         && !callsignDatabaseUpdater.downloading
+                                text: callsignDatabaseUpdater.checking
+                                      || callsignDatabaseUpdater.downloading
+                                      ? "Working…"
+                                      : (callsignDatabaseUpdater.updateAvailable
+                                         ? "Download update"
+                                         : "Check for updates")
+                                onClicked: callsignDatabaseUpdater.updateAvailable
+                                           ? callsignDatabaseUpdater.updateDatabase()
+                                           : callsignDatabaseUpdater.checkForUpdates()
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                color: "#8290a0"
+                                elide: Text.ElideRight
+                                text: callsignDatabaseUpdater.installedVersion.length > 0
+                                      ? "Installed release "
+                                        + callsignDatabaseUpdater.installedVersion.substring(0, 10)
+                                      : "No managed copy installed"
+                            }
+                        }
+                        Label {
+                            objectName: "managedCallsignDatabaseStatusLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#80cbc4"
+                            text: callsignDatabaseUpdater.statusMessage
+                                  + " · Last check: "
+                                  + callsignDatabaseUpdater.lastCheckedText
+                        }
                     }
                     Label { text: "Local callsign suggestions" }
                     CheckBox {
                         objectName: "localCallsignDatabaseEnabledCheck"
                         text: "Enable operator-supplied local file"
+                        enabled: !callsignDatabaseUpdater.managedEnabled
                         checked: appSettings.localCallsignDatabaseEnabled
                         onToggled: appSettings.localCallsignDatabaseEnabled = checked
                     }
@@ -260,11 +315,13 @@ Pane {
                         Button {
                             objectName: "browseLocalCallsignDatabaseButton"
                             text: "Browse…"
+                            enabled: !callsignDatabaseUpdater.managedEnabled
                             onClicked: localCallsignDatabaseDialog.open()
                         }
                         Button {
                             text: "Clear"
-                            enabled: appSettings.localCallsignDatabasePath.length > 0
+                            enabled: !callsignDatabaseUpdater.managedEnabled
+                                     && appSettings.localCallsignDatabasePath.length > 0
                             onClicked: appSettings.clearLocalCallsignDatabase()
                         }
                     }
@@ -285,6 +342,7 @@ Pane {
                             objectName: "reloadLocalCallsignDatabaseButton"
                             text: "Reload local file"
                             enabled: appSettings.localCallsignDatabaseEnabled
+                                     && !callsignDatabaseUpdater.managedEnabled
                                      && appSettings.localCallsignDatabasePath.length > 0
                             onClicked: appSettings.reloadLocalCallsignDatabase()
                         }

@@ -14,6 +14,7 @@
 
 #include "replay/replay_controller.hpp"
 #include "settings/app_settings.hpp"
+#include "updates/callsign_database_updater.hpp"
 #include "updates/update_checker.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
 
@@ -50,6 +51,7 @@ int main(int argc, char* argv[]) {
   }
   cwassistant::desktop::ReplayController replay_controller;
   cwassistant::desktop::UpdateChecker update_checker;
+  cwassistant::desktop::CallsignDatabaseUpdater callsign_database_updater;
   const auto apply_spectrum_processing = [&settings, &replay_controller] {
     replay_controller.setAveragingFrames(settings.averagingFrames());
     replay_controller.setSpectrumProcessing(
@@ -78,8 +80,15 @@ int main(int argc, char* argv[]) {
         settings.localDecoderEnabled(), settings.localDecoderModelPath(),
         settings.localDecoderMetadataPath());
   };
-  const auto apply_offline_callsign_database = [&settings,
-                                                &replay_controller] {
+  const auto apply_offline_callsign_database =
+      [&settings, &replay_controller, &callsign_database_updater] {
+    if (callsign_database_updater.managedEnabled()) {
+      const QString path = callsign_database_updater.installedFilePath();
+      if (!path.isEmpty()) {
+        replay_controller.configureOfflineCallsignDatabase(true, path);
+        return;
+      }
+    }
     replay_controller.configureOfflineCallsignDatabase(
         settings.localCallsignDatabaseEnabled(),
         settings.localCallsignDatabasePath());
@@ -109,9 +118,33 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings,
       &cwassistant::desktop::AppSettings::localCallsignDatabaseConfigurationCommitted,
+      &replay_controller, apply_offline_callsign_database);
+  QObject::connect(
+      &callsign_database_updater,
+      &cwassistant::desktop::CallsignDatabaseUpdater::databaseInstalled,
+      &replay_controller, apply_offline_callsign_database);
+  QObject::connect(
+      &callsign_database_updater,
+      &cwassistant::desktop::CallsignDatabaseUpdater::managedEnabledChanged,
       &replay_controller,
-      [&replay_controller](const bool enabled, const QString& path) {
-        replay_controller.configureOfflineCallsignDatabase(enabled, path);
+      [&callsign_database_updater, &apply_offline_callsign_database,
+       smoke_test = parser.isSet(smoke_test_option)] {
+        apply_offline_callsign_database();
+        if (!smoke_test && callsign_database_updater.managedEnabled() &&
+            callsign_database_updater.autoUpdateEnabled()) {
+          callsign_database_updater.checkAndInstallIfDue();
+        }
+      });
+  QObject::connect(
+      &callsign_database_updater,
+      &cwassistant::desktop::CallsignDatabaseUpdater::autoUpdateEnabledChanged,
+      &callsign_database_updater,
+      [&callsign_database_updater,
+       smoke_test = parser.isSet(smoke_test_option)] {
+        if (!smoke_test && callsign_database_updater.managedEnabled() &&
+            callsign_database_updater.autoUpdateEnabled()) {
+          callsign_database_updater.checkAndInstallIfDue();
+        }
       });
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::audioInputsChanged,
@@ -132,12 +165,22 @@ int main(int argc, char* argv[]) {
                                            &replay_controller);
   engine.rootContext()->setContextProperty(QStringLiteral("updateChecker"),
                                            &update_checker);
+  engine.rootContext()->setContextProperty(
+      QStringLiteral("callsignDatabaseUpdater"), &callsign_database_updater);
   if (!parser.isSet(smoke_test_option) && update_checker.autoCheckEnabled()) {
     // A short delay so the background check never competes with startup
     // rendering/audio work; never runs during the smoke test, which must
     // stay hermetic (no real network access).
     QTimer::singleShot(4'000, &update_checker,
                        [&update_checker] { update_checker.checkForUpdates(); });
+  }
+  if (!parser.isSet(smoke_test_option) &&
+      callsign_database_updater.managedEnabled() &&
+      callsign_database_updater.autoUpdateEnabled()) {
+    QTimer::singleShot(6'000, &callsign_database_updater,
+                       [&callsign_database_updater] {
+                         callsign_database_updater.checkAndInstallIfDue();
+                       });
   }
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,

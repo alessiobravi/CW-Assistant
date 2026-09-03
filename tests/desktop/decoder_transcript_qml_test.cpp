@@ -241,8 +241,20 @@ int main() {
       !contains(settings_qml, "replayController.offlineCallsignDatabaseStatus") ||
       !contains(settings_qml, "objectName: \"localCallsignDatabaseDialog\"") ||
       !contains(settings_qml, "appSettings.selectLocalCallsignDatabase(selectedFile)") ||
-      !contains(settings_qml, "Files are never downloaded or queried over the network") ||
-      !contains(settings_qml, "never confirms a stream or replaces decoded text") ||
+      !contains(settings_qml,
+                "objectName: \"managedCallsignDatabaseEnabledCheck\"") ||
+      !contains(settings_qml,
+                "objectName: \"managedCallsignDatabaseAutoUpdateCheck\"") ||
+      !contains(settings_qml,
+                "objectName: \"managedCallsignDatabaseUpdateButton\"") ||
+      !contains(settings_qml,
+                "objectName: \"managedCallsignDatabaseStatusLabel\"") ||
+      !contains(settings_qml,
+                "callsignDatabaseUpdater.checkForUpdates()") ||
+      !contains(settings_qml,
+                "callsignDatabaseUpdater.updateDatabase()") ||
+      !contains(settings_qml,
+                "never confirm a stream, replace decoded text") ||
       !contains(settings_qml, "replayController.localCharacterStatus") ||
       !contains(settings_qml, "replayController.localCharacterState") ||
       !contains(settings_qml, "objectName: \"radioTuningStepSlider\"") ||
@@ -250,6 +262,27 @@ int main() {
       !contains(settings_qml,
                 "appSettings.radioTuningStepHz = Math.round(value * 1000)")) {
     return 10;
+  }
+
+  std::ifstream main_source(CWA_DESKTOP_MAIN_CPP_PATH, std::ios::binary);
+  if (!main_source) return 12;
+  const std::string main_cpp{
+      std::istreambuf_iterator<char>{main_source},
+      std::istreambuf_iterator<char>{}};
+  if (!contains(main_cpp,
+                "QStringLiteral(\"callsignDatabaseUpdater\")") ||
+      !contains(main_cpp,
+                "CallsignDatabaseUpdater::databaseInstalled") ||
+      !contains(main_cpp,
+                "callsign_database_updater.installedFilePath()") ||
+      !contains(main_cpp,
+                "smoke_test = parser.isSet(smoke_test_option)") ||
+      !contains(main_cpp,
+                "!parser.isSet(smoke_test_option) &&\n"
+                "      callsign_database_updater.managedEnabled()") ||
+      !contains(main_cpp,
+                "callsign_database_updater.checkAndInstallIfDue()")) {
+    return 13;
   }
   return 0;
 }

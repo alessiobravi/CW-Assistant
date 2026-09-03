@@ -80,6 +80,12 @@ decoding hints rather than sharing one assumed contest sequence.
   suggestions must remain visibly separate from raw decoder output and expose
   confidence and list provenance. Absence from a list is never proof of an
   invalid callsign.
+- Permit an explicitly enabled managed offline list to discover provider
+  metadata over HTTPS, check no more than daily unless requested by the
+  operator, and install only a bounded, checksum-matching, structurally valid
+  dataset by atomic replacement. Preserve the last valid cache after every
+  network, validation, interruption, or write failure, and never bundle a
+  provider dataset without redistribution permission.
 - Keep callsign data behind a provider interface. Settings select provider
   roles, precedence, update policy, and credentials so fast offline completion,
   jurisdiction-limited official validation, and optional directory enrichment

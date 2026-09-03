@@ -222,12 +222,33 @@ operator-selected lane receives up to ten seconds for initial acquisition.
 Bursts that never fill one complete eight-second window produce no local-model
 text; the deterministic decoder remains available for those shorter signals.
 
-**Local callsign suggestions** accepts an operator-supplied N1MM-compatible
-`master.scp` or Call History text export. The file must be readable, non-empty,
-and no larger than 32 MiB; import is capped at one million unique calls and
-ignores comments, directives, duplicates, overlong lines, and structurally
-invalid calls. Selection is profile-persistent. **Reload local file** rereads
-the file after an external update. Nothing is downloaded or queried online.
+**Local callsign suggestions** can use either an operator-selected
+N1MM-compatible `master.scp` or Call History text export, or a managed copy of
+`MASTER.SCP` downloaded directly from the Super Check Partial (SCP) Database.
+Managed use and automatic updates are independently optional. Automatic checks
+run no more than once per day, honor the provider's cache validators, and
+download only a changed file. **Check for updates** performs the same safe check
+on demand. The source, release, last-check time, and current state remain
+visible in Settings.
+
+Downloaded and selected files must be readable, non-empty, and no larger than
+32 MiB; import is capped at one million unique calls and ignores comments,
+directives, duplicates, overlong lines, and structurally invalid calls. A
+managed download is checked against the provider's advertised SHA-256 identity,
+parsed into a fresh bounded database, and atomically installed only after every
+check passes. A failed, interrupted, malformed, oversized, or implausible
+download never replaces the last valid copy, so decoding can continue offline.
+Until the first managed copy is installed, an already-enabled operator-selected
+file remains the active fallback.
+**Reload local file** rereads an operator-selected file after an external
+update.
+
+Super Check Partial is maintained by W9KKN and is an activity-derived
+contesting aid, not an official callsign register. CW Assistant downloads it at
+runtime from `supercheckpartial.com`; the database is not bundled or
+redistributed with CW Assistant. Update requests identify CW Assistant and its
+version but never send received audio, decoded text, station identity, or a
+callsign query. Absence from SCP never makes a decoded call invalid.
 
 A directory match is eligible only for an already verified CW channel, a
 completed call-shaped transcript span containing at most two `?` characters,
