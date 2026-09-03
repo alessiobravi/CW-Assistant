@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <string>
@@ -23,6 +24,10 @@ int main() {
   const std::size_t end = qml.find("Layout.fillWidth: true\n                                text: modelData.wpm", start);
   if (start == std::string::npos || end == std::string::npos) return 2;
   const std::string transcript = qml.substr(start, end - start);
+  const std::size_t callsign_start = qml.find(
+      "property string callsignEvidenceText:");
+  const std::size_t callsign_end = qml.find(
+      "property string localModelState:", callsign_start);
 
   // Appends may move only the viewport. Moving the TextEdit cursor caused
   // Qt to repeatedly ensure it was visible, disturbing selection and making
@@ -35,7 +40,6 @@ int main() {
       !contains(transcript, "decodedTextArea.selectionEnd") ||
       !contains(transcript, "function applyDecodedText(nextText)") ||
       !contains(qml, "property string displayedDecodedText: rawDecodedText") ||
-      !contains(qml, "property string callsignEvidenceText:") ||
       contains(qml, "Acoustic correction:") ||
       !contains(transcript, "onDisplayedDecodedTextChanged()") ||
       !contains(transcript, "select(Math.min(oldSelectionStart") ||
@@ -43,6 +47,27 @@ int main() {
       !contains(transcript, "function onMovementStarted()") ||
       !contains(transcript, "followTail = false")) {
     return 3;
+  }
+  if (callsign_start == std::string::npos ||
+      callsign_end == std::string::npos ||
+      contains(qml.substr(callsign_start, callsign_end - callsign_start),
+               "localModel") ||
+      !contains(qml, "objectName: \"localModelTranscriptPanel\"") ||
+      !contains(qml, "objectName: \"localModelStateLabel\"") ||
+      !contains(qml, "objectName: \"localModelStatusLabel\"") ||
+      !contains(qml, "objectName: \"localModelTranscriptText\"") ||
+      !contains(qml, "id: localModelTranscriptScroll") ||
+      !contains(qml, "property string localModelStableText:") ||
+      !contains(qml, "property string localModelCallsign:") ||
+      !contains(qml, "text: \"MODEL\"") ||
+      !contains(qml, "sessionCard.localModelCallsign") ||
+      !contains(qml, "function applyStableText(nextText)") ||
+      !contains(qml, "function onLocalModelStateChanged()") ||
+      !contains(qml, "localModelTranscriptScroll.followAppendedText()") ||
+      !contains(qml, "localModelTranscriptScroll.availableWidth") ||
+      !contains(qml, "nextText.indexOf(text)") ||
+      contains(qml, "rawDecodedText + \" \" + modelData.localModelText")) {
+    return 11;
   }
 
   // Keep wrapping width independent of scrollbar visibility, with no
@@ -109,6 +134,28 @@ int main() {
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
       !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
     return 8;
+  }
+
+  const auto settings_path =
+      std::filesystem::path(CWA_MAIN_QML_PATH).parent_path() /
+      "SettingsPane.qml";
+  std::ifstream settings_source(settings_path, std::ios::binary);
+  if (!settings_source) return 9;
+  const std::string settings_qml{
+      std::istreambuf_iterator<char>{settings_source},
+      std::istreambuf_iterator<char>{}};
+  if (!contains(settings_qml, "TabButton { text: \"Decoder\" }") ||
+      !contains(settings_qml, "objectName: \"localDecoderEnabledCheck\"") ||
+      !contains(settings_qml, "appSettings.localDecoderBackendAvailable") ||
+      !contains(settings_qml, "objectName: \"localDecoderModelDialog\"") ||
+      !contains(settings_qml, "appSettings.selectLocalDecoderModel(selectedFile)") ||
+      !contains(settings_qml, "objectName: \"localDecoderMetadataDialog\"") ||
+      !contains(settings_qml, "appSettings.selectLocalDecoderMetadata(selectedFile)") ||
+      !contains(settings_qml, "objectName: \"localDecoderStatusLabel\"") ||
+      !contains(settings_qml, "appSettings.localDecoderStatus") ||
+      !contains(settings_qml, "replayController.localCharacterStatus") ||
+      !contains(settings_qml, "replayController.localCharacterState")) {
+    return 10;
   }
   return 0;
 }

@@ -8,7 +8,11 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <memory>
+#include <unordered_map>
+
 #include "../visualization/spectrum_frame.hpp"
+#include "cwassistant/core/cw_character_decoder.hpp"
 
 namespace cwassistant::desktop {
 
@@ -44,6 +48,10 @@ class ReplayController final : public QObject {
   Q_PROPERTY(int decoderSessionCount READ decoderSessionCount
                  NOTIFY decoderChanged)
   Q_PROPERTY(QVariantMap verificationDiagnostics READ verificationDiagnostics
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(QString localCharacterState READ localCharacterState
+                 NOTIFY decoderChanged)
+  Q_PROPERTY(QString localCharacterStatus READ localCharacterStatus
                  NOTIFY decoderChanged)
   Q_PROPERTY(bool debugCaptureActive READ debugCaptureActive
                  NOTIFY debugCaptureChanged)
@@ -83,6 +91,8 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QVariantList& decoderSessions() const noexcept;
   [[nodiscard]] int decoderSessionCount() const noexcept;
   [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
+  [[nodiscard]] const QString& localCharacterState() const noexcept;
+  [[nodiscard]] const QString& localCharacterStatus() const noexcept;
   [[nodiscard]] bool debugCaptureActive() const noexcept;
   [[nodiscard]] const QString& debugCapturePath() const noexcept;
   [[nodiscard]] double debugCaptureElapsedSeconds() const noexcept;
@@ -101,6 +111,8 @@ class ReplayController final : public QObject {
                              int frame_rate_hz);
   void setSourceMode(int value);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  void configureLocalCharacterDecoder(bool enabled, const QString& model_path,
+                                      const QString& metadata_path);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active,
@@ -165,6 +177,12 @@ class ReplayController final : public QObject {
   void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);
   void liveDebugCaptureStopRequested();
+  void localCharacterDecoderConfigureRequested(bool enabled,
+                                               const QString& model_path,
+                                               const QString& metadata_path);
+  void replayCharacterFrontendEnabledRequested(bool enabled);
+  void liveCharacterFrontendEnabledRequested(bool enabled);
+  void localCharacterResetRequested();
 
  private:
   void setStatus(QString status);
@@ -180,6 +198,8 @@ class ReplayController final : public QObject {
   QObject* audio_capture_worker_{nullptr};
   QThread audio_dsp_thread_;
   QObject* audio_dsp_worker_{nullptr};
+  QThread character_inference_thread_;
+  QObject* character_inference_worker_{nullptr};
   QString source_name_;
   QString status_text_{QStringLiteral("Select Start live RX to begin receiving audio")};
   bool source_loaded_{false};
@@ -207,6 +227,11 @@ class ReplayController final : public QObject {
   QVariantList decoder_sessions_;
   QList<qulonglong> decoder_session_order_;
   QVariantMap verification_diagnostics_;
+  std::unordered_map<std::uint64_t,
+                     cwassistant::core::CwCharacterConsensusMerger>
+      local_character_consensus_;
+  QString local_character_state_{QStringLiteral("disabled")};
+  QString local_character_status_{QStringLiteral("Local model disabled.")};
   bool debug_capture_active_{false};
   QString debug_capture_path_;
   double debug_capture_elapsed_seconds_{0.0};

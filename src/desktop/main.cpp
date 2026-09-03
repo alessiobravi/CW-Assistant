@@ -72,9 +72,16 @@ int main(int argc, char* argv[]) {
     replay_controller.setDecodedSignalTimeoutSeconds(
         settings.decodedSignalTimeoutSeconds());
   };
+  const auto apply_local_character_decoder = [&settings,
+                                               &replay_controller] {
+    replay_controller.configureLocalCharacterDecoder(
+        settings.localDecoderEnabled(), settings.localDecoderModelPath(),
+        settings.localDecoderMetadataPath());
+  };
   apply_spectrum_processing();
   apply_radio_frequency();
   apply_decoded_signal_timeout();
+  apply_local_character_decoder();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   QObject::connect(
@@ -98,6 +105,10 @@ int main(int argc, char* argv[]) {
         replay_controller.setAudioInputSelection(
             settings.audioInputId(), settings.audioInputDisplayName());
       });
+  QObject::connect(
+      &settings,
+      &cwassistant::desktop::AppSettings::localDecoderConfigurationCommitted,
+      &replay_controller, apply_local_character_decoder);
   qmlRegisterType<cwassistant::desktop::SpectrumWaterfallItem>(
       "CWAssistant", 1, 0, "SpectrumWaterfall");
   QQmlApplicationEngine engine;

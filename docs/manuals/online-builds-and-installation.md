@@ -13,6 +13,12 @@ and uploads one artifact for each platform:
 - macOS Sonoma 14 or newer, Apple silicon
 - macOS Sonoma 14 or newer, Intel x64
 
+Hosted packages include the CPU-only ONNX Runtime needed by the optional local
+character-refinement decoder. No decoding model or model metadata is bundled or
+downloaded; the Decoder settings page accepts compatible operator-supplied
+files stored on the local machine. Packages include the runtime's MIT license
+and third-party notices.
+
 For the simplest download, open the repository's root
 [`binaries/`](../../binaries/README.md) index. It points to stable asset names in
 the **Continuous development builds** prerelease and includes a machine-readable

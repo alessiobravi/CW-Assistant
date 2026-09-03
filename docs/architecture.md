@@ -73,8 +73,9 @@ The decoder uses an explainable semi-Markov timing path and now has an
 experimental optional boundary for compact causal learned key/CW likelihoods.
 The learned component does not emit text: the same dependency-free timing
 lattice retains Morse alternatives, UNKNOWN states, provenance, and the stable
-prefix for deterministic and learned evidence. No model or inference runtime is
-bundled until held-out receiver and cross-platform resource gates pass. A
+prefix for deterministic and learned evidence. No trained likelihood model is
+bundled until held-out receiver and cross-platform resource gates pass; the
+generic optional runtime described below carries no model. A
 bounded rolling buffer permits
 delayed multi-hypothesis rescoring, joint co-channel separation, and
 conservative strongest-track interference cancellation without delaying live
@@ -82,6 +83,16 @@ capture. Context and callsign sources can re-rank alternatives but remain
 distinct from acoustic output. See
 [High-accuracy CW decoder strategy](decoder-strategy.md) for the pass model,
 resource limits, training corpus, and benchmark gates.
+
+The desktop may also compile an optional ONNX character-refinement adapter.
+This is a separate downstream observer, not the learned-likelihood component
+above. A bounded bank prepares 30–50 Hz lanes for at most four verified,
+Morse-likely, or manually selected tracks. Eight-second overlapping windows are
+coalesced into a bounded inference queue on its own thread; timestamp consensus
+rejects stale generations and exposes an append-only, separately labeled local
+transcript. The adapter cannot affect channel verification, carrier lifetime,
+raw decoder text, or transmission. Models and metadata are selected from local
+files and are never bundled or fetched by the application.
 
 The first dependency-free ambiguity layer retains bounded, timestamped
 mark/gap observations and emits N-best acoustic segmentations with explicit

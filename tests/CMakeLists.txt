@@ -2,6 +2,12 @@ add_executable(cwa_core_tests core_tests.cpp)
 target_link_libraries(cwa_core_tests PRIVATE cwa_core)
 add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 
+add_executable(cwa_character_refinement_tests
+  cw_character_refinement_tests.cpp)
+target_link_libraries(cwa_character_refinement_tests PRIVATE cwa_core)
+add_test(NAME cwa_character_refinement_tests
+  COMMAND cwa_character_refinement_tests)
+
 add_executable(cwa_decoder_transcript_qml_test
   desktop/decoder_transcript_qml_test.cpp)
 target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE

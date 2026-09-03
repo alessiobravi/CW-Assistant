@@ -15,6 +15,12 @@ platforms where it is bundled. Optional vendor runtimes and drivers that cannot
 be redistributed stay external, are detected at runtime, and receive operator
 installation guidance.
 
+Hosted desktop packages may include the pinned ONNX Runtime CPU shared library
+under its MIT license to execute an operator-supplied local character model.
+The build installs the matching license and third-party notice beside the
+runtime. CW Assistant does not bundle, download, or redistribute a model or
+model metadata.
+
 Release builds will generate a software bill of materials and third-party
 notices. CI will add automated license-policy checks after dependency manifests
 are introduced; a human review remains required for new licenses and exceptions.

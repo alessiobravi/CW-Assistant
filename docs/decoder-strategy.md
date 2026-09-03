@@ -114,7 +114,7 @@ length, mark/gap duration distributions, character and word spacing, and
 manual-keying variance. This gives a low-resource baseline that can explain why
 a character was selected and can abstain instead of inventing text.
 
-The optional learned path is deliberately limited to acoustic evidence: compare
+The primary learned-likelihood path is deliberately limited to acoustic evidence: compare
 a causal depthwise temporal convolution network and compact causal recurrent
 models. Its inputs are physically scaled narrowband log energy,
 phase/frequency error, side-channel contrast, and causal envelope features; it
@@ -131,12 +131,32 @@ GRU, reports frame calibration plus transition excess and implausibly short
 runs, checks streaming ONNX export equivalence, and can infer from resampled
 mono PCM16 WAV input. Early experiments proved that aggregate frame metrics can
 hide unusable envelope fragmentation, so temporal topology and downstream
-character accuracy are mandatory gates. No learned artifact or inference
-runtime is bundled with the application yet.
+character accuracy are mandatory gates. No learned-likelihood artifact is
+bundled with the application; the generic optional runtime below carries no
+model.
 The first target is at most two million INT8 parameters, a bounded state cache,
 and CPU-only operation. This is a design budget to benchmark, not a performance
 claim. Model choice will be made from the character-error-rate/resource Pareto
 frontier rather than architecture popularity.
+
+An additional optional character-refinement boundary is now implemented for
+local operator-supplied ONNX models. It does not replace that primary design.
+At most four verified, Morse-likely, or manually selected tracks are translated
+into independent 30–50 Hz lanes, resampled to a strictly validated feature
+contract, and submitted as overlapping eight-second windows to a dedicated
+CPU inference thread. Pending work is bounded and coalesced per track, so a
+slow model cannot back up capture or DSP queues. Timestamp-aware consensus
+accepts only repeated overlap evidence, rejects stale track/frontend
+generations, and appends stable text without revising its current generation.
+
+This refinement remains downstream of classical CW qualification. Its
+transcript is labeled separately, cannot verify or keep a track alive, cannot
+replace raw acoustic output, and has no TX path. A complete callsign may be
+shown only as a model suggestion when the ordinary track is already verified
+and the existing context/repetition policy accepts stable model text. No model
+is bundled or downloaded; model accuracy, license, and provenance remain the
+operator's responsibility until an independently trained artifact passes the
+published corpus gates.
 
 ## Multiple-pass weak-signal decode
 

@@ -8,6 +8,22 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Added an optional, CPU-only local character-refinement decoder for
+  operator-supplied ONNX models and metadata. Up to four verified,
+  Morse-likely, or manually selected tracks receive independent 30–50 Hz
+  lanes; eight-second overlapping feature windows run on a bounded,
+  coalescing inference worker and timestamp consensus produces a separate
+  append-only transcript. Model text cannot verify a stream, replace raw
+  decoder text, or initiate transmission. Repeated/context-supported complete
+  calls may appear as an explicitly marked model suggestion after ordinary CW
+  verification. Bounded silence grace preserves slow manual word gaps, while
+  reset/reconfiguration cancels stale inference and clears retained card text.
+- Added strict optional ONNX Runtime 1.28.2 packaging for native Windows,
+  Linux, and macOS builds, including platform runtime layout, license/notices,
+  model/metadata/tensor validation, malformed-output bounds, and deterministic
+  enabled/disabled integration tests. No character model is bundled or
+  downloaded by the application.
+
 - Added an independently implemented experimental CW likelihood toolchain:
   deterministic synthetic receiver audio with exact key-run labels and
   checksummed leakage-safe splits, a compact stateful causal GRU that predicts

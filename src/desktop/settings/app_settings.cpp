@@ -3,6 +3,7 @@
 #include <QSettings>
 #include <QSerialPortInfo>
 #include <QAudioDevice>
+#include <QFileInfo>
 #include <QMediaDevices>
 #include <QRegularExpression>
 #include <QtGlobal>
@@ -370,6 +371,34 @@ bool AppSettings::showGrid() const noexcept { return show_grid_; }
 int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
   return decoded_signal_timeout_seconds_;
 }
+bool AppSettings::localDecoderEnabled() const noexcept {
+  return local_decoder_enabled_;
+}
+const QString& AppSettings::localDecoderModelPath() const noexcept {
+  return local_decoder_model_path_;
+}
+const QString& AppSettings::localDecoderMetadataPath() const noexcept {
+  return local_decoder_metadata_path_;
+}
+bool AppSettings::localDecoderBackendAvailable() const noexcept {
+#if defined(CWA_HAVE_ONNX_RUNTIME) && CWA_HAVE_ONNX_RUNTIME
+  return true;
+#else
+  return false;
+#endif
+}
+QString AppSettings::localDecoderStatus() const {
+  if (!localDecoderBackendAvailable()) {
+    return QStringLiteral(
+        "Local model support is unavailable in this build. Deterministic decoding remains active.");
+  }
+  if (!local_decoder_enabled_) return QStringLiteral("Local model disabled.");
+  if (local_decoder_model_path_.isEmpty() ||
+      local_decoder_metadata_path_.isEmpty()) {
+    return QStringLiteral("Select both a model and its metadata file.");
+  }
+  return QStringLiteral("Configuration ready to validate and load.");
+}
 const QString& AppSettings::statusMessage() const noexcept { return status_message_; }
 
 #define CWA_SETTER(Method, Member, Type)            \
@@ -427,6 +456,7 @@ CWA_SETTER(setCwGuideWidthHz, cw_guide_width_hz_, double)
 CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
+CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
 
 #undef CWA_SETTER
 
@@ -450,6 +480,51 @@ void AppSettings::setOwnCallsign(const QString& value) {
     setStatusMessage(QStringLiteral("Own callsign normalized and ready to save."));
     emit settingsChanged();
   }
+}
+
+namespace {
+
+bool selectLocalFile(const QUrl& url, QString& destination) {
+  if (!url.isLocalFile()) return false;
+  const QFileInfo file(url.toLocalFile());
+  if (!file.exists() || !file.isFile() || !file.isReadable()) return false;
+  destination = file.canonicalFilePath();
+  return !destination.isEmpty();
+}
+
+}  // namespace
+
+bool AppSettings::selectLocalDecoderModel(const QUrl& url) {
+  QString path;
+  if (!selectLocalFile(url, path)) {
+    setStatusMessage(QStringLiteral("Select a readable local model file."));
+    return false;
+  }
+  if (assign_if_changed(local_decoder_model_path_, path)) emit settingsChanged();
+  setStatusMessage(QStringLiteral("Local model selected. Apply to save."));
+  return true;
+}
+
+bool AppSettings::selectLocalDecoderMetadata(const QUrl& url) {
+  QString path;
+  if (!selectLocalFile(url, path)) {
+    setStatusMessage(QStringLiteral("Select a readable local metadata file."));
+    return false;
+  }
+  if (assign_if_changed(local_decoder_metadata_path_, path))
+    emit settingsChanged();
+  setStatusMessage(QStringLiteral("Local model metadata selected. Apply to save."));
+  return true;
+}
+
+void AppSettings::clearLocalDecoderModel() {
+  if (assign_if_changed(local_decoder_model_path_, QString{}))
+    emit settingsChanged();
+}
+
+void AppSettings::clearLocalDecoderMetadata() {
+  if (assign_if_changed(local_decoder_metadata_path_, QString{}))
+    emit settingsChanged();
 }
 
 void AppSettings::selectReferenceRig(const int index) {
@@ -730,12 +805,21 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
   settings.setValue(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
                     decoded_signal_timeout_seconds_);
+  settings.setValue(storageKey(QStringLiteral("decoder/localEnabled")),
+                    local_decoder_enabled_);
+  settings.setValue(storageKey(QStringLiteral("decoder/localModelPath")),
+                    local_decoder_model_path_);
+  settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
+                    local_decoder_metadata_path_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
     return false;
   }
   emit settingsChanged();
+  emit localDecoderConfigurationCommitted(
+      local_decoder_enabled_, local_decoder_model_path_,
+      local_decoder_metadata_path_);
   setStatusMessage(QStringLiteral("Settings saved. Transmit remains disarmed."));
   refreshProfiles();
   return true;
@@ -832,6 +916,13 @@ void AppSettings::load() {
   show_grid_ = settings.value(storageKey(QStringLiteral("display/showGrid")), true).toBool();
   decoded_signal_timeout_seconds_ =
       settings.value(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")), 30).toInt();
+  local_decoder_enabled_ = settings
+      .value(storageKey(QStringLiteral("decoder/localEnabled")), false)
+      .toBool();
+  local_decoder_model_path_ = settings
+      .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
+  local_decoder_metadata_path_ = settings
+      .value(storageKey(QStringLiteral("decoder/localMetadataPath"))).toString();
 }
 
 bool AppSettings::completeSetup() {
@@ -876,6 +967,9 @@ bool AppSettings::selectProfile(const QString& profile_name) {
   emit profileSelectionRequiredChanged();
   emit audioInputsChanged();
   emit settingsChanged();
+  emit localDecoderConfigurationCommitted(
+      local_decoder_enabled_, local_decoder_model_path_,
+      local_decoder_metadata_path_);
   setStatusMessage(QStringLiteral("Station profile selected. Transmit remains disarmed."));
   return true;
 }
@@ -912,6 +1006,9 @@ bool AppSettings::createProfile(const QString& profile_name) {
   emit profileSelectionRequiredChanged();
   emit audioInputsChanged();
   emit settingsChanged();
+  emit localDecoderConfigurationCommitted(
+      local_decoder_enabled_, local_decoder_model_path_,
+      local_decoder_metadata_path_);
   setStatusMessage(QStringLiteral("New station profile created. Complete its setup."));
   return true;
 }
@@ -993,6 +1090,9 @@ void AppSettings::resetInMemorySettings() {
   averaging_frames_ = 3;
   show_grid_ = true;
   decoded_signal_timeout_seconds_ = 30;
+  local_decoder_enabled_ = false;
+  local_decoder_model_path_.clear();
+  local_decoder_metadata_path_.clear();
   applyReferenceDefaults(0);
 }
 

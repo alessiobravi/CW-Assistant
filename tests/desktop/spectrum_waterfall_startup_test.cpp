@@ -1,12 +1,19 @@
 #include <QGuiApplication>
 #include <QSGNode>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <iterator>
+#include <numbers>
+#include <span>
+#include <vector>
 
+#include "decoder/local_character_decoder.hpp"
+#include "replay/decoder_channel_model.hpp"
+#include "replay/replay_controller.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
 #include "visualization/waterfall_conditioner.hpp"
-#include "replay/replay_controller.hpp"
-#include "replay/decoder_channel_model.hpp"
 
 namespace {
 
@@ -16,10 +23,165 @@ class TestableSpectrumWaterfallItem final
   using SpectrumWaterfallItem::updatePaintNode;
 };
 
+using CharacterWindow =
+    cwassistant::desktop::CwCharacterFeatureWindowPtr;
+
+std::vector<CharacterWindow> feedFrontend(
+    cwassistant::desktop::LocalCharacterFrontendBank& bank,
+    const std::span<const cwassistant::core::CwTrackDiagnostic> channels,
+    const std::span<const double> tones_hz, const std::size_t block_count,
+    std::uint64_t& sequence, std::uint64_t& timestamp_ns,
+    std::uint64_t& sample_cursor) {
+  constexpr double sample_rate_hz = 3'200.0;
+  constexpr std::size_t samples_per_block = 3'200U;
+  std::vector<CharacterWindow> windows;
+  for (std::size_t block_index = 0; block_index < block_count;
+       ++block_index) {
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream = {.kind = cwassistant::core::StreamKind::Audio,
+                    .sample_rate_hz = sample_rate_hz,
+                    .center_frequency_hz = 0.0,
+                    .channel_count = 1};
+    block.sequence = sequence++;
+    block.timestamp_ns = timestamp_ns;
+    block.sample_count = samples_per_block;
+    for (std::size_t sample = 0; sample < samples_per_block; ++sample) {
+      double value = 0.0;
+      for (const double tone_hz : tones_hz) {
+        value += std::sin(2.0 * std::numbers::pi * tone_hz *
+                          static_cast<double>(sample_cursor + sample) /
+                          sample_rate_hz);
+      }
+      const double scale = tones_hz.empty()
+          ? 0.0 : 0.4 / static_cast<double>(tones_hz.size());
+      block.samples[sample] = {
+          static_cast<float>(value * scale), 0.0F};
+    }
+    sample_cursor += samples_per_block;
+    timestamp_ns += 1'000'000'000ULL;
+    auto produced = bank.process(block, channels);
+    windows.insert(windows.end(),
+                   std::make_move_iterator(produced.begin()),
+                   std::make_move_iterator(produced.end()));
+  }
+  return windows;
+}
+
+bool testLocalCharacterFrontendBank() {
+  std::uint64_t sequence = 1U;
+  std::uint64_t timestamp_ns = 1'000'000'000ULL;
+  std::uint64_t sample_cursor = 0U;
+  const std::array<double, 5> tones{600.0, 700.0, 800.0, 900.0, 1'000.0};
+  std::array<cwassistant::core::CwTrackDiagnostic, 5> channels{};
+  channels[0] = {.id = 101, .frequency_hz = 600.0, .snr_db = 2.0F,
+                 .verification_state = cwassistant::core::CwTrackState::Verified,
+                 .active = true};
+  channels[1] = {.id = 102, .frequency_hz = 700.0, .snr_db = 12.0F,
+                 .active = true, .operator_selected = true};
+  channels[2] = {.id = 103, .frequency_hz = 800.0, .snr_db = 30.0F,
+                 .active = true};
+  channels[3] = {.id = 104, .frequency_hz = 900.0, .snr_db = 30.0F,
+                 .verification_state = cwassistant::core::CwTrackState::Verified,
+                 .active = false};
+  channels[4] = {.id = 105, .frequency_hz = 1'000.0, .snr_db = 5.0F,
+                 .verification_state =
+                     cwassistant::core::CwTrackState::MorseLikely,
+                 .active = true};
+
+  cwassistant::desktop::LocalCharacterFrontendBank bank{2U};
+  if (!feedFrontend(bank, channels, tones, 9U, sequence, timestamp_ns,
+                    sample_cursor).empty()) {
+    return false;
+  }
+  bank.setEnabled(true);
+
+  cwassistant::desktop::LocalCharacterFrontendBank ineligible_bank{2U};
+  ineligible_bank.setEnabled(true);
+  std::array<cwassistant::core::CwTrackDiagnostic, 2> ineligible{
+      channels[2], channels[3]};
+  if (!feedFrontend(ineligible_bank, ineligible, tones, 9U, sequence,
+                    timestamp_ns, sample_cursor).empty()) {
+    return false;
+  }
+  ineligible[0].operator_selected = true;
+  if (!feedFrontend(ineligible_bank, ineligible, tones, 1U, sequence,
+                    timestamp_ns, sample_cursor).empty()) {
+    return false;
+  }
+
+  const auto first = feedFrontend(bank, channels, tones, 9U, sequence,
+                                  timestamp_ns, sample_cursor);
+  if (first.size() != 2U) return false;
+  const auto find_track = [](const auto& windows, const std::uint64_t id) {
+    return std::find_if(windows.begin(), windows.end(),
+                        [id](const CharacterWindow& window) {
+                          return window && window->track.track_id == id;
+                        });
+  };
+  const auto first_verified = find_track(first, 101U);
+  const auto first_selected = find_track(first, 102U);
+  if (first_verified == first.end() || first_selected == first.end() ||
+      find_track(first, 103U) != first.end() ||
+      find_track(first, 104U) != first.end() ||
+      find_track(first, 105U) != first.end()) {
+    return false;
+  }
+  const auto first_key = (*first_verified)->track;
+
+  auto silent_channels = channels;
+  for (auto& channel : silent_channels) channel.active = false;
+  const auto slow_word_gap = feedFrontend(
+      bank, silent_channels, tones, 1U, sequence, timestamp_ns, sample_cursor);
+  const auto gap_verified = find_track(slow_word_gap, 101U);
+  if (gap_verified == slow_word_gap.end() ||
+      (*gap_verified)->track != first_key) {
+    return false;
+  }
+
+  cwassistant::core::RealtimeSampleBlock empty_block;
+  for (std::size_t index = 0; index < 501U; ++index) {
+    empty_block.sequence = sequence++;
+    empty_block.timestamp_ns = timestamp_ns;
+    timestamp_ns += 1'000'000ULL;
+    if (!bank.process(empty_block, {}).empty()) return false;
+  }
+  const auto reacquired = feedFrontend(bank, channels, tones, 9U, sequence,
+                                       timestamp_ns, sample_cursor);
+  const auto reacquired_verified = find_track(reacquired, 101U);
+  if (reacquired_verified == reacquired.end() ||
+      (*reacquired_verified)->track.track_generation !=
+          first_key.track_generation ||
+      (*reacquired_verified)->track.frontend_generation ==
+          first_key.frontend_generation) {
+    return false;
+  }
+
+  bank.reset();
+  const auto reset_windows = feedFrontend(bank, channels, tones, 9U, sequence,
+                                          timestamp_ns, sample_cursor);
+  const auto reset_verified = find_track(reset_windows, 101U);
+  if (reset_verified == reset_windows.end() ||
+      (*reset_verified)->track.track_generation == first_key.track_generation) {
+    return false;
+  }
+
+  cwassistant::desktop::LocalCharacterFrontendBank likely_bank{1U};
+  likely_bank.setEnabled(true);
+  const std::array<cwassistant::core::CwTrackDiagnostic, 1> likely_track{
+      channels[4]};
+  const std::array<double, 1> likely_tone{1'000.0};
+  const auto likely_windows = feedFrontend(
+      likely_bank, likely_track, likely_tone, 9U, sequence, timestamp_ns,
+      sample_cursor);
+  return likely_windows.size() == 1U && likely_windows.front() &&
+      likely_windows.front()->track.track_id == 105U;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  if (!testLocalCharacterFrontendBank()) return 21;
   cwassistant::core::CwChannelSnapshot selected_snapshot{
       .id = 5,
       .frequency_hz = 850.0,
@@ -47,16 +209,41 @@ int main(int argc, char* argv[]) {
       !selected_model.value(QStringLiteral("provisionalText")).toString().isEmpty() ||
       !selected_model.value(QStringLiteral("elements")).toString().isEmpty() ||
       !selected_model.value(QStringLiteral("callsign")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("localModelText")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("localModelCallsign")).toString().isEmpty() ||
+      selected_model.value(QStringLiteral("localModelState")).toString() !=
+          QStringLiteral("unavailable") ||
       !selected_model.value(QStringLiteral("characterEvidence")).toList().isEmpty() ||
       selected_model.value(QStringLiteral("color")).toString() !=
           QStringLiteral("#8d9aaa")) {
     return 18;
   }
+  const cwassistant::desktop::LocalDecoderChannelPresentation local_decoder{
+      .channel_id = 5,
+      .state = cwassistant::desktop::LocalDecoderPresentationState::Ready,
+      .stable_text = QStringLiteral("CQ TEST "),
+      .status = QStringLiteral("Stable local transcript"),
+  };
+  selected_model =
+      cwassistant::desktop::decoderChannelModel(
+          std::span<const cwassistant::core::CwChannelSnapshot>{
+              &selected_snapshot, 1},
+          std::span<const cwassistant::desktop::LocalDecoderChannelPresentation>{
+              &local_decoder, 1})
+          .front().toMap();
+  if (!selected_model.value(QStringLiteral("localModelText")).toString().isEmpty() ||
+      !selected_model.value(QStringLiteral("localModelCallsign")).toString().isEmpty() ||
+      selected_model.value(QStringLiteral("localModelState")).toString() !=
+          QStringLiteral("ready")) {
+    return 20;
+  }
   selected_snapshot.verified_cw = true;
   selected_model =
       cwassistant::desktop::decoderChannelModel(
           std::span<const cwassistant::core::CwChannelSnapshot>{
-              &selected_snapshot, 1})
+              &selected_snapshot, 1},
+          std::span<const cwassistant::desktop::LocalDecoderChannelPresentation>{
+              &local_decoder, 1})
           .front().toMap();
   if (selected_model.value(QStringLiteral("text")).toString() !=
           QStringLiteral("UNVERIFIED") ||
@@ -64,6 +251,12 @@ int main(int argc, char* argv[]) {
           QStringLiteral("EA1EYL ") ||
       selected_model.value(QStringLiteral("callsign")).toString() !=
           QStringLiteral("IU0LFQ") ||
+      selected_model.value(QStringLiteral("localModelText")).toString() !=
+          QStringLiteral("CQ TEST ") ||
+      selected_model.value(QStringLiteral("localModelState")).toString() !=
+          QStringLiteral("ready") ||
+      selected_model.value(QStringLiteral("localModelStatus")).toString() !=
+          QStringLiteral("Stable local transcript") ||
       selected_model.value(QStringLiteral("characterEvidence")).toList().size() != 1 ||
       selected_model.value(QStringLiteral("color")).toString() ==
           QStringLiteral("#8d9aaa")) {

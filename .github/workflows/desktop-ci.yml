@@ -47,6 +47,7 @@ jobs:
             portable_archive: false
             windows_installer: true
             debian_package: false
+            ort_arch: x64
           - name: Linux x64 / GCC
             os: ubuntu-24.04
             qt-arch: linux_gcc_64
@@ -57,6 +58,7 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: true
+            ort_arch: x64
           - name: macOS ARM64 / Apple Clang
             os: macos-15
             qt-arch: clang_64
@@ -67,6 +69,7 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: false
+            ort_arch: arm64
           - name: macOS x64 / Apple Clang
             os: macos-15-intel
             qt-arch: clang_64
@@ -77,12 +80,247 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: false
+            ort_arch: x86_64
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+    env:
+      CWA_ONNXRUNTIME_VERSION: 1.28.2
+      CWA_ONNXRUNTIME_COMMIT: 33ca9628233dc8f002435e868d4c2e9f82766ca1
+      CWA_ONNXRUNTIME_ROOT: ${{ github.workspace }}/.dependencies/onnxruntime-root
+      CWA_ONNXRUNTIME_SOURCE: ${{ github.workspace }}/.dependencies/onnxruntime-source
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+      - name: Restore pinned ONNX Runtime CPU build
+        id: cache_onnxruntime
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CWA_ONNXRUNTIME_ROOT }}
+          key: cwa-onnxruntime-${{ env.CWA_ONNXRUNTIME_VERSION }}-${{ env.CWA_ONNXRUNTIME_COMMIT }}-${{ runner.os }}-${{ matrix.ort_arch }}-cpu-shared-telemetry-off-v1
+      - name: Check out pinned ONNX Runtime source
+        id: checkout_onnxruntime
+        if: steps.cache_onnxruntime.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: microsoft/onnxruntime
+          ref: ${{ env.CWA_ONNXRUNTIME_COMMIT }}
+          path: .dependencies/onnxruntime-source
+          fetch-depth: 1
+          submodules: recursive
+      - name: Build pinned ONNX Runtime CPU library
+        id: build_onnxruntime_posix
+        if: steps.cache_onnxruntime.outputs.cache-hit != 'true' && runner.os != 'Windows'
+        shell: bash
+        working-directory: ${{ env.CWA_ONNXRUNTIME_SOURCE }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${CWA_ONNXRUNTIME_COMMIT}"
+          build_arguments=(
+            --config Release
+            --update
+            --build
+            --build_shared_lib
+            --parallel 2
+            --skip_tests
+            --skip_submodule_sync
+            --compile_no_warning_as_error
+            --cmake_extra_defines
+            onnxruntime_USE_TELEMETRY=OFF
+            onnxruntime_BUILD_UNIT_TESTS=OFF
+          )
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            build_arguments+=(
+              --osx_arch "${{ matrix.ort_arch }}"
+              --apple_deploy_target 14.0
+            )
+          fi
+          ./build.sh "${build_arguments[@]}"
+      - name: Build pinned ONNX Runtime CPU library on Windows
+        id: build_onnxruntime_windows
+        if: steps.cache_onnxruntime.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        working-directory: ${{ env.CWA_ONNXRUNTIME_SOURCE }}
+        run: |
+          $sourceCommit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or
+              $sourceCommit -ne "${env:CWA_ONNXRUNTIME_COMMIT}") {
+            throw 'The ONNX Runtime source checkout is not the pinned commit.'
+          }
+          & .\build.bat `
+            --config Release `
+            --update `
+            --build `
+            --build_shared_lib `
+            --parallel 2 `
+            --skip_tests `
+            --skip_submodule_sync `
+            --compile_no_warning_as_error `
+            --cmake_generator "Visual Studio 17 2022" `
+            --cmake_extra_defines `
+              onnxruntime_USE_TELEMETRY=OFF `
+              onnxruntime_BUILD_UNIT_TESTS=OFF
+          if ($LASTEXITCODE -ne 0) {
+            throw "The pinned ONNX Runtime build failed with exit code $LASTEXITCODE."
+          }
+      - name: Normalize pinned ONNX Runtime distribution
+        id: normalize_onnxruntime_posix
+        if: steps.cache_onnxruntime.outputs.cache-hit != 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          telemetry_caches=()
+          while IFS= read -r cache_path; do
+            telemetry_caches+=("${cache_path}")
+          done < <(find "${CWA_ONNXRUNTIME_SOURCE}/build" -name CMakeCache.txt \
+            -exec grep -lFx 'onnxruntime_USE_TELEMETRY:BOOL=OFF' {} +)
+          test "${#telemetry_caches[@]}" -ge 1
+
+          runtime_pattern='libonnxruntime.so.1.28.2'
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            runtime_pattern='libonnxruntime.1.28.2.dylib'
+          fi
+          runtime_files=()
+          while IFS= read -r runtime_path; do
+            runtime_files+=("${runtime_path}")
+          done < <(find "${CWA_ONNXRUNTIME_SOURCE}/build" -type f \
+            -name "${runtime_pattern}")
+          if [[ "${#runtime_files[@]}" -ne 1 ]]; then
+            echo "Expected one ${runtime_pattern}; found ${#runtime_files[@]}." >&2
+            exit 1
+          fi
+
+          cmake -E make_directory \
+            "${CWA_ONNXRUNTIME_ROOT}/include" \
+            "${CWA_ONNXRUNTIME_ROOT}/lib"
+          cmake -E copy_directory \
+            "${CWA_ONNXRUNTIME_SOURCE}/include/onnxruntime/core/session" \
+            "${CWA_ONNXRUNTIME_ROOT}/include"
+          cmake -E copy "${runtime_files[0]}" \
+            "${CWA_ONNXRUNTIME_ROOT}/lib/${runtime_pattern}"
+
+          provider_files=()
+          while IFS= read -r provider_path; do
+            provider_files+=("${provider_path}")
+          done < <(find "${CWA_ONNXRUNTIME_SOURCE}/build" -type f \
+            \( -name 'libonnxruntime_providers_shared.so' \
+               -o -name 'libonnxruntime_providers_shared.dylib' \))
+          if [[ "${#provider_files[@]}" -gt 1 ]]; then
+            echo "Expected at most one shared provider library; found ${#provider_files[@]}." >&2
+            exit 1
+          fi
+          if [[ "${#provider_files[@]}" -eq 1 ]]; then
+            cmake -E copy "${provider_files[0]}" \
+              "${CWA_ONNXRUNTIME_ROOT}/lib/"
+          fi
+          cmake -E copy \
+            "${CWA_ONNXRUNTIME_SOURCE}/LICENSE" \
+            "${CWA_ONNXRUNTIME_SOURCE}/ThirdPartyNotices.txt" \
+            "${CWA_ONNXRUNTIME_SOURCE}/VERSION_NUMBER" \
+            "${CWA_ONNXRUNTIME_ROOT}/"
+          printf '%s\n' "${CWA_ONNXRUNTIME_COMMIT}" \
+            > "${CWA_ONNXRUNTIME_ROOT}/GIT_COMMIT_ID"
+          printf '%s\n' \
+            "version=${CWA_ONNXRUNTIME_VERSION}" \
+            "commit=${CWA_ONNXRUNTIME_COMMIT}" \
+            "architecture=${{ matrix.ort_arch }}" \
+            'onnxruntime_USE_TELEMETRY=OFF' \
+            > "${CWA_ONNXRUNTIME_ROOT}/BUILD_PROVENANCE"
+      - name: Normalize pinned ONNX Runtime distribution on Windows
+        id: normalize_onnxruntime_windows
+        if: steps.cache_onnxruntime.outputs.cache-hit != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $telemetryCaches = @(
+            Get-ChildItem "${env:CWA_ONNXRUNTIME_SOURCE}/build" -Recurse -Filter CMakeCache.txt |
+              Where-Object {
+                Select-String -Path $_.FullName `
+                  -SimpleMatch 'onnxruntime_USE_TELEMETRY:BOOL=OFF' -Quiet
+              }
+          )
+          if ($telemetryCaches.Count -lt 1) {
+            throw 'The ONNX Runtime build did not record telemetry as disabled.'
+          }
+          $runtimeFiles = @(
+            Get-ChildItem "${env:CWA_ONNXRUNTIME_SOURCE}/build" -Recurse `
+              -File -Filter onnxruntime.dll
+          )
+          $importLibraries = @(
+            Get-ChildItem "${env:CWA_ONNXRUNTIME_SOURCE}/build" -Recurse `
+              -File -Filter onnxruntime.lib
+          )
+          if ($runtimeFiles.Count -ne 1 -or $importLibraries.Count -ne 1) {
+            throw "Expected one runtime DLL and import library; found $($runtimeFiles.Count) and $($importLibraries.Count)."
+          }
+          New-Item -ItemType Directory -Force `
+            "${env:CWA_ONNXRUNTIME_ROOT}/include", `
+            "${env:CWA_ONNXRUNTIME_ROOT}/lib" | Out-Null
+          Copy-Item `
+            "${env:CWA_ONNXRUNTIME_SOURCE}/include/onnxruntime/core/session/*" `
+            "${env:CWA_ONNXRUNTIME_ROOT}/include/" -Recurse
+          Copy-Item $runtimeFiles[0].FullName `
+            "${env:CWA_ONNXRUNTIME_ROOT}/lib/onnxruntime.dll"
+          Copy-Item $importLibraries[0].FullName `
+            "${env:CWA_ONNXRUNTIME_ROOT}/lib/onnxruntime.lib"
+          $providerFiles = @(
+            Get-ChildItem "${env:CWA_ONNXRUNTIME_SOURCE}/build" -Recurse `
+              -File -Filter onnxruntime_providers_shared.dll
+          )
+          if ($providerFiles.Count -gt 1) {
+            throw "Expected at most one shared provider DLL; found $($providerFiles.Count)."
+          }
+          if ($providerFiles.Count -eq 1) {
+            Copy-Item $providerFiles[0].FullName `
+              "${env:CWA_ONNXRUNTIME_ROOT}/lib/onnxruntime_providers_shared.dll"
+          }
+          foreach ($metadataName in @(
+            'LICENSE', 'ThirdPartyNotices.txt', 'VERSION_NUMBER'
+          )) {
+            Copy-Item `
+              "${env:CWA_ONNXRUNTIME_SOURCE}/$metadataName" `
+              "${env:CWA_ONNXRUNTIME_ROOT}/$metadataName"
+          }
+          Set-Content "${env:CWA_ONNXRUNTIME_ROOT}/GIT_COMMIT_ID" `
+            -Value "${env:CWA_ONNXRUNTIME_COMMIT}"
+          @(
+            "version=${env:CWA_ONNXRUNTIME_VERSION}"
+            "commit=${env:CWA_ONNXRUNTIME_COMMIT}"
+            "architecture=${{ matrix.ort_arch }}"
+            'onnxruntime_USE_TELEMETRY=OFF'
+          ) | Set-Content "${env:CWA_ONNXRUNTIME_ROOT}/BUILD_PROVENANCE"
+      - name: Verify pinned ONNX Runtime provenance
+        id: verify_onnxruntime
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(tr -d '\r\n' < "${CWA_ONNXRUNTIME_ROOT}/VERSION_NUMBER")" \
+            = "${CWA_ONNXRUNTIME_VERSION}"
+          test "$(tr -d '\r\n' < "${CWA_ONNXRUNTIME_ROOT}/GIT_COMMIT_ID")" \
+            = "${CWA_ONNXRUNTIME_COMMIT}"
+          tr -d '\r' < "${CWA_ONNXRUNTIME_ROOT}/BUILD_PROVENANCE" \
+            | grep -Fx 'onnxruntime_USE_TELEMETRY=OFF'
+          tr -d '\r' < "${CWA_ONNXRUNTIME_ROOT}/BUILD_PROVENANCE" \
+            | grep -Fx "architecture=${{ matrix.ort_arch }}"
+          test -s "${CWA_ONNXRUNTIME_ROOT}/LICENSE"
+          test -s "${CWA_ONNXRUNTIME_ROOT}/ThirdPartyNotices.txt"
+          test -s "${CWA_ONNXRUNTIME_ROOT}/include/onnxruntime_c_api.h"
+          test -s "${CWA_ONNXRUNTIME_ROOT}/include/onnxruntime_cxx_api.h"
+          case "${RUNNER_OS}" in
+            Windows)
+              test -s "${CWA_ONNXRUNTIME_ROOT}/lib/onnxruntime.dll"
+              test -s "${CWA_ONNXRUNTIME_ROOT}/lib/onnxruntime.lib"
+              ;;
+            macOS)
+              test -s "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.${CWA_ONNXRUNTIME_VERSION}.dylib"
+              test "$(lipo -archs "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.${CWA_ONNXRUNTIME_VERSION}.dylib")" \
+                = "${{ matrix.ort_arch }}"
+              ;;
+            Linux)
+              test -s "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.${CWA_ONNXRUNTIME_VERSION}"
+              file "${CWA_ONNXRUNTIME_ROOT}/lib/libonnxruntime.so.${CWA_ONNXRUNTIME_VERSION}" \
+                | grep -F 'x86-64'
+              ;;
+          esac
       - name: Install Qt
         id: install_qt
         continue-on-error: true
@@ -115,6 +353,8 @@ jobs:
           -DCWA_BUILD_APP=OFF
           -DCWA_BUILD_DESKTOP=ON
           -DCWA_BUILD_TESTS=ON
+          -DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON
+          -DCWA_ONNXRUNTIME_ROOT="${{ env.CWA_ONNXRUNTIME_ROOT }}"
           -DCWA_PACKAGE_REVISION=${{ github.run_number }}
           ${{ matrix.configure-arguments }}
       - name: Build desktop and core tests
@@ -138,12 +378,19 @@ jobs:
           test -s build/cw-assistant-version.txt
           build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
           echo "Expected canonical version: ${build_version}"
+          ort_license_dir=stage/share/doc/cw-assistant/third-party/onnxruntime
+          test -s "${ort_license_dir}/LICENSE"
+          test -s "${ort_license_dir}/ThirdPartyNotices.txt"
+          cmp "${CWA_ONNXRUNTIME_ROOT}/LICENSE" "${ort_license_dir}/LICENSE"
+          cmp "${CWA_ONNXRUNTIME_ROOT}/ThirdPartyNotices.txt" \
+            "${ort_license_dir}/ThirdPartyNotices.txt"
           case "${RUNNER_OS}" in
             Windows)
               installed_version_file=stage/share/doc/cw-assistant/VERSION
               test -s "${installed_version_file}"
               cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -f stage/bin/cw-assistant-desktop.exe
+              test -f stage/bin/onnxruntime.dll
               executable_version="$(powershell.exe -NoProfile -Command \
                 "(Get-Item 'stage/bin/cw-assistant-desktop.exe').VersionInfo.ProductVersion" \
                 | tr -d '\r\n')"
@@ -156,6 +403,8 @@ jobs:
               test -s "${installed_version_file}"
               cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -x "${app_binary}"
+              test -f stage/cw-assistant-desktop.app/Contents/Frameworks/libonnxruntime.1.dylib
+              otool -L "${app_binary}" | grep -F '@rpath/libonnxruntime.1.dylib'
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
               cmake \
                 -DCWA_APP_BUNDLE="$PWD/stage/cw-assistant-desktop.app" \
@@ -167,6 +416,8 @@ jobs:
               test -s "${installed_version_file}"
               cmp build/cw-assistant-version.txt "${installed_version_file}"
               test -x stage/bin/cw-assistant-desktop
+              test -f stage/lib/cw-assistant/libonnxruntime.so.1
+              readelf -d stage/bin/cw-assistant-desktop | grep -F 'libonnxruntime.so.1'
               ;;
           esac
       - name: Smoke-test staged application with native graphics
@@ -255,6 +506,13 @@ jobs:
           CWA_MARKER: ${{ matrix.marker }}
           CWA_QT_RESULT: ${{ steps.install_qt.outcome }}
           CWA_QT_RETRY_RESULT: ${{ steps.install_qt_retry.outcome }}
+          CWA_ORT_CACHE_RESULT: ${{ steps.cache_onnxruntime.outcome }}
+          CWA_ORT_CHECKOUT_RESULT: ${{ steps.checkout_onnxruntime.outcome }}
+          CWA_ORT_BUILD_POSIX_RESULT: ${{ steps.build_onnxruntime_posix.outcome }}
+          CWA_ORT_BUILD_WINDOWS_RESULT: ${{ steps.build_onnxruntime_windows.outcome }}
+          CWA_ORT_NORMALIZE_POSIX_RESULT: ${{ steps.normalize_onnxruntime_posix.outcome }}
+          CWA_ORT_NORMALIZE_WINDOWS_RESULT: ${{ steps.normalize_onnxruntime_windows.outcome }}
+          CWA_ORT_VERIFY_RESULT: ${{ steps.verify_onnxruntime.outcome }}
           CWA_CONFIGURE_RESULT: ${{ steps.configure.outcome }}
           CWA_BUILD_RESULT: ${{ steps.build.outcome }}
           CWA_TEST_RESULT: ${{ steps.test.outcome }}
@@ -270,7 +528,7 @@ jobs:
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_verify=${CWA_WINDOWS_VERIFY_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="ort_cache=${CWA_ORT_CACHE_RESULT} ort_checkout=${CWA_ORT_CHECKOUT_RESULT} ort_build_posix=${CWA_ORT_BUILD_POSIX_RESULT} ort_build_windows=${CWA_ORT_BUILD_WINDOWS_RESULT} ort_normalize_posix=${CWA_ORT_NORMALIZE_POSIX_RESULT} ort_normalize_windows=${CWA_ORT_NORMALIZE_WINDOWS_RESULT} ort_verify=${CWA_ORT_VERIFY_RESULT} qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_verify=${CWA_WINDOWS_VERIFY_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           if [[ "${CWA_QT_RESULT}" == "failure" ]]; then
             qt_log="$(find "${GITHUB_WORKSPACE}" -type f -name aqtinstall.log -exec tail -n 20 {} \; 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${qt_log}" ]]; then

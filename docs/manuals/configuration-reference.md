@@ -198,6 +198,35 @@ per simulated second. The timing corpus also caps its conservative decoder
 state estimate at 256 KiB. These are regression limits for the included corpus,
 not universal RF accuracy claims; real recording coverage remains backlog work.
 
+## Decoder page
+
+Native builds that include the optional local-model backend expose **Settings
+→ Decoder**. Enable **Local character refinement**, then select both a local
+`.onnx` model and its matching JSON metadata file. The application never
+downloads or bundles a character model. Files are validated when **Apply** is
+selected; an incompatible model, tensor contract, or metadata file leaves the
+normal deterministic decoder running and shows an error instead.
+
+The supported feature contract is 3200 Hz audio, FFT length 256, hop length 48,
+and 65 frequency bins covering 400–1200 Hz. Inference is CPU-only and limited
+to four active verified, Morse-likely, or manually selected lanes. The first
+stable output normally needs two overlapping eight-second windows, so it is a
+delayed refinement rather than an instant character display. When processing
+falls behind, older pending windows for the same lane are replaced instead of
+allowing an unbounded queue to interfere with live reception.
+Automatically qualified lanes continue through a bounded two-second silence
+grace so slow manual word gaps do not reset their feature history; an
+operator-selected lane receives up to ten seconds for initial acquisition.
+Bursts that never fill one complete eight-second window produce no local-model
+text; the deterministic decoder remains available for those shorter signals.
+
+Local-model output appears in a separate **LOCAL MODEL** section in the decoder
+card. It never replaces raw text, verifies a stream, keeps a silent stream
+active, or controls transmission. A repeated/context-supported complete call
+may be displayed in the card header with a **MODEL** badge after the ordinary
+signal path has already verified CW. Builds without the optional runtime show
+the setting as unavailable while retaining all deterministic decoding.
+
 ## Station page
 
 **Own station callsign** is stored separately in every station profile. Input is

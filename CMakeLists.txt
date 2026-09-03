@@ -25,6 +25,15 @@ message(STATUS "CW Assistant effective build version: ${CWA_BUILD_VERSION}")
 option(CWA_BUILD_APP "Build the command-line development host" ON)
 option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
 option(CWA_BUILD_TESTS "Build unit tests" ON)
+option(CWA_ENABLE_ONNX_CHARACTER_DECODER
+  "Enable the optional ONNX character-decoder runtime" OFF)
+set(CWA_ONNXRUNTIME_ROOT "" CACHE PATH
+  "Root of a pinned ONNX Runtime CPU distribution")
+
+if(CWA_ENABLE_ONNX_CHARACTER_DECODER)
+  include(cmake/CwaOnnxRuntime.cmake)
+  cwa_configure_onnx_runtime()
+endif()
 
 if(CWA_BUILD_TESTS)
   include(CTest)

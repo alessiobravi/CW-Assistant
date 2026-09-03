@@ -1002,7 +1002,7 @@ ApplicationWindow {
                         required property var modelData
                         required property int index
                         width: decoderChannelList.width
-                        height: 210
+                        height: localModelHasText ? 302 : 258
                         radius: 7
                         color: "#151d27"
                         border.width: modelData.keyDown ? 2 : 1
@@ -1026,6 +1026,17 @@ ApplicationWindow {
                         property string displayedDecodedText: rawDecodedText
                         property string callsignEvidenceText:
                             rawDecodedText + " " + modelData.refinedText
+                        property string localModelState:
+                            modelData.localModelState
+                        property string localModelStatus:
+                            modelData.localModelStatus
+                        property string localModelStableText:
+                            modelData.localModelText
+                        property string localModelCallsign:
+                            modelData.localModelCallsign
+                        property bool localModelHasText:
+                            localModelState === "ready"
+                            && localModelStableText.length > 0
                         property int ownCallMatches: window.exactCallCount(
                             callsignEvidenceText, appSettings.ownCallsign)
                         property int previousOwnCallMatches: 0
@@ -1075,13 +1086,27 @@ ApplicationWindow {
                                     color: modelData.color
                                 }
                                 Label {
-                                    text: modelData.callsign.length > 0
-                                          ? modelData.callsign + "  •  "
+                                    text: (modelData.callsign.length > 0
+                                           ? modelData.callsign
+                                           : sessionCard.localModelCallsign)
+                                          .length > 0
+                                          ? (modelData.callsign.length > 0
+                                             ? modelData.callsign
+                                             : sessionCard.localModelCallsign)
+                                            + "  •  "
                                             + modelData.frequencyLabel
                                           : modelData.frequencyLabel
                                     color: modelData.color
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
+                                }
+                                Label {
+                                    visible: modelData.callsign.length === 0
+                                             && sessionCard.localModelCallsign.length > 0
+                                    text: "MODEL"
+                                    color: "#80cbc4"
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
                                 }
                                 Label {
                                     visible: sessionCard.ownCallMatches > 0
@@ -1234,6 +1259,144 @@ ApplicationWindow {
                                         function onDisplayedDecodedTextChanged() {
                                             decodedTextArea.applyDecodedText(
                                                 sessionCard.displayedDecodedText)
+                                        }
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                objectName: "localModelTranscriptPanel"
+                                Layout.fillWidth: true
+                                Layout.preferredHeight:
+                                    sessionCard.localModelHasText ? 82 : 38
+                                radius: 4
+                                color: "#101820"
+                                border.color: sessionCard.localModelState
+                                              === "error"
+                                              ? "#c75b62" : "#263241"
+                                border.width: 1
+                                ColumnLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 7
+                                    spacing: 3
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        Label {
+                                            text: "LOCAL MODEL"
+                                            color: "#91a0b1"
+                                            font.pixelSize: 10
+                                            font.weight: Font.Bold
+                                        }
+                                        Item { Layout.fillWidth: true }
+                                        Label {
+                                            objectName: "localModelStateLabel"
+                                            text: sessionCard.localModelState.toUpperCase()
+                                            color: sessionCard.localModelState
+                                                   === "error"
+                                                   ? "#ef7d85" : "#8290a0"
+                                            font.pixelSize: 9
+                                        }
+                                    }
+                                    Label {
+                                        objectName: "localModelStatusLabel"
+                                        visible: !sessionCard.localModelHasText
+                                        Layout.fillWidth: true
+                                        text: sessionCard.localModelStatus
+                                        color: "#8290a0"
+                                        font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                    }
+                                    ScrollView {
+                                        id: localModelTranscriptScroll
+                                        visible: sessionCard.localModelHasText
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        clip: true
+                                        property bool followTail: true
+                                        function maximumContentY() {
+                                            if (!contentItem)
+                                                return 0
+                                            return Math.max(
+                                                0, contentItem.contentHeight
+                                                   - contentItem.height)
+                                        }
+                                        function followAppendedText() {
+                                            if (!followTail)
+                                                return
+                                            Qt.callLater(function() {
+                                                if (localModelTranscriptScroll.followTail
+                                                        && localModelTranscriptScroll.contentItem) {
+                                                    localModelTranscriptScroll.contentItem.contentY =
+                                                        localModelTranscriptScroll.maximumContentY()
+                                                }
+                                            })
+                                        }
+                                        ScrollBar.horizontal: ScrollBar {
+                                            policy: ScrollBar.AlwaysOff
+                                        }
+                                        ScrollBar.vertical: ScrollBar {
+                                            policy: ScrollBar.AlwaysOn
+                                        }
+                                        Connections {
+                                            target: localModelTranscriptScroll.contentItem
+                                            function onMovementStarted() {
+                                                localModelTranscriptScroll.followTail = false
+                                            }
+                                            function onMovementEnded() {
+                                                localModelTranscriptScroll.followTail =
+                                                    localModelTranscriptScroll.contentItem.contentY
+                                                    >= localModelTranscriptScroll.maximumContentY() - 2
+                                            }
+                                        }
+                                        TextArea {
+                                            id: localModelTranscriptText
+                                            objectName: "localModelTranscriptText"
+                                            readOnly: true
+                                            selectByMouse: true
+                                            width: localModelTranscriptScroll.availableWidth
+                                            height: Math.max(
+                                                        localModelTranscriptScroll.availableHeight,
+                                                        implicitHeight)
+                                            text: ""
+                                            textFormat: TextEdit.PlainText
+                                            color: "#c8e6df"
+                                            font.pixelSize: 14
+                                            wrapMode: TextEdit.WrapAnywhere
+                                            padding: 0
+                                            background: null
+                                            // Append-only applies within one
+                                            // lane incarnation. A withdrawn
+                                            // or non-prefix value marks a
+                                            // lifecycle reset and must clear
+                                            // stale text from a retained card.
+                                            function applyStableText(nextText) {
+                                                if (sessionCard.localModelState
+                                                        !== "ready"
+                                                        || nextText.length === 0) {
+                                                    text = ""
+                                                    localModelTranscriptScroll.followTail = true
+                                                } else if (nextText.indexOf(text)
+                                                           === 0) {
+                                                    text = nextText
+                                                } else {
+                                                    text = nextText
+                                                    localModelTranscriptScroll.followTail = true
+                                                }
+                                                localModelTranscriptScroll.followAppendedText()
+                                            }
+                                            Component.onCompleted:
+                                                applyStableText(
+                                                    sessionCard.localModelStableText)
+                                            Connections {
+                                                target: sessionCard
+                                                function onLocalModelStableTextChanged() {
+                                                    localModelTranscriptText.applyStableText(
+                                                        sessionCard.localModelStableText)
+                                                }
+                                                function onLocalModelStateChanged() {
+                                                    localModelTranscriptText.applyStableText(
+                                                        sessionCard.localModelStableText)
+                                                }
+                                            }
                                         }
                                     }
                                 }

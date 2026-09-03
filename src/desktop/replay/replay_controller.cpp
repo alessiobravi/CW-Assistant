@@ -16,9 +16,11 @@
 #include <utility>
 
 #include "cwassistant/core/spectrum_analyzer.hpp"
+#include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
+#include "../decoder/local_character_decoder.hpp"
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
@@ -93,6 +95,7 @@ class ReplayWorker final : public QObject {
     source_.stop();
     analyzer_.reset();
     decoder_.reset();
+    character_frontends_.reset();
     started_ = false;
     opened_ = source_.open(path.toStdString(), {});
     if (!opened_) {
@@ -116,6 +119,7 @@ class ReplayWorker final : public QObject {
       }
       analyzer_.reset();
       decoder_.reset();
+      character_frontends_.reset();
       started_ = true;
       emit progress(0.0);
     }
@@ -135,6 +139,7 @@ class ReplayWorker final : public QObject {
     source_.stop();
     analyzer_.reset();
     decoder_.reset();
+    character_frontends_.reset();
     started_ = false;
     emit playbackChanged(false);
     emit progress(0.0);
@@ -173,11 +178,16 @@ class ReplayWorker final : public QObject {
                    config.audio_lower_frequency_hz + 1.0, 96'000.0);
     static_cast<void>(analyzer_.configure(config));
     decoder_.reset();
+    character_frontends_.reset();
   }
 
   void setDecodedSignalTimeoutSeconds(const int seconds) {
     decoder_.configure({.decoded_track_retention_seconds =
                             static_cast<double>(std::clamp(seconds, 5, 120))});
+  }
+
+  void setLocalCharacterFrontendEnabled(const bool enabled) {
+    character_frontends_.setEnabled(enabled);
   }
 
   void selectDecoderFrequency(const double audio_frequency_hz) {
@@ -197,6 +207,9 @@ class ReplayWorker final : public QObject {
   void decoderProduced(const QVariantList& channels);
   void diagnosticsProduced(const QVariantMap& diagnostics);
   void manualDecoderSelected(qulonglong channel_id);
+  void characterWindowProduced(
+      int source_mode,
+      cwassistant::desktop::CwCharacterFeatureWindowPtr window);
   void ended();
 
  private slots:
@@ -218,6 +231,9 @@ class ReplayWorker final : public QObject {
           snapshot.upper_frequency_hz, snapshot.bins_dbfs));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
+    const auto character_tracks = decoder_.allTrackDiagnostics();
+    for (auto& window : character_frontends_.process(block, character_tracks))
+      emit characterWindowProduced(1, std::move(window));
     for (auto& snapshot : snapshots) {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
       std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
@@ -254,12 +270,49 @@ class ReplayWorker final : public QObject {
   cwassistant::core::WavReplaySource source_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
   cwassistant::core::CwChannelBank decoder_;
+  LocalCharacterFrontendBank character_frontends_;
   bool opened_{false};
   bool started_{false};
 };
 
 ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   qRegisterMetaType<SpectrumFrame>();
+  qRegisterMetaType<CwCharacterFeatureWindowPtr>();
+  qRegisterMetaType<CwCharacterHypothesisPtr>();
+  auto* character_worker = new LocalCharacterInferenceWorker;
+  character_inference_worker_ = character_worker;
+  character_worker->moveToThread(&character_inference_thread_);
+  connect(&character_inference_thread_, &QThread::finished, character_worker,
+          &QObject::deleteLater);
+  connect(this, &ReplayController::localCharacterDecoderConfigureRequested,
+          character_worker, &LocalCharacterInferenceWorker::configure);
+  connect(this, &ReplayController::localCharacterResetRequested,
+          character_worker, &LocalCharacterInferenceWorker::discardPending,
+          Qt::DirectConnection);
+  connect(character_worker, &LocalCharacterInferenceWorker::statusChanged,
+          this, [this](const QString& state, const QString& detail) {
+            local_character_state_ = state;
+            local_character_status_ = detail;
+            const bool ready = state == QStringLiteral("ready");
+            if (!ready) local_character_consensus_.clear();
+            emit replayCharacterFrontendEnabledRequested(ready);
+            emit liveCharacterFrontendEnabledRequested(ready);
+            rebuildDecoderModels();
+          });
+  connect(character_worker, &LocalCharacterInferenceWorker::resultReady,
+          this, [this](const int source_mode,
+                       const CwCharacterHypothesisPtr& hypothesis) {
+            if (!hypothesis || source_mode != source_mode_ ||
+                local_character_state_ != QStringLiteral("ready")) return;
+            const auto id = hypothesis->track.track_id;
+            auto [entry, inserted] = local_character_consensus_.try_emplace(id);
+            static_cast<void>(inserted);
+            const auto update = entry->second.process(*hypothesis);
+            if (update.changed) rebuildDecoderModels();
+          });
+  character_inference_thread_.setObjectName(
+      QStringLiteral("Local character inference"));
+  character_inference_thread_.start();
   connect(this, &ReplayController::sourceReset, this,
           &ReplayController::resetDecoder);
   auto* worker = new ReplayWorker;
@@ -276,6 +329,10 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::configure);
   connect(this, &ReplayController::decodedSignalTimeoutRequested, worker,
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
+          worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
+  connect(worker, &ReplayWorker::characterWindowProduced, character_worker,
+          &LocalCharacterInferenceWorker::submit, Qt::DirectConnection);
   connect(this, &ReplayController::manualDecoderFrequencyRequested, worker,
           &ReplayWorker::selectDecoderFrequency);
   connect(worker, &ReplayWorker::opened, this,
@@ -352,6 +409,11 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::configure);
   connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
+          dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
+  connect(dsp_worker, &LiveAudioDspWorker::characterWindowProduced,
+          character_worker, &LocalCharacterInferenceWorker::submit,
+          Qt::DirectConnection);
   connect(this, &ReplayController::liveFrequencyShiftRequested, dsp_worker,
           &LiveAudioDspWorker::shiftTrackedFrequencies);
   connect(this, &ReplayController::liveManualDecoderFrequencyRequested,
@@ -447,6 +509,9 @@ ReplayController::~ReplayController() {
   }
   worker_thread_.quit();
   worker_thread_.wait();
+  emit localCharacterResetRequested();
+  character_inference_thread_.quit();
+  character_inference_thread_.wait();
 }
 
 const QString& ReplayController::sourceName() const noexcept {
@@ -496,6 +561,12 @@ int ReplayController::decoderSessionCount() const noexcept {
 const QVariantMap& ReplayController::verificationDiagnostics() const noexcept {
   return verification_diagnostics_;
 }
+const QString& ReplayController::localCharacterState() const noexcept {
+  return local_character_state_;
+}
+const QString& ReplayController::localCharacterStatus() const noexcept {
+  return local_character_status_;
+}
 bool ReplayController::debugCaptureActive() const noexcept {
   return debug_capture_active_;
 }
@@ -529,6 +600,23 @@ void ReplayController::setAveragingFrames(const int value) {
   averaging_frames_ = clamped;
   emit averagingFramesChanged();
   publishSpectrumConfiguration();
+}
+
+void ReplayController::configureLocalCharacterDecoder(
+    const bool enabled, const QString& model_path,
+    const QString& metadata_path) {
+  emit replayCharacterFrontendEnabledRequested(false);
+  emit liveCharacterFrontendEnabledRequested(false);
+  emit localCharacterResetRequested();
+  local_character_consensus_.clear();
+  local_character_state_ = enabled ? QStringLiteral("loading")
+                                   : QStringLiteral("disabled");
+  local_character_status_ = enabled
+      ? QStringLiteral("Loading and validating the local model…")
+      : QStringLiteral("Local model disabled.");
+  rebuildDecoderModels();
+  emit localCharacterDecoderConfigureRequested(enabled, model_path,
+                                                metadata_path);
 }
 
 void ReplayController::setSpectrumProcessing(
@@ -631,6 +719,24 @@ void ReplayController::rebuildDecoderModels() {
     }
     item.insert(QStringLiteral("sessionOpen"),
                 decoder_session_order_.contains(id));
+    item.insert(QStringLiteral("localModelState"), local_character_state_);
+    item.insert(QStringLiteral("localModelStatus"), local_character_status_);
+    const auto local = local_character_consensus_.find(id);
+    if (item.value(QStringLiteral("verifiedCw")).toBool() &&
+        local != local_character_consensus_.end()) {
+      const auto& stable_text = local->second.stableText();
+      item.insert(QStringLiteral("localModelText"),
+                  QString::fromStdString(stable_text));
+      const auto suggested_callsign =
+          cwassistant::core::CallsignPolicy::best_complete_in_text(stable_text);
+      item.insert(QStringLiteral("localModelCallsign"),
+                  suggested_callsign
+                      ? QString::fromStdString(*suggested_callsign)
+                      : QString{});
+    } else {
+      item.insert(QStringLiteral("localModelText"), QString{});
+      item.insert(QStringLiteral("localModelCallsign"), QString{});
+    }
     decoder_channels_.push_back(item);
     by_id.insert(id, item);
   }
@@ -733,6 +839,8 @@ void ReplayController::resetDecoder() {
   decoder_sessions_.clear();
   decoder_session_order_.clear();
   verification_diagnostics_.clear();
+  local_character_consensus_.clear();
+  emit localCharacterResetRequested();
   emit decoderChanged();
 }
 

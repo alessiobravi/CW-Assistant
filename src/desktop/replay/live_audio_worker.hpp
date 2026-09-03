@@ -19,6 +19,7 @@
 #include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/wav_writer.hpp"
 #include "../visualization/spectrum_frame.hpp"
+#include "../decoder/local_character_decoder.hpp"
 
 #include <fstream>
 
@@ -92,6 +93,7 @@ class LiveAudioDspWorker final : public QObject {
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  void setLocalCharacterFrontendEnabled(bool enabled);
   // Re-centers every currently tracked signal by a known audio-domain shift
   // (the shift implied by an operator retuning the linked radio's RX VFO),
   // so an already-identified signal's tracking follows the retune instead
@@ -117,6 +119,9 @@ signals:
   void manualDecoderSelected(qulonglong channel_id);
   void debugCaptureStateChanged(bool active, const QString& base_path,
                                 double elapsed_seconds, const QString& note);
+  void characterWindowProduced(
+      int source_mode,
+      cwassistant::desktop::CwCharacterFeatureWindowPtr window);
 
  private slots:
   void drain();
@@ -129,6 +134,7 @@ signals:
   QTimer timer_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
   cwassistant::core::CwChannelBank decoder_;
+  LocalCharacterFrontendBank character_frontends_;
 
   cwassistant::core::WavWriter capture_writer_;
   std::ofstream capture_diagnostics_log_;

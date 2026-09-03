@@ -262,11 +262,24 @@ processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
 Development tooling includes an experimental independently trained acoustic
-likelihood model, but released applications do not load it yet. The live binary
-continues to use the deterministic narrowband envelope and timing decoder. A
-learned model will be enabled only after it improves locked receiver recordings
-at character level, preserves no-CW safety, fits the CPU/memory budget on every
-packaged architecture, and keeps the deterministic path available as fallback.
+likelihood model, but released applications do not load that model yet. The
+live primary path continues to use the deterministic narrowband envelope and
+timing decoder. A learned likelihood model will be enabled only after it
+improves locked receiver recordings at character level, preserves no-CW safety,
+fits the CPU/memory budget on every packaged architecture, and keeps the
+deterministic path available as fallback.
+
+Builds with the optional local character backend can additionally run an
+operator-supplied ONNX character model selected under **Settings → Decoder**.
+The application supplies no model and performs no download. Once enabled and
+validated, up to four verified, Morse-likely, or manually selected tracks are
+refined on a CPU worker. The card shows delayed append-only output in a separate
+**LOCAL MODEL** block; the first stable characters normally require two
+overlapping eight-second windows. Raw decoder text remains unchanged. A
+complete call supported by repetition or normal CW context may be shown in the
+header with a **MODEL** badge only after the ordinary path has verified the
+stream. Local-model output cannot verify a carrier, keep it alive, or initiate
+transmission.
 
 Treat `?` as retained acoustic uncertainty, not as a character that an online
 directory has disproved. Acoustic alternatives remain available in diagnostic

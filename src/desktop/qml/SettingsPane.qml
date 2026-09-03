@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Dialogs
 
 Pane {
     id: root
@@ -26,6 +27,7 @@ Pane {
             id: tabs
             Layout.fillWidth: true
             TabButton { text: "Audio" }
+            TabButton { text: "Decoder" }
             TabButton { text: "Radio" }
             TabButton { text: "Keying" }
             TabButton { text: "Display" }
@@ -137,6 +139,91 @@ Pane {
                         wrapMode: Text.WordWrap
                         color: "#f3bd55"
                         text: "DC rejection removes the persistent zero-frequency peak. Software gain is optional and does not alter the operating-system mixer; when automatic gain is disabled, the manual dB value is exact. Automatic bandwidth derives a 100–3000 Hz CW-oriented view from the input sample rate."
+                    }
+                }
+            }
+
+            ScrollView {
+                contentWidth: availableWidth
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 18
+                    rowSpacing: 12
+                    anchors.margins: 22
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Optionally configure a compatible local decoding model. The deterministic decoder remains available and model output cannot control transmission."
+                    }
+                    Label { text: "Local model" }
+                    CheckBox {
+                        objectName: "localDecoderEnabledCheck"
+                        text: "Enable local model refinement"
+                        checked: appSettings.localDecoderEnabled
+                        enabled: appSettings.localDecoderBackendAvailable
+                        onToggled: appSettings.localDecoderEnabled = checked
+                    }
+                    Label { text: "Model file" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        TextField {
+                            objectName: "localDecoderModelPathField"
+                            Layout.fillWidth: true
+                            readOnly: true
+                            text: appSettings.localDecoderModelPath
+                            placeholderText: "No model selected"
+                            ToolTip.visible: hovered && text.length > 0
+                            ToolTip.text: text
+                        }
+                        Button {
+                            objectName: "browseLocalDecoderModelButton"
+                            text: "Browse…"
+                            onClicked: localDecoderModelDialog.open()
+                        }
+                        Button {
+                            text: "Clear"
+                            enabled: appSettings.localDecoderModelPath.length > 0
+                            onClicked: appSettings.clearLocalDecoderModel()
+                        }
+                    }
+                    Label { text: "Metadata file" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        TextField {
+                            objectName: "localDecoderMetadataPathField"
+                            Layout.fillWidth: true
+                            readOnly: true
+                            text: appSettings.localDecoderMetadataPath
+                            placeholderText: "No metadata selected"
+                            ToolTip.visible: hovered && text.length > 0
+                            ToolTip.text: text
+                        }
+                        Button {
+                            objectName: "browseLocalDecoderMetadataButton"
+                            text: "Browse…"
+                            onClicked: localDecoderMetadataDialog.open()
+                        }
+                        Button {
+                            text: "Clear"
+                            enabled: appSettings.localDecoderMetadataPath.length > 0
+                            onClicked: appSettings.clearLocalDecoderMetadata()
+                        }
+                    }
+                    Label { text: "Status" }
+                    Label {
+                        objectName: "localDecoderStatusLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: appSettings.localDecoderBackendAvailable
+                              ? replayController.localCharacterStatus
+                              : appSettings.localDecoderStatus
+                        color: replayController.localCharacterState === "error"
+                               ? "#ef7d85"
+                               : (appSettings.localDecoderBackendAvailable
+                                  ? "#43c6ac" : "#f3bd55")
                     }
                 }
             }
@@ -486,5 +573,23 @@ Pane {
             Label { text: appSettings.statusMessage; color: "#91a0b1"; Layout.fillWidth: true; elide: Text.ElideRight }
             Button { text: "Apply"; highlighted: true; onClicked: appSettings.apply() }
         }
+    }
+
+    FileDialog {
+        id: localDecoderModelDialog
+        objectName: "localDecoderModelDialog"
+        title: "Select local decoder model"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["ONNX models (*.onnx)", "All files (*)"]
+        onAccepted: appSettings.selectLocalDecoderModel(selectedFile)
+    }
+
+    FileDialog {
+        id: localDecoderMetadataDialog
+        objectName: "localDecoderMetadataDialog"
+        title: "Select local decoder metadata"
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["JSON metadata (*.json)", "All files (*)"]
+        onAccepted: appSettings.selectLocalDecoderMetadata(selectedFile)
     }
 }

@@ -2,6 +2,7 @@
 
 #include <QVariantMap>
 
+#include <algorithm>
 #include <array>
 
 namespace cwassistant::desktop {
@@ -16,10 +17,43 @@ constexpr std::array<const char*, 24> kChannelColors{
     "#80cbc4", "#ffcc80", "#9fa8da", "#b0bec5",
 };
 
+QString localDecoderStateName(const LocalDecoderPresentationState state) {
+  switch (state) {
+    case LocalDecoderPresentationState::Unavailable:
+      return QStringLiteral("unavailable");
+    case LocalDecoderPresentationState::Disabled:
+      return QStringLiteral("disabled");
+    case LocalDecoderPresentationState::Loading:
+      return QStringLiteral("loading");
+    case LocalDecoderPresentationState::Ready:
+      return QStringLiteral("ready");
+    case LocalDecoderPresentationState::Error:
+      return QStringLiteral("error");
+  }
+  return QStringLiteral("unavailable");
+}
+
+QString localDecoderDefaultStatus(const LocalDecoderPresentationState state) {
+  switch (state) {
+    case LocalDecoderPresentationState::Unavailable:
+      return QStringLiteral("Unavailable in this build");
+    case LocalDecoderPresentationState::Disabled:
+      return QStringLiteral("Disabled");
+    case LocalDecoderPresentationState::Loading:
+      return QStringLiteral("Loading local decoder");
+    case LocalDecoderPresentationState::Ready:
+      return QStringLiteral("Listening for stable text");
+    case LocalDecoderPresentationState::Error:
+      return QStringLiteral("Local decoder error");
+  }
+  return QStringLiteral("Unavailable in this build");
+}
+
 }  // namespace
 
 QVariantList decoderChannelModel(
-    const std::span<const cwassistant::core::CwChannelSnapshot> channels) {
+    const std::span<const cwassistant::core::CwChannelSnapshot> channels,
+    const std::span<const LocalDecoderChannelPresentation> local_decoder) {
   QVariantList model;
   model.reserve(static_cast<qsizetype>(channels.size()));
   for (const auto& channel : channels) {
@@ -117,6 +151,22 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("callsign"),
                 expose_verified_content
                     ? QString::fromStdString(channel.callsign) : QString{});
+    const auto local = std::find_if(
+        local_decoder.begin(), local_decoder.end(),
+        [&channel](const LocalDecoderChannelPresentation& candidate) {
+          return candidate.channel_id == channel.id;
+        });
+    const auto local_state = local == local_decoder.end()
+        ? LocalDecoderPresentationState::Unavailable : local->state;
+    item.insert(QStringLiteral("localModelState"),
+                localDecoderStateName(local_state));
+    item.insert(QStringLiteral("localModelStatus"),
+                local != local_decoder.end() && !local->status.isEmpty()
+                    ? local->status : localDecoderDefaultStatus(local_state));
+    item.insert(QStringLiteral("localModelText"),
+                expose_verified_content && local != local_decoder.end()
+                    ? local->stable_text : QString{});
+    item.insert(QStringLiteral("localModelCallsign"), QString{});
     item.insert(QStringLiteral("color"),
                 expose_verified_content
                     ? QString::fromLatin1(kChannelColors[

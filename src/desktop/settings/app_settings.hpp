@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <QTimer>
+#include <QUrl>
 
 #include <memory>
 #include <cstdint>
@@ -83,6 +84,11 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames NOTIFY settingsChanged)
   Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
   Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(bool localDecoderEnabled READ localDecoderEnabled WRITE setLocalDecoderEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(QString localDecoderModelPath READ localDecoderModelPath NOTIFY settingsChanged)
+  Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath NOTIFY settingsChanged)
+  Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable CONSTANT)
+  Q_PROPERTY(QString localDecoderStatus READ localDecoderStatus NOTIFY settingsChanged)
   Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
  public:
@@ -159,6 +165,11 @@ class AppSettings final : public QObject {
   [[nodiscard]] int averagingFrames() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
   [[nodiscard]] int decodedSignalTimeoutSeconds() const noexcept;
+  [[nodiscard]] bool localDecoderEnabled() const noexcept;
+  [[nodiscard]] const QString& localDecoderModelPath() const noexcept;
+  [[nodiscard]] const QString& localDecoderMetadataPath() const noexcept;
+  [[nodiscard]] bool localDecoderBackendAvailable() const noexcept;
+  [[nodiscard]] QString localDecoderStatus() const;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -209,6 +220,7 @@ class AppSettings final : public QObject {
   void setAveragingFrames(int value);
   void setShowGrid(bool value);
   void setDecodedSignalTimeoutSeconds(int value);
+  void setLocalDecoderEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -218,6 +230,10 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
+  Q_INVOKABLE bool selectLocalDecoderModel(const QUrl& url);
+  Q_INVOKABLE bool selectLocalDecoderMetadata(const QUrl& url);
+  Q_INVOKABLE void clearLocalDecoderModel();
+  Q_INVOKABLE void clearLocalDecoderMetadata();
   Q_INVOKABLE bool completeSetup();
   Q_INVOKABLE bool selectProfile(const QString& profile_name);
   Q_INVOKABLE bool createProfile(const QString& profile_name);
@@ -239,6 +255,9 @@ class AppSettings final : public QObject {
   void cat4omChanged();
   void radioFrequencyChanged();
   void detectedRadiosChanged();
+  void localDecoderConfigurationCommitted(bool enabled,
+                                          const QString& model_path,
+                                          const QString& metadata_path);
 
  private:
   void load();
@@ -316,6 +335,9 @@ class AppSettings final : public QObject {
   int averaging_frames_{3};
   bool show_grid_{true};
   int decoded_signal_timeout_seconds_{30};
+  bool local_decoder_enabled_{false};
+  QString local_decoder_model_path_;
+  QString local_decoder_metadata_path_;
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

@@ -219,6 +219,7 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
 void LiveAudioDspWorker::start() {
   analyzer_.reset();
   decoder_.reset();
+  character_frontends_.reset();
   cwassistant::core::RealtimeSampleBlock stale;
   while (pipe_->blocks.try_pop(stale)) {
   }
@@ -229,6 +230,7 @@ void LiveAudioDspWorker::stop() {
   timer_.stop();
   analyzer_.reset();
   decoder_.reset();
+  character_frontends_.reset();
   emit diagnosticsProduced(
       verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   if (capture_active_) {
@@ -439,6 +441,11 @@ void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
                           static_cast<double>(std::clamp(seconds, 5, 120))});
 }
 
+void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
+    const bool enabled) {
+  character_frontends_.setEnabled(enabled);
+}
+
 void LiveAudioDspWorker::shiftTrackedFrequencies(const double audio_hz_delta) {
   decoder_.shiftTrackedFrequencies(audio_hz_delta);
 }
@@ -464,6 +471,9 @@ void LiveAudioDspWorker::drain() {
           snapshot.upper_frequency_hz, snapshot.bins_dbfs));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
+    const auto character_tracks = decoder_.allTrackDiagnostics();
+    for (auto& window : character_frontends_.process(block, character_tracks))
+      emit characterWindowProduced(0, std::move(window));
     for (auto& snapshot : snapshots) {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
       std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),

@@ -3,6 +3,25 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 
 qt_standard_project_setup(REQUIRES 6.5)
 
+function(cwa_target_add_local_character_decoder target_name)
+  target_sources(${target_name} PRIVATE
+    decoder/local_character_decoder.cpp
+    decoder/local_character_decoder.hpp)
+  target_include_directories(${target_name} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  if(CWA_ENABLE_ONNX_CHARACTER_DECODER)
+    target_sources(${target_name} PRIVATE
+      decoder/onnx_character_decoder_backend.cpp
+      decoder/onnx_character_decoder_backend.hpp)
+    cwa_target_link_onnx_runtime(${target_name})
+    target_compile_definitions(${target_name} PRIVATE
+      CWA_HAVE_ONNX_RUNTIME=1)
+  else()
+    target_compile_definitions(${target_name} PRIVATE
+      CWA_HAVE_ONNX_RUNTIME=0)
+  endif()
+endfunction()
+
 qt_add_executable(cw-assistant-desktop
   main.cpp
   replay/replay_controller.cpp
@@ -90,6 +109,7 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::SerialPort
   Qt6::WebSockets
 )
+cwa_target_add_local_character_decoder(cw-assistant-desktop)
 target_compile_definitions(cw-assistant-desktop PRIVATE
   CWA_VERSION="${CWA_BUILD_VERSION}")
 
@@ -105,6 +125,7 @@ if(CWA_BUILD_TESTS)
     cwa_core Qt6::Core Qt6::Multimedia)
   target_include_directories(cwa_live_audio_pipeline_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
+  cwa_target_add_local_character_decoder(cwa_live_audio_pipeline_test)
   add_test(NAME cwa_live_audio_pipeline_test
     COMMAND cwa_live_audio_pipeline_test)
   set_tests_properties(cwa_live_audio_pipeline_test PROPERTIES TIMEOUT 15)
@@ -127,6 +148,7 @@ if(CWA_BUILD_TESTS)
     cwa_core Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Quick)
   target_include_directories(cwa_desktop_render_startup_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
+  cwa_target_add_local_character_decoder(cwa_desktop_render_startup_test)
   add_test(NAME cwa_desktop_render_startup_test
     COMMAND cwa_desktop_render_startup_test)
   set_tests_properties(cwa_desktop_render_startup_test PROPERTIES
@@ -150,6 +172,24 @@ if(CWA_BUILD_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_update_checker_test COMMAND cwa_update_checker_test)
   set_tests_properties(cwa_update_checker_test PROPERTIES TIMEOUT 10)
+
+  if(CWA_ENABLE_ONNX_CHARACTER_DECODER)
+    qt_add_executable(cwa_onnx_character_decoder_backend_test
+      ${PROJECT_SOURCE_DIR}/tests/desktop/onnx_character_decoder_backend_test.cpp
+      decoder/onnx_character_decoder_backend.cpp
+      decoder/onnx_character_decoder_backend.hpp)
+    target_link_libraries(cwa_onnx_character_decoder_backend_test PRIVATE
+      cwa_core Qt6::Core)
+    cwa_target_link_onnx_runtime(cwa_onnx_character_decoder_backend_test)
+    target_compile_definitions(cwa_onnx_character_decoder_backend_test PRIVATE
+      CWA_HAVE_ONNX_RUNTIME=1)
+    target_include_directories(cwa_onnx_character_decoder_backend_test PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR})
+    add_test(NAME cwa_onnx_character_decoder_backend_test
+      COMMAND cwa_onnx_character_decoder_backend_test)
+    set_tests_properties(cwa_onnx_character_decoder_backend_test PROPERTIES
+      TIMEOUT 10)
+  endif()
 endif()
 
 include(GNUInstallDirs)
