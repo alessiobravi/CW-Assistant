@@ -539,11 +539,6 @@ void test_cw_channel_bank() {
   {
     CwChannelBank replacement_bank({.empty_track_retention_seconds = 0.5,
                                     .decoded_track_retention_seconds = 10.0,
-                                    // Drives fabricated spectra faster than the
-                                    // detector cadence and asserts the exact
-                                    // replacement/inheritance lifecycle, so
-                                    // cadence decimation is disabled here.
-                                    .detector_frame_interval_seconds = 0.0,
                                     .minimum_spectral_observations = 1,
                                     .minimum_verification_symbols = 0,
                                     .verification_enter_seconds = 0.0,
@@ -615,7 +610,6 @@ void test_cw_channel_bank() {
       replacement_bank.configure({
           .empty_track_retention_seconds = 0.5,
           .decoded_track_retention_seconds = 10.0,
-          .detector_frame_interval_seconds = 0.0,
           .minimum_spectral_observations = 1,
           .minimum_verification_symbols = 20,
           .verification_enter_seconds = 0.0,
@@ -629,7 +623,6 @@ void test_cw_channel_bank() {
       replacement_bank.configure({
           .empty_track_retention_seconds = 0.5,
           .decoded_track_retention_seconds = 10.0,
-          .detector_frame_interval_seconds = 0.0,
           .minimum_spectral_observations = 1,
           .minimum_verification_symbols = 0,
           .verification_enter_seconds = 0.0,
@@ -1292,12 +1285,6 @@ void test_cw_channel_presentation_frequency_model() {
   using namespace cwassistant::core;
   CwChannelBank bank({
       .decoded_track_retention_seconds = 4.0,
-      // This fixture drives fabricated instantaneous spectra and asserts exact
-      // presentation geometry, so detector smoothing is disabled to isolate the
-      // centering/deadband/slew logic. Frame-rate and averaging invariance of
-      // the detector itself is covered separately.
-      .detector_averaging_seconds = 0.0,
-      .detector_frame_interval_seconds = 0.0,
       .minimum_verification_symbols = 1,
       .minimum_key_transitions = 2,
       .minimum_cadence_observations = 1,
@@ -1467,12 +1454,7 @@ void test_cw_channel_presentation_frequency_model() {
   // carrier. Its new association origin is about 58 Hz away from the old
   // biased origin, but the frozen color lease is tied to the robust verified
   // carrier center and must preserve the operator-facing color.
-  // Outlast the verified track's 4 s decoded-signal retention explicitly. The
-  // fixture previously relied on spectral persistence decaying faster than
-  // retention, which only held because decay was counted in frames and this
-  // fixture drives spectra at 100 Hz; persistence is now accrued in elapsed
-  // time, so the expiry this case depends on is stated directly.
-  feed(false, 4'400, carrier_hz + 200.0);
+  feed(false, 2'200, carrier_hz + 200.0);
   for (int repeat = 0; repeat < 3; ++repeat) {
     letter("...", carrier_hz + 200.0);
     letter("---", carrier_hz + 200.0);
@@ -2173,119 +2155,6 @@ void test_cat4om_protocol_contract() {
 
 }  // namespace
 
-// Display settings must never change decoding. Spectrum averaging is a
-// presentation control, and a display line rate that is a multiple of the
-// detector's own cadence must supply the detector with the same evidence.
-// Both were operator-visible defects: raising averaging changed candidate
-// churn by an order of magnitude, and changing the line rate could change the
-// callsign shown for a signal.
-void test_decoder_display_setting_invariance() {
-  using namespace cwassistant::core;
-
-  constexpr double sample_rate = 48'000.0;
-  constexpr double tone_hz = 700.0;
-  constexpr double dot_seconds = 0.06;  // 20 WPM
-  std::vector<float> audio;
-  audio.reserve(static_cast<std::size_t>(sample_rate * 8.0));
-  double phase = 0.0;
-  std::uint32_t noise_state = 0x1234'5678U;
-  const auto emit = [&](const double seconds, const bool keyed) {
-    const auto count = static_cast<std::size_t>(seconds * sample_rate);
-    for (std::size_t index = 0; index < count; ++index) {
-      noise_state = noise_state * 1'103'515'245U + 12'345U;
-      const float noise = 0.002F * (static_cast<float>(
-          (noise_state >> 16U) & 0x7FFFU) / 16'384.0F - 1.0F);
-      phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
-      audio.push_back(keyed
-          ? 0.20F * static_cast<float>(std::sin(phase)) + noise
-          : noise);
-    }
-  };
-  const auto send = [&](const std::string_view elements) {
-    for (std::size_t index = 0; index < elements.size(); ++index) {
-      emit(elements[index] == '-' ? 3.0 * dot_seconds : dot_seconds, true);
-      emit(dot_seconds, false);
-    }
-    emit(2.0 * dot_seconds, false);
-  };
-  emit(0.3, false);
-  for (int repeat = 0; repeat < 6; ++repeat) {
-    send("...");    // S
-    send("---");    // O
-    send("...");    // S
-    emit(4.0 * dot_seconds, false);
-  }
-
-  struct Outcome {
-    std::string text;
-    std::size_t published{0};
-    std::uint64_t verified{0};
-  };
-  const auto replay = [&](const int averaging_frames,
-                          const int frame_rate_hz) {
-    SpectrumAnalyzer analyzer({
-        .averaging_frames = static_cast<std::uint8_t>(averaging_frames),
-        .frame_rate_hz = static_cast<std::uint16_t>(frame_rate_hz),
-        .audio_upper_frequency_hz = 3'000.0});
-    CwChannelBank bank;
-    RealtimeSampleBlock block;
-    block.stream.sample_rate_hz = sample_rate;
-    Outcome outcome;
-    std::vector<std::uint64_t> ids;
-    std::size_t position = 0;
-    std::uint64_t now = 0;
-    while (position < audio.size()) {
-      const std::size_t take = std::min<std::size_t>(1'024,
-                                                     audio.size() - position);
-      block.sample_count = take;
-      block.timestamp_ns = now;
-      for (std::size_t index = 0; index < take; ++index)
-        block.samples[index] = {audio[position + index], 0.0F};
-      for (const auto& snapshot : analyzer.process(block)) {
-        // Production supplies the unaveraged bins; the detector owns its own
-        // smoothing so display averaging cannot reach it.
-        static_cast<void>(bank.updateSpectrum(
-            snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-            snapshot.upper_frequency_hz,
-            snapshot.instantaneous_bins_dbfs));
-      }
-      for (const auto& channel : bank.processSamples(block)) {
-        if (std::find(ids.begin(), ids.end(), channel.id) == ids.end())
-          ids.push_back(channel.id);
-        if (channel.text.size() > outcome.text.size())
-          outcome.text = channel.text;
-      }
-      position += take;
-      now += static_cast<std::uint64_t>(
-          static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
-    }
-    outcome.published = ids.size();
-    outcome.verified = bank.verificationDiagnostics().verified_transitions;
-    return outcome;
-  };
-
-  const Outcome reference = replay(3, 60);
-  expect(!reference.text.empty() && reference.published > 0,
-         "display-invariance fixture decodes a signal at the reference "
-         "averaging and line rate");
-
-  for (const int averaging_frames : {1, 8, 32}) {
-    const Outcome measured = replay(averaging_frames, 60);
-    expect(measured.text == reference.text &&
-               measured.published == reference.published &&
-               measured.verified == reference.verified,
-           "spectrum averaging is a display control and cannot change the "
-           "decoded result");
-  }
-
-  const Outcome doubled_rate = replay(3, 120);
-  expect(doubled_rate.text == reference.text &&
-             doubled_rate.published == reference.published &&
-             doubled_rate.verified == reference.verified,
-         "a display line rate above the detector cadence supplies the same "
-         "evidence and cannot change the decoded result");
-}
-
 int main() {
   test_ring_buffer();
   test_scheduler();
@@ -2296,7 +2165,6 @@ int main() {
   test_operator_selected_cw_probe();
   test_cw_channel_presentation_frequency_model();
   test_cw_channel_bank_implausible_character_distribution();
-  test_decoder_display_setting_invariance();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

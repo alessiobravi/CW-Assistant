@@ -139,15 +139,6 @@ through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
 updates/second. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
 then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
-Detection is deliberately separated from presentation: it reads the unaveraged
-spectrum and applies its own smoothing over a fixed time constant, and it runs
-on its own fixed cadence rather than once per displayed frame. Changing **Avg**
-therefore produces an identical decode, and so does any **Lines / second**
-setting at or above that cadence. A line rate below it supplies the detector
-with fewer observations and can delay acquisition, so keep **Lines / second**
-at 60 or higher while decoding matters. Changing a display control also no
-longer restarts decoding: only a change to the audio reaching the detector —
-processing bandwidth, DC rejection, or gain — resets tracks and transcripts.
 The verified stream marker also remains at a stable 120 Hz presentation width;
 adaptive filter changes are diagnostic and do not resize its clickable area.
 When retained but inactive, its filled area clears and only a short horizontal

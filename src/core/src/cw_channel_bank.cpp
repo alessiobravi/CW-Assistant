@@ -157,16 +157,6 @@ void CwChannelBank::sanitizeConfig() noexcept {
       std::clamp(config_.evidence_rate_hz, 100.0, 2'000.0);
   config_.maximum_tracks =
       std::clamp<std::size_t>(config_.maximum_tracks, 1, 64);
-  if (!std::isfinite(config_.detector_averaging_seconds)) {
-    config_.detector_averaging_seconds = 0.05;
-  }
-  config_.detector_averaging_seconds =
-      std::clamp(config_.detector_averaging_seconds, 0.0, 1.0);
-  if (!std::isfinite(config_.detector_frame_interval_seconds)) {
-    config_.detector_frame_interval_seconds = 1.0 / 60.0;
-  }
-  config_.detector_frame_interval_seconds =
-      std::clamp(config_.detector_frame_interval_seconds, 0.0, 1.0);
   config_.minimum_spectral_observations =
       std::clamp<std::uint16_t>(config_.minimum_spectral_observations, 1, 50);
   config_.minimum_verification_symbols =
@@ -237,102 +227,18 @@ void CwChannelBank::reset() noexcept {
 
 const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     const std::uint64_t timestamp_ns, const double lower_frequency_hz,
-    const double upper_frequency_hz,
-    const std::span<const float> raw_bins_dbfs) {
-  if (raw_bins_dbfs.size() < 3 ||
+    const double upper_frequency_hz, const std::span<const float> bins_dbfs) {
+  if (bins_dbfs.size() < 3 ||
       !std::isfinite(lower_frequency_hz) ||
       !std::isfinite(upper_frequency_hz) ||
       upper_frequency_hz <= lower_frequency_hz) {
     return snapshots_;
   }
 
-  // Detection averages the supplied spectrum here, over a fixed time constant
-  // measured in seconds rather than in frames. Display-side averaging and the
-  // configured display frame rate therefore cannot change which candidates are
-  // discovered, how prominent they appear, or how quickly they persist.
+  last_spectrum_timestamp_ns_ = timestamp_ns;
   last_spectrum_lower_frequency_hz_ = lower_frequency_hz;
   last_spectrum_upper_frequency_hz_ = upper_frequency_hz;
-  last_spectrum_timestamp_ns_ = timestamp_ns;
   spectrum_range_initialized_ = true;
-
-  // Detection runs on its own fixed cadence and consumes exactly one spectrum
-  // frame per tick. Frames supplied faster than that are ignored entirely
-  // rather than folded in, so a display line rate that is a multiple of the
-  // detector rate reproduces the detector rate's result exactly.
-  const double detector_interval_seconds =
-      detector_pass_initialized_ && timestamp_ns > last_detector_pass_ns_
-          ? static_cast<double>(timestamp_ns - last_detector_pass_ns_) /
-                1'000'000'000.0
-          : 0.0;
-  if (detector_pass_initialized_ &&
-      config_.detector_frame_interval_seconds > 0.0 &&
-      detector_interval_seconds <
-          config_.detector_frame_interval_seconds * 0.999) {
-    return snapshots_;
-  }
-  last_detector_pass_ns_ = timestamp_ns;
-  detector_pass_initialized_ = true;
-
-  if (detector_bins_power_.size() != raw_bins_dbfs.size()) {
-    detector_bins_power_.assign(raw_bins_dbfs.size(), 0.0F);
-    detector_bins_dbfs_.assign(raw_bins_dbfs.size(), -200.0F);
-    detector_average_initialized_ = false;
-  }
-  const float averaging_alpha =
-      !detector_average_initialized_ || config_.detector_averaging_seconds <= 0.0
-          ? 1.0F
-          : static_cast<float>(1.0 - std::exp(
-                -std::max(detector_interval_seconds, 0.001) /
-                config_.detector_averaging_seconds));
-  for (std::size_t bin = 0; bin < raw_bins_dbfs.size(); ++bin) {
-    const float level = raw_bins_dbfs[bin];
-    const float power = std::isfinite(level)
-        ? std::pow(10.0F, 0.1F * level) : 0.0F;
-    detector_bins_power_[bin] +=
-        averaging_alpha * (power - detector_bins_power_[bin]);
-    detector_bins_dbfs_[bin] = detector_bins_power_[bin] > 0.0F
-        ? 10.0F * std::log10(detector_bins_power_[bin])
-        : -200.0F;
-  }
-  detector_average_initialized_ = true;
-  const std::span<const float> bins_dbfs{detector_bins_dbfs_};
-
-  // Spectral persistence accrues in wall-clock time and is then expressed in
-  // 60 Hz-equivalent observations, so a track needs the same real evidence at
-  // any display frame rate. The quantum and decay interval reproduce the
-  // previous per-frame behaviour exactly at the default 60 frames per second.
-  constexpr double kObservationQuantumMs = 1'000.0 / 60.0;
-  constexpr double kPersistenceDecayIntervalMs = 500.0;
-  const double frame_interval_ms = detector_interval_seconds > 0.0
-      ? detector_interval_seconds * 1'000.0
-      : kObservationQuantumMs;
-  // One spectrum frame is at most one independent observation however long the
-  // preceding gap was, so a single frame after silence cannot manufacture
-  // persistence. Raising the frame rate above the 60 Hz reference therefore no
-  // longer accelerates qualification; it only subdivides it.
-  const double matched_credit_ms =
-      std::min(frame_interval_ms, kObservationQuantumMs);
-  const double unmatched_credit_ms =
-      std::min(frame_interval_ms, kPersistenceDecayIntervalMs);
-  const auto creditMatchedEvidence = [&](Track& track) {
-    track.unmatched_evidence_credit_ms = 0.0;
-    track.matched_evidence_credit_ms += matched_credit_ms;
-    if (track.matched_evidence_credit_ms >= kObservationQuantumMs) {
-      track.matched_evidence_credit_ms -= kObservationQuantumMs;
-      if (track.spectral_observations <
-          std::numeric_limits<std::uint16_t>::max()) {
-        ++track.spectral_observations;
-      }
-    }
-  };
-  const auto creditUnmatchedEvidence = [&](Track& track) {
-    track.matched_evidence_credit_ms = 0.0;
-    track.unmatched_evidence_credit_ms += unmatched_credit_ms;
-    if (track.unmatched_evidence_credit_ms >= kPersistenceDecayIntervalMs) {
-      track.unmatched_evidence_credit_ms -= kPersistenceDecayIntervalMs;
-      if (track.spectral_observations > 0) --track.spectral_observations;
-    }
-  };
 
   const double bin_width_hz =
       (upper_frequency_hz - lower_frequency_hz) /
@@ -662,7 +568,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     }
     nearest->matched = true;
     nearest->decoder_input_suspended = false;
-    creditMatchedEvidence(*nearest);
+    if (nearest->spectral_observations <
+        std::numeric_limits<std::uint16_t>::max()) {
+      ++nearest->spectral_observations;
+    }
     const double elapsed_seconds = timestamp_ns > nearest->last_frequency_update_ns
         ? static_cast<double>(timestamp_ns - nearest->last_frequency_update_ns) /
               1'000'000'000.0
@@ -714,7 +623,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     if (selected_snr < config_.retention_snr_db) continue;
     track.matched = true;
     track.decoder_input_suspended = false;
-    creditMatchedEvidence(track);
+    if (track.spectral_observations <
+        std::numeric_limits<std::uint16_t>::max()) {
+      ++track.spectral_observations;
+    }
     track.last_detected_ns = timestamp_ns;
     track.last_candidate_match_ns = timestamp_ns;
     track.consecutive_spectrum_misses = 0;
@@ -730,9 +642,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       }
       // Persistence is recent evidence, not a lifetime counter. A slow decay
       // tolerates keyed gaps while ensuring abandoned candidates eventually
-      // lose their admission advantage. The decay is driven by elapsed time so
-      // it matches the accrual rule above at any spectrum frame rate.
-      creditUnmatchedEvidence(track);
+      // lose their admission advantage.
+      if (track.consecutive_spectrum_misses % 30U == 0U &&
+          track.spectral_observations > 0) {
+        --track.spectral_observations;
+      }
       track.drift_hz_per_second *= 0.92;
       if (std::abs(track.drift_hz_per_second) < 0.1)
         track.drift_hz_per_second = 0.0;

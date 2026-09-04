@@ -6,19 +6,6 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-05 — separated presentation settings from detection.
-Measurement showed the spectrum **Avg** control and the display line rate both
-changed decoded output, and that every display change reset the decoder while
-the workspace kept showing stale channels; at one line rate the displayed
-callsign changed. Detection now consumes unaveraged bins with its own
-fixed-time smoothing, runs on its own cadence, accrues spectral persistence
-from elapsed time, and is reset only by a genuine signal-path change. Added a
-core display-invariance regression and a desktop source contract; both fail
-against the previous implementation. Expired unverified candidates fall 60–96 %
-across the available captures. DSP-002 and UI-005 remain active for the wider
-detection and visualization scope; CW-001 and PERF-001 remain active because
-character accuracy and the allocation/CPU profile are unchanged by this slice.
-
 Last reviewed: 2026-09-03 — added capability-gated RX-frequency entry and
 waterfall-edge stepping for linked writable OmniRig/CAT4OM providers. Checked
 actual-RF-to-dial conversion preserves transverter offsets, and the active RX

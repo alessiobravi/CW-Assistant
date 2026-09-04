@@ -463,8 +463,7 @@ void LiveAudioDspWorker::configure(
     const bool automatic_gain, const double gain_db,
     const double automatic_gain_target_dbfs, const bool automatic_bandwidth,
     const double lower_frequency_hz, const double upper_frequency_hz) {
-  const auto previous = analyzer_.config();
-  auto config = previous;
+  auto config = analyzer_.config();
   config.averaging_frames = static_cast<std::uint8_t>(
       std::clamp(averaging_frames, 1, 32));
   config.frame_rate_hz = static_cast<std::uint16_t>(
@@ -480,21 +479,8 @@ void LiveAudioDspWorker::configure(
   config.audio_upper_frequency_hz =
       std::clamp(upper_frequency_hz,
                  config.audio_lower_frequency_hz + 1.0, 96'000.0);
-  // Only a change that alters the audio actually presented to the detector may
-  // discard decoder state. Spectrum averaging and the display frame rate are
-  // presentation settings: resetting on them destroyed every track, transcript
-  // and callsign whenever the operator moved a display slider.
-  const bool signal_path_changed =
-      config.audio_dc_rejection != previous.audio_dc_rejection ||
-      config.audio_automatic_gain != previous.audio_automatic_gain ||
-      config.audio_gain_db != previous.audio_gain_db ||
-      config.audio_automatic_gain_target_dbfs !=
-          previous.audio_automatic_gain_target_dbfs ||
-      config.audio_automatic_bandwidth != previous.audio_automatic_bandwidth ||
-      config.audio_lower_frequency_hz != previous.audio_lower_frequency_hz ||
-      config.audio_upper_frequency_hz != previous.audio_upper_frequency_hz;
   static_cast<void>(analyzer_.configure(config));
-  if (signal_path_changed) decoder_.reset();
+  decoder_.reset();
 }
 
 void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
@@ -537,12 +523,9 @@ void LiveAudioDspWorker::drain() {
     ++drained;
     auto snapshots = analyzer_.process(block);
     for (const auto& snapshot : snapshots) {
-      // Detection consumes the unaveraged bins and applies its own fixed-time
-      // smoothing, so the operator's display averaging cannot change which
-      // signals are discovered or how quickly they qualify.
       static_cast<void>(decoder_.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.bins_dbfs));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
     const auto character_tracks = decoder_.allTrackDiagnostics();
