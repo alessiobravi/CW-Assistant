@@ -440,7 +440,8 @@ class ReplayWorker final : public QObject {
                  const bool automatic_bandwidth,
                  const double lower_frequency_hz,
                  const double upper_frequency_hz) {
-    auto config = analyzer_.config();
+    const auto previous = analyzer_.config();
+    auto config = previous;
     config.averaging_frames = static_cast<std::uint8_t>(
         std::clamp(averaging_frames, 1, 32));
     config.frame_rate_hz = static_cast<std::uint16_t>(
@@ -457,9 +458,23 @@ class ReplayWorker final : public QObject {
     config.audio_upper_frequency_hz =
         std::clamp(upper_frequency_hz,
                    config.audio_lower_frequency_hz + 1.0, 96'000.0);
+    // Presentation settings (averaging, frame rate) must not discard decoder
+    // state; only a change to the audio the detector actually receives may.
+    const bool signal_path_changed =
+        config.audio_dc_rejection != previous.audio_dc_rejection ||
+        config.audio_automatic_gain != previous.audio_automatic_gain ||
+        config.audio_gain_db != previous.audio_gain_db ||
+        config.audio_automatic_gain_target_dbfs !=
+            previous.audio_automatic_gain_target_dbfs ||
+        config.audio_automatic_bandwidth !=
+            previous.audio_automatic_bandwidth ||
+        config.audio_lower_frequency_hz != previous.audio_lower_frequency_hz ||
+        config.audio_upper_frequency_hz != previous.audio_upper_frequency_hz;
     static_cast<void>(analyzer_.configure(config));
-    decoder_.reset();
-    character_frontends_.reset();
+    if (signal_path_changed) {
+      decoder_.reset();
+      character_frontends_.reset();
+    }
   }
 
   void setDecodedSignalTimeoutSeconds(const int seconds) {
@@ -517,9 +532,12 @@ class ReplayWorker final : public QObject {
 
     auto snapshots = analyzer_.process(block);
     for (const auto& snapshot : snapshots) {
+      // Detection consumes the unaveraged bins and applies its own fixed-time
+      // smoothing, so the operator's display averaging cannot change which
+      // signals are discovered or how quickly they qualify.
       static_cast<void>(decoder_.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
     const auto character_tracks = decoder_.allTrackDiagnostics();

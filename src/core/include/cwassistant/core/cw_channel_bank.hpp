@@ -77,6 +77,18 @@ struct CwChannelBankConfig {
   double noise_reference_offset_hz{300.0};
   double evidence_rate_hz{500.0};
   std::size_t maximum_tracks{24};
+  // The detector averages the supplied spectrum itself, over a fixed time
+  // constant, so that display-side averaging and the display frame rate can
+  // never change candidate discovery. Callers should supply unaveraged bins.
+  double detector_averaging_seconds{0.05};
+  // Detection runs on its own fixed cadence. Spectrum frames arriving faster
+  // than this are folded into the detector's average but do not run an extra
+  // detection pass, so raising the display line rate cannot change decoding.
+  // Zero processes every supplied frame.
+  double detector_frame_interval_seconds{1.0 / 60.0};
+  // Spectral persistence is expressed in 60 Hz-equivalent observations and is
+  // accumulated from elapsed time, so a track needs the same wall-clock
+  // evidence regardless of the configured display frame rate.
   std::uint16_t minimum_spectral_observations{3};
   std::uint16_t minimum_verification_symbols{3};
   std::uint16_t minimum_key_transitions{6};
@@ -284,6 +296,11 @@ class CwChannelBank {
     float narrowband_coherence{0.0F};
     std::uint16_t spectral_observations{0};
     std::uint16_t consecutive_spectrum_misses{0};
+    // Elapsed matched/unmatched spectrum time not yet converted into a
+    // 60 Hz-equivalent observation step. Keeping the credit in milliseconds
+    // makes persistence independent of the spectrum frame rate.
+    double matched_evidence_credit_ms{0.0};
+    double unmatched_evidence_credit_ms{0.0};
     std::uint16_t verification_pass_samples{0};
     std::uint16_t verification_fail_samples{0};
     std::uint16_t decoder_rejection_samples{0};
@@ -386,6 +403,14 @@ class CwChannelBank {
   StreamDescriptor stream_{};
   std::uint64_t expected_sample_timestamp_ns_{0};
   std::uint64_t last_spectrum_timestamp_ns_{0};
+  // Detector-owned averaged spectrum. Display averaging is deliberately not an
+  // input to detection; this buffer is smoothed over a fixed time constant so
+  // the same signal produces the same candidates at any display frame rate.
+  std::vector<float> detector_bins_dbfs_;
+  std::vector<float> detector_bins_power_;
+  bool detector_average_initialized_{false};
+  std::uint64_t last_detector_pass_ns_{0};
+  bool detector_pass_initialized_{false};
   double last_spectrum_lower_frequency_hz_{0.0};
   double last_spectrum_upper_frequency_hz_{0.0};
   bool spectrum_range_initialized_{false};

@@ -24,6 +24,29 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Spectrum averaging no longer changes decoding. Detection previously consumed
+  the same display-averaged bins the waterfall uses, so the **Avg** control
+  altered candidate discovery, the decoded text, and the number of published
+  streams. The detector now receives the unaveraged spectrum and applies its
+  own smoothing over a fixed time constant, so every averaging setting produces
+  an identical decode.
+- The display line rate no longer changes decoding. Detection previously
+  advanced once per spectrum frame while its retention timers were measured in
+  seconds, so raising the line rate qualified tracks on less real evidence; on
+  one receiver capture it changed the displayed callsign. Detection now runs on
+  its own fixed cadence and accrues spectral persistence from elapsed time, so
+  any line rate at or above that cadence yields the same result. Rates below it
+  still supply the detector with fewer observations; 60 lines per second or
+  more is recommended while decoding.
+- Adjusting a display control no longer discards decoder state. Both receive
+  workers reset the decoder on every configuration call, so changing averaging
+  or the line rate destroyed all tracks, transcripts and confirmed callsigns
+  while the workspace continued to show the previous contents. Only a change to
+  the audio actually presented to the detector — bandwidth, DC rejection or
+  gain — now resets it.
+- Across the available receiver captures these changes reduce expired
+  unverified candidates by 60–96 % (for example 780 to 143 and 645 to 156),
+  leaving substantially less candidate churn in the bounded track bank.
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
   and the current N-best callsign winner. Two current paths must still agree,
