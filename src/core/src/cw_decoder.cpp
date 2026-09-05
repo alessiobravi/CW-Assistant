@@ -89,6 +89,7 @@ void CwTimingDecoder::reset() noexcept {
   stable_text_.clear(); provisional_text_.clear(); elements_.clear();
   dot_ms_ = 1'200.0 / config_.initial_wpm;
   state_started_ns_ = 0; last_timestamp_ns_ = 0;
+  previous_state_started_ns_ = 0; has_previous_state_ = false;
   last_snr_db_ = 0.0F; key_down_probability_ = 0.0F;
   confidence_ = 0.0F; element_confidence_sum_ = 0.0F;
   timing_confidence_sum_ = 0.0F;
@@ -128,8 +129,17 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   }
 
   const double elapsed_ms = milliseconds(timestamp_ns - last_timestamp_ns_);
+  // Scale evidence smoothing to the element length this hypothesis is
+  // tracking. A single fixed constant cannot serve a 7.5:1 speed range: at
+  // 12 ms it is 8% of a dit at 8 WPM (so receiver noise passes into the
+  // decision) and 60% of a dit at 60 WPM (so short marks are destroyed).
+  // A quarter of the element length measured best across the WPM x SNR
+  // surface: wide enough to integrate receiver noise, narrow enough to keep
+  // a 60 WPM dit resolvable.
+  const double evidence_time_constant_ms = std::clamp(
+      dot_ms_ / 4.0, 2.0, config_.evidence_time_constant_ms * 2.0);
   const float smoothing = static_cast<float>(std::clamp(
-      elapsed_ms / config_.evidence_time_constant_ms, 0.0, 1.0));
+      elapsed_ms / evidence_time_constant_ms, 0.0, 1.0));
   key_down_probability_ +=
       smoothing * (instantaneous_probability - key_down_probability_);
   if (key_down_ && elapsed_ms > 0.0) {
@@ -142,9 +152,34 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   const bool observed_down =
       key_down_ ? key_down_probability_ >= config_.key_off_probability
                 : key_down_probability_ >= config_.key_on_probability;
+  // The smoothed probability crosses its threshold roughly one time constant
+  // after the signal actually changed. Both edges of a completed run shift by
+  // the same amount, so measured run lengths are already correct and must not
+  // be adjusted: the time constant tracks dot_ms_, so compensating a run's two
+  // ends with two different delays would feed the estimate back into itself.
+  // Only a still-open gap is affected, because it is timed against the wall
+  // clock while its start edge was detected late.
+  const double detection_delay_ms = 1.1 * evidence_time_constant_ms;
   bool changed = false;
   if (observed_down != key_down_) {
     const double duration_ms = milliseconds(timestamp_ns - state_started_ns_);
+    // Impulsive noise produces very short excursions. Rejecting them by
+    // duration keeps the amplitude decision free to sit exactly at the edge,
+    // instead of using a wide hysteresis band that mistimes every real
+    // element in order to survive impulses.
+    // A quarter of an element measured best across the accuracy surface and
+    // the hard-negative corpus together: it raises timing quality on real CW
+    // (0.98) while lowering it on irregularly keyed noise (0.44), which is
+    // exactly the separation the verification gate needs.
+#ifndef CWA_MIN_RUN_DOTS
+#define CWA_MIN_RUN_DOTS 0.25
+#endif
+    if (has_previous_state_ && duration_ms < (CWA_MIN_RUN_DOTS) * dot_ms_) {
+      key_down_ = observed_down;
+      state_started_ns_ = previous_state_started_ns_;
+      has_previous_state_ = false;
+      return snapshot(false);
+    }
     if (key_transition_count_ < std::numeric_limits<std::uint32_t>::max())
       ++key_transition_count_;
     if (key_down_) {
@@ -182,7 +217,10 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
         word_space_emitted_ = true; changed = true;
       }
     }
-    key_down_ = observed_down; state_started_ns_ = timestamp_ns;
+    previous_state_started_ns_ = state_started_ns_;
+    has_previous_state_ = true;
+    key_down_ = observed_down;
+    state_started_ns_ = timestamp_ns;
     if (key_down_) {
       mark_probability_sum_ = 0.0F;
       mark_probability_duration_ms_ = 0.0;
@@ -190,7 +228,9 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
       word_space_emitted_ = false;
     }
   } else if (!key_down_) {
-    const double duration_ms = milliseconds(timestamp_ns - state_started_ns_);
+    // The gap actually began one detection delay before it was observed.
+    const double duration_ms =
+        milliseconds(timestamp_ns - state_started_ns_) + detection_delay_ms;
     if (!character_finished_ && !elements_.empty() &&
         duration_ms >= config_.character_gap_dots * dot_ms_) {
       finishCharacter(); changed = true;
@@ -470,9 +510,14 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
       hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
       changed = changed || hypothesis.update.changed;
     }
-    observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
-    observeLattice(hypotheses_.front().update.key_down,
-                   hypotheses_.front().update.key_down_probability,
+    // Each hypothesis now smooths evidence against its own element length,
+    // so their key decisions genuinely differ. Cadence and lattice evidence
+    // must follow the current presentation leader rather than the first
+    // seeded hypothesis, which is the slowest one in the bank.
+    observeCadence(hypotheses_[leader_index_].update.key_down,
+                   timestamp_ns);
+    observeLattice(hypotheses_[leader_index_].update.key_down,
+                   hypotheses_[leader_index_].update.key_down_probability,
                    timestamp_ns);
     const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
@@ -506,9 +551,14 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
     changed = changed || hypothesis.update.changed;
   }
-  observeCadence(hypotheses_.front().update.key_down, timestamp_ns);
-  observeLattice(hypotheses_.front().update.key_down,
-                 hypotheses_.front().update.key_down_probability,
+  // Each hypothesis now smooths evidence against its own element length,
+  // so their key decisions genuinely differ. Cadence and lattice evidence
+  // must follow the current presentation leader rather than the first
+  // seeded hypothesis, which is the slowest one in the bank.
+  observeCadence(hypotheses_[leader_index_].update.key_down,
+                 timestamp_ns);
+  observeLattice(hypotheses_[leader_index_].update.key_down,
+                 hypotheses_[leader_index_].update.key_down_probability,
                  timestamp_ns);
   const std::size_t previous_leader = leader_index_;
   float margin = 0.0F;

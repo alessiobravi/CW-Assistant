@@ -81,7 +81,14 @@ struct CwChannelBankConfig {
   std::uint16_t minimum_verification_symbols{3};
   std::uint16_t minimum_key_transitions{6};
   std::uint16_t minimum_cadence_observations{3};
-  float minimum_verification_timing_quality{0.45F};
+  // Raised from 0.45 once element timing was measured without the systematic
+  // mark/gap bias. Real CW now sits at 0.85-0.98 and irregularly keyed noise
+  // at about 0.44, so the threshold moves into the gap between them instead
+  // of sitting on top of the negative.
+#ifndef CWA_TIMING_GATE
+#define CWA_TIMING_GATE 0.55F
+#endif
+  float minimum_verification_timing_quality{CWA_TIMING_GATE};
   float minimum_verification_cadence_quality{0.42F};
   float minimum_character_confidence{0.40F};
   // A long run of decoded text dominated by only the two single-element
@@ -291,8 +298,13 @@ class CwChannelBank {
     bool ever_morse_likely{false};
     std::uint64_t character_refinement_timestamp_ns{0};
     float keying_snr_db{0.0F};
-    float keying_floor_db{0.0F};
-    float keying_peak_db{0.0F};
+    // Two-component keying level model held in LINEAR power relative to the
+    // side noise reference. Thresholding a dB-domain span at a fixed fraction
+    // put the decision far below half amplitude, which lengthened every mark
+    // and shortened every gap; the bias grew with signal strength because a
+    // stronger carrier widens the dB span.
+    float keying_space_power{0.0F};
+    float keying_mark_power{0.0F};
     bool keying_envelope_initialized{false};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};

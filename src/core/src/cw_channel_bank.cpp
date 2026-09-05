@@ -952,27 +952,72 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       }
       track.snr_db = width_snr[track.selected_width_index];
       if (center_localization_ratio < 0.02F) track.snr_db = 0.0F;
+      // Keying evidence is decided in the linear power domain, at the point
+      // half way between the estimated space and mark AMPLITUDES. A keyed
+      // envelope crosses its half-amplitude at the nominal edge, so marks and
+      // gaps are measured without a systematic length bias.
+      const float observed_power = std::pow(10.0F, 0.1F * track.snr_db);
       if (!track.keying_envelope_initialized) {
-        track.keying_floor_db = track.snr_db - 6.0F;
-        track.keying_peak_db = track.snr_db;
+        track.keying_space_power = observed_power;
+        track.keying_mark_power = observed_power * 4.0F;
         track.keying_envelope_initialized = true;
       } else {
-        const float floor_smoothing = track.snr_db < track.keying_floor_db
-            ? 0.20F : (track.update.key_down ? 0.0005F : 0.01F);
-        track.keying_floor_db += floor_smoothing *
-            (track.snr_db - track.keying_floor_db);
-        const float peak_smoothing = track.snr_db > track.keying_peak_db
-            ? 0.15F : 0.002F;
-        track.keying_peak_db += peak_smoothing *
-            (track.snr_db - track.keying_peak_db);
+        const float space_amplitude = std::sqrt(std::max(
+            track.keying_space_power, 0.0F));
+        const float mark_amplitude = std::sqrt(std::max(
+            track.keying_mark_power, 0.0F));
+        const float split_amplitude = 0.5F * (space_amplitude +
+                                              mark_amplitude);
+        // Each observation updates only the level it currently belongs to, so
+        // the two components stay separated instead of one slow envelope
+        // chasing both states.
+        if (observed_power < split_amplitude * split_amplitude) {
+          track.keying_space_power += (observed_power <
+                                       track.keying_space_power ? 0.30F
+                                                                : 0.02F) *
+              (observed_power - track.keying_space_power);
+        } else {
+          track.keying_mark_power += (observed_power >
+                                      track.keying_mark_power ? 0.30F
+                                                              : 0.02F) *
+              (observed_power - track.keying_mark_power);
+        }
+        // Keep the two levels separated so a silent channel cannot collapse
+        // the model onto one point and start slicing noise.
+        track.keying_mark_power = std::max(track.keying_mark_power,
+                                           track.keying_space_power * 2.0F);
       }
-      track.keying_peak_db = std::max(
-          track.keying_peak_db, track.keying_floor_db + 3.0F);
-      const float keying_span = std::max(
-          track.keying_peak_db - track.keying_floor_db, 6.0F);
-      track.keying_snr_db = 10.0F * std::clamp(
-          (track.snr_db - track.keying_floor_db) / keying_span,
-          0.0F, 1.0F);
+      const float space_amplitude = std::sqrt(std::max(
+          track.keying_space_power, 0.0F));
+      const float mark_amplitude = std::sqrt(std::max(
+          track.keying_mark_power, 0.0F));
+      const float middle_amplitude = 0.5F * (space_amplitude +
+                                             mark_amplitude);
+      const float half_span_amplitude = std::max(
+          0.5F * (mark_amplitude - space_amplitude), 1.0e-6F);
+      const float observed_amplitude = std::sqrt(observed_power);
+      // A slicer always produces a decision, even between two levels that are
+      // indistinguishable. Without an explicit "no keying here" state the
+      // decoder converts receiver noise into single-element characters, which
+      // is the origin of both the spurious leading character on a clean signal
+      // and the E/T output on channels carrying no CW at all. Confidence is
+      // therefore scaled by how far the two estimated levels actually separate.
+      const float level_separation_db = 10.0F * std::log10(
+          std::max(track.keying_mark_power, 1.0e-12F) /
+          std::max(track.keying_space_power, 1.0e-12F));
+      const float separation_weight = std::clamp(
+          (level_separation_db - 3.0F) / 6.0F, 0.0F, 1.0F);
+      // Map half amplitude onto the timing decoder's decision midpoint so its
+      // symmetric hysteresis brackets the true edge instead of sitting below
+      // it. Endpoints saturate at the configured 0-10 evidence range.
+      // The gain sets how tightly the timing decoder's fixed hysteresis
+      // brackets the half-amplitude point. Ten places the key-on/key-off pair
+      // within a few percent of the true edge; wider bands mistime every
+      // element, and impulsive noise is rejected by duration instead.
+      track.keying_snr_db = separation_weight * std::clamp(
+          4.5F + 10.0F * (observed_amplitude - middle_amplitude) /
+                     half_span_amplitude,
+          0.0F, 10.0F);
       const auto timestamp_ns = block.timestamp_ns +
           static_cast<std::uint64_t>(
               static_cast<long double>(index) * 1'000'000'000.0L /
@@ -1098,8 +1143,8 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.total_width_observations = 0;
   track.noise_initialized = false;
   track.keying_snr_db = 0.0F;
-  track.keying_floor_db = 0.0F;
-  track.keying_peak_db = 0.0F;
+  track.keying_space_power = 0.0F;
+  track.keying_mark_power = 0.0F;
   track.keying_envelope_initialized = false;
   track.filter_initialized = false;
 }

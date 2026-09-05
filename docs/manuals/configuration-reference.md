@@ -136,7 +136,16 @@ maintains separate soft key evidence, timing, provisional text, stable text,
 WPM, SNR, verification/rejection reason, and bounded per-character evidence.
 Key evidence is calculated from original input samples
 through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
-updates/second. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
+updates/second. The key decision itself is taken in the linear power domain at
+the half-amplitude point between the estimated space and mark levels, so marks
+and gaps are timed without a systematic length bias; the smoothing applied
+before it scales with the element length rather than being a fixed constant,
+and impulsive noise is rejected by a minimum run duration rather than by
+widening the decision band. Raising the audio sample rate or the internal
+evidence rate does not improve copy and measurably degrades it: element timing
+is already oversampled at these settings, while a higher sample rate coarsens
+the fixed-size FFT and a higher evidence rate shortens the integration behind
+each measurement. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
 then select a narrower or wider path without changing the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 The verified stream marker also remains at a stable 120 Hz presentation width;

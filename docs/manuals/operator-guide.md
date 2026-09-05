@@ -260,6 +260,18 @@ Development builds also preserve the final verification summary when the
 hosted live-audio acceptance fixture fails, so a release is not advanced on an
 opaque or unexplained decoder result.
 
+Element timing is measured without a length bias. The keying decision is taken
+in the linear power domain at the half-amplitude point between the measured
+noise level and the measured mark level, so a mark and the gap that follows it
+are timed symmetrically, and the smoothing applied before that decision scales
+with the element length being tracked rather than being fixed. In practice this
+removes the strong speed dependence the decoder used to have: copy quality no
+longer falls away above and below roughly 20 WPM, and the reported speed now
+tracks the sender's actual speed to within a few percent instead of being read
+as much as a fifth too slow. Weak signals below roughly 12 dB remain unreliable,
+and speeds near 50 WPM are currently limited by the narrowband filter width
+rather than by timing.
+
 The baseline handles letters, digits, common punctuation, selected prosigns,
 sub-bin drift tracking, and automatic filter width selection, but does not yet
 provide calibrated confidence, multiple-pass weak-signal recovery, or separation of

@@ -24,6 +24,41 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Corrected the keying decision that limited character accuracy at every speed
+  except a narrow band around 20 WPM. The decision was taken on a decibel-domain
+  envelope at a fixed fraction of a floor-to-peak span, which sits far below
+  half amplitude in linear terms, so every mark was measured long and every gap
+  short — and the error grew as the signal got stronger, because a stronger
+  carrier widens the span. Keying is now decided in the linear power domain at
+  the half-amplitude point between an estimated space level and mark level.
+- Evidence smoothing now scales with the element length each timing hypothesis
+  is tracking instead of using one fixed 12 ms constant across the whole 8-60
+  WPM range, where it was 8% of a dit at the slow end and 60% at the fast end.
+- Impulsive noise is now rejected by duration rather than by a wide decision
+  hysteresis. Separating the two lets the amplitude decision sit on the real
+  edge, and it is what allows irregularly keyed noise to be told apart from CW.
+- Character and word boundaries are no longer detected late. A still-open gap
+  was timed against the wall clock while its start edge had been observed one
+  smoothing constant after the signal actually changed.
+- Raised the verification timing-quality floor from 0.45 to 0.55. It had been
+  calibrated against the earlier biased measurement and sat directly on top of
+  the irregular-impulse hard negative; corrected timing puts real CW at
+  0.85-0.98 and that negative at about 0.44, so the threshold now sits in the
+  gap between them.
+- Cadence and lattice evidence now follow the current presentation leader.
+  Hypotheses previously shared one key decision, so the first seeded (slowest)
+  one could be sampled; they now smooth against their own element lengths.
+
+  Measured against a character-error-rate surface driven from synthesised audio
+  through the production path (seven speeds from 12 to 50 WPM by four
+  signal-to-noise ratios), mean character error falls from 0.713 to 0.653, and
+  at 30 dB from 0.363 to 0.053. Acquired-speed error falls from as much as 23%
+  to at most 4.2% across the 8-55 WPM benchmark. The deterministic timing
+  corpus keeps zero character edits, zero refined edits and no speed failures,
+  and the hard-negative corpus keeps three of three acquisitions with zero
+  false publications. On the available receiver captures a previously confirmed
+  but incorrect callsign is no longer presented.
+
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
   and the current N-best callsign winner. Two current paths must still agree,

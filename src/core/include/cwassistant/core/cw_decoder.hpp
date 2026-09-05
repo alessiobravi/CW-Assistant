@@ -100,6 +100,13 @@ class CwTimingDecoder {
   std::string provisional_text_;
   std::string elements_;
   std::uint64_t state_started_ns_{0};
+  // Start of the run preceding the current one. A key excursion shorter than a
+  // plausible fraction of an element is impulsive noise, not keying; absorbing
+  // it back into the preceding run lets the amplitude decision stay tight
+  // enough to time real edges accurately without letting impulses generate
+  // characters.
+  std::uint64_t previous_state_started_ns_{0};
+  bool has_previous_state_{false};
   std::uint64_t last_timestamp_ns_{0};
   double dot_ms_{60.0};
   float last_snr_db_{0.0F};

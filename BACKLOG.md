@@ -6,6 +6,22 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-05 — corrected the acoustic front end and element
+timing. The keying decision was being taken on a decibel-domain span at a fixed
+fraction, placing it far below half amplitude, so marks measured long and gaps
+short with the error growing as signal strength grew. Keying now resolves in
+linear power at half amplitude, evidence smoothing scales with element length,
+impulses are rejected by duration instead of by hysteresis width, and open-gap
+timing accounts for the detection delay. Mean character error over an
+audio-driven speed/noise surface falls from 0.713 to 0.653 and from 0.363 to
+0.053 at 30 dB; acquired-speed error falls from up to 23% to at most 4.2%. The
+verification timing floor moves from 0.45 to 0.55 now that real CW and
+irregularly keyed noise separate cleanly. CW-001 remains active: weak-signal
+copy below about 12 dB is unchanged, 50 WPM is limited by narrowband filter
+selection rather than timing, and the full bounded semi-Markov path with
+held-out capture calibration is still outstanding. PERF-001 and DSP-002 remain
+active.
+
 Last reviewed: 2026-09-03 — added capability-gated RX-frequency entry and
 waterfall-edge stepping for linked writable OmniRig/CAT4OM providers. Checked
 actual-RF-to-dial conversion preserves transverter offsets, and the active RX

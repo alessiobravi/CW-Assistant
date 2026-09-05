@@ -577,9 +577,17 @@ void test_cw_channel_bank() {
         replacement_mark(elements[index] == '.' ? 6 : 18);
         if (index + 1U < elements.size()) replacement_gap(6);
       }
-      replacement_gap(30);
+      // Standard Morse spacing: three dots between characters. This fixture
+      // previously used five, which is neither a character gap (three) nor a
+      // word gap (seven) but exactly between them, so whether it produced a
+      // word space depended on the decoder's element-length estimate being
+      // wrong by a specific amount. The fixture exists to exercise the
+      // replacement/inheritance lifecycle, not gap classification, so it now
+      // sends unambiguous spacing.
+      replacement_gap(18);
     };
-    const auto replacement_word_gap = [&] { replacement_gap(30); };
+    // Extend the preceding three-dot character gap to a seven-dot word gap.
+    const auto replacement_word_gap = [&] { replacement_gap(24); };
     // Establish an acoustic callsign on the predecessor so the replacement
     // lifecycle test can distinguish transcript continuity from station-name
     // continuity. A new tracker may inherit readable session history, but it
