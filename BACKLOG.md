@@ -16,8 +16,13 @@ callsigns are recovered, and none of the five captures established to contain
 no CW asserts a callsign. Confirmed the keying decision is level invariant -
 scaling a whole scene across 52 dB at fixed signal-to-noise ratio produces
 identical output - so strength dependence is confined to the deliberately
-contrast-adaptive decision band. Lightly weighted machine sending regressed
-slightly and stays open, as do CW-001's weak-signal band and 50 WPM.
+contrast-adaptive decision band. Damping the paired estimate to 70% of the former
+adaptation rate removes the light-weighting regression the first attempt
+introduced, taking that case below its original value. An adaptive word-gap
+classifier was prototyped and rejected: better on synthetic Farnsworth timing,
+but worse on the receiver captures and it asserted a callsign on a capture
+containing no CW. CW-001's weak-signal band, Farnsworth spacing and 50 WPM all
+remain open.
 
 Last reviewed: 2026-09-06 — narrowband width is now selected from required
 keying bandwidth rather than comparative filter power, with the 60 Hz path

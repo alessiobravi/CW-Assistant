@@ -87,9 +87,17 @@ All notable changes to CW Assistant are recorded here. The format follows
   sum is independent of weight. Measured at 20 WPM and 20 dB, bug-style sending
   (0.8 weight with 15% jitter) falls from complete failure to 0.61 character
   error and becomes partially readable, Farnsworth spacing falls from 0.56 to
-  0.33, and 10% timing jitter from 0.33 to 0.17. Lightly weighted machine
-  sending is slightly worse, 0.59 to 0.67, because pairing sums two noisy
-  measurements where the bias it removes was small.
+  0.31, 10% timing jitter from 0.33 to 0.17, and lightly weighted sending from
+  0.59 to 0.48. The paired estimate adapts at 70% of the former rate, because
+  summing a mark and its gap also sums their measurement noise; without that
+  damping the light-weighting case came out worse than the biased estimate it
+  replaced.
+- An adaptive word-gap classifier, learning the character/word boundary from
+  the observed gap population rather than a fixed multiple of the element, was
+  prototyped and rejected. It improved Farnsworth spacing on synthetic timing
+  but degraded the receiver captures and asserted a callsign on a capture
+  independently established to contain no CW. Farnsworth spacing remains an
+  open limitation.
 
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
