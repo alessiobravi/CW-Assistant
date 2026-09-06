@@ -197,7 +197,11 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
               (pending_pair_mark_dots_ + 1.0);
           if (estimate >= 15.0 && estimate <= 240.0 &&
               pending_pair_confidence_ >= 0.35F) {
-            const double adaptation = 0.08 + 0.14 * pending_pair_confidence_;
+            // Damped relative to the mark-only estimate it replaces: the
+            // pair sums two noisy measurements, so it trades a little
+            // convergence speed for the variance that addition introduces.
+            const double adaptation =
+                0.7 * (0.08 + 0.14 * pending_pair_confidence_);
             dot_ms_ += adaptation * (estimate - dot_ms_);
           }
         }
@@ -370,6 +374,7 @@ void CwTimingDecoder::finishCharacter() {
   timing_confidence_sum_ = 0.0F;
   element_count_ = 0;
 }
+
 
 void CwTimingDecoder::promoteProvisional() {
   if (provisional_text_.empty()) return;
