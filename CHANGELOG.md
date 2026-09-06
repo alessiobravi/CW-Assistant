@@ -79,6 +79,18 @@ All notable changes to CW Assistant are recorded here. The format follows
   and the hard-negative corpus keeps three of three acquisitions with zero
   false publications.
 
+- The element-length estimate is no longer biased by the operator's keying
+  weight. It was derived from mark durations alone, but at keying weight w a
+  dit lasts w elements while the gap after it lasts (2-w), so lightly weighted
+  and bug-style sending pulled the estimate short and every gap then read long.
+  The estimate now uses the mark together with its following element gap, whose
+  sum is independent of weight. Measured at 20 WPM and 20 dB, bug-style sending
+  (0.8 weight with 15% jitter) falls from complete failure to 0.61 character
+  error and becomes partially readable, Farnsworth spacing falls from 0.56 to
+  0.33, and 10% timing jitter from 0.33 to 0.17. Lightly weighted machine
+  sending is slightly worse, 0.59 to 0.67, because pairing sums two noisy
+  measurements where the bias it removes was small.
+
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
   and the current N-best callsign winner. Two current paths must still agree,

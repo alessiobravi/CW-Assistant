@@ -108,6 +108,14 @@ class CwTimingDecoder {
   std::uint64_t previous_state_started_ns_{0};
   bool has_previous_state_{false};
   std::uint64_t last_timestamp_ns_{0};
+  // A mark alone is biased by the operator's keying weight: at weight w a dit
+  // lasts w*dot while the element gap after it lasts (2-w)*dot. The pair
+  // therefore sums to a weight-independent (n+1)*dot, so the element-length
+  // estimate is deferred until the following gap closes.
+  double pending_pair_mark_dots_{0.0};
+  double pending_pair_mark_duration_ms_{0.0};
+  float pending_pair_confidence_{0.0F};
+  bool pending_pair_valid_{false};
   double dot_ms_{60.0};
   float last_snr_db_{0.0F};
   float key_down_probability_{0.0F};

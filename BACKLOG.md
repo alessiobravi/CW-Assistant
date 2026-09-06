@@ -6,6 +6,19 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-06 — removed the keying-weight bias from the element
+estimate after measuring that operator sending style, not just speed and
+signal-to-noise ratio, was an untested decoder dimension. Bug-style sending was
+previously undecodable. Added keying style (weighting, Farnsworth spacing,
+timing jitter) and absolute-level invariance to the local quality gate, and
+began scoring receiver captures directly: six of eight externally corroborated
+callsigns are recovered, and none of the five captures established to contain
+no CW asserts a callsign. Confirmed the keying decision is level invariant -
+scaling a whole scene across 52 dB at fixed signal-to-noise ratio produces
+identical output - so strength dependence is confined to the deliberately
+contrast-adaptive decision band. Lightly weighted machine sending regressed
+slightly and stays open, as do CW-001's weak-signal band and 50 WPM.
+
 Last reviewed: 2026-09-06 — narrowband width is now selected from required
 keying bandwidth rather than comparative filter power, with the 60 Hz path
 restricted to slow signals because its 15.9 ms group delay is a quarter of a

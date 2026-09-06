@@ -268,9 +268,13 @@ with the element length being tracked rather than being fixed. In practice this
 removes the strong speed dependence the decoder used to have: copy quality no
 longer falls away above and below roughly 20 WPM, and the reported speed now
 tracks the sender's actual speed to within a few percent instead of being read
-as much as a fifth too slow. Weak signals below roughly 12 dB remain unreliable,
-and speeds near 50 WPM are currently limited by the narrowband filter width
-rather than by timing.
+as much as a fifth too slow. The element length is measured from a mark together with the
+gap that follows it, whose combined length does not depend on how heavily the
+operator weights their sending, so bug and hand-key styles are no longer
+penalised the way they were. Weak signals below roughly 15 dB remain
+unreliable, very light machine weighting is slightly worse than heavy, and
+speeds near 50 WPM are currently limited by the narrowband filter width rather
+than by timing.
 
 The baseline handles letters, digits, common punctuation, selected prosigns,
 sub-bin drift tracking, and automatic filter width selection, but does not yet
