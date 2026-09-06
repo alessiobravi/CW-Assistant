@@ -59,6 +59,26 @@ All notable changes to CW Assistant are recorded here. The format follows
   false publications. On the available receiver captures a previously confirmed
   but incorrect callsign is no longer presented.
 
+- Narrowband analysis width is now chosen from the keying bandwidth a signal
+  actually needs — about 3.5 element rates — instead of from comparative filter
+  power. The narrowest 60 Hz path is additionally restricted to genuinely slow
+  signals: its three cascaded sections delay the envelope by 15.9 ms, a sixth
+  of a 12 WPM element but a quarter of a 20 WPM one, so selecting it for
+  ordinary speeds rounded real elements together. On receiver captures that
+  cost one recording its callsign entirely and made another report a wrong one.
+- The keying decision band now adapts to measured keying contrast. A clean
+  signal is sliced tightly for accurate edge timing, while a weak one widens
+  the band, trading some edge precision for noise immunity rather than
+  chattering on a noisy envelope.
+
+  Across the audio-driven speed and noise surface, mean character error falls
+  from 0.653 to 0.621. On receiver captures a repeated callsign that was
+  previously garbled on its second appearance now decodes correctly, and a
+  second capture's repeated exchange is materially cleaner. The deterministic
+  timing corpus keeps zero character and refined edits with no speed failures,
+  and the hard-negative corpus keeps three of three acquisitions with zero
+  false publications.
+
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
   and the current N-best callsign winner. Two current paths must still agree,

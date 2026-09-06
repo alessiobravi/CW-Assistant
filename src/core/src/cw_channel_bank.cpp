@@ -923,21 +923,60 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           ? center_localization
           : 0.92F * track.narrowband_coherence +
                 0.08F * center_localization;
+      // Analysis width follows the keying bandwidth the signal actually needs.
+      // A keyed carrier occupies roughly four times its element rate, so the
+      // requirement is about 4 * (WPM / 1.2) Hz: 60 Hz carries speeds to about
+      // 18 WPM, 120 Hz to about 36, and 240 Hz beyond. Choosing the narrowest
+      // width that still passes the keying gives the best noise rejection
+      // without rounding short elements into each other, which is what made
+      // fast signals decode as strings of single-element characters. Selecting
+      // on comparative filter power instead let a fast signal sit in a filter
+      // too narrow to resolve its own dits.
+      const double measured_wpm = std::max(
+          track.update.wpm,
+          track.update.acoustic_cadence_confidence >= 0.45F
+              ? track.update.acoustic_wpm
+              : 0.0);
       std::size_t preferred = 1;
-      if (std::abs(track.drift_hz_per_second) >= 30.0 ||
-          (track.update.wpm >= 40.0 &&
-           width_snr[2] >= width_snr[1] - 1.0F)) {
-        preferred = 2;
-      } else if (track.update.wpm > 0.0 && track.update.wpm <= 16.0 &&
-                 std::abs(track.drift_hz_per_second) < 8.0 &&
-                 width_snr[0] >= width_snr[1] - 1.0F) {
-        preferred = 0;
-      } else if (width_snr[0] > width_snr[1] + 4.0F) {
-        preferred = 0;
-      } else if (width_snr[2] > width_snr[1] + 6.0F &&
-                 center_localization >= 0.02F) {
-        preferred = 2;
+      if (measured_wpm > 0.0) {
+        // 3.5 measured best across the speed/noise surface: the theoretical
+        // occupancy is about four element rates, but the outermost sidebands
+        // carry little energy and admitting them costs more in noise than the
+        // edge sharpness they buy.
+        // Two constraints, not one. A width must be wide enough to pass the
+        // keying sidebands (about 3.5 element rates) AND settle fast enough
+        // that its own group delay is small against an element. The three
+        // cascaded single-pole sections give a delay of 3/(pi*width) seconds,
+        // so the 60 Hz path costs 15.9 ms - a quarter of a 20 WPM element -
+        // which rounds real elements into each other. Selecting purely on
+        // bandwidth put ordinary 20 WPM signals in that filter and measurably
+        // degraded receiver captures.
+        // Wide enough to pass the keying sidebands, which occupy about 3.5
+        // element rates. The narrowest 60 Hz path is deliberately excluded:
+        // three cascaded single-pole sections give it 3/(pi*60) = 15.9 ms of
+        // group delay, a quarter of a 20 WPM element, so it rounds real
+        // elements into each other. Selecting it on comparative filter power
+        // measurably degraded receiver captures - one lost its callsign
+        // entirely and another reported the wrong one.
+        // Width must pass the keying sidebands, which occupy about 3.5
+        // element rates: 120 Hz therefore serves speeds to about 41 WPM and
+        // 240 Hz beyond. The narrowest 60 Hz path is additionally restricted
+        // to genuinely slow signals. Three cascaded single-pole sections give
+        // it 3/(pi*60) = 15.9 ms of group delay, which is a sixth of a 12 WPM
+        // element but a quarter of a 20 WPM one; measured against receiver
+        // captures it helps below roughly 15 WPM and clearly hurts above,
+        // where selecting it cost one capture its callsign entirely and made
+        // another report the wrong one.
+        const double required_width_hz = 3.5 * (measured_wpm / 1.2);
+        constexpr double kNarrowPathMaximumWpm = 15.0;
+        preferred =
+            required_width_hz <= kNarrowbandWidthsHz[0] &&
+                    measured_wpm <= kNarrowPathMaximumWpm ? 0U
+          : required_width_hz <= kNarrowbandWidthsHz[1] ? 1U
+                                                        : 2U;
       }
+      // A drifting carrier needs headroom regardless of its speed.
+      if (std::abs(track.drift_hz_per_second) >= 30.0) preferred = 2;
       if (track.total_width_observations < 250) {
         ++track.total_width_observations;
       } else if (preferred == track.pending_width_index) {
@@ -1011,11 +1050,17 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // symmetric hysteresis brackets the true edge instead of sitting below
       // it. Endpoints saturate at the configured 0-10 evidence range.
       // The gain sets how tightly the timing decoder's fixed hysteresis
-      // brackets the half-amplitude point. Ten places the key-on/key-off pair
-      // within a few percent of the true edge; wider bands mistime every
-      // element, and impulsive noise is rejected by duration instead.
+      // brackets the half-amplitude point. A high gain places the key-on and
+      // key-off pair within a few percent of the true edge, which is what
+      // makes element timing accurate; but on a noisy envelope such a narrow
+      // band chatters, turning receiver noise into single-element characters.
+      // Trade the two against measured keying contrast: a clean signal is
+      // sliced tightly, and a weak one gets a wider band that costs some edge
+      // precision to buy noise immunity.
+      const float decision_gain = std::clamp(
+          10.0F * (level_separation_db - 3.0F) / 18.0F, 4.0F, 10.0F);
       track.keying_snr_db = separation_weight * std::clamp(
-          4.5F + 10.0F * (observed_amplitude - middle_amplitude) /
+          4.5F + decision_gain * (observed_amplitude - middle_amplitude) /
                      half_span_amplitude,
           0.0F, 10.0F);
       const auto timestamp_ns = block.timestamp_ns +

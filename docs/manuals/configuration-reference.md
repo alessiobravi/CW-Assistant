@@ -130,7 +130,7 @@ transitions,
 three spacing observations, and narrowband coherence. It must then decode at
 least three known symbols with no more than 30% unknown output in the bounded
 recent evidence window and meet the independent cadence (0.42), pure timing
-(0.45), and blended mean-character-confidence (0.40) floors before it becomes a
+(0.55), and blended mean-character-confidence (0.40) floors before it becomes a
 published CW track with a stable color. Each track
 maintains separate soft key evidence, timing, provisional text, stable text,
 WPM, SNR, verification/rejection reason, and bounded per-character evidence.
@@ -145,8 +145,12 @@ widening the decision band. Raising the audio sample rate or the internal
 evidence rate does not improve copy and measurably degrades it: element timing
 is already oversampled at these settings, while a higher sample rate coarsens
 the fixed-size FFT and a higher evidence rate shortens the integration behind
-each measurement. Acquisition starts at 120 Hz; measured WPM, drift, and local SNR
-then select a narrower or wider path without changing the visual guide. **Avg**,
+each measurement. Acquisition starts at 120 Hz. The width then follows the keying bandwidth the
+signal needs, roughly 3.5 times its element rate, so 120 Hz serves speeds to
+about 41 WPM and 240 Hz beyond; a drifting carrier is widened regardless. The
+narrowest 60 Hz path is used only below about 15 WPM, because its settling time
+is a quarter of a 20 WPM element and rounds real elements together. None of
+this changes the visual guide. **Avg**,
 display bounds, waterfall suppression, and the visual guide do not alter it.
 The verified stream marker also remains at a stable 120 Hz presentation width;
 adaptive filter changes are diagnostic and do not resize its clickable area.

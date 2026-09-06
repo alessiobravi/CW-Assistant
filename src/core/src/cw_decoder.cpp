@@ -171,10 +171,7 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
     // the hard-negative corpus together: it raises timing quality on real CW
     // (0.98) while lowering it on irregularly keyed noise (0.44), which is
     // exactly the separation the verification gate needs.
-#ifndef CWA_MIN_RUN_DOTS
-#define CWA_MIN_RUN_DOTS 0.25
-#endif
-    if (has_previous_state_ && duration_ms < (CWA_MIN_RUN_DOTS) * dot_ms_) {
+    if (has_previous_state_ && duration_ms < 0.25 * dot_ms_) {
       key_down_ = observed_down;
       state_started_ns_ = previous_state_started_ns_;
       has_previous_state_ = false;

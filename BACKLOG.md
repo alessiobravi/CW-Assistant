@@ -6,6 +6,19 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-06 — narrowband width is now selected from required
+keying bandwidth rather than comparative filter power, with the 60 Hz path
+restricted to slow signals because its 15.9 ms group delay is a quarter of a
+20 WPM element; the keying decision band also adapts to measured contrast.
+Mean character error over the audio-driven surface falls from 0.653 to 0.621
+and receiver-capture copy improves. A diagnostic run confirmed that spectral
+acquisition is not the weak-signal limit — narrowband coherence stays flat at
+about 0.386 at every signal-to-noise ratio — and that copy collapses between
+15 and 12 dB because the per-interval level slicer fragments elements: 17% of
+marks fragment at 12 dB, rising to 90% at 6 dB. Recovering that band needs
+soft-decision decoding rather than threshold tuning, and remains CW-001 along
+with 50 WPM. PERF-001 and DSP-002 remain active.
+
 Last reviewed: 2026-09-05 — corrected the acoustic front end and element
 timing. The keying decision was being taken on a decibel-domain span at a fixed
 fraction, placing it far below half amplitude, so marks measured long and gaps
