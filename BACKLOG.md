@@ -6,6 +6,29 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (thirteenth entry) — tracks are verified as CW on
+recordings that contain none: eight across the four such captures, one to three
+each, published with text like "BL E EEHWE IH K I E". Nothing measured this. The
+quality checks count false callsigns, so a track wrongly accepted as a signal was
+invisible, which is the same blind spot callsign precision had.
+
+Tightening the verification timing-quality threshold does not fix it and is
+recorded so it is not retried: at 0.55 there are eight false tracks and eight of
+nine callsigns recovered; at 0.70, still eight and seven; at 0.80, four and six;
+at 0.88, one and four. Reaching one false track costs half the real stations,
+because noise reaches the same timing quality as CW -- measured values overlap,
+noise 0.62 to 0.80 against real 0.75 to 0.94. The threshold stays where it is.
+What discriminates on structure rather than timing is CW-006's recognisable
+pattern evidence, and that is the honest next attempt.
+
+The same sweep found that the threshold had been left parameterised by a
+build-time define since the keying-decision work earlier in the day, surviving
+eight commits and every verification run: the sweep silently changed nothing,
+and three identical rows were what exposed it. The define is gone and the
+verification battery now fails on any stray build-time define or leftover
+standard-error output anywhere in the shipped sources, because the previous
+check listed macro names by hand and could only catch the ones already known.
+
 Last reviewed: 2026-09-07 (twelfth entry) — the local model reported an error
 for a model that was never configured. Enabling it without selecting files still
 attempted a load, and an empty path fails the metadata check by the same branch

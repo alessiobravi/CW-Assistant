@@ -8,6 +8,11 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- The verification timing-quality threshold is a plain constant again. It had
+  been left parameterised by a build-time define after an experiment, so a build
+  that happened to set that name would have silently changed which signals the
+  application accepts as CW. The shipped value is unchanged.
+
 - The optional local model no longer reports an error for a model that was
   never configured. Enabling it without selecting the files still attempted a
   load, and an empty path failed the metadata check as though the file were the

@@ -105,10 +105,7 @@ struct CwChannelBankConfig {
   // mark/gap bias. Real CW now sits at 0.85-0.98 and irregularly keyed noise
   // at about 0.44, so the threshold moves into the gap between them instead
   // of sitting on top of the negative.
-#ifndef CWA_TIMING_GATE
-#define CWA_TIMING_GATE 0.55F
-#endif
-  float minimum_verification_timing_quality{CWA_TIMING_GATE};
+  float minimum_verification_timing_quality{0.55F};
   float minimum_verification_cadence_quality{0.42F};
   float minimum_character_confidence{0.40F};
   // A long run of decoded text dominated by only the two single-element
