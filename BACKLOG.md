@@ -6,6 +6,57 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (fifth entry) — CW-001. Two findings, one of which
+changes how this decoder must be measured at all.
+
+First, measurement. The character-error figure used to judge decoder changes is
+averaged over five noise seeds, and its value moves by about 0.03 with the draw
+alone -- larger than most differences that were being read as results. It is
+deterministic per seed, so the variance is entirely across draws rather than
+between runs, and a comparison of two builds on the same seeds cancels it
+almost completely. Every decoder comparison must therefore be paired against
+identical draws and reported as the paired difference. An absolute figure
+compared against a remembered baseline from a different build means nothing at
+this scale, and several conclusions reached that way were wrong.
+
+Second, where the remaining error lives. Feeding the event lattice exact run
+boundaries decodes a message perfectly at every speed, so the sequence decoder
+is not a limit; segmentation is the whole of it. Degrading those boundaries the
+way noise does shows the costs are strongly asymmetric: displacing every edge
+by a quarter of a dot costs 0.045 character error, losing a tenth of the marks
+costs 0.455, and inventing a tenth costs 0.125. Losing a mark is roughly three
+and a half times worse than inventing one.
+
+That asymmetry cannot be exploited by moving the keying thresholds, and the
+attempt is recorded so it is not repeated: shifting the hysteresis band down
+retains marks but lengthens every one of them, which the independent cadence
+estimator and the lattice's evidence confidence both detect, and narrowing the
+band restores timing while losing more copy than the original. One threshold
+crossing has to serve both retention and timing and they pull opposite ways.
+Making the decision adapt to signal quality instead is currently impossible:
+the keying evidence is a calibrated posterior that saturates by design, and
+neither the decoder's own confidence nor the detector's level separation nor
+its mark level tracks the input signal-to-noise ratio -- all three were
+measured and all three are flat or saturated across a 30 dB to 12 dB range. A
+quality-adaptive rule needs a signal that does not exist yet.
+
+Also rejected on measurement this session: weighting anchor selection by a
+searched element length (recorded in the third entry), and an evidence-scaled
+speed prior, which bought no copy on its own and broke the timing benchmark.
+
+What ships from it is one constant. Gap classification now sits nearer the
+nominal character gap, worth a paired 0.018, 0.039 and 0.013 across three
+independent seed sets. The staging fixture that had to move for it was
+asserting a two-and-a-half dot gap, neither an element gap nor a character gap
+but between them, and now uses unambiguous spacing -- the same correction this
+tree already applied once to the replacement fixture, and it passes under the
+old threshold as well as the new one.
+
+Still open under CW-001: copy below about 15 dB, Farnsworth spacing and 50 WPM,
+and the acquisition transient -- capture 20260903-165900 decodes EM90ZMV as
+T90ZMV, losing only the first two characters, because element boundaries must
+be committed before any speed estimate exists. DSP-002 and UI-005 unchanged.
+
 Last reviewed: 2026-09-07 (fourth entry) — UI-005: fixed the decoded transcript
 shuddering as text arrived. The cause was that every update reassigned the whole
 string, rebuilding the text document and resetting the viewport, so one frame in

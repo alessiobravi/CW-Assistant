@@ -99,6 +99,16 @@ All notable changes to CW Assistant are recorded here. The format follows
   independently established to contain no CW. Farnsworth spacing remains an
   open limitation.
 
+- Gap classification no longer splits characters that were never spaced apart.
+  The threshold separating an element gap from a character gap sat close to the
+  midpoint between their nominal lengths, which is where it belongs only if
+  gaps are measured cleanly. They are not: a noise excursion inside a gap
+  registers as a mark and eats into it from both ends, so measured gaps run
+  short and a midpoint threshold breaks characters apart. Placing it nearer the
+  nominal character gap costs nothing on unambiguous spacing and recovers
+  those characters, lowering mean character error by 0.024 across the speed and
+  noise surface.
+
 - The decoded transcript no longer shudders while text arrives. Each update
   replaced the whole text document, which discarded its layout and reset the
   viewport, so the card showed a stale scroll offset for one frame on every

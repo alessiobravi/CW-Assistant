@@ -38,7 +38,17 @@ struct CwDecoderConfig {
   float key_on_probability{0.68F};
   float key_off_probability{0.32F};
   double evidence_time_constant_ms{12.0};
-  double character_gap_dots{2.2};
+  // Threshold separating an element gap from a character gap. The midpoint
+  // between the two nominal lengths would be 2.0, but a gap is not measured
+  // in clean conditions: a noise excursion inside it registers as a mark and
+  // eats it from both ends, so measured gaps run short and a midpoint
+  // threshold breaks apart characters that were never spaced. Sitting nearer
+  // the nominal character gap costs nothing on unambiguous spacing and
+  // recovers those characters. Measured paired against the same noise draws
+  // across three independent seed sets, this lowers mean character error by
+  // 0.018, 0.039 and 0.013 -- the absolute figure swings by about 0.03 with
+  // the draw, so only the paired difference means anything here.
+  double character_gap_dots{2.8};
   double stable_gap_dots{3.1};
   double word_gap_dots{6.0};
 };

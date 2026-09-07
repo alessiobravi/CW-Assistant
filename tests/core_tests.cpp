@@ -154,7 +154,12 @@ void test_cw_timing_decoder() {
   };
   staged_feed(false, 100);
   staged_feed(true, 60);
-  staged_feed(false, 150);
+  // Three dots: an unambiguous character gap. This was two and a half, which
+  // is neither an element gap (one) nor a character gap (three) but between
+  // them, so it asserted where the classification threshold happens to sit
+  // rather than the staging behaviour it exists to cover. The replacement
+  // fixture below was corrected for the same reason.
+  staged_feed(false, 180);
   expect(staged.text.empty() && staged.provisional_text == "E",
          "completed character is exposed provisionally before confirmation");
   staged_feed(false, 60);

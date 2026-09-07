@@ -148,7 +148,13 @@ shaping of an already shaped number; on a channel whose two levels do not
 separate, the ratio falls to zero and reports no information rather than an
 implied key-up. The smoothing applied before it scales with the element length
 rather than being a fixed constant, and impulsive noise is rejected by a
-minimum run duration rather than by widening the decision band. Raising the audio sample rate or the internal
+minimum run duration rather than by widening the decision band. Gaps are then
+classified against the element length, with the boundary between an element
+gap and a character gap placed nearer the character gap than half way. A gap
+is not measured in clean conditions: a noise excursion inside one registers as
+a mark and eats into it from both ends, so measured gaps run short, and a
+boundary placed half way between the two nominal lengths breaks apart
+characters that were never spaced. Raising the audio sample rate or the internal
 evidence rate does not improve copy and measurably degrades it: element timing
 is already oversampled at these settings, while a higher sample rate coarsens
 the fixed-size FFT and a higher evidence rate shortens the integration behind
