@@ -6,6 +6,37 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (third entry) — tested and rejected the element-length
+search that CW-001 had proposed as its next step. The proposal was to replace
+the nine fixed speed anchors with a searched element length. Implementing it
+turned out to need little new machinery, because the event lattice already is a
+duration-explicit decoder: it scores a whole segment's run durations against
+the dot, dash and three gap classes with a beam search, and merely took the
+element length as an input supplied by whichever anchor was leading. Searching
+that one parameter, coarse then local and always including the anchor bank's
+own answer as a candidate, was therefore the whole change.
+
+It does not pay. The search alone leaves mean character error at 0.307
+unchanged, because the lattice feeds the refined transcript rather than the
+primary text, and it roughly doubles decode time. Feeding the searched length
+back into anchor selection makes copy monotonically worse as its weight rises:
+0.307 at zero weight, then 0.317, 0.332 and 0.331. The reason is that the
+anchors are not choosing wrongly in the first place. Measured against known
+synthetic signals, the leading anchor's speed is within 1.3 per cent of truth
+at 20, 30, 40 and 50 WPM at both 20 dB and 12 dB. The premise came from
+diagnosing an earlier acceptance-test failure, where a wrong anchor genuinely
+did capture a whole segment, and it did not survive the element-timing
+corrections that followed; it should not be re-attempted on that reasoning.
+
+What remains under CW-001 is therefore not a speed problem. Copy at 12 dB sits
+at 0.719 with the speed already correct, so the residue is noise corrupting
+individual elements. The lattice decides against run durations produced by a
+threshold, which discards the per-frame margin the detector now measures;
+letting it place its own boundaries from that evidence is the remaining
+soft-decision step, and it should be justified by measurement before being
+built. Farnsworth spacing and 50 WPM stay open. DSP-002 and UI-005 are
+unchanged.
+
 Last reviewed: 2026-09-07 (second entry) — replaced the heuristic keying slicer
 with a soft decision, the first stage of the weak-signal work. The detector now
 emits a calibrated log-likelihood ratio from a two-level model that tracks each
