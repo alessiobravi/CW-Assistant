@@ -1593,6 +1593,50 @@ void test_transmit_guard() {
   expect(guard.reset_fault(), "fault reset returns to disarmed");
 }
 
+void test_presented_speed_requires_evidence() {
+  using namespace cwassistant::core;
+  // Below a few decoded symbols the timing bank has nothing to choose between
+  // its hypotheses: the value is still the seeded default and whichever anchor
+  // briefly leads can be far from the truth. Observed on a receiver capture, a
+  // 27 WPM station read 20 WPM before anything was decoded and reached 40 WPM
+  // on its fourth key transition. An unsupported speed is not presented, and
+  // the display renders an absent speed as a dash.
+  CwChannelBank bank({.minimum_spectral_observations = 1,
+                      .minimum_verification_symbols = 0,
+                      .verification_enter_seconds = 0.0,
+                      .verification_exit_seconds = 0.0});
+  std::vector<float> bins(201, -110.0F);
+  std::uint64_t now = 0;
+  double phase = 0.0;
+  constexpr double sample_rate = 8'000.0;
+  const auto feed = [&](const bool keyed, const int milliseconds) {
+    for (int step = 0; step < milliseconds / 10; ++step) {
+      bins.assign(bins.size(), -110.0F);
+      if (keyed) bins[60] = -55.0F;
+      static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+      RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = now;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.35F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
+        phase += 2.0 * std::numbers::pi * 300.0 / sample_rate;
+      }
+      static_cast<void>(bank.processSamples(block));
+      now += 10'000'000;
+    }
+  };
+  feed(false, 100);
+  feed(true, 60);
+  feed(false, 180);
+  const auto& early = bank.channels();
+  const bool early_speed_hidden =
+      early.empty() || early.front().wpm == 0.0;
+  expect(early_speed_hidden,
+         "no speed is presented before enough symbols support one");
+}
+
 void test_callsign_policy_prosign_glue() {
   using cwassistant::core::CallsignPolicy;
   // A missing word gap glues the prosign onto the callsign after it, and the
@@ -2429,6 +2473,7 @@ int main() {
   test_soft_decision_keying_evidence();
   test_callsign_policy();
   test_callsign_policy_prosign_glue();
+  test_presented_speed_requires_evidence();
   test_spectrum_settings();
   test_wav_replay_source();
   test_wav_writer();

@@ -32,9 +32,14 @@ estimated mark level, +31 dB for that station. Confidence was reported from the
 instantaneous value, which falls to zero between characters and read zero per
 cent while text arrived; it now reports the character-averaged figure.
 
-Still open from those captures: the speed estimate wanders during acquisition,
-reaching 40 WPM on a 27 WPM station before settling, and the independent
-cadence estimate spikes to 40.9. The transcript away from the callsign remains
+The wandering speed from those captures is addressed at the presentation. The
+estimator is unchanged and still adapts freely, but a speed is withheld until
+at least three symbols support one: before that the value is the seeded default
+rather than a measurement, which is why a 27 WPM station read 20 WPM with
+nothing decoded and 40 WPM on its fourth key transition. Six of fourteen
+sampled readings across that recording were unsupported and are now withheld,
+narrowing the displayed range from 20-28 WPM to 25-28. The independent cadence
+estimate still spikes to 40.9 on thin evidence and is not yet gated. The transcript away from the callsign remains
 poor at this signal strength, which is the retention limit already recorded
 above rather than anything specific to this recording.
 

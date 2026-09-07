@@ -1862,6 +1862,24 @@ void CwChannelBank::recoverRejectedDecoder(Track& track) {
   ++decoder_reacquisitions_;
 }
 
+namespace {
+
+// Speed shown to the operator. Below a few decoded symbols the timing bank has
+// nothing to choose between its hypotheses: the value is still the seeded
+// default, and whichever anchor briefly leads can be far from the truth. On a
+// receiver capture a 27 WPM station read 20 WPM before anything was decoded
+// and jumped to 40 WPM on its fourth key transition. Presenting nothing until
+// the estimate is supported is honest, and the display already renders an
+// absent speed as a dash.
+constexpr std::uint32_t kMinimumSymbolsForPresentedSpeed = 3;
+
+double presentedWpm(const CwDecoderUpdate& update) noexcept {
+  return update.decoded_symbols >= kMinimumSymbolsForPresentedSpeed
+      ? update.wpm : 0.0;
+}
+
+}  // namespace
+
 std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
   std::vector<CwTrackDiagnostic> result;
   result.reserve(tracks_.size());
@@ -1892,7 +1910,7 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
         .timing_quality = track.update.timing_quality,
         .cadence_quality = track.update.cadence_quality,
         .mean_character_confidence = track.update.mean_character_confidence,
-        .wpm = track.update.wpm,
+        .wpm = presentedWpm(track.update),
         .acoustic_wpm = track.update.acoustic_wpm,
         .acoustic_cadence_confidence =
             track.update.acoustic_cadence_confidence,
@@ -1941,7 +1959,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
           .snr_db = track.keying_envelope_initialized
             ? track.keying_mark_snr_db : track.snr_db,
-          .wpm = track.update.wpm,
+          .wpm = presentedWpm(track.update),
           .acoustic_wpm = track.update.acoustic_wpm,
           .acoustic_cadence_confidence =
               track.update.acoustic_cadence_confidence,
@@ -2011,7 +2029,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
             kNarrowbandWidthsHz[track.selected_width_index],
         .snr_db = track.keying_envelope_initialized
             ? track.keying_mark_snr_db : track.snr_db,
-        .wpm = track.update.wpm,
+        .wpm = presentedWpm(track.update),
         .acoustic_wpm = track.update.acoustic_wpm,
         .acoustic_cadence_confidence =
             track.update.acoustic_cadence_confidence,

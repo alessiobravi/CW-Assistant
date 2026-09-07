@@ -8,6 +8,17 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A stream shows no speed until enough symbols support one. Below a few decoded
+  symbols the timing bank has nothing to choose between its hypotheses: the
+  value is still the seeded default, and whichever anchor briefly leads can be
+  far from the truth. On a receiver capture a 27 WPM station read 20 WPM before
+  anything had been decoded and reached 40 WPM on its fourth key transition,
+  which is what made the displayed speed appear to wander. Across that
+  recording six of fourteen sampled readings were unsupported and are now
+  withheld, and the range shown narrows from 20 to 28 WPM down to 25 to 28. The
+  decoder itself continues to adapt exactly as before; only the presentation
+  waits for evidence.
+
 - The signal level shown for a stream is the mark level, not an instantaneous
   reading. A keyed carrier is present only half the time, so the instantaneous
   figure swings between roughly +28 dB inside a mark and below zero inside a
