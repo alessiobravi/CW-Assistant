@@ -6,6 +6,25 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (twelfth entry) — the local model reported an error
+for a model that was never configured. Enabling it without selecting files still
+attempted a load, and an empty path fails the metadata check by the same branch
+as a file of the wrong kind or past the size limit, so the card showed a size
+complaint for a model the operator had not chosen. An enabled but unfinished
+setup is now its own state, loads nothing and says what to select, and the panel
+is hidden while the feature is unused.
+
+Also measured and not adopted: choosing between the consensus and the literal
+transcript when they disagree. Neither available signal discriminates. The
+lattice's evidence confidence moves only from 0.830 to 0.821 across a seventeen
+fold change in the consensus's own character error, and its acoustic cost per
+symbol is anti-correlated at the extremes -- the best consensus measured, at
+0.016 error, carried the highest cost per symbol at 0.41, while one at 0.391
+error carried 0.18. A four point sample suggested cost tracked quality and an
+eighteen point sample destroyed it. Any preference rule written on these signals
+would be arbitrary, so none was written; calibrating the lattice's confidence so
+that it means something is the real work, and it is its own piece.
+
 Last reviewed: 2026-09-07 (eleventh entry) — CW-001's Farnsworth item is closed.
 The event lattice scored gaps against fixed centres of one, three and seven
 element lengths. Farnsworth sending holds element timing at the operator's speed

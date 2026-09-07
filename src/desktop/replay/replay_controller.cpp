@@ -990,6 +990,22 @@ void ReplayController::configureLocalCharacterDecoder(
   emit liveCharacterFrontendEnabledRequested(false);
   emit localCharacterResetRequested();
   local_character_consensus_.clear();
+  // Enabled without both files selected is not an error, it is an unfinished
+  // setup, and it must not be reported as one. Loading was attempted anyway,
+  // and an empty path fails the metadata check as though the file were the
+  // wrong kind or too large: the card showed "metadata must be a regular JSON
+  // file no larger than 64 KiB" for a model the operator had never chosen.
+  const bool configured =
+      !model_path.trimmed().isEmpty() && !metadata_path.trimmed().isEmpty();
+  if (enabled && !configured) {
+    local_character_state_ = QStringLiteral("unconfigured");
+    local_character_status_ = QStringLiteral(
+        "Select a model file and its metadata under Settings, Decoder. "
+        "Deterministic decoding continues meanwhile.");
+    rebuildDecoderModels();
+    emit localCharacterDecoderConfigureRequested(false, QString{}, QString{});
+    return;
+  }
   local_character_state_ = enabled ? QStringLiteral("loading")
                                    : QStringLiteral("disabled");
   local_character_status_ = enabled

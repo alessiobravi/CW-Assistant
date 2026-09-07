@@ -8,6 +8,17 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- The optional local model no longer reports an error for a model that was
+  never configured. Enabling it without selecting the files still attempted a
+  load, and an empty path failed the metadata check as though the file were the
+  wrong kind or too large, so the card read "metadata must be a regular JSON
+  file no larger than 64 KiB" for a model the operator had not chosen. An
+  enabled but unfinished setup now says so and loads nothing, and its panel is
+  hidden entirely while the feature is not in use rather than occupying every
+  card to report a state the operator has no interest in. The four genuine
+  metadata failures -- a missing file, a path that is not a file, an empty file
+  and one past the size limit -- each state their own cause.
+
 - Farnsworth spacing no longer splits every character apart. The decoder scored
   the gaps between symbols against fixed centres of one, three and seven
   element lengths, but Farnsworth sending keeps element timing at the operator's

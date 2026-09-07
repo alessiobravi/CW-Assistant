@@ -126,6 +126,16 @@ int main() {
     return 16;
   }
 
+  // The optional local model must not report an error for a model that was
+  // never configured, and its panel must not occupy every card when the
+  // feature is not in use. Enabling it without selecting files previously
+  // attempted a load, and an empty path failed the metadata check as though
+  // the file were the wrong kind or too large.
+  if (!contains(qml, "sessionCard.localModelState !== \"disabled\"") ||
+      !contains(qml, "sessionCard.localModelState !== \"unconfigured\"")) {
+    return 17;
+  }
+
   // A confirmed callsign must say whether the offline list corroborates it.
   // Both are legitimate outcomes -- an unlisted station is ordinary -- so the
   // badge reports corroboration and never implies the decode is wrong, and it

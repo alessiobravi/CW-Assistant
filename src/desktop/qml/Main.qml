@@ -1679,9 +1679,16 @@ ApplicationWindow {
                             Rectangle {
                                 id: localModelTranscriptPanel
                                 objectName: "localModelTranscriptPanel"
+                                // Hidden when the optional local model is not
+                                // in use. A panel reporting the state of a
+                                // feature the operator has not set up is noise
+                                // on every card, and it reported an error for a
+                                // model that was never configured.
+                                visible: sessionCard.localModelState !== "disabled"
+                                         && sessionCard.localModelState !== "unconfigured"
                                 Layout.fillWidth: true
-                                Layout.preferredHeight:
-                                    sessionCard.localModelHasText ? 88 : 50
+                                Layout.preferredHeight: !visible ? 0
+                                    : (sessionCard.localModelHasText ? 88 : 50)
                                 radius: 4
                                 color: "#101820"
                                 border.color: sessionCard.localModelState
