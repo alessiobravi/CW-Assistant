@@ -6,6 +6,14 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (fourth entry) — UI-005: fixed the decoded transcript
+shuddering as text arrived. The cause was that every update reassigned the whole
+string, rebuilding the text document and resetting the viewport, so one frame in
+every decoded character was drawn at a stale offset. Appending only the suffix
+and pinning the tail in the same frame the content grows removes it; the local
+model transcript in the same card shared the defect and is fixed with it. The
+decoder work in this session is unchanged by it.
+
 Last reviewed: 2026-09-07 (third entry) — tested and rejected the element-length
 search that CW-001 had proposed as its next step. The proposal was to replace
 the nine fixed speed anchors with a searched element length. Implementing it

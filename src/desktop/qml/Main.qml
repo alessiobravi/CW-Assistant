@@ -1450,6 +1450,10 @@ ApplicationWindow {
                                            || contentItem.contentY
                                               >= maximumContentY() - 2
                                 }
+                                function pinToTail() {
+                                    if (followTail && contentItem)
+                                        contentItem.contentY = maximumContentY()
+                                }
                                 function followAppendedText() {
                                     if (decodedTextArea.selectionStart
                                             !== decodedTextArea.selectionEnd) {
@@ -1458,6 +1462,12 @@ ApplicationWindow {
                                     }
                                     if (!followTail)
                                         return
+                                    // Pin immediately so the tail is already
+                                    // correct in the frame the text grows in,
+                                    // then again once layout settles, because
+                                    // the content height for a wrapped line is
+                                    // only final after that pass.
+                                    pinToTail()
                                     Qt.callLater(function() {
                                         if (transcriptScroll.followTail
                                                 && transcriptScroll.contentItem) {
@@ -1488,6 +1498,12 @@ ApplicationWindow {
                                     function onMovementEnded() {
                                         transcriptScroll.followTail =
                                             transcriptScroll.isAtTail()
+                                    }
+                                    // Growing content would otherwise leave the
+                                    // viewport short of the new bottom until
+                                    // something else moved it.
+                                    function onContentHeightChanged() {
+                                        transcriptScroll.pinToTail()
                                     }
                                 }
                                 TextArea {
@@ -1524,12 +1540,29 @@ ApplicationWindow {
                                         var oldSelectionEnd = selectionEnd
                                         var hadSelection = oldSelectionStart
                                                            !== oldSelectionEnd
-                                        text = nextText
-                                        if (hadSelection) {
-                                            select(Math.min(oldSelectionStart,
-                                                            length),
-                                                   Math.min(oldSelectionEnd,
-                                                            length))
+                                        // The transcript is append-only while a
+                                        // station is being copied. Reassigning
+                                        // the whole string rebuilds the text
+                                        // document, which resets the viewport
+                                        // and leaves the card showing a stale
+                                        // offset until the next frame restores
+                                        // it -- once per decoded character,
+                                        // which reads as a constant shudder.
+                                        // Insert only the new suffix so the
+                                        // existing layout and scroll position
+                                        // survive untouched.
+                                        if (!hadSelection
+                                                && nextText.length > length
+                                                && nextText.indexOf(text)
+                                                   === 0) {
+                                            insert(length,
+                                                   nextText.substring(length))
+                                        } else {
+                                            text = nextText
+                                            if (hadSelection) {
+                                                select(Math.min(oldSelectionStart, length),
+                                                       Math.min(oldSelectionEnd, length))
+                                            }
                                         }
                                         transcriptScroll.followAppendedText()
                                     }
@@ -1603,9 +1636,14 @@ ApplicationWindow {
                                                 0, contentItem.contentHeight
                                                    - contentItem.height)
                                         }
+                                        function pinToTail() {
+                                            if (followTail && contentItem)
+                                                contentItem.contentY = maximumContentY()
+                                        }
                                         function followAppendedText() {
                                             if (!followTail)
                                                 return
+                                            pinToTail()
                                             Qt.callLater(function() {
                                                 if (localModelTranscriptScroll.followTail
                                                         && localModelTranscriptScroll.contentItem) {
@@ -1629,6 +1667,9 @@ ApplicationWindow {
                                                 localModelTranscriptScroll.followTail =
                                                     localModelTranscriptScroll.contentItem.contentY
                                                     >= localModelTranscriptScroll.maximumContentY() - 2
+                                            }
+                                            function onContentHeightChanged() {
+                                                localModelTranscriptScroll.pinToTail()
                                             }
                                         }
                                         TextArea {
@@ -1660,7 +1701,12 @@ ApplicationWindow {
                                                     localModelTranscriptScroll.followTail = true
                                                 } else if (nextText.indexOf(text)
                                                            === 0) {
-                                                    text = nextText
+                                                    // Append only the suffix,
+                                                    // for the same reason the
+                                                    // decoded transcript does.
+                                                    if (nextText.length > length)
+                                                        insert(length,
+                                                               nextText.substring(length))
                                                 } else {
                                                     text = nextText
                                                     localModelTranscriptScroll.followTail = true

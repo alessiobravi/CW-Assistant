@@ -45,6 +45,19 @@ int main() {
   const std::size_t callsign_end = qml.find(
       "property string ownCallEvidenceText:", callsign_start);
 
+  // An append must not rebuild the text document. Reassigning the whole
+  // string discards the layout and resets the viewport, so the card showed a
+  // stale offset for one frame on every decoded character, which reads as a
+  // constant shudder. The new suffix is inserted instead, and the tail is
+  // pinned in the same frame the content grows rather than a frame later.
+  if (!contains(transcript, "insert(length,") ||
+      !contains(transcript, "nextText.substring(length)") ||
+      !contains(transcript, "function pinToTail()") ||
+      !contains(transcript, "function onContentHeightChanged()") ||
+      !contains(transcript, "transcriptScroll.pinToTail()")) {
+    return 4;
+  }
+
   // Appends may move only the viewport. Moving the TextEdit cursor caused
   // Qt to repeatedly ensure it was visible, disturbing selection and making
   // every live update jump through intermediate layouts.

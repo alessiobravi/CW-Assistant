@@ -145,8 +145,11 @@ decoded session in the right-hand panel. Its larger decoded-text window wraps
 the latest output and follows new text while its viewport is at the bottom.
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
-The transcript remains plain text so incoming characters cannot cause styled
-text or scrollbar-driven line reflow. Short content fills the complete
+New characters are appended to the existing text rather than replacing it, so
+the view stays where it is instead of shifting as each one arrives, and when
+the transcript is following the tail it stays pinned to the bottom in the same
+frame the text grows. The transcript remains plain text so incoming characters
+cannot cause styled text or scrollbar-driven line reflow. Short content fills the complete
 transcript viewport instead of leaving a differently sized inner box; longer
 content grows vertically inside the same scroller. A confirmed remote callsign
 is bold and shown in the card header using the stream color. If

@@ -99,6 +99,16 @@ All notable changes to CW Assistant are recorded here. The format follows
   independently established to contain no CW. Farnsworth spacing remains an
   open limitation.
 
+- The decoded transcript no longer shudders while text arrives. Each update
+  replaced the whole text document, which discarded its layout and reset the
+  viewport, so the card showed a stale scroll offset for one frame on every
+  decoded character and only jumped back to the bottom afterwards. New
+  characters are now inserted as a suffix, leaving the existing layout and
+  scroll position untouched, and a transcript that is following the tail is
+  pinned to the bottom in the same frame its content grows rather than a frame
+  later. The local model transcript in the same card had the same defect and
+  is fixed with it.
+
 - The keying decision is now a soft one. The detector previously shaped its
   amplitude reading into an evidence ramp with a hand-set slope, and the timing
   decoder squashed that ramp a second time to get a probability, so the number
