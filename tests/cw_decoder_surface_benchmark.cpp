@@ -123,6 +123,44 @@ std::vector<float> synthesize(const std::string& message, const double wpm,
   return audio;
 }
 
+struct Decoded {
+  std::string text;
+  std::string callsign;
+};
+
+Decoded decodeChannel(const std::vector<float>& audio,
+                      const double sample_rate) {
+  SpectrumAnalyzer analyzer({.audio_upper_frequency_hz = 3'000.0});
+  CwChannelBank bank;
+  RealtimeSampleBlock block;
+  block.stream.sample_rate_hz = sample_rate;
+  Decoded best;
+  std::size_t position = 0;
+  std::uint64_t now = 0;
+  while (position < audio.size()) {
+    const std::size_t take = std::min<std::size_t>(1'024,
+                                                   audio.size() - position);
+    block.sample_count = take;
+    block.timestamp_ns = now;
+    for (std::size_t index = 0; index < take; ++index)
+      block.samples[index] = {audio[position + index], 0.0F};
+    for (const auto& snapshot : analyzer.process(block)) {
+      static_cast<void>(bank.updateSpectrum(
+          snapshot.timestamp_ns, snapshot.lower_frequency_hz,
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+    }
+    for (const auto& channel : bank.processSamples(block)) {
+      if (channel.text.size() > best.text.size()) best.text = channel.text;
+      if (!channel.callsign.empty()) best.callsign = channel.callsign;
+    }
+    position += take;
+    now += static_cast<std::uint64_t>(
+        static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
+  }
+  best.text = squeeze(best.text);
+  return best;
+}
+
 std::string decode(const std::vector<float>& audio, const double sample_rate) {
   SpectrumAnalyzer analyzer({.audio_upper_frequency_hz = 3'000.0});
   CwChannelBank bank;
@@ -172,6 +210,9 @@ int main(int argc, char** argv) {
   std::printf("decoder surface: %zu speeds x %zu signal-to-noise ratios,"
               " %zu independent seed sets\n",
               speeds.size(), ratios.size(), seed_sets.size());
+  const std::string expected_call = "IU0LFQ";
+  std::size_t wrong_callsigns = 0;
+  std::size_t right_callsigns = 0;
   std::vector<double> per_set;
   per_set.reserve(seed_sets.size());
   for (std::size_t set = 0; set < seed_sets.size(); ++set) {
@@ -183,9 +224,17 @@ int main(int argc, char** argv) {
         for (const unsigned seed : seed_sets[set]) {
           const auto audio = synthesize(message, wpm, snr_db, sample_rate,
                                         700.0, seed);
+          const auto decoded = decodeChannel(audio, sample_rate);
           accumulated += std::min<double>(
-              1.0, static_cast<double>(editDistance(
-                       message, decode(audio, sample_rate))) / message.size());
+              1.0, static_cast<double>(editDistance(message, decoded.text)) /
+                       message.size());
+          // Naming the wrong station is worse than naming none: an operator
+          // logs what the application asserts. A mis-decoded token sitting in
+          // a position where a callsign belongs scores exactly as a correct
+          // one does, so this cannot be scored away and is measured instead.
+          if (!decoded.callsign.empty() && decoded.callsign != expected_call)
+            ++wrong_callsigns;
+          if (decoded.callsign == expected_call) ++right_callsigns;
         }
         total += accumulated / static_cast<double>(seed_sets[set].size());
         ++cells;
@@ -201,6 +250,8 @@ int main(int argc, char** argv) {
   for (const double value : per_set) sum += value;
   std::printf("  overall %.4f, spread across seed sets %.4f\n",
               sum / static_cast<double>(per_set.size()), spread);
+  std::printf("  callsign asserted correctly %zu, wrongly %zu\n",
+              right_callsigns, wrong_callsigns);
   std::printf("  a difference smaller than %.4f is not a result: compare two"
               " builds on these same seed sets and read the paired\n"
               "  difference per set, never one absolute figure against"

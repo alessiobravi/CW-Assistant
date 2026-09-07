@@ -6,6 +6,83 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (ninth entry) — callsign precision was never measured
+and is poor. The quality checks counted callsigns recovered and false callsigns
+on recordings containing no CW; a wrong station named on a live signal was
+invisible. Measured against the corroborated receiver captures, six of nine
+assert some other callsign at the true station's own frequency, usually a near
+miss of it: EG1PDA also asserted as EG1PEIE, DB26YLBB as UR5BV, EA1EYL as A1E,
+4X1MM as K1NE, EM90ZMV as T90ZTTV. The decoder surface benchmark now reports
+the same thing on synthetic signals, where six assertions in thirty-three name a
+station that was never sent.
+
+It cannot be fixed by scoring, and two attempts to do so are recorded here so
+they are not repeated. Raising the acceptance threshold from 3 to 5 removes
+every wrong assertion but drops correct ones from six to four and, worse, kills
+the exact-repetition path that identifies a pileup caller sending only its own
+call -- which is a case the application must keep. Weakening the bare closing
+prosign weight changes nothing at any value from 4 down to 1, because these
+tokens are followed by PSE K, a separate and much stronger rule. The reason is
+structural: the false tokens sit in positions where a callsign genuinely
+belongs, so context scoring cannot separate a correctly placed wrong token from
+a correctly placed right one. Only better decoding or external corroboration
+can, which is what the offline-list badge and the near-miss correction provide.
+
+Last reviewed: 2026-09-07 (eighth entry) — CW-001. Refining where element
+boundaries are placed was proposed as the remaining weak-signal work and is
+rejected on measurement, before any decoder code was written for it. The idea
+was to keep the threshold for deciding that a transition happened and place the
+boundary itself by likelihood, on the reasoning that one threshold crossing
+cannot serve both mark retention and timing precision.
+
+Placement is already accurate. Measured against known signals at 20 WPM, the
+median boundary lands within 3 per cent of a dot of the truth at 20, 15 and 12
+dB. Refining that would gain a percent or two of a dot, and the error surface
+says a quarter of a dot of jitter costs only 0.045 character error, so there is
+nothing there to win.
+
+The tail is a different failure. The ninetieth percentile sits near half a dot
+at every signal-to-noise ratio, and an edge that far out is a mark detected in
+the wrong place or not at all rather than one mistimed: it is the retention
+problem again, and placement refinement does not touch it. Retention remains
+what the error surface says is expensive -- losing a tenth of the marks costs
+0.455 against 0.125 for inventing a tenth -- and it cannot be bought with the
+keying thresholds without lengthening every mark, which the cadence estimator
+and the lattice's evidence confidence both detect. What is left is genuinely
+structural: the lattice would have to hypothesise marks and gaps from the
+evidence stream instead of being handed runs a threshold already extracted.
+That is a large piece of work and should be scoped deliberately rather than
+approached as a tuning change.
+
+Last reviewed: 2026-09-07 (seventh entry) — the remaining unrecovered receiver
+capture, 20260903-165900, was investigated and two proposed explanations were
+disproved by measurement before anything was built on them.
+
+It is not an acquisition transient. The theory was that opening characters are
+always lost because element boundaries must be committed before a speed
+estimate exists. A clean synthetic signal decodes the same callsign correctly
+from its first repetition at 16, 20 and 30 WPM, so no such general defect
+exists; the leading-token corruption seen in keying-style output is real but
+does not generalise to a mechanism.
+
+It is not track splitting either. Eleven of nineteen captures hold track pairs
+within 5 Hz, some 0.1 Hz apart, which looked like one carrier held under two
+identities. They are sequential rather than simultaneous: at 1015 Hz in capture
+20260902-132323 the acquisitions are 110, 128, 156 and 232 seconds apart. That
+is a station transmitting intermittently with tracks expiring between overs,
+which is the documented identity lifecycle.
+
+What is actually wrong is narrower. The callsign decodes as "EM ?0ZMV": a
+spurious gap splits it in two, and the character distinguishing the station is
+unknown. Joining the fragments would not settle it -- a wildcard lookup for
+EM?0ZMV matches EM80ZMV and EM90ZMV at distance zero, and the new directory
+correction refuses an ambiguous neighbourhood by design rather than guessing
+between two real stations. Recovery therefore depends on the operator's own
+list: unique there, a span that bridges one spurious gap would recover it;
+holding both, the decode genuinely does not determine which station sent.
+Bridging a single gap when forming the callsign span is worth trying for that
+reason, and must stay behind the existing correction setting.
+
 Last reviewed: 2026-09-07 (sixth entry) — the offline callsign list's fuzzy
 lookup was implemented and covered by tests but never called by the application;
 its only use was an exact-membership check that labelled a suggestion's source.
@@ -598,7 +675,7 @@ translucent band rather than two signal-like lines.
 | CW-005 | todo | Add optional coherent receive diversity | Synchronized receiver/antenna inputs can contribute spatial or confidence diversity, but bad alignment or a weak source must never degrade the best single-input held-out result. |
 | CW-006 | todo | Recognize well-known CW patterns as verification evidence | A recognized prosign/Q-code/contest token (`CQ`, `TEST`, `599`, `5NN`, `TU`, `UP`, and similarly distinctive ones — deliberately excluding short/common ones like `K`/`DE` that noise can hit by chance) appearing in a track's accumulated text is strong independent evidence of genuine Morse, distinct from the aggregate character-confidence score. Motivated directly by real debug-capture data: a real contest track's text contained a legible `TEST` yet never verified because `timingQuality` (see `DSP-002`'s known defect below) stayed under threshold for the track's entire lifetime. Add as an additional verification path (pattern found + minimal supporting evidence → verify) rather than replacing the existing gates, and calibrate/test the token list against real noise captures so it cannot reopen the noise-verification problem `DSP-002`'s plausibility gate closed. |
 | CW-007 | todo | Operator role modes: runner and search-and-pounce | The application has no notion of the operator's own role, which weakens stream callsign attribution. Runner: the operator calls and expects answers, needing split working (listening away from the transmit frequency) and pileup reading where many stations answer at once and each repeats only its own call. Search and pounce: the operator hunts stations that are calling, the common case, where the monitored stream is a runner whose own call is the one to label. Motivating measurement: role scoring already picks the transmitting station in nine of eleven realistic exchanges (both reply directions, contest CQ, split runner, pileup caller repeating), but fails where `TU` is ambiguous — it precedes the runner identifying itself (`TU IU0LFQ`) and equally the station just worked (`TU DL1NKB`), both scoring 6, so a run can label the worked station instead of the runner. Knowing the operator's role and own callsign resolves that directly: in search and pounce the monitored stream is the runner, and a call the operator's own station sends is never a stream label. Extends `CALL-001`'s segment-roles item; the own callsign is already configured under Settings → Station and stable text matching it is already detected. |
-| DOC-001 | active | Render documentation diagrams instead of ASCII art | Every diagram under `docs/` is currently ASCII art in a fenced block. Replace them with rendered vector figures (source checked in and generated at build or docs time, so a diagram is never a binary blob nobody can edit), covering the signal path, the decoder stages, verification state transitions, and the UI layout maps. Keep the rendered output legible in both light and dark viewers, and keep a text alternative for accessibility and for terminal readers. Done for the five existing diagrams: the layer stack, the realtime data flow and the transmit-safety states in `docs/architecture.md`, the decoder pipeline in `docs/decoder-strategy.md`, and the renderer node tree in `docs/decisions/0001`. All are Mermaid, which keeps the source in the document, diffable and editable, renders as vectors in GitHub and the common documentation viewers, and needs no build step or checked-in binary. Each carries a prose description of the same content immediately below it, so a terminal reader or screen reader loses nothing. Remaining: diagrams the manuals could gain but do not yet have, in particular a UI layout map. |
+| DOC-003 | done | Render documentation diagrams instead of ASCII art | Every diagram under `docs/` is currently ASCII art in a fenced block. Replace them with rendered vector figures (source checked in and generated at build or docs time, so a diagram is never a binary blob nobody can edit), covering the signal path, the decoder stages, verification state transitions, and the UI layout maps. Keep the rendered output legible in both light and dark viewers, and keep a text alternative for accessibility and for terminal readers. Done for the five existing diagrams: the layer stack, the realtime data flow and the transmit-safety states in `docs/architecture.md`, the decoder pipeline in `docs/decoder-strategy.md`, and the renderer node tree in `docs/decisions/0001`. All are Mermaid, which keeps the source in the document, diffable and editable, renders as vectors in GitHub and the common documentation viewers, and needs no build step or checked-in binary. Each carries a prose description of the same content immediately below it, so a terminal reader or screen reader loses nothing. The operator guide also gained the UI layout map it lacked. |
 | PERF-001 | active | Build decoder accuracy/resource benchmark gate | Deterministic gates cover zero primary and consensus edits across 8–55 WPM, a compressed-gap callsign repaired by consensus, append-only long-stream truncation, speed acquisition/change, no-CW false characters, clean/30 WPM/weak verified-track acquisition, five interference hard negatives (including a broad-spectral-hump case distinguishing wide non-CW energy from a narrowband CW carrier), a maximum 0.20 real-time resource factor, and a conservative decoder-state estimate capped at 256 KiB across the timing corpus. Raw-bank tests cover simultaneous tones and adjacent rejection; the threaded live fixture requires keyed Morse. Extend with WER, call precision/recall, calibrated SNR curves, co-channel separation, provisional/stable latency/revisions, true platform peak memory, real recordings, and per-platform overload behavior. |
 | CALL-001 | active | Extract and rank callsign candidates | A conservative normalized letter+digit token is exposed only after its track is verified, a stable word gap confirms the complete token, and exchange context (`DE`, `CQ`, `TU`, callsign-before-`UP`) or exact repetition supports it. Runner-identifying context outranks a repeated standalone caller; lone call-shaped noise/report fragments remain hidden. The timing layer now preserves bounded `?`/gap alternatives and exposes append-only acoustic consensus separately; a complete call from that consensus may pass the same context/repetition label policy without rewriting raw text. Add per-character alternative alignment, frequency-scoped repetition, segment roles, ranked callsign suggestions, optional external validation, and measured precision/recall targets including portable calls. Raw acoustic text must remain available and a suggestion must never silently replace it. |
 | CALL-006 | active | Maintain frequency-anchored decoded observation lifecycle | Tracks retain stable IDs/colors through keyed gaps and silence, update overlays and operator-selected sessions in place, and expire after a profile-configurable hold (Settings → Display, default 30 s, maximum 300 s). Retention preserves identity/text but cannot assert active/keyed state; explicit source/prefix provenance prevents simultaneous nearby tracks from overwriting one observation and carries a bounded 2,048-character transcript exactly once across a genuine replacement. A replacement never inherits a confirmed callsign and must establish station identity from its own acoustic suffix. Concurrent published identities own distinct colors, while a later reacquisition reuses its unoccupied five-minute frequency-color lease. Composed presentation text is never rescored as raw callsign repetition. Leases follow known RX retunes. Linked live radio audio can show checked actual RF using provider state, transverter offset, CW pitch, and sideband direction; add a visible/configurable lost state, viewport-independent RF reacquisition, and callsign-level identity. |

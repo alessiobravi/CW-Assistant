@@ -27,6 +27,32 @@ produced spectrum data. The staged application is also launched with the hosted
 runner's native graphics path before its installer or archive is uploaded, with
 a deterministic test spectrum to exercise waterfall texture creation.
 
+## Where things are on screen
+
+```mermaid
+flowchart TB
+  subgraph WIN["Application window"]
+    TOOL["Receiver toolbar — source, start and stop, radio link, settings"]
+    subgraph MAIN["Workspace"]
+      direction LR
+      SPEC["Spectrum and waterfall<br/>channel markers, callsign labels,<br/>CALLING YOU alert, selection cursor"]
+      CARDS["Decoder cards — one per open stream<br/>transcript, callsign and LISTED badge,<br/>speed, signal-to-noise ratio, confidence"]
+    end
+    STATUS["Status line — device, sample rate, radio frequency, capture state"]
+  end
+  TOOL --> MAIN --> STATUS
+  SPEC -->|"click a marker"| CARDS
+```
+
+The window is a toolbar above a workspace above a status line. The workspace
+holds the spectrum and waterfall on one side and the open decoder cards on the
+other. Every tracked signal appears as a marker on the spectrum carrying its
+callsign once one is decoded; clicking a marker opens that stream as a decoder
+card, which is where the transcript, the callsign and its corroboration badge,
+the speed, the signal-to-noise ratio and the confidence are shown. The status
+line reports the audio device and sample rate, the linked radio's frequency
+where one is connected, and whether a debug capture is running.
+
 ## Receive live radio audio
 
 1. Open **Settings → Audio**, select the sound-card input connected to the
