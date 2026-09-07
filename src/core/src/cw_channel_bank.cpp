@@ -1118,37 +1118,80 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           track.keying_mark_power, 0.0F));
       const float middle_amplitude = 0.5F * (space_amplitude +
                                              mark_amplitude);
+      const float observed_amplitude = std::sqrt(observed_power);
+      // Scatter about the assigned level, tracked slowly so a burst of marks
+      // cannot make the channel look quiet. A sample caught on a keying edge
+      // sits legitimately between the levels and says nothing about noise, so
+      // it is excluded: at 40 WPM the dot is barely two detector frames long
+      // and edge samples would otherwise dominate the estimate, flattening
+      // the decision on exactly the clean fast signals it should sharpen.
       const float half_span_amplitude = std::max(
           0.5F * (mark_amplitude - space_amplitude), 1.0e-6F);
-      const float observed_amplitude = std::sqrt(observed_power);
-      // A slicer always produces a decision, even between two levels that are
-      // indistinguishable. Without an explicit "no keying here" state the
-      // decoder converts receiver noise into single-element characters, which
-      // is the origin of both the spurious leading character on a clean signal
-      // and the E/T output on channels carrying no CW at all. Confidence is
-      // therefore scaled by how far the two estimated levels actually separate.
-      const float level_separation_db = 10.0F * std::log10(
-          std::max(track.keying_mark_power, 1.0e-12F) /
-          std::max(track.keying_space_power, 1.0e-12F));
-      const float separation_weight = std::clamp(
-          (level_separation_db - 3.0F) / 6.0F, 0.0F, 1.0F);
-      // Map half amplitude onto the timing decoder's decision midpoint so its
-      // symmetric hysteresis brackets the true edge instead of sitting below
-      // it. Endpoints saturate at the configured 0-10 evidence range.
-      // The gain sets how tightly the timing decoder's fixed hysteresis
-      // brackets the half-amplitude point. A high gain places the key-on and
-      // key-off pair within a few percent of the true edge, which is what
-      // makes element timing accurate; but on a noisy envelope such a narrow
-      // band chatters, turning receiver noise into single-element characters.
-      // Trade the two against measured keying contrast: a clean signal is
-      // sliced tightly, and a weak one gets a wider band that costs some edge
-      // precision to buy noise immunity.
-      const float decision_gain = std::clamp(
-          10.0F * (level_separation_db - 3.0F) / 18.0F, 4.0F, 10.0F);
-      track.keying_snr_db = separation_weight * std::clamp(
-          4.5F + decision_gain * (observed_amplitude - middle_amplitude) /
-                     half_span_amplitude,
-          0.0F, 10.0F);
+      const bool nearer_space = observed_amplitude < middle_amplitude;
+      const float level_residual = observed_amplitude -
+          (nearer_space ? space_amplitude : mark_amplitude);
+      // A mark carries signal plus noise and a space carries noise alone, so
+      // the two levels do not scatter equally. Tracking them separately is
+      // what lets the ratio state that a quiet space is more certain than a
+      // fading mark, rather than averaging the two into one blunt figure.
+      float& level_variance = nearer_space ? track.keying_space_variance
+                                           : track.keying_mark_variance;
+      // Admit a sample into a level's scatter only if it is plausibly ON that
+      // level. A keying edge sweeps through both levels' territory, and an
+      // edge sample admitted here inflates one level's scatter far above the
+      // other's -- which, with the boundary now sensitive to that ratio,
+      // moves the decision by a lot. Gate on the level's own established
+      // spread, falling back to a fraction of the level separation before any
+      // spread is known.
+      if (level_variance <= 0.0F) {
+        level_variance = level_residual * level_residual;
+      } else if (std::abs(level_residual) <= 0.5F * half_span_amplitude) {
+        level_variance +=
+            0.02F * (level_residual * level_residual - level_variance);
+      }
+      // A mark carries the space's noise plus the signal's own fluctuation,
+      // so its scatter can never be the smaller of the two. Keying edges sweep
+      // through both levels and can transiently inflate the space estimate
+      // past the mark's, which inverts the boundary shift and pushes the
+      // decision away from the mark instead of toward it -- on a clean signal
+      // that mistimes every element badly enough to lose the text entirely.
+      // Constrain the pair the same way the levels themselves are kept
+      // ordered.
+      track.keying_space_variance = std::min(track.keying_space_variance,
+                                             track.keying_mark_variance > 0.0F
+                                                 ? track.keying_mark_variance
+                                                 : track.keying_space_variance);
+      // Log-likelihood ratio between the mark and space hypotheses under the
+      // two-level model. With both levels carrying the same scatter this is
+      // the separation times the signed distance from the midpoint, over that
+      // scatter: the standard soft-decision result. The slope is measured
+      // rather than chosen, so it steepens when the levels separate cleanly
+      // and flattens toward zero -- meaning "no information" -- when they do
+      // not. That is the honest statement for a channel carrying no CW, and
+      // it replaces both the hand-set decision gain and the separation weight
+      // that used to push such a channel toward key-up. A hard slicer instead
+      // discards this margin, which is what fragmented weak elements: at 6 dB
+      // nine marks in ten broke up and mean mark length fell to 18 ms against
+      // a true 60 ms, even though spectral acquisition never failed.
+      const float variance_floor = std::max(
+          1.0e-12F, 1.0e-4F * middle_amplitude * middle_amplitude);
+      const float space_variance = std::max(track.keying_space_variance,
+                                            variance_floor);
+      const float mark_variance = std::max(track.keying_mark_variance,
+                                           variance_floor);
+      // Likelihood ratio under the two-level model with each level carrying
+      // its own scatter. Unequal scatter moves the decision off half
+      // amplitude, and here that is wanted rather than tolerated: a mark
+      // carries signal plus noise and a space carries noise alone, so the
+      // boundary sits nearer the mark and noise excursions stop producing
+      // marks. That is the whole weak-signal gain.
+      const float space_offset = observed_amplitude - space_amplitude;
+      const float mark_offset = observed_amplitude - mark_amplitude;
+      const float log_likelihood_ratio =
+          0.5F * (space_offset * space_offset / space_variance -
+                  mark_offset * mark_offset / mark_variance);
+      track.keying_snr_db =
+          track.decoder.evidenceForLogLikelihoodRatio(log_likelihood_ratio);
       const auto timestamp_ns = block.timestamp_ns +
           static_cast<std::uint64_t>(
               static_cast<long double>(index) * 1'000'000'000.0L /
@@ -1276,6 +1319,8 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.keying_snr_db = 0.0F;
   track.keying_space_power = 0.0F;
   track.keying_mark_power = 0.0F;
+  track.keying_space_variance = 0.0F;
+  track.keying_mark_variance = 0.0F;
   track.keying_envelope_initialized = false;
   track.filter_initialized = false;
 }

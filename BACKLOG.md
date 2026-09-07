@@ -6,6 +6,25 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (second entry) — replaced the heuristic keying slicer
+with a soft decision, the first stage of the weak-signal work. The detector now
+emits a calibrated log-likelihood ratio from a two-level model that tracks each
+level's scatter separately, so the decision slope is measured rather than set
+by hand and an unkeyed channel reports no information instead of being pushed
+toward key-up. Mean character error falls from 0.507 to 0.307, concentrated in
+the weak columns (20 dB 0.389 to 0.136, 15 dB 0.619 to 0.338, 12 dB 0.915 to
+0.719), and keying-style error falls from 0.296 to 0.108. Receiver captures and
+level invariance are unchanged. Two intermediate forms were measured and
+rejected on the way: a single pooled variance reached only 0.498 because it
+cannot express that a mark is noisier than a space, and forcing the decision
+back onto half amplitude reached 0.520, which established that the boundary
+shift is the gain rather than a defect to be corrected. CW-001 therefore stays
+open but narrows: what remains is the duration-explicit sequence decoder that
+would search dot length directly rather than choosing among nine fixed speed
+anchors, which is the piece that should carry Farnsworth spacing and 50 WPM.
+The debounce, the E/T veto and the anchor bank all remain compensations for a
+hard slicer that no longer exists, and should retire with it.
+
 Last reviewed: 2026-09-07 — restored the display/detection separation that was
 withdrawn on 2026-09-05. The element-timing corrections made since removed the
 acquisition sensitivity that had destabilised the hosted live-audio acceptance

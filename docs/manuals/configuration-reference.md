@@ -136,12 +136,19 @@ maintains separate soft key evidence, timing, provisional text, stable text,
 WPM, SNR, verification/rejection reason, and bounded per-character evidence.
 Key evidence is calculated from original input samples
 through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
-updates/second. The key decision itself is taken in the linear power domain at
-the half-amplitude point between the estimated space and mark levels, so marks
-and gaps are timed without a systematic length bias; the smoothing applied
-before it scales with the element length rather than being a fixed constant,
-and impulsive noise is rejected by a minimum run duration rather than by
-widening the decision band. Raising the audio sample rate or the internal
+updates/second. The key decision itself is a likelihood ratio
+between an estimated mark level and an estimated space level, taken in the
+linear power domain. Each level also carries its own measured scatter, and
+because a mark carries signal plus noise while a space carries noise alone the
+decision settles nearer the mark than half way between them, which is what
+stops noise excursions from producing marks on a weak signal. The ratio is
+handed to the timing decoder in the form its own logistic inverts exactly, so
+the probability that decoder works from is calibrated rather than a second
+shaping of an already shaped number; on a channel whose two levels do not
+separate, the ratio falls to zero and reports no information rather than an
+implied key-up. The smoothing applied before it scales with the element length
+rather than being a fixed constant, and impulsive noise is rejected by a
+minimum run duration rather than by widening the decision band. Raising the audio sample rate or the internal
 evidence rate does not improve copy and measurably degrades it: element timing
 is already oversampled at these settings, while a higher sample rate coarsens
 the fixed-size FFT and a higher evidence rate shortens the integration behind

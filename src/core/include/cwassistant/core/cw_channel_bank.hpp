@@ -322,6 +322,13 @@ class CwChannelBank {
     // stronger carrier widens the dB span.
     float keying_space_power{0.0F};
     float keying_mark_power{0.0F};
+    // Scatter of the observed amplitude about the level it was assigned to.
+    // This is the noise on the keying decision itself, and dividing the level
+    // separation by it is what converts a bare amplitude distance into
+    // evidence: the same gap is decisive on a quiet channel and meaningless
+    // on a noisy one.
+    float keying_space_variance{0.0F};
+    float keying_mark_variance{0.0F};
     bool keying_envelope_initialized{false};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};

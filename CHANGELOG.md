@@ -99,6 +99,37 @@ All notable changes to CW Assistant are recorded here. The format follows
   independently established to contain no CW. Farnsworth spacing remains an
   open limitation.
 
+- The keying decision is now a soft one. The detector previously shaped its
+  amplitude reading into an evidence ramp with a hand-set slope, and the timing
+  decoder squashed that ramp a second time to get a probability, so the number
+  it worked from was not a measure of anything. The detector now states a
+  log-likelihood ratio between its mark and space hypotheses, each level
+  carrying its own measured scatter, and encodes it so the decoder recovers a
+  calibrated posterior directly. The slope is therefore measured rather than
+  chosen: it steepens when the two levels separate cleanly and falls to zero --
+  meaning no information -- when they do not, which is the honest reading for a
+  channel carrying no CW.
+
+  Because a mark carries signal plus noise while a space carries noise alone,
+  the two levels scatter differently, and the decision consequently sits nearer
+  the mark than half amplitude. That is where the weak-signal gain comes from:
+  noise excursions stop producing marks. The one thing that must never happen
+  is the shift running the other way, so the space's scatter is held to no more
+  than the mark's. A keying edge sweeps through both levels and can briefly
+  inflate the space estimate past the mark's, and unconstrained that mistimes
+  every element badly enough to lose the message entirely.
+
+  Mean character error over the speed and noise surface falls from 0.507 to
+  0.307. The gain is concentrated where copy was worst: averaged across speeds,
+  error at 20 dB falls from 0.389 to 0.136, at 15 dB from 0.619 to 0.338, and
+  at 12 dB from 0.915 to 0.719. Keying style improves throughout, with mean
+  error across the styles falling from 0.296 to 0.108 -- a light-weighted fist
+  from 0.442 to 0.117 and a bug-like fist from 0.592 to 0.117 -- and six of the
+  seven styles now read the callsign correctly on both repetitions. Receiver
+  captures hold at eight of nine corroborated callsigns with none asserted on
+  any of the four captures containing no CW, and output remains identical
+  across a 52 dB span of absolute input level.
+
 - Detection no longer shares state with the spectrum display. It reads the
   unaveraged bins and applies its own smoothing over a fixed time constant, it
   runs on its own cadence rather than once per displayed frame, spectral

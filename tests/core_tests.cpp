@@ -2294,6 +2294,100 @@ void test_decoder_display_setting_invariance() {
          "evidence and cannot change the decoded result");
 }
 
+void test_soft_decision_keying_evidence() {
+  using namespace cwassistant::core;
+
+  constexpr double sample_rate = 48'000.0;
+  constexpr double tone_hz = 700.0;
+  // The keying decision is a likelihood ratio between a mark level and a space
+  // level, each carrying its own measured scatter. Unequal scatter moves the
+  // decision off half amplitude, which is wanted: a mark carries signal plus
+  // noise and a space carries noise alone, so the boundary sits nearer the
+  // mark and noise excursions stop producing marks. It may only ever move that
+  // way. A keying edge sweeps through both levels and can transiently inflate
+  // the space estimate past the mark's; if that is allowed to stand, the
+  // boundary shifts the wrong way and every element is mistimed. On a signal
+  // with no noise at all -- where the true scatter of both levels is nil and
+  // the transient is the only thing either estimate ever sees -- that failure
+  // is total, and the decoder emits nothing at all.
+  const auto decode = [&](const double dot_seconds,
+                         const float noise_amplitude) {
+    std::vector<float> audio;
+    audio.reserve(static_cast<std::size_t>(sample_rate * 12.0));
+    double phase = 0.0;
+    std::uint32_t noise_state = 0x2468'ACE0U;
+    const auto emit = [&](const double seconds, const bool keyed) {
+      const auto count = static_cast<std::size_t>(seconds * sample_rate);
+      for (std::size_t index = 0; index < count; ++index) {
+        noise_state = noise_state * 1'103'515'245U + 12'345U;
+        const float noise = noise_amplitude * (static_cast<float>(
+            (noise_state >> 16U) & 0x7FFFU) / 16'384.0F - 1.0F);
+        phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
+        audio.push_back(keyed
+            ? 0.20F * static_cast<float>(std::sin(phase)) + noise
+            : noise);
+      }
+    };
+    const auto send = [&](const std::string_view elements) {
+      for (std::size_t index = 0; index < elements.size(); ++index) {
+        emit(elements[index] == '-' ? 3.0 * dot_seconds : dot_seconds, true);
+        emit(dot_seconds, false);
+      }
+      emit(2.0 * dot_seconds, false);
+    };
+    emit(0.3, false);
+    for (int repeat = 0; repeat < 8; ++repeat) {
+      send("...");    // S
+      send("---");    // O
+      send("...");    // S
+      emit(4.0 * dot_seconds, false);
+    }
+
+    SpectrumAnalyzer analyzer({.audio_upper_frequency_hz = 3'000.0});
+    CwChannelBank bank;
+    RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    std::string text;
+    std::size_t position = 0;
+    std::uint64_t now = 0;
+    while (position < audio.size()) {
+      const std::size_t take = std::min<std::size_t>(1'024,
+                                                     audio.size() - position);
+      block.sample_count = take;
+      block.timestamp_ns = now;
+      for (std::size_t index = 0; index < take; ++index)
+        block.samples[index] = {audio[position + index], 0.0F};
+      for (const auto& snapshot : analyzer.process(block)) {
+        static_cast<void>(bank.updateSpectrum(
+            snapshot.timestamp_ns, snapshot.lower_frequency_hz,
+            snapshot.upper_frequency_hz,
+            snapshot.instantaneous_bins_dbfs));
+      }
+      for (const auto& channel : bank.processSamples(block)) {
+        if (!channel.text.empty()) text = channel.text;
+      }
+      position += take;
+      now += static_cast<std::uint64_t>(
+          static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
+    }
+    return text;
+  };
+
+  const std::string clean = decode(0.06, 0.0F);   // 20 WPM, no noise
+  expect(clean.find("SOS") != std::string::npos,
+         "a perfectly keyed signal carrying no noise decodes");
+
+  // Fast keying with receiver noise present is where the ordering matters
+  // most: the elements are short enough that edge samples are a large share
+  // of every run, so an unconstrained space estimate overtakes the mark's and
+  // the boundary shifts away from the mark. Every element then runs together
+  // and the message collapses into a string of single marks.
+  const std::string fast = decode(0.03, 0.002F);  // 40 WPM with noise
+  expect(fast.find("SOS") != std::string::npos,
+         "fast keying survives, so a keying edge cannot invert the two "
+         "levels' scatter and shift the decision away from the mark");
+}
+
 int main() {
   test_ring_buffer();
   test_scheduler();
@@ -2305,6 +2399,7 @@ int main() {
   test_cw_channel_presentation_frequency_model();
   test_cw_channel_bank_implausible_character_distribution();
   test_decoder_display_setting_invariance();
+  test_soft_decision_keying_evidence();
   test_callsign_policy();
   test_spectrum_settings();
   test_wav_replay_source();

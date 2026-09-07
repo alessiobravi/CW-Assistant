@@ -387,6 +387,32 @@ void CwTimingDecoder::promoteProvisional() {
   provisional_character_ = {};
 }
 
+namespace {
+
+float evidenceForRatio(const CwDecoderConfig& config,
+                       const float log_likelihood_ratio) noexcept {
+  const float midpoint = 0.5F * (config.key_on_snr_db + config.key_off_snr_db);
+  const float scale = std::max(
+      0.75F, 0.5F * (config.key_on_snr_db - config.key_off_snr_db));
+  // Saturate symmetrically about the midpoint. Beyond this the posterior is
+  // already within a few percent of certain, and letting it run further only
+  // lets one confident sample dominate the evidence average.
+  const float bounded = std::clamp(log_likelihood_ratio, -3.0F, 3.0F);
+  return midpoint + scale * bounded;
+}
+
+}  // namespace
+
+float CwTimingDecoder::evidenceForLogLikelihoodRatio(
+    const float log_likelihood_ratio) const noexcept {
+  return evidenceForRatio(config_, log_likelihood_ratio);
+}
+
+float CwMultiSpeedDecoder::evidenceForLogLikelihoodRatio(
+    const float log_likelihood_ratio) const noexcept {
+  return evidenceForRatio(decoder_config_, log_likelihood_ratio);
+}
+
 float CwTimingDecoder::probabilityForSnr(const float snr_db) const noexcept {
   const float midpoint =
       0.5F * (config_.key_on_snr_db + config_.key_off_snr_db);

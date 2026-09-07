@@ -87,6 +87,13 @@ class CwTimingDecoder {
                                         float snr_db);
   [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
   [[nodiscard]] std::size_t stateBytes() const noexcept;
+  // Exact inverse of the internal evidence-to-probability logistic. A detector
+  // that can state its keying decision as a log-likelihood ratio encodes it
+  // through this, and the probability this decoder then works with is a
+  // calibrated posterior instead of a second squash of an already shaped
+  // ramp. Kept beside its inverse so the two cannot drift apart.
+  [[nodiscard]] float evidenceForLogLikelihoodRatio(
+      float log_likelihood_ratio) const noexcept;
 
  private:
   void finishElement(double duration_ms);
@@ -164,6 +171,10 @@ class CwMultiSpeedDecoder {
   [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
   [[nodiscard]] std::size_t hypothesisCount() const noexcept;
   [[nodiscard]] std::size_t stateBytes() const noexcept;
+  // Every hypothesis shares one evidence configuration, so the calibration is
+  // common to all of them and a detector need encode its ratio only once.
+  [[nodiscard]] float evidenceForLogLikelihoodRatio(
+      float log_likelihood_ratio) const noexcept;
 
  private:
   struct Hypothesis {
