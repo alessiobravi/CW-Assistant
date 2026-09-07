@@ -73,7 +73,14 @@ several adjustments.
 The waterfall always represents the selected fixed number of **History**
 seconds from top to bottom. At startup, unavailable older time stays dark rather
 than stretching the first received rows over the pane. Resizing changes only
-the pixel height, and capture gaps remain visible as dark time. **Lines/s**
+the pixel height, and capture gaps remain visible as dark time. Display
+controls do not change what is decoded: **Avg** is a presentation setting only,
+and any **Lines/s** value of 60 or more supplies the decoder with identical
+evidence. Below 60 lines/s the detector receives fewer spectrum observations
+and may acquire a signal more slowly, so prefer 60 or more while decoding.
+Adjusting these controls no longer restarts decoding either — only changing the
+processing bandwidth, DC rejection, or gain resets tracks and transcripts.
+**Lines/s**
 controls genuine overlapping analysis updates without changing the window
 duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subject
 to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise

@@ -99,6 +99,30 @@ All notable changes to CW Assistant are recorded here. The format follows
   independently established to contain no CW. Farnsworth spacing remains an
   open limitation.
 
+- Detection no longer shares state with the spectrum display. It reads the
+  unaveraged bins and applies its own smoothing over a fixed time constant, it
+  runs on its own cadence rather than once per displayed frame, spectral
+  persistence accrues from elapsed time rather than per frame, and the receive
+  workers reset the decoder only when the audio reaching the detector actually
+  changes. Previously the **Avg** control and the display line rate both
+  changed decoded output — on one receiver capture the line rate changed the
+  callsign shown — and every display adjustment discarded all tracks,
+  transcripts and confirmed callsigns while the workspace kept showing the
+  previous channels.
+
+  This was first attempted earlier and withdrawn because it destabilised the
+  hosted live-audio acceptance test: element timing was then sensitive enough
+  that a few milliseconds of change in candidate admission selected a different
+  speed hypothesis for a whole segment. With the timing corrections since, that
+  sensitivity is gone and the change now improves every measure. Mean character
+  error over the audio-driven speed and noise surface falls from 0.545 to
+  0.507. Across the receiver captures, eight of nine externally corroborated
+  callsigns are now recovered against six of eight before, and none of the four
+  captures containing no CW asserts a callsign. Two recordings previously
+  believed to contain nothing in fact carry traffic that was being lost
+  entirely; one of them repeats a plain CQ call whose station identifier the
+  application's own capture-time diagnostics independently confirm.
+
 - Offline callsign suggestions now tolerate at most two acoustically supported
   substitutions, insertions, or deletions between a completed uncertain span
   and the current N-best callsign winner. Two current paths must still agree,

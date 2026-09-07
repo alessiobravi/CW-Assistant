@@ -6,6 +6,22 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 — restored the display/detection separation that was
+withdrawn on 2026-09-05. The element-timing corrections made since removed the
+acquisition sensitivity that had destabilised the hosted live-audio acceptance
+test, and with it the change improves every measure: mean character error falls
+from 0.545 to 0.507 and receiver-capture recovery rises from six of eight to
+eight of nine corroborated callsigns with no callsign asserted on any of the
+four captures containing no CW. Two captures previously treated as empty were
+found to carry traffic that the earlier detector lost; one is corroborated by
+the application's own capture-time diagnostics. A boxcar integrator matched to
+the element length was also prototyped for weak signals and rejected: it
+improved mean error but smeared element edges by its own window, degrading the
+timing corpus and turning consensus SOS into SYS. Weak-signal copy below about
+15 dB therefore still needs soft-decision decoding rather than a better filter,
+and remains CW-001 with Farnsworth spacing and 50 WPM. DSP-002 and UI-005 stay
+active for the wider detection and visualization scope.
+
 Last reviewed: 2026-09-06 — removed the keying-weight bias from the element
 estimate after measuring that operator sending style, not just speed and
 signal-to-noise ratio, was an untested decoder dimension. Bug-style sending was

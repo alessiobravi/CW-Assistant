@@ -16,6 +16,14 @@ target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE
 add_test(NAME cwa_decoder_transcript_qml_test
   COMMAND cwa_decoder_transcript_qml_test)
 
+add_executable(cwa_decoder_display_separation_test
+  desktop/decoder_display_separation_test.cpp)
+target_compile_definitions(cwa_decoder_display_separation_test PRIVATE
+  CWA_LIVE_AUDIO_WORKER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/live_audio_worker.cpp"
+  CWA_REPLAY_CONTROLLER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/replay_controller.cpp")
+add_test(NAME cwa_decoder_display_separation_test
+  COMMAND cwa_decoder_display_separation_test)
+
 add_executable(cwa_callsign_evidence_tests callsign_evidence_tests.cpp)
 target_link_libraries(cwa_callsign_evidence_tests PRIVATE cwa_core)
 add_test(NAME cwa_callsign_evidence_tests COMMAND cwa_callsign_evidence_tests)
