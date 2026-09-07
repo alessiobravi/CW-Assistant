@@ -123,6 +123,16 @@ int main() {
     return 12;
   }
 
+  // A station calling the operator must be visible on the spectrum, before
+  // any card is opened: an alert that only appears inside an opened session
+  // cannot draw attention to a call the operator has not found yet.
+  if (!contains(qml, "modelData.callingOwnStation") ||
+      !contains(qml, "\\u25CF CALLING YOU") ||
+      !contains(qml, "loops: Animation.Infinite") ||
+      !contains(qml, "objectName: \"channelLabelBackground\"")) {
+    return 13;
+  }
+
   // Keep wrapping width independent of scrollbar visibility, with no
   // horizontal scrollbar and a permanently reserved vertical gutter.
   if (!contains(transcript, "width: transcriptScroll.availableWidth") ||

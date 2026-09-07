@@ -497,6 +497,10 @@ void LiveAudioDspWorker::configure(
   if (signal_path_changed) decoder_.reset();
 }
 
+void LiveAudioDspWorker::setOwnCallsign(const QString& callsign) {
+  decoder_.setOwnCallsign(callsign.trimmed().toStdString());
+}
+
 void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
   decoder_.configure({.decoded_track_retention_seconds =
                           static_cast<double>(std::clamp(seconds, 5, 120))});

@@ -112,6 +112,29 @@ All notable changes to CW Assistant are recorded here. The format follows
   was never sent. It stays advisory in either case and cannot rewrite the
   transcript, become the confirmed callsign on its own, or affect verification,
   and it never substitutes where more than one entry is equally close.
+- Every diagram in the documentation is now rendered rather than drawn in ASCII.
+  The layer stack, realtime data flow and transmit-safety states in the
+  architecture document, the decoder pipeline in the decoder strategy, and the
+  renderer node tree in the first design decision are Mermaid: the source stays
+  in the document where it can be diffed and edited, it renders as vectors in
+  GitHub and the common documentation viewers, and it needs no build step or
+  checked-in binary. Each keeps a prose description of the same content beside
+  it so a terminal or screen reader loses nothing.
+- A station calling the operator is now visible on the spectrum. Where a
+  stream's text contains the configured own callsign, its marker blinks and
+  reads CALLING YOU. The application already flashed an opened decoder card for
+  this, which cannot draw attention to a call the operator has not found yet.
+- The operator's own callsign is no longer used as a stream label. It reaches
+  decoded text whenever somebody calls the operator -- a caller sends it before
+  its own -- so a pileup answering the operator could label every stream with
+  the operator's own call. A stream now stays unlabelled until the calling
+  station identifies, which is the honest answer.
+- A benchmark reports character error over the speed and noise surface together
+  with its own repeatability. The figure moves by a few hundredths with the
+  noise draw while being deterministic per seed, so it prints the spread across
+  independent seed sets and states that a smaller difference is not a result.
+  Two builds must be compared on the same seeds and judged on the paired
+  difference.
 - A confirmed callsign now shows whether the offline list corroborates it. The
   decoder card carries a green LISTED badge with a tick where the callsign is
   in the list and a plain DECODED badge where it is not, and the spectrum draws

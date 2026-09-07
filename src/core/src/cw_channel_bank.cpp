@@ -116,6 +116,10 @@ void CwChannelBank::configure(CwChannelBankConfig config) noexcept {
   sanitizeConfig();
 }
 
+void CwChannelBank::setOwnCallsign(std::string callsign) {
+  config_.own_callsign = std::move(callsign);
+}
+
 void CwChannelBank::sanitizeConfig() noexcept {
   config_.acquisition_snr_db =
       std::clamp(config_.acquisition_snr_db, 3.0F, 30.0F);
@@ -1976,6 +1980,15 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
             config_.minimum_verification_timing_quality && callsign.empty()) {
       callsign = CallsignPolicy::best_complete_in_text(track.update.text)
                      .value_or(std::string{});
+    }
+    // Never label a stream with the operator's own callsign. It appears in
+    // received text whenever somebody calls the operator, and a caller that
+    // sends it repeatedly without ever completing its own would otherwise take
+    // the label. Suppressing it leaves the stream unlabelled until the calling
+    // station identifies, which is the honest answer.
+    if (!config_.own_callsign.empty() && !callsign.empty()) {
+      const auto own = CallsignPolicy::normalize(config_.own_callsign);
+      if (own && *own == callsign) callsign.clear();
     }
     CwChannelSnapshot snapshot{
         .id = track.id,

@@ -24,6 +24,11 @@ target_compile_definitions(cwa_decoder_display_separation_test PRIVATE
 add_test(NAME cwa_decoder_display_separation_test
   COMMAND cwa_decoder_display_separation_test)
 
+add_executable(cwa_decoder_surface_benchmark cw_decoder_surface_benchmark.cpp)
+target_link_libraries(cwa_decoder_surface_benchmark PRIVATE cwa_core)
+add_test(NAME cwa_decoder_surface_benchmark
+  COMMAND cwa_decoder_surface_benchmark)
+
 add_executable(cwa_update_notice_qml_test
   desktop/update_notice_qml_test.cpp)
 target_compile_definitions(cwa_update_notice_qml_test PRIVATE

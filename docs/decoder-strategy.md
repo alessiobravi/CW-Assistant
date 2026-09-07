@@ -25,25 +25,27 @@ or unsupported.
 
 ## Processing graph
 
-```text
-shared wide FFT
-      |
-candidate tone tracker
-      |
-complex mixer + narrow multirate filter bank + adaptive noise estimate
-      |
-physical narrowband features
-      |                         |
-deterministic key likelihood    tiny causal likelihood model (optional)
-      |                         |
-      +--------- calibrated probability fusion ---------+
-                                               |
-                              semi-Markov Morse n-best search
-                                               |
-                       provisional text, stable text, confidence, evidence
-                                               |
-                optional context/callsign re-ranking (always labeled separately)
+```mermaid
+flowchart TB
+  FFT["shared wide FFT"] --> TRK["candidate tone tracker"]
+  TRK --> MIX["complex mixer, narrow multirate filter bank,<br/>adaptive noise estimate"]
+  MIX --> FEAT["physical narrowband features"]
+  FEAT --> DET["deterministic key likelihood"]
+  FEAT --> MODEL["tiny causal likelihood model (optional)"]
+  DET --> FUSE["calibrated probability fusion"]
+  MODEL --> FUSE
+  FUSE --> SEARCH["semi-Markov Morse n-best search"]
+  SEARCH --> OUT["provisional text, stable text,<br/>confidence, evidence"]
+  OUT --> RANK["optional context and callsign re-ranking<br/>(always labelled separately)"]
 ```
+
+One wide FFT feeds a candidate tone tracker. Each candidate is mixed down
+through a narrow multirate filter bank against an adaptive noise estimate to
+yield physical narrowband features. Those features drive a deterministic key
+likelihood and, optionally, a small causal likelihood model; the two are fused
+as calibrated probabilities before a semi-Markov Morse n-best search produces
+provisional text, stable text, confidence and evidence. Any context or
+callsign re-ranking happens after that and is always labelled separately.
 
 A tracked signal is state, not a dedicated operating-system thread. One FFT is
 shared by all candidates and bounded worker-pool jobs process active tracks.

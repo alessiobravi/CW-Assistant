@@ -1,5 +1,6 @@
 #include "replay_controller.hpp"
 
+#include <QRegularExpression>
 #include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
@@ -502,6 +503,10 @@ class ReplayWorker final : public QObject {
     }
   }
 
+  void setOwnCallsign(const QString& callsign) {
+    decoder_.setOwnCallsign(callsign.trimmed().toStdString());
+  }
+
   void setDecodedSignalTimeoutSeconds(const int seconds) {
     decoder_.configure({.decoded_track_retention_seconds =
                             static_cast<double>(std::clamp(seconds, 5, 120))});
@@ -680,6 +685,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::configure);
   connect(this, &ReplayController::decodedSignalTimeoutRequested, worker,
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::ownCallsignRequested, worker,
+          &ReplayWorker::setOwnCallsign);
   connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
           worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::replayCharacterRefinementRequested,
@@ -762,6 +769,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::configure);
   connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::liveOwnCallsignRequested, dsp_worker,
+          &LiveAudioDspWorker::setOwnCallsign);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::liveCharacterRefinementRequested,
@@ -1178,6 +1187,26 @@ void ReplayController::rebuildDecoderModels() {
                         confirmed_callsign.toStdString()));
     item.insert(QStringLiteral("callsignDatabaseLoaded"),
                 offline_callsign_database_.size() > 0U);
+    // Somebody is calling the operator on this stream. Detected on the
+    // spectrum model rather than only on an opened card, because the operator
+    // has to notice it before deciding which stream to open -- an alert that
+    // only appears once the card is already open cannot draw attention to a
+    // call the operator has not found yet.
+    bool calling_own_station = false;
+    if (!own_callsign_.isEmpty()) {
+      const QString heard =
+          item.value(QStringLiteral("text")).toString() + QStringLiteral(" ") +
+          item.value(QStringLiteral("refinedText")).toString();
+      for (const QString& token :
+           heard.toUpper().split(QRegularExpression(QStringLiteral("[^A-Z0-9/]+")),
+                                 Qt::SkipEmptyParts)) {
+        if (token == own_callsign_) {
+          calling_own_station = true;
+          break;
+        }
+      }
+    }
+    item.insert(QStringLiteral("callingOwnStation"), calling_own_station);
     item.insert(QStringLiteral("callsignSuggestion"), QString{});
     item.insert(QStringLiteral("callsignSuggestionRawSpan"), QString{});
     item.insert(QStringLiteral("callsignSuggestionSource"), QString{});
@@ -1243,6 +1272,8 @@ void ReplayController::publishLivePresentationDiagnostics(const bool force) {
          channel.value(QStringLiteral("callsign"))},
         {QStringLiteral("callsignInDatabase"),
          channel.value(QStringLiteral("callsignInDatabase"))},
+        {QStringLiteral("callingOwnStation"),
+         channel.value(QStringLiteral("callingOwnStation"))},
         {QStringLiteral("callsignDatabaseLoaded"),
          channel.value(QStringLiteral("callsignDatabaseLoaded"))},
         {QStringLiteral("callsignSuggestion"),
@@ -1380,6 +1411,12 @@ void ReplayController::setSourceMode(const int value) {
 void ReplayController::setDecodedSignalTimeoutSeconds(const int seconds) {
   emit decodedSignalTimeoutRequested(seconds);
   emit liveDecodedSignalTimeoutRequested(seconds);
+}
+
+void ReplayController::setOwnCallsign(const QString& callsign) {
+  own_callsign_ = callsign.trimmed().toUpper();
+  emit ownCallsignRequested(own_callsign_);
+  emit liveOwnCallsignRequested(own_callsign_);
 }
 
 void ReplayController::setAudioInputSelection(QString encoded_id,

@@ -92,6 +92,7 @@ class LiveAudioDspWorker final : public QObject {
                  double automatic_gain_target_dbfs,
                  bool automatic_bandwidth, double lower_frequency_hz,
                  double upper_frequency_hz);
+  void setOwnCallsign(const QString& callsign);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setLocalCharacterFrontendEnabled(bool enabled);
   void acceptCharacterRefinement(qulonglong channel_id,

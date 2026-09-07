@@ -57,6 +57,14 @@ inline constexpr std::size_t kCwVerificationReasonCount =
     float maximum_simple_character_fraction) noexcept;
 
 struct CwChannelBankConfig {
+  // The operator's own callsign, normalized, or empty when unset. A stream is
+  // labelled with the station transmitting on it, and the operator's own call
+  // is by definition not that station: hearing it means somebody is calling
+  // the operator, and the station to name is the one doing the calling. It
+  // reaches the decoded text often -- a caller sends it before its own -- and
+  // without this a pileup answering the operator would label every stream with
+  // the operator's own call.
+  std::string own_callsign;
   float acquisition_snr_db{7.0F};
   float retention_snr_db{2.5F};
   float detection_dynamic_range_db{96.0F};
@@ -236,6 +244,10 @@ class CwChannelBank {
   // Applies a new configuration to future evaluation without discarding
   // existing tracks; every field is sanitized exactly as at construction.
   void configure(CwChannelBankConfig config) noexcept;
+  // Separate from configure() deliberately: configure() replaces the whole
+  // configuration, so a caller that later adjusts one unrelated field would
+  // otherwise silently clear this.
+  void setOwnCallsign(std::string callsign);
   void reset() noexcept;
   // Re-centers every current track by a known audio-domain frequency shift
   // (for example, the shift implied by an operator retuning the linked

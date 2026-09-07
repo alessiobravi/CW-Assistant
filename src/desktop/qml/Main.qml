@@ -516,7 +516,9 @@ ApplicationWindow {
                             y: spectrumDisplay.height * 0.36 - height - 12
                             transformOrigin: Item.BottomLeft
                             rotation: -90
-                            text: !modelData.verifiedCw
+                            text: modelData.callingOwnStation
+                                  ? "\u25CF CALLING YOU"
+                                  : !modelData.verifiedCw
                                   ? modelData.frequencyLabel + " • manual"
                                   : modelData.callsign.length > 0
                                   ? (modelData.callsign
@@ -533,17 +535,38 @@ ApplicationWindow {
                             bottomPadding: 2
                             z: 2
                             background: Rectangle {
+                                id: channelLabelBackground
+                                objectName: "channelLabelBackground"
                                 // A callsign corroborated by the operator's
                                 // offline list is drawn as a solid chip. One
                                 // that was only decoded keeps the plain
                                 // background, because an unlisted station is
-                                // ordinary rather than suspect.
-                                color: modelData.callsignInDatabase
-                                       ? "#16241a" : "#e6091018"
-                                border.color: modelData.color
-                                border.width: modelData.callsignInDatabase
-                                              || channelMarker.pointerHovered ? 1 : 0
+                                // ordinary rather than suspect. A stream that
+                                // is calling the operator overrides both: it
+                                // is the one thing here the operator must not
+                                // miss, and it has to be visible on the
+                                // spectrum, before any card is opened.
+                                color: modelData.callingOwnStation
+                                       ? "#5a1420"
+                                       : (modelData.callsignInDatabase
+                                          ? "#16241a" : "#e6091018")
+                                border.color: modelData.callingOwnStation
+                                              ? "#ff6b6b" : modelData.color
+                                border.width: modelData.callingOwnStation
+                                              ? 2
+                                              : (modelData.callsignInDatabase
+                                                 || channelMarker.pointerHovered ? 1 : 0)
                                 radius: 3
+                                SequentialAnimation on opacity {
+                                    running: modelData.callingOwnStation
+                                    loops: Animation.Infinite
+                                    alwaysRunToEnd: true
+                                    NumberAnimation { from: 1.0; to: 0.35; duration: 420 }
+                                    // The cycle ends fully opaque and is
+                                    // allowed to finish, so the marker never
+                                    // freezes half faded when the call stops.
+                                    NumberAnimation { from: 0.35; to: 1.0; duration: 420 }
+                                }
                             }
                             Behavior on font.pixelSize {
                                 NumberAnimation { duration: 90 }

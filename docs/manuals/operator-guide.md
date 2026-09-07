@@ -143,6 +143,15 @@ thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Its larger decoded-text window wraps
 the latest output and follows new text while its viewport is at the bottom.
+When a stream contains **Settings -> Station -> Own callsign**, its marker on
+the spectrum blinks and reads **CALLING YOU** in red. That happens on the
+spectrum rather than only inside an opened decoder card, because the point is
+to find the stream in the first place; click the marker to open it and follow
+the decode. The operator's own callsign is never used as a stream label either:
+hearing it means somebody is calling, and the station worth naming is the one
+doing the calling, so the stream stays unlabelled until that station
+identifies.
+
 A confirmed callsign shows whether the offline list corroborates it. In the
 decoder card a green **LISTED** badge with a tick follows a callsign found in
 the list, and a plain **DECODED** badge follows one that was not; on the

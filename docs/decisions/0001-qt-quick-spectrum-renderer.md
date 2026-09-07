@@ -16,17 +16,20 @@ retain a portable fallback when accelerated features are unavailable.
 Use Qt 6 Quick/QML for controls and layout, with a custom C++ `QQuickItem` for
 the real-time visualization:
 
-```text
-QML controls and layout
-        |
-SpectrumWaterfallItem (public QQuickItem API)
-        |
-Qt Scene Graph nodes
-  |-- spectrum line/fill geometry
-  |-- waterfall ring texture + palette shader
-  |-- grid/frequency markers
-  `-- decoded callsign/channel overlays and hit testing
+```mermaid
+flowchart TB
+  QML["QML controls and layout"] --> ITEM["SpectrumWaterfallItem<br/>(public QQuickItem API)"]
+  ITEM --> SG["Qt Scene Graph nodes"]
+  SG --> N1["spectrum line and fill geometry"]
+  SG --> N2["waterfall ring texture and palette shader"]
+  SG --> N3["grid and frequency markers"]
+  SG --> N4["decoded callsign and channel overlays,<br/>hit testing"]
 ```
+
+QML controls and layout drive a single public `SpectrumWaterfallItem`, which
+builds Qt Scene Graph nodes for the spectrum geometry, the waterfall ring
+texture and its palette shader, the grid and frequency markers, and the decoded
+callsign and channel overlays that also handle hit testing.
 
 Qt Shader Tools will compile shader variants at build time. Qt's rendering
 abstraction selects Direct3D on Windows, Metal on macOS, and Vulkan/OpenGL as

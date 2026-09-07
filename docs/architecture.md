@@ -2,62 +2,71 @@
 
 ## Component boundaries
 
-```text
-desktop-ui (Qt Quick/QML)
-  |-- custom QQuickItem scene-graph spectrum/waterfall renderer
-  |-- receiver/channel controls
-  |-- QSO workflow panels
-  `-- diagnostics and settings
-
-application services
-  |-- receiver coordinator
-  |-- channel tracker/scheduler
-  |-- QSO state machine and macro expansion
-  |-- TX safety supervisor
-  |-- log coordinator and durable outbox
-  `-- remote station coordinator and state snapshots
-
-dependency-free core
-  |-- sample and spectral data contracts
-  |-- bounded queues and worker scheduling
-  |-- CW timing/decoding state
-  |-- QSO/ADIF domain model
-  `-- hardware-neutral interfaces
-
-adapters
-  |-- Qt Multimedia input / WAV replay
-  |-- SoapySDR input / SigMF replay
-  |-- network receiver directory and KiwiSDR WebSocket source
-  |-- secure remote control/event and Opus receive-media transports
-  |-- Hamlib CAT
-  |-- serial RTS/DTR keying
-  `-- Log4OM UDP ADIF
+```mermaid
+flowchart TB
+  subgraph UI["desktop-ui — Qt Quick / QML"]
+    U1["scene-graph spectrum and waterfall renderer"]
+    U2["receiver and channel controls"]
+    U3["QSO workflow panels"]
+    U4["diagnostics and settings"]
+  end
+  subgraph SVC["application services"]
+    S1["receiver coordinator"]
+    S2["channel tracker and scheduler"]
+    S3["QSO state machine and macro expansion"]
+    S4["TX safety supervisor"]
+    S5["log coordinator and durable outbox"]
+    S6["remote station coordinator and state snapshots"]
+  end
+  subgraph CORE["dependency-free core"]
+    C1["sample and spectral data contracts"]
+    C2["bounded queues and worker scheduling"]
+    C3["CW timing and decoding state"]
+    C4["QSO and ADIF domain model"]
+    C5["hardware-neutral interfaces"]
+  end
+  subgraph ADP["adapters"]
+    A1["Qt Multimedia input / WAV replay"]
+    A2["SoapySDR input / SigMF replay"]
+    A3["receiver directory and KiwiSDR WebSocket source"]
+    A4["remote control, event and Opus receive-media transports"]
+    A5["Hamlib CAT"]
+    A6["serial RTS/DTR keying"]
+    A7["Log4OM UDP ADIF"]
+  end
+  UI --> SVC --> CORE
+  ADP --> CORE
 ```
+
+The stack is four layers. The Qt Quick interface sits above application
+services, both of which depend on a dependency-free core holding the data
+contracts, scheduling, CW timing state and domain model. Adapters for audio,
+SDR, network receivers, CAT control, keying and logging depend on the core's
+hardware-neutral interfaces and never the reverse.
 
 Dependencies point inward. Hardware adapters implement core interfaces; the
 core never includes Qt, Hamlib, or SoapySDR headers.
 
 ## Sample and threading model
 
-```text
-capture callback
-      | fixed block, try_push
-      v
-bounded SPSC ring ----overflow counter----> diagnostics
-      |
-      v
-DSP dispatcher ----FFT frame----> UI snapshot ring ----> render thread
-      |
-      +---- detector/tracker
-      |
-      `---- bounded work queue ----> fixed worker pool
-                                      | per-channel state
-                                      v
-                              decoded event queue
-                                      |
-                                      v
-                              application/QSO thread
+```mermaid
+flowchart TB
+  CB["capture callback"] -->|"fixed block, try_push"| RING["bounded SPSC ring"]
+  RING -->|"overflow counter"| DIAG["diagnostics"]
+  RING --> DSP["DSP dispatcher"]
+  DSP -->|"FFT frame"| SNAP["UI snapshot ring"] --> RENDER["render thread"]
+  DSP --> TRACK["detector / tracker"]
+  DSP --> WORK["bounded work queue"] --> POOL["fixed worker pool"]
+  POOL -->|"per-channel state"| EVQ["decoded event queue"] --> APP["application / QSO thread"]
 ```
+
+Audio arrives on the capture callback in fixed blocks and is pushed into a
+bounded single-producer single-consumer ring, whose overflow counter is
+reported to diagnostics rather than blocking the callback. The DSP dispatcher
+drains it, publishing FFT frames to a snapshot ring for the render thread,
+driving the detector and tracker, and handing per-channel work to a fixed
+worker pool through a bounded queue. Decoded events reach the application and
+QSO thread through a further queue.
 
 There is one capture callback per active source, one dispatcher per receiver,
 and a bounded worker pool. A tracked frequency is a state object, not a thread.
@@ -332,14 +341,26 @@ lines to their inactive polarity before the profile can be armed.
 
 ## TX safety state machine
 
-```text
-DISARMED -> ARMED -> AWAITING_CONFIRMATION -> CONFIRMED -> TRANSMITTING
-    ^          ^                                      |          |
-    |          `------------- QSO complete -----------'          |
-    `---------------- disarm / restart ---------------------------'
-
-Any state -> FAULT -> explicit reset -> DISARMED
+```mermaid
+stateDiagram-v2
+  [*] --> DISARMED
+  DISARMED --> ARMED
+  ARMED --> AWAITING_CONFIRMATION
+  AWAITING_CONFIRMATION --> CONFIRMED
+  CONFIRMED --> TRANSMITTING
+  TRANSMITTING --> ARMED: QSO complete
+  TRANSMITTING --> DISARMED: disarm / restart
+  ARMED --> DISARMED: disarm / restart
+  DISARMED --> FAULT: any state
+  ARMED --> FAULT: any state
+  TRANSMITTING --> FAULT: any state
+  FAULT --> DISARMED: explicit reset
 ```
+
+Transmission is reached only through disarmed, armed, awaiting confirmation and
+confirmed, in that order. Completing a QSO returns to armed, and disarming or
+restarting returns to disarmed. Any state can enter fault, which is left only
+by an explicit reset back to disarmed.
 
 The application state machine grants permission; the serial adapter remains
 responsible for a hard maximum-key-down timer and best-effort line release on
