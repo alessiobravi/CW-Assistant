@@ -97,6 +97,46 @@ double gapCost(const double ratio, const float confidence,
   return confidenceScale(confidence) * residual;
 }
 
+
+// Farnsworth sending keeps element timing at the sender's speed while
+// stretching the gaps between characters and words by a common factor. The
+// gap centres are therefore not at three and seven dots but at three and seven
+// times that factor, and scoring against the fixed centres reads every
+// stretched character gap as a word gap: on a Farnsworth fixture the literal
+// decoder read the message perfectly while this path split every character
+// apart, and the card prefers this path.
+//
+// The factor is recovered from the gaps themselves. Ordinary text contains far
+// more character gaps than word gaps, so the median gap that is clearly longer
+// than an element gap is a character gap, and the factor is that median over
+// three. Nothing is adapted unless enough such gaps exist and the result stays
+// within the range real sending occupies.
+double estimateFarnsworthFactor(
+    const std::vector<CwRunObservation>& observations,
+    const std::size_t first_observation, const double dot_ms,
+    const CwEventLatticeConfig& config) {
+  std::vector<double> long_gaps;
+  for (std::size_t index = first_observation; index < observations.size();
+       ++index) {
+    const auto& observation = observations[index];
+    if (observation.keyed) continue;
+    if (observation.confidence < config.minimum_tolerance_observation_confidence)
+      continue;
+    const double ratio = observation.duration_ms / dot_ms;
+    // Clearly beyond an element gap, and short of the longest a character gap
+    // could plausibly reach even when heavily stretched.
+    if (ratio > 1.8 && ratio < 12.0) long_gaps.push_back(ratio);
+  }
+  if (long_gaps.size() < config.minimum_adaptive_character_gaps) return 1.0;
+  std::ranges::sort(long_gaps);
+  const double median = long_gaps[long_gaps.size() / 2];
+  const double factor = median / config.character_gap_dots;
+  // Below one is ordinary compressed sending, which the existing compressed
+  // centres already model; above two and a half is beyond what is sent.
+  if (!std::isfinite(factor) || factor < 1.15 || factor > 2.5) return 1.0;
+  return factor;
+}
+
 double estimateTimingTolerance(
     const std::vector<CwRunObservation>& observations,
     const std::size_t first_observation, const double dot_ms,
@@ -378,6 +418,15 @@ CwEventLatticeResult CwEventLattice::decode(
 
   const double effective_tolerance = estimateTimingTolerance(
       observations_, first_observation, dot_ms, config_);
+  // Scale the character and word centres together, which is exactly how
+  // Farnsworth stretches them; element timing is untouched.
+  CwEventLatticeConfig spacing = config_;
+  const double farnsworth = estimateFarnsworthFactor(
+      observations_, first_observation, dot_ms, config_);
+  spacing.character_gap_dots *= farnsworth;
+  spacing.compressed_character_gap_dots *= farnsworth;
+  spacing.word_gap_dots *= farnsworth;
+  spacing.compressed_word_gap_dots *= farnsworth;
   result.effective_timing_tolerance_scale = effective_tolerance;
   float confidence_sum = 0.0F;
   std::size_t confidence_count = 0;
@@ -462,14 +511,14 @@ CwEventLatticeResult CwEventLattice::decode(
           config_.maximum_elements_per_symbol) {
         Path element_path = path;
         element_path.cost += gap_uncertainty_cost + gapCost(
-            gap_ratio, gap.confidence, GapKind::Element, config_,
+            gap_ratio, gap.confidence, GapKind::Element, spacing,
             effective_tolerance);
         expanded.push_back(std::move(element_path));
       }
 
       Path character_path = path;
       character_path.cost += gap_uncertainty_cost + gapCost(
-          gap_ratio, gap.confidence, GapKind::Character, config_,
+          gap_ratio, gap.confidence, GapKind::Character, spacing,
           effective_tolerance);
       const bool character_is_known =
           decodeElements(character_path.pending_elements).has_value();
@@ -485,7 +534,7 @@ CwEventLatticeResult CwEventLattice::decode(
 
       Path word_path = path;
       word_path.cost += gap_uncertainty_cost + gapCost(
-          gap_ratio, gap.confidence, GapKind::Word, config_,
+          gap_ratio, gap.confidence, GapKind::Word, spacing,
           effective_tolerance);
       const bool word_is_known =
           decodeElements(word_path.pending_elements).has_value();

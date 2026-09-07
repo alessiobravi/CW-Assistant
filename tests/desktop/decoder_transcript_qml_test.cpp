@@ -265,9 +265,13 @@ int main() {
       !contains(vfo_editor, "color: \"#06130e\"") ||
       !contains(vfo_editor, "Accessible.name: \"Edit RX frequency\"") ||
       !contains(qml, "objectName: \"vfoRxEditErrorLabel\"") ||
-      !contains(qml, "objectName: \"moveDecoderSessionUpButton\"") ||
-      !contains(qml, "objectName: \"moveDecoderSessionDownButton\"") ||
-      !contains(qml, "onPressed: replayController.moveDecoderSession(") ||
+      // Cards are reordered by dragging. A keyboard path is kept on the same
+      // control so the ordering is reachable without a pointer.
+      !contains(qml, "objectName: \"decoderSessionDragHandle\"") ||
+      !contains(qml, "objectName: \"decoderSessionDragHandler\"") ||
+      !contains(qml, "Keys.onUpPressed") ||
+      !contains(qml, "Keys.onDownPressed") ||
+      !contains(qml, "replayController.moveDecoderSession(") ||
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
       !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
     return 8;

@@ -1270,6 +1270,9 @@ ApplicationWindow {
                         id: sessionCard
                         required property var modelData
                         required property int index
+                        // Lifted while being dragged so the card being moved is
+                        // obvious against the ones it passes.
+                        opacity: sessionDragHandler.active ? 0.85 : 1.0
                         width: decoderChannelList.width
                         // Derive the delegate height from its actual rows. A
                         // fixed card height let platform font/control metrics
@@ -1281,7 +1284,7 @@ ApplicationWindow {
                         border.width: modelData.keyDown ? 2 : 1
                         border.color: modelData.color
                         clip: true
-                        z: 1
+                        z: sessionDragHandler.active ? 10 : 1
                         property string rawDecodedText: modelData.text.length > 0
                             ? modelData.text
                             : (modelData.provisionalText.length > 0
@@ -1467,23 +1470,57 @@ ApplicationWindow {
                                     font.pixelSize: 10
                                 }
                                 ToolButton {
-                                    objectName: "moveDecoderSessionUpButton"
-                                    text: "↑"
-                                    enabled: sessionCard.index > 0
-                                    Accessible.name: "Move decoded session up"
-                                    onPressed: replayController.moveDecoderSession(
-                                                   modelData.id,
-                                                   sessionCard.index - 1)
-                                }
-                                ToolButton {
-                                    objectName: "moveDecoderSessionDownButton"
-                                    text: "↓"
-                                    enabled: sessionCard.index + 1
-                                             < decoderChannelList.count
-                                    Accessible.name: "Move decoded session down"
-                                    onPressed: replayController.moveDecoderSession(
-                                                   modelData.id,
-                                                   sessionCard.index + 1)
+                                    objectName: "decoderSessionDragHandle"
+                                    text: "⠿"
+                                    // Cards are reordered by dragging this
+                                    // handle. The keyboard path is kept for
+                                    // operators who cannot drag, and for
+                                    // accessibility: the same control moves the
+                                    // card with the arrow keys when focused.
+                                    Accessible.name: "Reorder decoded session"
+                                    Accessible.description:
+                                        "Drag to reposition, or use the up and down arrow keys"
+                                    focusPolicy: Qt.StrongFocus
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 500
+                                    ToolTip.text: "Drag to reorder this card"
+                                    Keys.onUpPressed: if (sessionCard.index > 0)
+                                        replayController.moveDecoderSession(
+                                            modelData.id, sessionCard.index - 1)
+                                    Keys.onDownPressed:
+                                        if (sessionCard.index + 1 < decoderChannelList.count)
+                                            replayController.moveDecoderSession(
+                                                modelData.id, sessionCard.index + 1)
+                                    DragHandler {
+                                        id: sessionDragHandler
+                                        objectName: "decoderSessionDragHandler"
+                                        // The list owns delegate placement, so
+                                        // the card is not moved directly. The
+                                        // travelled distance is converted into
+                                        // a position change on release, which
+                                        // keeps the list authoritative and
+                                        // needs no reparenting.
+                                        target: null
+                                        xAxis.enabled: false
+                                        yAxis.enabled: true
+                                        property real pressY: 0
+                                        onActiveChanged: {
+                                            if (active) {
+                                                pressY = centroid.scenePosition.y
+                                                return
+                                            }
+                                            var travelled = centroid.scenePosition.y - pressY
+                                            var step = Math.round(
+                                                travelled / Math.max(1, sessionCard.height))
+                                            if (step === 0) return
+                                            var target = Math.max(0, Math.min(
+                                                decoderChannelList.count - 1,
+                                                sessionCard.index + step))
+                                            if (target !== sessionCard.index)
+                                                replayController.moveDecoderSession(
+                                                    modelData.id, target)
+                                        }
+                                    }
                                 }
                                 ToolButton {
                                     objectName: "closeDecoderSessionButton"

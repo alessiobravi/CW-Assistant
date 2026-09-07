@@ -6,6 +6,37 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
+Last reviewed: 2026-09-07 (eleventh entry) — CW-001's Farnsworth item is closed.
+The event lattice scored gaps against fixed centres of one, three and seven
+element lengths. Farnsworth sending holds element timing at the operator's speed
+and stretches the character and word gaps by a common factor, so a stretched
+character gap sat nearer the word-gap centre and was read as a word gap: the
+consensus transcript split every character apart while the literal transcript
+beside it was perfect, and the card prefers the consensus. The factor is now
+recovered from the observed gaps, since ordinary text holds far more character
+gaps than word gaps and the median gap clearly longer than an element gap is
+therefore a character gap. Character and word centres scale together, element
+timing is untouched, and nothing adapts without at least six confident gaps or
+outside the range real sending occupies.
+
+Measured on a controlled fixture with the word gap stretched proportionally, as
+Farnsworth does: consensus character error falls from 0.562 to 0.031, 0.547 to
+0.062 and 0.516 to 0.094 as spacing stretches, while the standard-spacing case
+is unchanged. The paired surface benchmark and the keying-style figures are
+byte-identical to baseline and captures hold at eight of nine with none asserted
+on the four containing no CW. On receiver capture 20260907-175150 a callsign
+that decoded as "R 7 K B ?" now reads "R7KBB"; the same capture also begins
+asserting R7KBTI, joining its one corrupted repetition where previously nothing
+was asserted, which is a real cost of joining what had been fragments.
+
+Two things measured along the way and not adopted. The lattice's evidence
+confidence does not track its own correctness -- 0.845 when its transcript was
+0.016 character error and 0.847 when it was 0.594 -- so it cannot be used to
+decide whether the consensus or the literal transcript should be shown. And a
+fixed stretched character-gap centre improved only the operating point it was
+placed at, leaving the gap between centres untouched, which is fitting a fixture
+rather than modelling the sender.
+
 Last reviewed: 2026-09-07 (tenth entry) — PKG-004's startup update notice now
 shares the verified-download presentation contract used by Settings → About:
 progress and checksum status remain visible, then **Open Installer** and the

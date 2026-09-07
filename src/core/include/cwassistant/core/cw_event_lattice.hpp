@@ -74,6 +74,9 @@ struct CwEventLatticeConfig {
   double compressed_word_gap_dots{4.5};
   double word_gap_dots{7.0};
   double unknown_symbol_cost{2.5};
+  // Confident non-element gaps required before the sender's spacing is
+  // estimated at all. Below this the defaults stand.
+  std::size_t minimum_adaptive_character_gaps{6};
   // Conservative floor and hard ceiling for the automatically estimated
   // per-segment timing tolerance. Estimation never moves Morse timing centers.
   // A larger effective value also reduces evidence_confidence, so hand-sent

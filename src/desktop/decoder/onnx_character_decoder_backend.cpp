@@ -84,9 +84,22 @@ bool readMetadata(const std::string& path, ModelMetadata& metadata,
                   std::string& error) {
   const QString file_path = QString::fromUtf8(path);
   const QFileInfo info(file_path);
-  if (!info.isFile() || info.size() <= 0 ||
-      info.size() > kMaximumMetadataBytes) {
-    error = "metadata must be a regular JSON file no larger than 64 KiB";
+  // One message for three unrelated causes left the operator unable to tell
+  // which applied, and therefore what to do about it.
+  if (!info.exists()) {
+    error = "metadata file not found at the configured path";
+    return false;
+  }
+  if (!info.isFile()) {
+    error = "metadata path is not a regular file";
+    return false;
+  }
+  if (info.size() <= 0) {
+    error = "metadata file is empty";
+    return false;
+  }
+  if (info.size() > kMaximumMetadataBytes) {
+    error = "metadata file is larger than the 64 KiB limit";
     return false;
   }
   QFile file(file_path);

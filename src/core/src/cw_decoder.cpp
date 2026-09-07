@@ -825,8 +825,16 @@ std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
 CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
   CwDecoderUpdate result = hypotheses_[leader_index_].update;
   result.changed = changed;
-  result.acoustic_wpm = cadence_dot_ms_ > 0.0
-      ? 1'200.0 / cadence_dot_ms_ : 0.0;
+  // The independent cadence estimate is withheld until its own confidence
+  // supports it, for the same reason the timing bank's speed is: on thin
+  // evidence it reaches values far from the truth. Measured on a receiver
+  // capture, it read 40.9 WPM for a 27 WPM station while fewer than twenty key
+  // transitions had been seen. It is an independent check on the speed, so a
+  // wrong value is worse than none.
+  constexpr float kMinimumCadenceConfidence = 0.45F;
+  result.acoustic_wpm =
+      cadence_dot_ms_ > 0.0 && cadence_confidence_ >= kMinimumCadenceConfidence
+          ? 1'200.0 / cadence_dot_ms_ : 0.0;
   result.acoustic_cadence_confidence = cadence_confidence_;
   result.refined_text = refined_text_;
   result.acoustic_alternatives = acoustic_alternatives_;

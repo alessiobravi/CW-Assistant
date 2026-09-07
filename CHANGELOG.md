@@ -8,6 +8,28 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- Farnsworth spacing no longer splits every character apart. The decoder scored
+  the gaps between symbols against fixed centres of one, three and seven
+  element lengths, but Farnsworth sending keeps element timing at the operator's
+  speed while stretching the character and word gaps by a common factor. A
+  stretched character gap therefore sat closer to the word-gap centre than the
+  character-gap one and was read as a word gap, so the consensus transcript --
+  which the decoder card prefers -- broke a callsign into single letters while
+  the literal transcript beside it read the message correctly. On a controlled
+  fixture its character error fell from 0.56 to 0.03, from 0.55 to 0.06 and
+  from 0.52 to 0.09 as the spacing was stretched further, and on a receiver
+  capture a callsign that had been shattered into "R 7 K B ?" reads "R7KBB".
+  The factor is recovered from the gaps themselves: ordinary text contains far
+  more character gaps than word gaps, so the median gap clearly longer than an
+  element gap is a character gap. Nothing adapts without at least six confident
+  gaps, and only within the range real sending occupies; outside that the
+  standard centres stand.
+- Decoded session cards are reordered by dragging them. The up and down arrows
+  are replaced by a handle: the card lifts while it is moved and takes its new
+  position on release. The list itself still owns placement, so nothing is
+  reparented. The same handle keeps arrow-key reordering when focused, so the
+  order remains reachable without a pointer.
+
 - A stream shows no speed until enough symbols support one. Below a few decoded
   symbols the timing bank has nothing to choose between its hypotheses: the
   value is still the seeded default, and whichever anchor briefly leads can be
