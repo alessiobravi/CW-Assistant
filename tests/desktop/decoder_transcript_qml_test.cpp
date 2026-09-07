@@ -25,7 +25,9 @@ int main() {
   // line-ending independent, so normalize before matching its bounded block.
   normalizeLineEndings(qml);
   const std::size_t start = qml.find("id: transcriptScroll");
-  const std::size_t end = qml.find("Layout.fillWidth: true\n                                text: modelData.wpm", start);
+  // Delimited by the metrics label's stable object name rather than by the
+  // text expression inside it, which changes whenever the line is reworded.
+  const std::size_t end = qml.find("objectName: \"decoderMetricsLabel\"", start);
   const std::size_t session_card_start = qml.find("id: sessionCard");
   const std::size_t local_panel_start = qml.find(
       "id: localModelTranscriptPanel", start);
@@ -108,6 +110,20 @@ int main() {
       !contains(qml, "nextText.indexOf(text)") ||
       contains(qml, "rawDecodedText + \" \" + modelData.localModelText")) {
     return 11;
+  }
+
+  // The metrics line is read while operating. It was 10px low-contrast grey on
+  // a single elided row, so values were cut off, and it reported instantaneous
+  // confidence which falls to zero between characters and showed 0% while text
+  // was arriving.
+  const std::size_t metrics = qml.find("objectName: \"decoderMetricsLabel\"");
+  if (metrics == std::string::npos) return 15;
+  const std::string metrics_block = qml.substr(metrics, 1800);
+  if (!contains(metrics_block, "meanCharacterConfidence") ||
+      contains(metrics_block, "elide: Text.ElideRight") ||
+      contains(metrics_block, "font.pixelSize: 10") ||
+      !contains(metrics_block, "wrapMode: Text.WordWrap")) {
+    return 16;
   }
 
   // A confirmed callsign must say whether the offline list corroborates it.

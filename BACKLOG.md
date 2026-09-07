@@ -14,6 +14,38 @@ also keep a missing word gap from turning `DE`, `CQ`, `TU`, or `QRZ` into part
 of the selected callsign when the remainder is independently plausible, and
 place the correction control beside the loaded-list state.
 
+Last reviewed: 2026-09-07 (tenth entry) — receiver captures 20260907-125614 and
+20260907-141450 were added to the local corpus and drove three fixes. A station
+sending CQ CQ CQ DE SV7BIO was labelled DESV7BIO: a missing word gap merged the
+prosign onto the callsign, and the merged token then collected the CQ context
+credit while the real callsign, which stood alone twice in the same text, got
+only repetition. Splitting the pair is now done at tokenisation and only where
+the remainder is itself a plausible callsign, which leaves a genuine
+DE-prefixed German call intact.
+
+The same capture explained two display complaints. Signal level was reported
+from an instantaneous reading, which on a keyed carrier is about +28 dB inside
+a mark and below zero inside a gap; the recorded diagnostics for that station
+swing between -17 and +30 dB frame to frame, and the -6.3 dB the operator saw
+was simply a gap sample on a strong signal. The presented figure is now the
+estimated mark level, +31 dB for that station. Confidence was reported from the
+instantaneous value, which falls to zero between characters and read zero per
+cent while text arrived; it now reports the character-averaged figure.
+
+Still open from those captures: the speed estimate wanders during acquisition,
+reaching 40 WPM on a 27 WPM station before settling, and the independent
+cadence estimate spikes to 40.9. The transcript away from the callsign remains
+poor at this signal strength, which is the retention limit already recorded
+above rather than anything specific to this recording.
+
+An adaptive gap-timing scheme clustering intra-element, character and word gaps
+per segment was evaluated against the paired benchmark and not adopted: mean
+character error was identical on all three seed sets, one additional wrong
+callsign was asserted, and the refined transcript on 20260907-141450 was worse
+than without it. The idea of learning spacing from the observed gap population
+is sound and better founded than adapting to signal quality, which has no
+usable signal; it needs to show a paired gain before it ships.
+
 Last reviewed: 2026-09-07 (ninth entry) — callsign precision was never measured
 and is poor. The quality checks counted callsigns recovered and false callsigns
 on recordings containing no CW; a wrong station named on a live signal was

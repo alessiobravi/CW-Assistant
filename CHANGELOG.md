@@ -8,6 +8,28 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- The signal level shown for a stream is the mark level, not an instantaneous
+  reading. A keyed carrier is present only half the time, so the instantaneous
+  figure swings between roughly +28 dB inside a mark and below zero inside a
+  gap, and whichever value the display happened to sample told the operator
+  nothing. On a receiver capture a perfectly readable station reported -6.3 dB
+  because the sample landed in a gap; it now reports +31 dB.
+- The decoder metrics line is legible while operating. It was ten-pixel
+  low-contrast grey on a single elided row, so its values were cut off, and it
+  reported instantaneous confidence, which falls to zero between characters and
+  therefore read zero per cent while text was arriving. It now uses the
+  character-averaged confidence, wraps instead of eliding, and drops the
+  instantaneous key percentage, which only ever flickered and is already shown
+  by the keyed marker.
+- A prosign glued to the callsign after it no longer becomes the station label.
+  A missing word gap merges the two, and the merged token then collects the
+  context credit the callsign earned: a station sending CQ CQ CQ DE SV7BIO
+  decoded as "CQ CQ DESV7BIO SV7BIO" was labelled DESV7BIO even though the real
+  callsign stood alone twice in the same text. The pair is split only where
+  what follows the prosign is itself a plausible callsign, so a genuine
+  DE-prefixed German call is untouched: removing DE from DE1ABC leaves 1ABC,
+  which is not a callsign, and the token stands.
+
 - Local callsign suggestions can maintain an optional cached `MASTER.SCP`
   directly from the Super Check Partial Database. Provider discovery and
   conditional HTTPS checks run no more than daily unless requested by the

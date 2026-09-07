@@ -1116,6 +1116,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         track.keying_mark_power = std::max(track.keying_mark_power,
                                            track.keying_space_power * 2.0F);
       }
+      // Mark level in dB above the side-noise reference the powers are
+      // already measured against. Held for presentation so the operator sees
+      // the signal rather than whichever half of the keying cycle happened to
+      // be sampled.
+      if (track.keying_envelope_initialized) {
+        track.keying_mark_snr_db = 10.0F * std::log10(
+            std::max(track.keying_mark_power, 1.0e-12F));
+      }
       const float space_amplitude = std::sqrt(std::max(
           track.keying_space_power, 0.0F));
       const float mark_amplitude = std::sqrt(std::max(
@@ -1321,6 +1329,7 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.total_width_observations = 0;
   track.noise_initialized = false;
   track.keying_snr_db = 0.0F;
+  track.keying_mark_snr_db = 0.0F;
   track.keying_space_power = 0.0F;
   track.keying_mark_power = 0.0F;
   track.keying_space_variance = 0.0F;
@@ -1870,7 +1879,8 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
             track.identity_origin_frequency_hz,
         .presentation_frequency_hz = track.presentation_frequency_hz,
         .drift_hz_per_second = track.drift_hz_per_second,
-        .snr_db = track.snr_db,
+        .snr_db = track.keying_envelope_initialized
+            ? track.keying_mark_snr_db : track.snr_db,
         .narrowband_coherence = track.narrowband_coherence,
         .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
         .verification_state = track.verification_state,
@@ -1929,7 +1939,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           .presentation_frequency_hz = track.presentation_frequency_hz,
           .drift_hz_per_second = track.drift_hz_per_second,
           .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
-          .snr_db = track.snr_db,
+          .snr_db = track.keying_envelope_initialized
+            ? track.keying_mark_snr_db : track.snr_db,
           .wpm = track.update.wpm,
           .acoustic_wpm = track.update.acoustic_wpm,
           .acoustic_cadence_confidence =
@@ -1998,7 +2009,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .drift_hz_per_second = track.drift_hz_per_second,
         .filter_width_hz =
             kNarrowbandWidthsHz[track.selected_width_index],
-        .snr_db = track.snr_db,
+        .snr_db = track.keying_envelope_initialized
+            ? track.keying_mark_snr_db : track.snr_db,
         .wpm = track.update.wpm,
         .acoustic_wpm = track.update.acoustic_wpm,
         .acoustic_cadence_confidence =

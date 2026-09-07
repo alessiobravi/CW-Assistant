@@ -332,6 +332,14 @@ class CwChannelBank {
     // put the decision far below half amplitude, which lengthened every mark
     // and shortened every gap; the bias grew with signal strength because a
     // stronger carrier widens the dB span.
+    // Signal level presented to the operator: the estimated MARK level, not
+    // the instantaneous reading. A keyed carrier is present only half the
+    // time, so an instantaneous figure swings between roughly +28 dB inside a
+    // mark and below zero inside a gap, and whichever value the display
+    // sampled tells the operator nothing about the signal. Observed on a
+    // receiver capture: a perfectly readable station reported -6.3 dB because
+    // the sample landed in a gap.
+    float keying_mark_snr_db{0.0F};
     float keying_space_power{0.0F};
     float keying_mark_power{0.0F};
     // Scatter of the observed amplitude about the level it was assigned to.

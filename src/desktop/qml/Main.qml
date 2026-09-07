@@ -1793,18 +1793,30 @@ ApplicationWindow {
                                 }
                             }
                             Label {
+                                objectName: "decoderMetricsLabel"
                                 Layout.fillWidth: true
-                                text: modelData.wpm.toFixed(1) + " WPM  •  "
-                                      + modelData.snrDb.toFixed(1) + " dB SNR  •  "
+                                // Readable while operating. This was 10px
+                                // low-contrast grey on one elided row, so the
+                                // values were cut off and hard to read at all.
+                                // Confidence now reports the character-averaged
+                                // figure: the instantaneous one falls to zero
+                                // between characters, so the line read 0%
+                                // while text was arriving. The instantaneous
+                                // key state is dropped entirely; it is already
+                                // shown by the keyed marker, and as a number it
+                                // only ever flickers.
+                                text: (modelData.wpm > 0
+                                       ? modelData.wpm.toFixed(0) + " WPM"
+                                       : "WPM —")
+                                      + "   •   " + modelData.snrDb.toFixed(0)
+                                      + " dB   •   "
                                       + modelData.filterWidthHz.toFixed(0)
-                                        + " Hz filter  •  "
-                                      + (modelData.confidence * 100).toFixed(0)
-                                        + "% confidence  •  "
-                                      + (modelData.keyProbability * 100).toFixed(0)
-                                        + "% key"
-                                color: "#8290a0"
-                                font.pixelSize: 10
-                                elide: Text.ElideRight
+                                      + " Hz   •   "
+                                      + (modelData.meanCharacterConfidence * 100).toFixed(0)
+                                      + "% confidence"
+                                color: "#c8d4e0"
+                                font.pixelSize: 13
+                                wrapMode: Text.WordWrap
                             }
                         }
                     }
