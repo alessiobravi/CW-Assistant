@@ -99,6 +99,30 @@ All notable changes to CW Assistant are recorded here. The format follows
   independently established to contain no CW. Farnsworth spacing remains an
   open limitation.
 
+- The offline callsign list can now correct a decoded callsign, not merely
+  confirm one. Its fuzzy lookup existed and was tested but nothing in the
+  application ever called it: the only use was an exact-membership check that
+  labelled a suggestion's source. Where a verified stream's acoustic winner is
+  within two characters of a single listed entry, that entry can now be
+  suggested instead, which is what recovers a callsign whose opening characters
+  were lost -- the acoustic path routinely loses them, because element
+  boundaries must be committed before any speed estimate exists. Correction is
+  off until enabled under Settings, Decoder, Callsign directory: two listed
+  stations can differ by one character, so a correction can name a station that
+  was never sent. It stays advisory in either case and cannot rewrite the
+  transcript, become the confirmed callsign on its own, or affect verification,
+  and it never substitutes where more than one entry is equally close.
+- A confirmed callsign now shows whether the offline list corroborates it. The
+  decoder card carries a green LISTED badge with a tick where the callsign is
+  in the list and a plain DECODED badge where it is not, and the spectrum draws
+  a corroborated callsign as a solid chip with a tick. Neither is shown when no
+  list is loaded, and DECODED is not a warning: an unlisted station is ordinary,
+  so the badge reports corroboration rather than correctness.
+- Pending updates are reported at startup. A newer application build or a newer
+  callsign list is listed once per launch with a button for each; nothing is
+  downloaded until the operator presses one, and the notice waits for any
+  first-run profile or setup step to finish.
+
 - Gap classification no longer splits characters that were never spaced apart.
   The threshold separating an element gap from a character gap sat close to the
   midpoint between their nominal lengths, which is where it belongs only if

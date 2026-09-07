@@ -519,7 +519,8 @@ ApplicationWindow {
                             text: !modelData.verifiedCw
                                   ? modelData.frequencyLabel + " • manual"
                                   : modelData.callsign.length > 0
-                                  ? modelData.callsign
+                                  ? (modelData.callsign
+                                     + (modelData.callsignInDatabase ? " \u2713" : ""))
                                   : modelData.callsignSuggestion.length > 0
                                   ? "≈ " + modelData.callsignSuggestion
                                   : modelData.frequencyLabel
@@ -532,9 +533,16 @@ ApplicationWindow {
                             bottomPadding: 2
                             z: 2
                             background: Rectangle {
-                                color: "#e6091018"
+                                // A callsign corroborated by the operator's
+                                // offline list is drawn as a solid chip. One
+                                // that was only decoded keeps the plain
+                                // background, because an unlisted station is
+                                // ordinary rather than suspect.
+                                color: modelData.callsignInDatabase
+                                       ? "#16241a" : "#e6091018"
                                 border.color: modelData.color
-                                border.width: channelMarker.pointerHovered ? 1 : 0
+                                border.width: modelData.callsignInDatabase
+                                              || channelMarker.pointerHovered ? 1 : 0
                                 radius: 3
                             }
                             Behavior on font.pixelSize {
@@ -1359,6 +1367,36 @@ ApplicationWindow {
                                     elide: Text.ElideRight
                                 }
                                 Label {
+                                    objectName: "callsignDatabaseBadge"
+                                    visible: modelData.callsign.length > 0
+                                             && modelData.callsignDatabaseLoaded
+                                    text: modelData.callsignInDatabase
+                                          ? "\u2713 LISTED" : "DECODED"
+                                    color: modelData.callsignInDatabase
+                                           ? "#0b1a10" : "#91a0b1"
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                    leftPadding: 5
+                                    rightPadding: 5
+                                    topPadding: 2
+                                    bottomPadding: 2
+                                    background: Rectangle {
+                                        radius: 3
+                                        color: modelData.callsignInDatabase
+                                               ? "#7fd18a" : "transparent"
+                                        border.color: modelData.callsignInDatabase
+                                                      ? "#7fd18a" : "#3a4756"
+                                        border.width: 1
+                                    }
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 400
+                                    ToolTip.text: modelData.callsignInDatabase
+                                        ? "This callsign appears in the offline callsign list."
+                                        : "Decoded from the air. It is not in the offline callsign list, which is normal for an unlisted station."
+                                    property bool hovered: badgeHover.hovered
+                                    HoverHandler { id: badgeHover }
+                                }
+                                Label {
                                     visible: modelData.callsign.length === 0
                                              && sessionCard.localModelCallsign.length > 0
                                     text: "MODEL"
@@ -1774,6 +1812,85 @@ ApplicationWindow {
         anchors.centerIn: Overlay.overlay
     }
 
+    // Startup notice for pending updates. It appears once per launch, only
+    // after any first-run setup is out of the way, and never steals focus from
+    // a decode in progress: the operator is told and can act later.
+    Dialog {
+        id: updateNotice
+        objectName: "updateNoticeDialog"
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        width: Math.min(460, parent ? parent.width - 48 : 460)
+        title: "Updates available"
+        standardButtons: Dialog.Close
+        property bool shownThisLaunch: false
+        property bool appPending: updateChecker.updateAvailable
+        property bool listPending: callsignDatabaseUpdater.updateAvailable
+        function considerShowing() {
+            if (shownThisLaunch) return
+            if (appSettings.profileSelectionRequired) return
+            if (!appSettings.setupComplete) return
+            if (!appPending && !listPending) return
+            shownThisLaunch = true
+            open()
+        }
+        ColumnLayout {
+            width: parent.width
+            spacing: 10
+            Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                color: "#c8d4e0"
+                text: "The following updates are ready. Installing them is optional and nothing is downloaded until you choose to."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: updateNotice.appPending
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#edf3f8"
+                    text: "Application " + updateChecker.latestVersion
+                          + " (installed " + updateChecker.currentVersion + ")"
+                }
+                Button {
+                    objectName: "updateNoticeDownloadAppButton"
+                    text: updateChecker.downloading ? "Downloading" : "Download"
+                    enabled: !updateChecker.downloading
+                    onClicked: updateChecker.downloadUpdate()
+                }
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                visible: updateNotice.listPending
+                spacing: 8
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#edf3f8"
+                    text: "Offline callsign list"
+                }
+                Button {
+                    objectName: "updateNoticeUpdateListButton"
+                    text: callsignDatabaseUpdater.downloading ? "Updating" : "Update"
+                    enabled: !callsignDatabaseUpdater.downloading
+                    onClicked: callsignDatabaseUpdater.updateDatabase()
+                }
+            }
+        }
+    }
+
+    Connections {
+        target: updateChecker
+        function onStateChanged() { updateNotice.considerShowing() }
+    }
+
+    Connections {
+        target: callsignDatabaseUpdater
+        function onStateChanged() { updateNotice.considerShowing() }
+    }
+
     FileDialog {
         id: wavDialog
         title: "Open receiver WAV recording"
@@ -1787,6 +1904,8 @@ ApplicationWindow {
             profileChooser.open()
         else if (!appSettings.setupComplete)
             setupWizard.open()
+        else
+            updateNotice.considerShowing()
     }
 
     Connections {

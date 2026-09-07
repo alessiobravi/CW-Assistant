@@ -38,6 +38,9 @@ struct AdvisoryCallsignPresentation {
   QString callsign;
   QString raw_span;
   bool database_match{false};
+  // The presented callsign is the nearest directory entry to the acoustic
+  // winner rather than the winner itself.
+  bool database_corrected{false};
   int agreeing_alternatives{0};
   double acoustic_support{0.0};
   double relative_cost{0.0};
@@ -45,13 +48,24 @@ struct AdvisoryCallsignPresentation {
 
 // Selects only the acoustically strongest callsign present in at least two
 // current bounded alternatives and within two wildcard-aware edits of the
-// latest completed '?' span. The database can annotate that winner but cannot
-// promote a weaker candidate, mutate the transcript, or affect verification.
+// latest completed '?' span. The database annotates that winner, and where the
+// winner is not listed it may substitute the single directory entry that is
+// strictly closest to it within two edits -- a near miss on a verified stream
+// is usually the listed station misread. It can do neither where the
+// neighbourhood is ambiguous, and in no case may it promote an acoustically
+// weaker candidate, mutate the transcript, or affect verification: the result
+// is advisory presentation only.
+//
+// Substitution is off unless the operator enables it. Two listed stations can
+// differ by one character, so a correction can name a station that was never
+// heard; without it the acoustic winner is always what is shown, which is the
+// behaviour this application has always had.
 [[nodiscard]] std::optional<AdvisoryCallsignPresentation>
 advisoryCallsignPresentation(const QVariantMap& channel,
                              const cwassistant::core::OfflineCallsignDatabase&
                                  database,
-                             QString* diagnostic_reason = nullptr);
+                             QString* diagnostic_reason = nullptr,
+                             bool allow_database_correction = false);
 
 class ReplayController final : public QObject {
   Q_OBJECT
@@ -128,6 +142,7 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
   [[nodiscard]] const QString& localCharacterState() const noexcept;
   [[nodiscard]] const QString& localCharacterStatus() const noexcept;
+  Q_INVOKABLE void setCallsignDatabaseCorrectionEnabled(bool value);
   [[nodiscard]] const QString& offlineCallsignDatabaseState() const noexcept;
   [[nodiscard]] const QString& offlineCallsignDatabaseStatus() const noexcept;
   [[nodiscard]] int offlineCallsignDatabaseEntries() const noexcept;
@@ -281,6 +296,7 @@ class ReplayController final : public QObject {
   QString local_character_state_{QStringLiteral("disabled")};
   QString local_character_status_{QStringLiteral("Local model disabled.")};
   cwassistant::core::OfflineCallsignDatabase offline_callsign_database_;
+  bool callsign_database_correction_enabled_{false};
   QString offline_callsign_database_state_{QStringLiteral("disabled")};
   QString offline_callsign_database_status_{
       QStringLiteral("Offline callsign suggestions disabled.")};

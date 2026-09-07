@@ -166,6 +166,20 @@ Pane {
                         enabled: appSettings.localDecoderBackendAvailable
                         onToggled: appSettings.localDecoderEnabled = checked
                     }
+                    Label { text: "Callsign directory" }
+                    CheckBox {
+                        objectName: "callsignDatabaseCorrectionCheck"
+                        text: "Correct near-miss callsigns from the offline list"
+                        checked: appSettings.callsignDatabaseCorrectionEnabled
+                        onToggled: appSettings.callsignDatabaseCorrectionEnabled = checked
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "When a decoded callsign is within two characters of a single entry in the offline list, suggest that entry instead. Off by default: two listed stations can differ by one character, so a correction can name a station that was never sent. The suggestion stays advisory either way and never changes the transcript or the confirmed callsign."
+                    }
                     Label { text: "Model file" }
                     RowLayout {
                         Layout.fillWidth: true

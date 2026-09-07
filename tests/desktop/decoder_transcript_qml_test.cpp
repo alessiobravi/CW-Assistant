@@ -110,6 +110,19 @@ int main() {
     return 11;
   }
 
+  // A confirmed callsign must say whether the offline list corroborates it.
+  // Both are legitimate outcomes -- an unlisted station is ordinary -- so the
+  // badge reports corroboration and never implies the decode is wrong, and it
+  // is hidden entirely when no list is loaded rather than claiming "not
+  // listed" against an empty directory.
+  if (!contains(qml, "objectName: \"callsignDatabaseBadge\"") ||
+      !contains(qml, "modelData.callsignInDatabase") ||
+      !contains(qml, "modelData.callsignDatabaseLoaded") ||
+      !contains(qml, "\\u2713 LISTED") ||
+      !contains(qml, "\"DECODED\"")) {
+    return 12;
+  }
+
   // Keep wrapping width independent of scrollbar visibility, with no
   // horizontal scrollbar and a permanently reserved vertical gutter.
   if (!contains(transcript, "width: transcriptScroll.availableWidth") ||

@@ -303,6 +303,32 @@ int main(int argc, char* argv[]) {
       stronger_acoustic->database_match) {
     return 27;
   }
+  // The same stream with directory correction enabled. The operator opts into
+  // substituting the single listed entry within two edits of the acoustic
+  // winner, which is what recovers a callsign whose opening characters were
+  // lost, and is why it is off by default: EM80ZMV and EM90ZMV are both
+  // plausible stations one character apart.
+  QString corrected_reason;
+  const auto stronger_corrected =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          stronger_unknown, callsign_database, &corrected_reason, true);
+  if (!stronger_corrected ||
+      stronger_corrected->callsign != QStringLiteral("EM90ZMV") ||
+      !stronger_corrected->database_match ||
+      !stronger_corrected->database_corrected ||
+      corrected_reason != QStringLiteral("suggested-database-corrected")) {
+    return 41;
+  }
+  // An acoustic winner that is already listed is never substituted, whether or
+  // not correction is enabled.
+  QVariantMap listed_unknown = stronger_unknown;
+  listed_unknown.insert(QStringLiteral("refinedText"),
+                        QStringLiteral("CQ DE EM90ZMV "));
+  const auto listed_exact =
+      cwassistant::desktop::advisoryCallsignPresentation(
+          listed_unknown, callsign_database, nullptr, true);
+  if (listed_exact && listed_exact->database_corrected) return 42;
+
   QVariantMap corrected_fixed_character = acoustic_channel;
   corrected_fixed_character.insert(QStringLiteral("refinedText"),
                                    QStringLiteral("CQ DE SV2?L? "));

@@ -143,6 +143,27 @@ thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Its larger decoded-text window wraps
 the latest output and follows new text while its viewport is at the bottom.
+A confirmed callsign shows whether the offline list corroborates it. In the
+decoder card a green **LISTED** badge with a tick follows a callsign found in
+the list, and a plain **DECODED** badge follows one that was not; on the
+spectrum, a corroborated callsign is drawn as a solid chip and carries a tick.
+Neither badge appears when no list is loaded. **DECODED** is not a warning: a
+station that is simply absent from the list is ordinary, and the badge reports
+corroboration rather than correctness.
+
+When the offline callsign list is loaded, a decoded callsign that is within
+two characters of a single entry in it can be suggested in place of what was
+decoded. That substitution is off until enabled in **Settings -> Decoder ->
+Callsign directory**, because two listed stations can differ by one character
+and a correction can therefore name a station that was never sent. Enabled or
+not, the suggestion stays advisory: it never rewrites the transcript, never
+becomes the confirmed callsign on its own, and never affects verification.
+
+Pending updates are reported once per launch. If a newer application build or
+a newer callsign list is available, a notice lists them with a button for each;
+nothing is downloaded until it is pressed, and the notice waits until any
+first-run profile or setup step is finished.
+
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
 New characters are appended to the existing text rather than replacing it, so

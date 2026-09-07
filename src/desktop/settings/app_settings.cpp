@@ -611,6 +611,10 @@ bool AppSettings::showGrid() const noexcept { return show_grid_; }
 int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
   return decoded_signal_timeout_seconds_;
 }
+bool AppSettings::callsignDatabaseCorrectionEnabled() const noexcept {
+  return callsign_database_correction_enabled_;
+}
+
 bool AppSettings::localDecoderEnabled() const noexcept {
   return local_decoder_enabled_;
 }
@@ -713,6 +717,8 @@ CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
+CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
+           callsign_database_correction_enabled_, bool)
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
@@ -1140,6 +1146,9 @@ bool AppSettings::apply() {
                     decoded_signal_timeout_seconds_);
   settings.setValue(storageKey(QStringLiteral("decoder/localEnabled")),
                     local_decoder_enabled_);
+  settings.setValue(
+      storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
+      callsign_database_correction_enabled_);
   settings.setValue(storageKey(QStringLiteral("decoder/localModelPath")),
                     local_decoder_model_path_);
   settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
@@ -1259,6 +1268,10 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")), 30).toInt();
   local_decoder_enabled_ = settings
       .value(storageKey(QStringLiteral("decoder/localEnabled")), false)
+      .toBool();
+  callsign_database_correction_enabled_ = settings
+      .value(storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
+             false)
       .toBool();
   local_decoder_model_path_ = settings
       .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
@@ -1451,6 +1464,7 @@ void AppSettings::resetInMemorySettings() {
   show_grid_ = true;
   decoded_signal_timeout_seconds_ = 30;
   local_decoder_enabled_ = false;
+  callsign_database_correction_enabled_ = false;
   local_decoder_model_path_.clear();
   local_decoder_metadata_path_.clear();
   local_callsign_database_enabled_ = false;

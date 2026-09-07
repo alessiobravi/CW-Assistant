@@ -128,7 +128,7 @@ std::optional<std::string> freshCharacterRefinementCallEvidence(
 std::optional<AdvisoryCallsignPresentation> advisoryCallsignPresentation(
     const QVariantMap& channel,
     const cwassistant::core::OfflineCallsignDatabase& database,
-    QString* diagnostic_reason) {
+    QString* diagnostic_reason, const bool allow_database_correction) {
   const auto reject = [diagnostic_reason](const char* reason) {
     if (diagnostic_reason != nullptr)
       *diagnostic_reason = QString::fromLatin1(reason);
@@ -321,24 +321,47 @@ std::optional<AdvisoryCallsignPresentation> advisoryCallsignPresentation(
       return reject("ambiguous-acoustic-winner");
     }
   }
-  const bool database_match = database.contains(winner.first);
+  bool database_match = database.contains(winner.first);
+  std::string presented = winner.first;
+  bool database_corrected = false;
+  if (!database_match && allow_database_correction) {
+    // A verified acoustic winner that is one or two edits from a directory
+    // entry is usually that entry misread, not a different station: the
+    // acoustic path routinely loses the opening characters of a transmission
+    // because element boundaries must be committed before any speed estimate
+    // exists. Correct it only when a single entry is strictly closest --
+    // an ambiguous neighbourhood corrects nothing, because presenting the
+    // wrong station is worse than presenting an incomplete one.
+    const auto matches = database.query(winner.first, 2U, 8U);
+    const bool strictly_closest = matches.size() == 1U ||
+        (matches.size() > 1U &&
+         matches.front().edit_distance < matches[1].edit_distance);
+    if (!matches.empty() && strictly_closest &&
+        matches.front().edit_distance > 0U) {
+      presented = matches.front().callsign;
+      database_match = true;
+      database_corrected = true;
+    }
+  }
   const std::vector<cwassistant::core::CallsignRawHypothesis> hypotheses{{
       .raw_span = *mask,
-      .candidate = winner.first,
+      .candidate = presented,
       .acoustic_support = winner.second.support,
       .acoustic_edit_cost = winner.second.relative_cost,
   }};
   std::vector<cwassistant::core::CallsignProviderEvidence> providers;
   if (database_match) {
     providers.push_back({
-        .candidate = winner.first,
+        .candidate = presented,
         .provider_id = "offline-directory",
         .provider_label = "Offline callsign list",
         .kind = cwassistant::core::CallsignEvidenceKind::DirectoryListing,
         .requested_weight = 0.06F,
         .retrieved_at = std::chrono::system_clock::time_point{
             std::chrono::seconds{1}},
-        .rationale = "Exact local-list entry supporting the acoustic winner",
+        .rationale = database_corrected
+            ? "Nearest local-list entry to the acoustic winner"
+            : "Exact local-list entry supporting the acoustic winner",
     });
   }
   const auto ranked = cwassistant::core::rank_callsign_suggestions(
@@ -347,13 +370,15 @@ std::optional<AdvisoryCallsignPresentation> advisoryCallsignPresentation(
   if (ranked.empty())
     return reject("bounded-ranker-rejected");
   if (diagnostic_reason != nullptr)
-    *diagnostic_reason = database_match
-        ? QStringLiteral("suggested-database")
-        : QStringLiteral("suggested-acoustic");
+    *diagnostic_reason = database_corrected
+        ? QStringLiteral("suggested-database-corrected")
+        : (database_match ? QStringLiteral("suggested-database")
+                          : QStringLiteral("suggested-acoustic"));
   return AdvisoryCallsignPresentation{
       .callsign = QString::fromStdString(ranked.front().candidate),
       .raw_span = QString::fromStdString(*mask),
       .database_match = database_match,
+      .database_corrected = database_corrected,
       .agreeing_alternatives = winner.second.alternatives,
       .acoustic_support = ranked.front().acoustic_support,
       .relative_cost = ranked.front().acoustic_edit_cost,
@@ -899,6 +924,10 @@ const QString& ReplayController::localCharacterState() const noexcept {
 const QString& ReplayController::localCharacterStatus() const noexcept {
   return local_character_status_;
 }
+void ReplayController::setCallsignDatabaseCorrectionEnabled(const bool value) {
+  callsign_database_correction_enabled_ = value;
+}
+
 const QString& ReplayController::offlineCallsignDatabaseState() const noexcept {
   return offline_callsign_database_state_;
 }
@@ -1136,6 +1165,19 @@ void ReplayController::rebuildDecoderModels() {
       item.insert(QStringLiteral("localModelCallsign"), QString{});
     }
 
+    // Whether a confirmed callsign appears in the operator's offline list. The
+    // operator needs to tell a callsign the directory corroborates from one
+    // that was only heard; both are legitimate, and an unlisted station is
+    // common, so this reports corroboration rather than correctness.
+    const QString confirmed_callsign =
+        item.value(QStringLiteral("callsign")).toString();
+    item.insert(QStringLiteral("callsignInDatabase"),
+                !confirmed_callsign.isEmpty() &&
+                    offline_callsign_database_.size() > 0U &&
+                    offline_callsign_database_.contains(
+                        confirmed_callsign.toStdString()));
+    item.insert(QStringLiteral("callsignDatabaseLoaded"),
+                offline_callsign_database_.size() > 0U);
     item.insert(QStringLiteral("callsignSuggestion"), QString{});
     item.insert(QStringLiteral("callsignSuggestionRawSpan"), QString{});
     item.insert(QStringLiteral("callsignSuggestionSource"), QString{});
@@ -1145,7 +1187,8 @@ void ReplayController::rebuildDecoderModels() {
     QString suggestion_diagnostic = QStringLiteral("not-evaluated");
     if (item.value(QStringLiteral("callsign")).toString().isEmpty()) {
       if (const auto suggestion = advisoryCallsignPresentation(
-              item, offline_callsign_database_, &suggestion_diagnostic)) {
+              item, offline_callsign_database_, &suggestion_diagnostic,
+              callsign_database_correction_enabled_)) {
         item.insert(QStringLiteral("callsignSuggestion"), suggestion->callsign);
         item.insert(QStringLiteral("callsignSuggestionRawSpan"), suggestion->raw_span);
         item.insert(QStringLiteral("callsignSuggestionSource"),
@@ -1198,6 +1241,10 @@ void ReplayController::publishLivePresentationDiagnostics(const bool force) {
         {QStringLiteral("id"), channel.value(QStringLiteral("id"))},
         {QStringLiteral("callsign"),
          channel.value(QStringLiteral("callsign"))},
+        {QStringLiteral("callsignInDatabase"),
+         channel.value(QStringLiteral("callsignInDatabase"))},
+        {QStringLiteral("callsignDatabaseLoaded"),
+         channel.value(QStringLiteral("callsignDatabaseLoaded"))},
         {QStringLiteral("callsignSuggestion"),
          channel.value(QStringLiteral("callsignSuggestion"))},
         {QStringLiteral("callsignSuggestionRawSpan"),
