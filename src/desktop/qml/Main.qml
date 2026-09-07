@@ -1847,6 +1847,7 @@ ApplicationWindow {
         title: "Updates available"
         standardButtons: Dialog.Close
         property bool shownThisLaunch: false
+        property bool appDownloadStarted: false
         property bool appPending: updateChecker.updateAvailable
         property bool listPending: callsignDatabaseUpdater.updateAvailable
         function considerShowing() {
@@ -1866,7 +1867,7 @@ ApplicationWindow {
                 color: "#c8d4e0"
                 text: "The following updates are ready. Installing them is optional and nothing is downloaded until you choose to."
             }
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
                 visible: updateNotice.appPending
                 spacing: 8
@@ -1877,12 +1878,52 @@ ApplicationWindow {
                     text: "Application " + updateChecker.latestVersion
                           + " (installed " + updateChecker.currentVersion + ")"
                 }
-                Button {
-                    objectName: "updateNoticeDownloadAppButton"
-                    text: updateChecker.downloading ? "Downloading" : "Download"
-                    enabled: !updateChecker.downloading
-                    onClicked: updateChecker.downloadUpdate()
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    Button {
+                        objectName: "updateNoticeDownloadAppButton"
+                        visible: updateChecker.downloadActionVisible
+                        text: updateChecker.downloading
+                              ? "Downloading… "
+                                + Math.round(updateChecker.downloadProgress * 100)
+                                + "%"
+                              : "Download update"
+                        enabled: !updateChecker.downloading
+                        onClicked: {
+                            updateNotice.appDownloadStarted = true
+                            updateChecker.downloadUpdate()
+                        }
+                    }
+                    Button {
+                        objectName: "updateNoticeOpenAppButton"
+                        visible: updateChecker.verifiedDownloadActionsVisible
+                        text: "Open Installer"
+                        onClicked: updateChecker.openDownloadedFile()
+                    }
+                    Button {
+                        objectName: "updateNoticeRevealAppButton"
+                        visible: updateChecker.verifiedDownloadActionsVisible
+                        text: Qt.platform.os === "osx" ? "Show in Finder"
+                              : Qt.platform.os === "windows"
+                                ? "Show in File Explorer"
+                                : "Show in Folder"
+                        flat: true
+                        onClicked: updateChecker.revealDownloadFolder()
+                    }
+                    Item { Layout.fillWidth: true }
                 }
+            }
+            Label {
+                objectName: "updateNoticeAppStatusLabel"
+                Layout.fillWidth: true
+                visible: updateNotice.appPending
+                         && (updateNotice.appDownloadStarted
+                             || updateChecker.downloading
+                             || updateChecker.downloadVerified)
+                wrapMode: Text.WordWrap
+                color: updateChecker.downloadVerified ? "#4dff88" : "#91a0b1"
+                text: updateChecker.statusMessage
             }
             RowLayout {
                 Layout.fillWidth: true

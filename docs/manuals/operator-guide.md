@@ -189,15 +189,20 @@ corroboration rather than correctness.
 When the offline callsign list is loaded, a decoded callsign that is within
 two characters of a single entry in it can be suggested in place of what was
 decoded. That substitution is off until enabled in **Settings -> Decoder ->
-Callsign directory**, because two listed stations can differ by one character
-and a correction can therefore name a station that was never sent. Enabled or
-not, the suggestion stays advisory: it never rewrites the transcript, never
-becomes the confirmed callsign on its own, and never affects verification.
+Correct near misses**, directly below the callsign-list controls. It is
+unavailable until either the managed cache or an operator-supplied list has
+loaded successfully. Two listed stations can differ by one character, so a
+correction can name a station that was never sent. Enabled or not, the
+suggestion stays advisory: it never rewrites the transcript, never becomes the
+confirmed callsign on its own, and never affects verification.
 
 Pending updates are reported once per launch. If a newer application build or
 a newer callsign list is available, a notice lists them with a button for each;
 nothing is downloaded until it is pressed, and the notice waits until any
-first-run profile or setup step is finished.
+first-run profile or setup step is finished. For an application update, the
+notice then shows download and checksum status and replaces the download
+button with **Open Installer** and the platform reveal action after successful
+verification.
 
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
@@ -490,7 +495,11 @@ installer/package to your Downloads folder and verifies its checksum against
 the published `SHA256SUMS` before keeping it — a failed or mismatched
 download is discarded automatically, never silently kept. Once verified,
 **Open Installer** and the platform-specific reveal action replace **Download
-update** in the same action row. **Open Installer** hands it to the OS's own
+update** in the same action row. The startup update notice follows the same
+sequence: it shows download and checksum-verification status, then replaces
+its download button with **Open Installer** and the platform reveal action
+without requiring you to find the About page. **Open Installer** hands it to
+the OS's own
 installer or package manager
 (the Windows MSI installer, the Linux package tool, or an archive tool on
 the portable builds) so you complete the install the normal way; **Show in

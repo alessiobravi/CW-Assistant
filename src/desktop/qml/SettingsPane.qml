@@ -166,20 +166,6 @@ Pane {
                         enabled: appSettings.localDecoderBackendAvailable
                         onToggled: appSettings.localDecoderEnabled = checked
                     }
-                    Label { text: "Callsign directory" }
-                    CheckBox {
-                        objectName: "callsignDatabaseCorrectionCheck"
-                        text: "Correct near-miss callsigns from the offline list"
-                        checked: appSettings.callsignDatabaseCorrectionEnabled
-                        onToggled: appSettings.callsignDatabaseCorrectionEnabled = checked
-                    }
-                    Label {
-                        Layout.columnSpan: 2
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        color: "#91a0b1"
-                        text: "When a decoded callsign is within two characters of a single entry in the offline list, suggest that entry instead. Off by default: two listed stations can differ by one character, so a correction can name a station that was never sent. The suggestion stays advisory either way and never changes the transcript or the confirmed callsign."
-                    }
                     Label { text: "Model file" }
                     RowLayout {
                         Layout.fillWidth: true
@@ -339,6 +325,31 @@ Pane {
                             onClicked: appSettings.clearLocalCallsignDatabase()
                         }
                     }
+                    Label { text: "Correct near misses" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        CheckBox {
+                            objectName: "callsignDatabaseCorrectionCheck"
+                            text: "Correct near-miss callsigns from the list"
+                            // Requires a loaded list: with none there is
+                            // nothing to correct against, and a control that
+                            // silently does nothing is worse than one that
+                            // says why it cannot act.
+                            enabled: replayController.offlineCallsignDatabaseState === "ready"
+                            checked: appSettings.callsignDatabaseCorrectionEnabled
+                            onToggled: appSettings.callsignDatabaseCorrectionEnabled = checked
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: replayController.offlineCallsignDatabaseState === "ready"
+                                   ? "#91a0b1" : "#f3bd55"
+                            text: replayController.offlineCallsignDatabaseState === "ready"
+                                  ? "When a decoded callsign is within two characters of a single entry in the list, suggest that entry instead. Off by default: two listed stations can differ by one character, so a correction can name a station that was never sent. The suggestion stays advisory either way and never changes the transcript or the confirmed callsign."
+                                  : "Unavailable until a callsign list is loaded. Enable the managed list above, or select an operator-supplied file, and this becomes available once its state reads ready."
+                        }
+                    }
+
                     Label { text: "Local-list state" }
                     ColumnLayout {
                         Layout.fillWidth: true

@@ -27,10 +27,28 @@ int main() {
       !contains(qml, "updateChecker.updateAvailable") ||
       !contains(qml, "callsignDatabaseUpdater.updateAvailable") ||
       !contains(qml, "objectName: \"updateNoticeDownloadAppButton\"") ||
+      !contains(qml, "objectName: \"updateNoticeOpenAppButton\"") ||
+      !contains(qml, "objectName: \"updateNoticeRevealAppButton\"") ||
+      !contains(qml, "objectName: \"updateNoticeAppStatusLabel\"") ||
       !contains(qml, "objectName: \"updateNoticeUpdateListButton\"") ||
       !contains(qml, "updateChecker.downloadUpdate()") ||
+      !contains(qml, "updateChecker.openDownloadedFile()") ||
+      !contains(qml, "updateChecker.revealDownloadFolder()") ||
       !contains(qml, "callsignDatabaseUpdater.updateDatabase()")) {
     return 3;
+  }
+
+  // Match the state transition in Settings -> About: after checksum
+  // verification, replace Download with open/reveal actions and retain a
+  // visible verification result.
+  if (!contains(qml, "visible: updateChecker.downloadActionVisible") ||
+      !contains(qml,
+                "visible: updateChecker.verifiedDownloadActionsVisible") ||
+      !contains(qml, "property bool appDownloadStarted: false") ||
+      !contains(qml, "updateNotice.appDownloadStarted = true") ||
+      !contains(qml, "updateChecker.downloadVerified ?") ||
+      !contains(qml, "text: updateChecker.statusMessage")) {
+    return 6;
   }
 
   // Shown once per launch, and never over first-run setup: a profile chooser

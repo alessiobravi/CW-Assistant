@@ -1593,6 +1593,28 @@ void test_transmit_guard() {
   expect(guard.reset_fault(), "fault reset returns to disarmed");
 }
 
+void test_callsign_policy_prosign_glue() {
+  using cwassistant::core::CallsignPolicy;
+  // A missing word gap glues the prosign onto the callsign after it, and the
+  // glued token then collects the context credit the callsign earned. Observed
+  // on a receiver capture: a station sending CQ CQ CQ DE SV7BIO SV7BIO decoded
+  // as "CQ CQ DESV7BIO SV7BIO SV7BIO" and the stream was labelled DESV7BIO,
+  // although the real callsign stood alone twice in the same text.
+  const auto glued = CallsignPolicy::best_complete_in_text(
+      "Q CQ DESV7BIO SV7BIO SV7BI O + ");
+  expect(glued.has_value() && *glued == "SV7BIO",
+         "a prosign glued to the callsign after it does not become the "
+         "station label");
+
+  // The split may only happen where what follows the prosign is itself a
+  // callsign. A genuine German DE-prefixed call must survive intact: removing
+  // DE from DE1ABC leaves 1ABC, which is not a callsign, so the token stands.
+  const auto german = CallsignPolicy::best_complete_in_text(
+      "CQ DE DE1ABC DE1ABC K ");
+  expect(german.has_value() && *german == "DE1ABC",
+         "a genuine DE-prefixed callsign is not split apart");
+}
+
 void test_callsign_policy() {
   using cwassistant::core::CallsignPolicy;
   CallsignPolicy policy;
@@ -2406,6 +2428,7 @@ int main() {
   test_decoder_display_setting_invariance();
   test_soft_decision_keying_evidence();
   test_callsign_policy();
+  test_callsign_policy_prosign_glue();
   test_spectrum_settings();
   test_wav_replay_source();
   test_wav_writer();

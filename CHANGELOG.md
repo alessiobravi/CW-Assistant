@@ -24,6 +24,15 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Fixed
 
+- Missing word spacing no longer lets common leading prosigns such as `DE` or
+  `CQ` become part of a stream's callsign label. The split is accepted only
+  when the remaining token is itself a plausible callsign, preserving genuine
+  `DE`- and `TU`-prefixed calls. The near-miss correction control is now beside
+  the callsign-list state and explains when no ready database is available.
+- The startup application-update notice now reports download and checksum
+  verification status. After verification, **Open Installer** and the
+  platform-specific reveal action replace **Download update** in place, just
+  as they do in Settings → About.
 - Corrected the keying decision that limited character accuracy at every speed
   except a narrow band around 20 WPM. The decision was taken on a decibel-domain
   envelope at a fixed fraction of a floor-to-peak span, which sits far below

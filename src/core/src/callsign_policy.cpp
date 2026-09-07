@@ -155,7 +155,31 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
     if (std::isalnum(character) != 0 || character == '/') {
       token.push_back(static_cast<char>(std::toupper(character)));
     } else if (!token.empty()) {
-      words.push_back(std::move(token));
+      // A missing word gap glues a leading prosign onto the callsign that
+      // follows it, and the glued token then collects the very context credit
+      // the callsign earned: an observed CQ CQ DE SV7BIO decoded as
+      // "CQ CQ DESV7BIO SV7BIO" labelled the stream DESV7BIO, even though the
+      // real callsign stood alone twice in the same text. Split the pair only
+      // when what follows the prosign is itself a plausible callsign, so a
+      // genuine DE-prefixed German call is untouched -- stripping DE from
+      // DE1ABC leaves 1ABC, which is not a callsign, and the token stands.
+      static constexpr std::string_view kGluedPrefixes[]{"DE", "CQ", "TU",
+                                                          "QRZ"};
+      bool split = false;
+      for (const std::string_view prefix : kGluedPrefixes) {
+        if (token.size() <= prefix.size() ||
+            token.compare(0, prefix.size(), prefix) != 0) {
+          continue;
+        }
+        const std::string remainder = token.substr(prefix.size());
+        const auto normalized = normalize(remainder);
+        if (!normalized || !isPlausibleDecodedCallsign(*normalized)) continue;
+        words.emplace_back(prefix);
+        words.push_back(remainder);
+        split = true;
+        break;
+      }
+      if (!split) words.push_back(token);
       token.clear();
     }
   }
