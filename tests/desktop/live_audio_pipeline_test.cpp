@@ -208,6 +208,9 @@ int main(int argc, char* argv[]) {
       !first_line.contains("\"candidateTracks\"") ||
       !first_line.contains("\"acousticWpm\"") ||
       !first_line.contains("\"acousticCadenceConfidence\"") ||
+      !first_line.contains("\"keyingLevelSeparationDb\"") ||
+      !first_line.contains("\"keyingLevelExplainedVariation\"") ||
+      !first_line.contains("\"robustKeyingLevelAnchorActive\"") ||
       !first_line.contains("\"presentedCallsign\"") ||
       !first_line.contains("\"presentedCallsignSource\"") ||
       !first_line.contains("\"identityOriginFrequencyHz\"") ||

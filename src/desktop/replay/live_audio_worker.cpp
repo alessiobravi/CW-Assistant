@@ -394,6 +394,12 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("acousticWpm"), track.acoustic_wpm);
     item.insert(QStringLiteral("acousticCadenceConfidence"),
                 track.acoustic_cadence_confidence);
+    item.insert(QStringLiteral("keyingLevelSeparationDb"),
+                track.keying_level_separation_db);
+    item.insert(QStringLiteral("keyingLevelExplainedVariation"),
+                track.keying_level_explained_variation);
+    item.insert(QStringLiteral("robustKeyingLevelAnchorActive"),
+                track.robust_keying_level_anchor_active);
     item.insert(QStringLiteral("text"), QString::fromStdString(track.text));
     item.insert(QStringLiteral("refinedText"),
                 QString::fromStdString(track.refined_text));

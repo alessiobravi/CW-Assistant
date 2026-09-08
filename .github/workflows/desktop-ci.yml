@@ -39,7 +39,7 @@ jobs:
             os: windows-2025
             qt-arch: win64_msvc2022_64
             configure-arguments: -A x64
-            artifact: cw-assistant-windows11-x64
+            artifact: cw-buddy-windows11-x64
             marker: windows11-x64
             # Build-tool pin only: remove after a released aqtinstall includes
             # the Qt 6.11 Windows repository-layout fix from this commit.
@@ -52,7 +52,7 @@ jobs:
             os: ubuntu-24.04
             qt-arch: linux_gcc_64
             configure-arguments: ""
-            artifact: cw-assistant-linux-x64
+            artifact: cw-buddy-linux-x64
             marker: linux-x64
             aqt_source: ""
             portable_archive: true
@@ -63,7 +63,7 @@ jobs:
             os: macos-15
             qt-arch: clang_64
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=arm64
-            artifact: cw-assistant-macos-arm64
+            artifact: cw-buddy-macos-arm64
             marker: macos-arm64
             aqt_source: ""
             portable_archive: true
@@ -74,7 +74,7 @@ jobs:
             os: macos-15-intel
             qt-arch: clang_64
             configure-arguments: -DCMAKE_OSX_ARCHITECTURES=x86_64
-            artifact: cw-assistant-macos-x64
+            artifact: cw-buddy-macos-x64
             marker: macos-x64
             aqt_source: ""
             portable_archive: true
@@ -369,10 +369,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s build/cw-assistant-version.txt
-          build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
+          test -s build/cw-buddy-version.txt
+          build_version="$(tr -d '\r\n' < build/cw-buddy-version.txt)"
           echo "Expected canonical version: ${build_version}"
-          ort_license_dir=stage/share/doc/cw-assistant/third-party/onnxruntime
+          ort_license_dir=stage/share/doc/cw-buddy/third-party/onnxruntime
           test -s "${ort_license_dir}/LICENSE"
           test -s "${ort_license_dir}/Privacy.md"
           test -s "${ort_license_dir}/ThirdPartyNotices.txt"
@@ -382,38 +382,38 @@ jobs:
             "${ort_license_dir}/ThirdPartyNotices.txt"
           case "${RUNNER_OS}" in
             Windows)
-              installed_version_file=stage/share/doc/cw-assistant/VERSION
+              installed_version_file=stage/share/doc/cw-buddy/VERSION
               test -s "${installed_version_file}"
-              cmp build/cw-assistant-version.txt "${installed_version_file}"
-              test -f stage/bin/cw-assistant-desktop.exe
+              cmp build/cw-buddy-version.txt "${installed_version_file}"
+              test -f stage/bin/cw-buddy-desktop.exe
               test -f stage/bin/onnxruntime.dll
               executable_version="$(powershell.exe -NoProfile -Command \
-                "(Get-Item 'stage/bin/cw-assistant-desktop.exe').VersionInfo.ProductVersion" \
+                "(Get-Item 'stage/bin/cw-buddy-desktop.exe').VersionInfo.ProductVersion" \
                 | tr -d '\r\n')"
               echo "Windows executable ProductVersion: ${executable_version}"
               test "${executable_version}" = "${build_version}"
               ;;
             macOS)
-              app_binary=stage/cw-assistant-desktop.app/Contents/MacOS/cw-assistant-desktop
-              installed_version_file=stage/cw-assistant-desktop.app/Contents/Resources/VERSION
+              app_binary=stage/cw-buddy-desktop.app/Contents/MacOS/cw-buddy-desktop
+              installed_version_file=stage/cw-buddy-desktop.app/Contents/Resources/VERSION
               test -s "${installed_version_file}"
-              cmp build/cw-assistant-version.txt "${installed_version_file}"
+              cmp build/cw-buddy-version.txt "${installed_version_file}"
               test -x "${app_binary}"
-              test -f stage/cw-assistant-desktop.app/Contents/Frameworks/libonnxruntime.1.dylib
+              test -f stage/cw-buddy-desktop.app/Contents/Frameworks/libonnxruntime.1.dylib
               otool -L "${app_binary}" | grep -F '@rpath/libonnxruntime.1.dylib'
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
               cmake \
-                -DCWA_APP_BUNDLE="$PWD/stage/cw-assistant-desktop.app" \
+                -DCWA_APP_BUNDLE="$PWD/stage/cw-buddy-desktop.app" \
                 -DCWA_EXPECTED_VERSION="${build_version}" \
                 -P cmake/VerifyMacOSBundle.cmake
               ;;
             Linux)
-              installed_version_file=stage/share/doc/cw-assistant/VERSION
+              installed_version_file=stage/share/doc/cw-buddy/VERSION
               test -s "${installed_version_file}"
-              cmp build/cw-assistant-version.txt "${installed_version_file}"
-              test -x stage/bin/cw-assistant-desktop
-              test -f stage/lib/cw-assistant/libonnxruntime.so.1
-              readelf -d stage/bin/cw-assistant-desktop | grep -F 'libonnxruntime.so.1'
+              cmp build/cw-buddy-version.txt "${installed_version_file}"
+              test -x stage/bin/cw-buddy-desktop
+              test -f stage/lib/cw-buddy/libonnxruntime.so.1
+              readelf -d stage/bin/cw-buddy-desktop | grep -F 'libonnxruntime.so.1'
               ;;
           esac
       - name: Smoke-test staged application with native graphics
@@ -422,13 +422,13 @@ jobs:
         run: |
           case "${RUNNER_OS}" in
             Windows)
-              stage/bin/cw-assistant-desktop.exe --profile ci-native-smoke --smoke-test
+              stage/bin/cw-buddy-desktop.exe --profile ci-native-smoke --smoke-test
               ;;
             macOS)
-              stage/cw-assistant-desktop.app/Contents/MacOS/cw-assistant-desktop --profile ci-native-smoke --smoke-test
+              stage/cw-buddy-desktop.app/Contents/MacOS/cw-buddy-desktop --profile ci-native-smoke --smoke-test
               ;;
             Linux)
-              xvfb-run -a stage/bin/cw-assistant-desktop --profile ci-native-smoke --smoke-test
+              xvfb-run -a stage/bin/cw-buddy-desktop --profile ci-native-smoke --smoke-test
               ;;
           esac
       - name: Preserve the staged application as an archive
@@ -479,20 +479,20 @@ jobs:
         if: matrix.debian_package
         run: |
           cpack --config build/CPackConfig.cmake -G DEB -B packages
-          build_version="$(tr -d '\r\n' < build/cw-assistant-version.txt)"
+          build_version="$(tr -d '\r\n' < build/cw-buddy-version.txt)"
           deb_packages=(packages/*.deb)
           test "${#deb_packages[@]}" -eq 1
           test "$(dpkg-deb -f "${deb_packages[0]}" Version)" = "${build_version}-1"
-          cmake -E copy build/cw-assistant-version.txt packages/cw-assistant-version.txt
+          cmake -E copy build/cw-buddy-version.txt packages/cw-buddy-version.txt
       - name: Publish Debian/Ubuntu package
         id: upload_deb
         if: matrix.debian_package
         uses: actions/upload-artifact@v7
         with:
-          name: cw-assistant-debian-ubuntu-x64
+          name: cw-buddy-debian-ubuntu-x64
           path: |
             packages/*.deb
-            packages/cw-assistant-version.txt
+            packages/cw-buddy-version.txt
           if-no-files-found: error
           retention-days: 14
       - name: Publish SSH-queryable job result
@@ -565,8 +565,8 @@ jobs:
               status_message="${status_message}"$'\n'"test_log=${test_log}"
             fi
           fi
-          git config user.name "CW Assistant CI"
-          git config user.email "ci@cw-assistant.invalid"
+          git config user.name "CW Buddy CI"
+          git config user.email "ci@cw-buddy.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"
           git push origin "refs/tags/${status_tag}" --force
 
@@ -585,7 +585,7 @@ jobs:
         id: download
         uses: actions/download-artifact@v8
         with:
-          pattern: cw-assistant-*
+          pattern: cw-buddy-*
           path: release-assets
           merge-multiple: true
       - name: Normalize names and generate integrity metadata
@@ -598,18 +598,18 @@ jobs:
             echo "Expected exactly one Debian package; found ${#deb_packages[@]}." >&2
             exit 1
           fi
-          mv "${deb_packages[0]}" release-assets/cw-assistant-debian-ubuntu-x64.deb
+          mv "${deb_packages[0]}" release-assets/cw-buddy-debian-ubuntu-x64.deb
           windows_installers=(release-assets/*.msi)
           if (( ${#windows_installers[@]} != 1 )); then
             echo "Expected exactly one Windows installer; found ${#windows_installers[@]}." >&2
             exit 1
           fi
-          mv "${windows_installers[0]}" release-assets/cw-assistant-windows11-x64.msi
-          if [[ ! -f release-assets/cw-assistant-version.txt ]]; then
+          mv "${windows_installers[0]}" release-assets/cw-buddy-windows11-x64.msi
+          if [[ ! -f release-assets/cw-buddy-version.txt ]]; then
             echo "The canonical build-version file is missing." >&2
             exit 1
           fi
-          build_version="$(tr -d '\r\n' < release-assets/cw-assistant-version.txt)"
+          build_version="$(tr -d '\r\n' < release-assets/cw-buddy-version.txt)"
           if [[ ! "${build_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Invalid canonical build version: ${build_version}" >&2
             exit 1
@@ -617,10 +617,10 @@ jobs:
           jq --arg version "${build_version}" \
             '.version = $version' binaries/latest.json \
             > release-assets/latest.json
-          rm release-assets/cw-assistant-version.txt
+          rm release-assets/cw-buddy-version.txt
           (
             cd release-assets
-            sha256sum cw-assistant-* | sort -k2 > SHA256SUMS
+            sha256sum cw-buddy-* | sort -k2 > SHA256SUMS
           )
       - name: Write continuous-release notes
         id: notes
@@ -674,8 +674,8 @@ jobs:
         run: |
           status_tag="ci-status/release-${GITHUB_SHA}"
           status_message="download=${CWA_DOWNLOAD_RESULT} normalize=${CWA_NORMALIZE_RESULT} notes=${CWA_NOTES_RESULT} release=${CWA_RELEASE_RESULT}"
-          git config user.name "CW Assistant CI"
-          git config user.email "ci@cw-assistant.invalid"
+          git config user.name "CW Buddy CI"
+          git config user.email "ci@cw-buddy.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"
           git push origin "refs/tags/${status_tag}" --force
       - name: Mark the fully verified commit

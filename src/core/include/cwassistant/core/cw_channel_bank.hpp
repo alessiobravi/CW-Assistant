@@ -103,6 +103,11 @@ struct CwChannelBankConfig {
   double noise_reference_offset_hz{300.0};
   double evidence_rate_hz{500.0};
   std::size_t maximum_tracks{24};
+  // Keep the fast per-frame level tracker anchored to two robust modes from a
+  // short history. Exposed to the core benchmark so the production path can
+  // be compared with its exact pre-anchor baseline on identical audio; normal
+  // application configurations leave this enabled.
+  bool robust_keying_level_history{true};
   // The detector averages the supplied spectrum itself, over a fixed time
   // constant, so that display-side averaging and the display frame rate can
   // never change candidate discovery. Callers should supply unaveraged bins.
@@ -246,6 +251,9 @@ struct CwTrackDiagnostic {
   double wpm{0.0};
   double acoustic_wpm{0.0};
   float acoustic_cadence_confidence{0.0F};
+  float keying_level_separation_db{0.0F};
+  float keying_level_explained_variation{0.0F};
+  bool robust_keying_level_anchor_active{false};
   std::string text;
   std::string refined_text;
   std::vector<CwAcousticAlternative> acoustic_alternatives;
@@ -389,6 +397,17 @@ class CwChannelBank {
     float keying_space_variance{0.0F};
     float keying_mark_variance{0.0F};
     bool keying_envelope_initialized{false};
+    // A short, allocation-free amplitude history periodically anchors the
+    // online two-level tracker to two robust modes.  The per-frame tracker is
+    // still needed for attack, fading, and weighting; the history prevents a
+    // run of ambiguous edge samples from walking both levels together.
+    static constexpr std::size_t kKeyingLevelHistorySize = 256;
+    std::array<float, kKeyingLevelHistorySize> keying_level_history{};
+    std::size_t keying_level_history_count{0};
+    std::size_t keying_level_history_index{0};
+    std::uint8_t keying_level_fit_countdown{0};
+    float keying_level_explained_variation{0.0F};
+    bool robust_keying_level_anchor_active{false};
 
     std::array<std::array<std::complex<float>, 3>, 3> center_filters{};
     std::array<std::complex<float>, 3> lower_filter{};

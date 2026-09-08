@@ -26,20 +26,20 @@ function(cwa_require_plist_value key expected)
   endif()
 endfunction()
 
-cwa_require_plist_value(CFBundleDisplayName "CW Assistant")
-cwa_require_plist_value(CFBundleExecutable "cw-assistant-desktop")
-cwa_require_plist_value(CFBundleIconFile "cw-assistant.icns")
+cwa_require_plist_value(CFBundleDisplayName "CW Buddy")
+cwa_require_plist_value(CFBundleExecutable "cw-buddy-desktop")
+cwa_require_plist_value(CFBundleIconFile "cw-buddy.icns")
 cwa_require_plist_value(CFBundleIdentifier "it.iu0lfq.CWAssistant")
-cwa_require_plist_value(CFBundleName "CW Assistant")
+cwa_require_plist_value(CFBundleName "CW Buddy")
 cwa_require_plist_value(CFBundleShortVersionString "${CWA_EXPECTED_VERSION}")
 cwa_require_plist_value(CFBundleVersion "${CWA_EXPECTED_VERSION}")
 
 if(NOT EXISTS
-    "${CWA_APP_BUNDLE}/Contents/MacOS/cw-assistant-desktop")
+    "${CWA_APP_BUNDLE}/Contents/MacOS/cw-buddy-desktop")
   message(FATAL_ERROR "The declared macOS bundle executable is missing")
 endif()
 if(NOT EXISTS
-    "${CWA_APP_BUNDLE}/Contents/Resources/cw-assistant.icns")
+    "${CWA_APP_BUNDLE}/Contents/Resources/cw-buddy.icns")
   message(FATAL_ERROR "The declared macOS bundle icon is missing")
 endif()
 

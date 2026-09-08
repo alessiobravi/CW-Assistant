@@ -89,7 +89,7 @@ provenance metadata is not eligible for packaging.
 
 ## Licensing and provenance
 
-All source in this directory is part of CW Assistant and is licensed under
+All source in this directory is part of CW Buddy and is licensed under
 GPL-3.0-or-later. Generated manifests and annotations explicitly state
 `generated-from-scratch`, `externalAudioUsed: false`, and
 `externalModelsUsed: false`.

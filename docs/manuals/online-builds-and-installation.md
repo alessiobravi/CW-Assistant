@@ -1,5 +1,12 @@
 # Online builds and installation
 
+CW Buddy replaces earlier CW Assistant installations. The Windows installer
+keeps the existing upgrade identity, the Debian package declares the former
+package as replaced, and the application imports existing profiles and the
+managed callsign database on first launch. The macOS bundle identifier remains
+unchanged intentionally so the operating system recognizes the renamed app as
+the same product.
+
 ## Build entirely on GitHub
 
 Every push and pull request starts the desktop workflow on GitHub-hosted
@@ -49,8 +56,8 @@ The Windows leg temporarily installs the SDK downloader from immutable upstream
 commit `8c3695d4a4e1ceabf6a74dc6c79681656dc6b74b`. That commit contains the Qt
 6.11 Windows repository-layout correction missing from the current downloader
 release. This is a build-tool pin only: the application still bundles the
-explicit Qt 6.11.2 runtime, and MSI application upgrades continue to use CW
-Assistant's stable upgrade identity and monotonically increasing package
+explicit Qt 6.11.2 runtime, and MSI application upgrades continue to use the
+product's stable upgrade identity and monotonically increasing package
 revision. Replace the source pin with a released downloader only after a hosted
 Windows build proves that the release contains the same correction.
 
@@ -79,13 +86,13 @@ well as the empty first frame.
 The Windows download is an MSI installer, not a compressed archive:
 
 ```text
-cw-assistant-windows11-x64.msi
+cw-buddy-windows11-x64.msi
 ```
 
 Verify its SHA-256 checksum, double-click it, and follow Windows Installer to
 select the installation folder. It installs the self-contained Qt application,
-creates **Start → All → CW Assistant → CW Assistant** as a dedicated program
-group plus a **CW Assistant** desktop shortcut, registers the application in
+creates **Start → All → CW Buddy → CW Buddy** as a dedicated program
+group plus a **CW Buddy** desktop shortcut, registers the application in
 **Settings → Apps → Installed apps**, and provides normal uninstall/repair
 behavior. The executable, shortcuts, and installed-app entry use the CW
 Morse-key application icon.
@@ -96,11 +103,11 @@ major upgrade of the existing installation; station profiles remain in the
 user’s application settings and are not removed with program files. Downgrades
 are rejected by Windows Installer.
 
-The successful finish page includes **Launch CW Assistant**. It is unchecked
+The successful finish page includes **Launch CW Buddy**. It is unchecked
 for a clean install and selected by default for an interactive upgrade, so the
 updated application normally reopens when setup finishes. You can clear the
 option before selecting **Finish**. During an upgrade, Windows Installer asks a
-running CW Assistant instance to close gracefully and waits up to 15 seconds
+running CW Buddy instance to close gracefully and waits up to 15 seconds
 before terminating a stuck instance. The launch default applies to every
 interactive upgrade because process closure occurs separately in Windows
 Installer's elevated execute session; its result is not reused by the
@@ -127,13 +134,13 @@ downloading and running the newer MSI from the same continuous release page.
 Every artifact from one workflow uses the same `major.minor.revision` value.
 For continuous builds, `revision` is the GitHub Actions run number. The value in
 **Settings → About** therefore matches the Windows executable and MSI, macOS
-bundle, Debian package, installed `share/doc/cw-assistant/VERSION` file, and the
+bundle, Debian package, installed `share/doc/cw-buddy/VERSION` file, and the
 `version` field injected into `latest.json`. A default local configuration uses
 revision `0`.
 
 On macOS, the self-contained application stores the same machine-readable
-record at `CW Assistant.app/Contents/Resources/VERSION`; Windows and Linux use
-`share/doc/cw-assistant/VERSION` inside the staged installation. The hosted
+record at `CW Buddy.app/Contents/Resources/VERSION`; Windows and Linux use
+`share/doc/cw-buddy/VERSION` inside the staged installation. The hosted
 build checks these records and the native executable/bundle metadata before it
 publishes any package.
 
@@ -143,7 +150,7 @@ Both macOS archives contain a self-contained `.app` bundle with the native
 application icon and microphone usage declaration, compiled with
 deployment target 14.0. Choose the Apple silicon archive for M-series Macs and
 the Intel x64 archive for supported Intel Macs. Extract the archive and move
-`cw-assistant-desktop.app` to `/Applications` if desired.
+`cw-buddy-desktop.app` to `/Applications` if desired.
 
 The hosted matrix inspects the staged executable's Mach-O build metadata and
 rejects an artifact unless its minimum macOS version is exactly 14.0. It also
@@ -163,27 +170,27 @@ release version if it persists.
 ## Debian and Ubuntu
 
 Only the Linux matrix job runs the Debian packaging stage. It produces a
-`cw-assistant_<version>-<revision>_amd64.deb`
-package. Download it from the `cw-assistant-debian-ubuntu-x64` workflow
+`cw-buddy_<version>-<revision>_amd64.deb`
+package. Download it from the `cw-buddy-debian-ubuntu-x64` workflow
 artifact, extract the artifact archive if necessary, then install with APT so
 dependency errors are reported clearly:
 
 ```sh
-sudo apt install ./cw-assistant_0.1.245-1_amd64.deb
+sudo apt install ./cw-buddy_0.1.245-1_amd64.deb
 ```
 
 The stable continuous-release filename is
-`cw-assistant-debian-ubuntu-x64.deb`, so a release download can instead be
+`cw-buddy-debian-ubuntu-x64.deb`, so a release download can instead be
 installed with:
 
 ```sh
-sudo apt install ./cw-assistant-debian-ubuntu-x64.deb
+sudo apt install ./cw-buddy-debian-ubuntu-x64.deb
 ```
 
 Launch from the desktop application menu or run:
 
 ```sh
-cw-assistant-desktop
+cw-buddy-desktop
 ```
 
 The package includes the application, deployed Qt/QML runtime components,
@@ -194,8 +201,8 @@ downloaded `.deb` is not the same as subscribing to an APT repository.
 
 Because the hosted package deploys its pinned Qt runtime, available Qt SDK
 license texts are installed under
-`/usr/share/doc/cw-assistant/third-party/qt6/`. The project dependency policy is
-installed as `/usr/share/doc/cw-assistant/licensing.md`.
+`/usr/share/doc/cw-buddy/third-party/qt6/`. The project dependency policy is
+installed as `/usr/share/doc/cw-buddy/licensing.md`.
 
 ## Local developer build (optional)
 

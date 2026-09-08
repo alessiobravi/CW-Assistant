@@ -1,13 +1,13 @@
 # ADIF conformance policy
 
-CW Assistant targets the current released ADIF specification and is intended to
+CW Buddy targets the current released ADIF specification and is intended to
 remain eligible for the conformance or certification process available at the
 time of each release. The current baseline is ADIF 3.1.7 (2026-03-22).
 
 ## Release rules
 
 - Track the published ADIF release and review specification changes before each
-  CW Assistant release. Updating the version is a reviewed code/data change,
+  CW Buddy release. Updating the version is a reviewed code/data change,
   never only a documentation edit.
 - Export the recommended QSO identity fields: `QSO_DATE`, `TIME_ON`, `CALL`,
   `MODE`, and `FREQ` and/or `BAND`.

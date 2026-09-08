@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-GENERATOR_ID = "cw-assistant-synthetic-key-v1"
+GENERATOR_ID = "cw-buddy-synthetic-key-v1"
 LICENSE = "GPL-3.0-or-later"
 
 MORSE = {

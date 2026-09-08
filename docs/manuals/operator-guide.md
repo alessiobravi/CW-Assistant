@@ -2,7 +2,7 @@
 
 ## Current development status
 
-CW Assistant is pre-release software. The current desktop shell can create and
+CW Buddy is pre-release software. The current desktop shell can create and
 select isolated station profiles, guide first-time setup, run in receive-only
 SWL mode, discover serial ports without opening them, identify online radios
 through a supported integration, save radio/keying/display settings, open the Windows
@@ -334,14 +334,16 @@ hosted live-audio acceptance fixture fails, so a release is not advanced on an
 opaque or unexplained decoder result.
 
 Element timing is measured without a length bias. The keying decision is taken
-in the linear power domain at the half-amplitude point between the measured
-noise level and the measured mark level, so a mark and the gap that follows it
-are timed symmetrically, and the smoothing applied before that decision scales
-with the element length being tracked rather than being fixed. In practice this
-removes the strong speed dependence the decoder used to have: copy quality no
-longer falls away above and below roughly 20 WPM, and the reported speed now
-tracks the sender's actual speed to within a few percent instead of being read
-as much as a fifth too slow. The element length is measured from a mark together with the
+in the linear power domain from separately measured space and mark levels. A
+responsive tracker follows fading and manual weighting, while a bounded recent
+history anchors it to robust low and high populations only when they are
+clearly separated; a broad noise population cannot supply that anchor. This
+keeps ambiguous keying-edge samples from pulling both levels together. The
+smoothing applied before the decision scales with the element length being
+tracked rather than being fixed. In practice this removes the strong speed
+dependence the decoder used to have and improves the generated speed/noise
+surface, but it does not make every field transcript correct. The element
+length is measured from a mark together with the
 gap that follows it, whose combined length does not depend on how heavily the
 operator weights their sending, so bug and hand-key styles are no longer
 penalised the way they were. Weak signals below roughly 15 dB remain
@@ -390,7 +392,7 @@ most daily and download only a changed release; **Check for updates** starts an
 immediate operator-requested check. The last valid copy remains usable offline
 and is preserved after any network, validation, or write failure. SCP is an
 activity-derived contesting aid maintained by W9KKN, not an official callsign
-register, and is not bundled with CW Assistant.
+register, and is not bundled with CW Buddy.
 
 If at least two current competitive acoustic paths agree on the same strongest
 complete callsign, and it is within two wildcard-aware substitutions,
@@ -574,7 +576,7 @@ replaces its validated local data cache.
 
 ## First launch
 
-1. Start `cw-assistant-desktop`.
+1. Start `cw-buddy-desktop`.
 2. Enter a descriptive station profile name, such as `HF desk` or
    `Satellite station`.
 3. For audio-only decoding, select **No radio — receive-only audio decoding
@@ -620,8 +622,8 @@ profile exists, the startup helper asks which profile to open. A shortcut or
 automation can bypass the helper:
 
 ```text
-cw-assistant-desktop --profile "HF desk"
-cw-assistant-desktop --profile "Satellite station"
+cw-buddy-desktop --profile "HF desk"
+cw-buddy-desktop --profile "Satellite station"
 ```
 
 Two application processes may use different profiles. Future device locks will
@@ -666,7 +668,7 @@ Settings → Radio allows whole-kHz steps from 1 to 100 kHz. The controls are
 hidden for WAV/SWL operation and read-only, disconnected, non-master, or
 otherwise incapable providers.
 
-The entered value is actual RF, not necessarily the radio dial. CW Assistant
+The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic
 before sending the provider request. In split operation only the receive VFO is
 targeted: TX frequency and mode are left unchanged. The provider's subsequent

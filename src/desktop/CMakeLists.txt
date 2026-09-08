@@ -22,7 +22,7 @@ function(cwa_target_add_local_character_decoder target_name)
   endif()
 endfunction()
 
-qt_add_executable(cw-assistant-desktop
+qt_add_executable(cw-buddy-desktop
   main.cpp
   replay/replay_controller.cpp
   replay/replay_controller.hpp
@@ -34,6 +34,8 @@ qt_add_executable(cw-assistant-desktop
   radio/cat4om_client.hpp
   settings/app_settings.cpp
   settings/app_settings.hpp
+  settings/product_migration.cpp
+  settings/product_migration.hpp
   updates/update_checker.cpp
   updates/update_checker.hpp
   updates/callsign_database_updater.cpp
@@ -45,12 +47,14 @@ qt_add_executable(cw-assistant-desktop
   visualization/spectrum_waterfall_item.hpp
 )
 
-set(CWA_MACOS_BUNDLE_NAME "CW Assistant")
-set(CWA_MACOS_BUNDLE_EXECUTABLE "cw-assistant-desktop")
+set(CWA_MACOS_BUNDLE_NAME "CW Buddy")
+set(CWA_MACOS_BUNDLE_EXECUTABLE "cw-buddy-desktop")
+# Preserve the original bundle identifier so macOS recognizes CW Buddy as an
+# upgrade of installed legacy builds instead of a second application.
 set(CWA_MACOS_BUNDLE_IDENTIFIER "it.iu0lfq.CWAssistant")
-set(CWA_MACOS_BUNDLE_ICON "cw-assistant.icns")
+set(CWA_MACOS_BUNDLE_ICON "cw-buddy.icns")
 
-set_target_properties(cw-assistant-desktop PROPERTIES
+set_target_properties(cw-buddy-desktop PROPERTIES
   MACOSX_BUNDLE TRUE
   MACOSX_BUNDLE_BUNDLE_NAME "${CWA_MACOS_BUNDLE_NAME}"
   MACOSX_BUNDLE_GUI_IDENTIFIER "${CWA_MACOS_BUNDLE_IDENTIFIER}"
@@ -61,24 +65,24 @@ set_target_properties(cw-assistant-desktop PROPERTIES
   WIN32_EXECUTABLE TRUE
 )
 
-set_source_files_properties(packaging/cw-assistant.png PROPERTIES
-  QT_RESOURCE_ALIAS cw-assistant.png)
-qt_add_resources(cw-assistant-desktop "cwa_application_icons"
+set_source_files_properties(packaging/cw-buddy.png PROPERTIES
+  QT_RESOURCE_ALIAS cw-buddy.png)
+qt_add_resources(cw-buddy-desktop "cwa_application_icons"
   PREFIX "/icons"
-  FILES packaging/cw-assistant.png)
+  FILES packaging/cw-buddy.png)
 
 if(WIN32)
-  configure_file(packaging/cw-assistant.rc.in
-    "${CMAKE_CURRENT_BINARY_DIR}/cw-assistant.rc" @ONLY)
-  target_sources(cw-assistant-desktop PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/cw-assistant.rc"
-    packaging/cw-assistant.ico)
+  configure_file(packaging/cw-buddy.rc.in
+    "${CMAKE_CURRENT_BINARY_DIR}/cw-buddy.rc" @ONLY)
+  target_sources(cw-buddy-desktop PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/cw-buddy.rc"
+    packaging/cw-buddy.ico)
 endif()
 
 if(APPLE)
-  set_source_files_properties(packaging/cw-assistant.icns PROPERTIES
+  set_source_files_properties(packaging/cw-buddy.icns PROPERTIES
     MACOSX_PACKAGE_LOCATION Resources)
-  target_sources(cw-assistant-desktop PRIVATE packaging/cw-assistant.icns)
+  target_sources(cw-buddy-desktop PRIVATE packaging/cw-buddy.icns)
 endif()
 
 set_source_files_properties(qml/Main.qml PROPERTIES QT_RESOURCE_ALIAS Main.qml)
@@ -87,8 +91,8 @@ set_source_files_properties(qml/ProfileChooser.qml PROPERTIES QT_RESOURCE_ALIAS 
 set_source_files_properties(qml/SetupWizard.qml PROPERTIES QT_RESOURCE_ALIAS SetupWizard.qml)
 set_source_files_properties(qml/SettingsPane.qml PROPERTIES QT_RESOURCE_ALIAS SettingsPane.qml)
 
-qt_add_qml_module(cw-assistant-desktop
-  URI CWAssistant
+qt_add_qml_module(cw-buddy-desktop
+  URI CWBuddy
   VERSION 1.0
   QML_FILES
     qml/Main.qml
@@ -98,7 +102,7 @@ qt_add_qml_module(cw-assistant-desktop
     qml/SettingsPane.qml
 )
 
-target_link_libraries(cw-assistant-desktop PRIVATE
+target_link_libraries(cw-buddy-desktop PRIVATE
   cwa_core
   Qt6::Core
   Qt6::Gui
@@ -111,8 +115,8 @@ target_link_libraries(cw-assistant-desktop PRIVATE
   Qt6::SerialPort
   Qt6::WebSockets
 )
-cwa_target_add_local_character_decoder(cw-assistant-desktop)
-target_compile_definitions(cw-assistant-desktop PRIVATE
+cwa_target_add_local_character_decoder(cw-buddy-desktop)
+target_compile_definitions(cw-buddy-desktop PRIVATE
   CWA_VERSION="${CWA_BUILD_VERSION}")
 
 if(CWA_BUILD_TESTS)
@@ -158,7 +162,7 @@ if(CWA_BUILD_TESTS)
     TIMEOUT 10)
 
   add_test(NAME cwa_desktop_qml_startup_smoke
-    COMMAND cw-assistant-desktop --profile ci-smoke --smoke-test)
+    COMMAND cw-buddy-desktop --profile ci-smoke --smoke-test)
   set_tests_properties(cwa_desktop_qml_startup_smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
     TIMEOUT 15)
@@ -177,6 +181,8 @@ if(CWA_BUILD_TESTS)
 
   qt_add_executable(cwa_callsign_database_updater_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/callsign_database_updater_test.cpp
+    settings/product_migration.cpp
+    settings/product_migration.hpp
     updates/callsign_database_updater.cpp
     updates/callsign_database_updater.hpp
   )
@@ -208,46 +214,46 @@ if(CWA_BUILD_TESTS)
 endif()
 
 include(GNUInstallDirs)
-install(TARGETS cw-assistant-desktop
+install(TARGETS cw-buddy-desktop
   BUNDLE DESTINATION .
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
 qt_generate_deploy_qml_app_script(
-  TARGET cw-assistant-desktop
+  TARGET cw-buddy-desktop
   OUTPUT_SCRIPT cwa_deploy_script
   NO_UNSUPPORTED_PLATFORM_ERROR
 )
 
 if(UNIX AND NOT APPLE)
-  install(FILES packaging/cw-assistant.desktop
+  install(FILES packaging/cw-buddy.desktop
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
-  install(FILES packaging/cw-assistant.png
+  install(FILES packaging/cw-buddy.png
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/512x512/apps)
-  install(FILES packaging/it.iu0lfq.CWAssistant.metainfo.xml
+  install(FILES packaging/it.iu0lfq.CWBuddy.metainfo.xml
     DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo)
 endif()
 
 install(FILES ${PROJECT_SOURCE_DIR}/LICENSE
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy
   RENAME copyright)
 install(FILES ${PROJECT_SOURCE_DIR}/docs/licensing.md
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant)
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy)
 if(APPLE)
   # Keep the canonical record inside the self-contained application bundle.
   # The custom Info.plist reads the same CWA_BUILD_VERSION directly so bundle
   # metadata and this machine-readable record cannot diverge through target
   # property/template expansion.
-  install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
-    DESTINATION "cw-assistant-desktop.app/Contents/Resources"
+  install(FILES "${CMAKE_BINARY_DIR}/cw-buddy-version.txt"
+    DESTINATION "cw-buddy-desktop.app/Contents/Resources"
     RENAME VERSION)
 else()
-  install(FILES "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant
+  install(FILES "${CMAKE_BINARY_DIR}/cw-buddy-version.txt"
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy
     RENAME VERSION)
 endif()
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/docs/manuals/
-  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/manuals
+  DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/manuals
   FILES_MATCHING PATTERN "*.md")
 
 # Hosted builds deploy Qt shared libraries, so preserve the corresponding Qt
@@ -255,7 +261,7 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/docs/manuals/
 get_filename_component(cwa_qt_prefix "${Qt6Core_DIR}/../../.." ABSOLUTE)
 if(EXISTS "${cwa_qt_prefix}/LICENSES")
   install(DIRECTORY "${cwa_qt_prefix}/LICENSES/"
-    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/third-party/qt6)
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/third-party/qt6)
 endif()
 
 # Deployment copies and signs the completed macOS bundle. Keep it after every
@@ -264,11 +270,11 @@ endif()
 install(SCRIPT ${cwa_deploy_script})
 
 if(WIN32)
-  target_link_libraries(cw-assistant-desktop PRIVATE ole32 oleaut32)
+  target_link_libraries(cw-buddy-desktop PRIVATE ole32 oleaut32)
 endif()
 
 if(MSVC)
-  target_compile_options(cw-assistant-desktop PRIVATE /W4 /permissive-)
+  target_compile_options(cw-buddy-desktop PRIVATE /W4 /permissive-)
 else()
-  target_compile_options(cw-assistant-desktop PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(cw-buddy-desktop PRIVATE -Wall -Wextra -Wpedantic)
 endif()

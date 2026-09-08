@@ -1,6 +1,6 @@
 #include <windows.h>
 
-IDI_APPLICATION_ICON ICON "@CMAKE_CURRENT_SOURCE_DIR@/packaging/cw-assistant.ico"
+IDI_APPLICATION_ICON ICON "@CMAKE_CURRENT_SOURCE_DIR@/packaging/cw-buddy.ico"
 
 VS_VERSION_INFO VERSIONINFO
  FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@CWA_PACKAGE_REVISION@,0
@@ -20,12 +20,12 @@ BEGIN
     BLOCK "040904b0"
     BEGIN
       VALUE "CompanyName", "Alessio Bravi\0"
-      VALUE "FileDescription", "CW Assistant\0"
+      VALUE "FileDescription", "CW Buddy\0"
       VALUE "FileVersion", "@CWA_BUILD_VERSION@\0"
-      VALUE "InternalName", "cw-assistant-desktop\0"
+      VALUE "InternalName", "cw-buddy-desktop\0"
       VALUE "LegalCopyright", "GPL-3.0-or-later\0"
-      VALUE "OriginalFilename", "cw-assistant-desktop.exe\0"
-      VALUE "ProductName", "CW Assistant\0"
+      VALUE "OriginalFilename", "cw-buddy-desktop.exe\0"
+      VALUE "ProductName", "CW Buddy\0"
       VALUE "ProductVersion", "@CWA_BUILD_VERSION@\0"
     END
   END

@@ -26,6 +26,6 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSMicrophoneUsageDescription</key>
-  <string>CW Assistant uses the selected audio input to receive and decode radio audio.</string>
+  <string>CW Buddy uses the selected audio input to receive and decode radio audio.</string>
 </dict>
 </plist>

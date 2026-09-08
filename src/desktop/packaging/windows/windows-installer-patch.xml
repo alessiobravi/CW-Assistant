@@ -6,9 +6,9 @@
       upgrade path below selects it by default after installation completes.
     -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
-              Value="Launch CW Assistant" />
+              Value="Launch CW Buddy" />
     <Property Id="WixShellExecTarget"
-              Value="[INSTALL_ROOT]bin\cw-assistant-desktop.exe" />
+              Value="[INSTALL_ROOT]bin\cw-buddy-desktop.exe" />
 
     <CustomAction Id="CwaLaunchApplication"
                   BinaryKey="WixCA"
@@ -42,9 +42,21 @@
       platform-specific WiX custom-action binary.
     -->
     <util:CloseApplication Id="CwaCloseRunningApplicationDuringUpgrade"
-                           Target="cw-assistant-desktop.exe"
-                           Description="CW Assistant must close before the update can continue."
+                           Target="cw-buddy-desktop.exe"
+                           Description="CW Buddy must close before the update can continue."
                            Sequence="1"
+                           CloseMessage="yes"
+                           ElevatedCloseMessage="yes"
+                           Timeout="15"
+                           TerminateProcess="1"
+                           RebootPrompt="no">
+      WIX_UPGRADE_DETECTED
+    </util:CloseApplication>
+    <!-- The first CW Buddy upgrade may still find the old executable running. -->
+    <util:CloseApplication Id="CwaCloseLegacyApplicationDuringUpgrade"
+                           Target="cw-assistant-desktop.exe"
+                           Description="CW Buddy must close the previous application before the update can continue."
+                           Sequence="2"
                            CloseMessage="yes"
                            ElevatedCloseMessage="yes"
                            Timeout="15"

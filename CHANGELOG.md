@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to CW Assistant are recorded here. The format follows
+All notable changes to CW Buddy are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and releases will use
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -48,6 +48,37 @@ All notable changes to CW Assistant are recorded here. The format follows
   its label entirely.
 
 ### Changed
+
+- The application is now **CW Buddy** throughout its public identity, including
+  the desktop UI, executable and package names, installer text, update assets,
+  documentation, and repository links. The new project artwork is used by the
+  application and shown on the repository home page. Existing profiles and the
+  managed Super Check Partial cache are imported on first launch; Windows and
+  macOS retain their established upgrade identities, and the Debian package
+  replaces the former package instead of installing a duplicate.
+
+- Keying-level estimation now combines the responsive per-frame tracker with a
+  bounded 512 ms amplitude history. A robust two-class split may anchor the
+  space and mark levels only when both populations contain enough samples, are
+  separated by at least 6 dB of power, and explain at least 70% of the observed
+  variation. Ambiguous edge samples therefore no longer make the two learned
+  levels drift together, while fading and manually weighted sending still use
+  the responsive tracker.
+
+  On identical, cross-platform reproducible generated audio, full-surface mean
+  character error falls from 0.3070 without the robust history to 0.2579 with
+  it; all three seed sets improve and the aggregate paired gain is 0.0491.
+  Wrong callsign assertions on that surface fall from 40 to 36. The receiver
+  corpus remains at eight of nine corroborated
+  callsigns and zero callsign assertions on all four recordings containing no
+  CW. Debug captures now include the level separation, explained variation,
+  and whether the robust anchor was accepted, so future changes can be judged
+  from evidence rather than transcript appearance.
+
+  The benchmark noise generator now derives its Gaussian-like samples directly
+  from the standardized `mt19937` integer sequence. `normal_distribution` does
+  not define the same mapping across standard libraries and had silently given
+  MSVC, libc++, and libstdc++ different acceptance waveforms for the same seed.
 
 - Debug capture is reachable from Settings -> Decoder, not only from the decoder
   panel header, with a button that opens the capture folder in the file manager.
@@ -639,7 +670,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   fail immediately after the welcome page. Process closure now remains in
   WiX's standard execute sequence, the finish-page launcher uses the canonical
   WiX binary, and CI rejects the unsafe detector or a wrong action binding.
-  **Launch CW Assistant** remains unchecked on clean installs and is selected
+  **Launch CW Buddy** remains unchecked on clean installs and is selected
   by default after interactive upgrades.
 
 - Verified stream markers now correct a biased initial acquisition from robust
@@ -651,7 +682,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   and key state for direct field diagnosis.
 - After an update artifact passes checksum verification, **Open Installer**
   and the platform-native reveal action replace **Download update** in the same
-  row. The Windows MSI finish page now offers **Launch CW Assistant**, selecting
+  row. The Windows MSI finish page now offers **Launch CW Buddy**, selecting
   it automatically only when an interactive upgrade found and closed a running
   instance; its process detection, bounded shutdown, condition, and installed
   launch target are verified from the generated MSI tables in CI, with verifier
@@ -1082,7 +1113,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   ready for station logging and exact own-call notification matching.
 - A modern CW Morse-key application mark with native Windows executable/MSI,
   macOS bundle, Linux desktop, and Qt window icon assets. The Windows installer
-  creates the **CW Assistant** Start-menu program group and desktop shortcut.
+  creates the **CW Buddy** Start-menu program group and desktop shortcut.
 - Backlog scope for configurable own-callsign decode notification and an
   optional guarded QSO-closing macro.
 - Backlog scope for optional real-time callsign prediction/validation using a
@@ -1238,4 +1269,4 @@ All notable changes to CW Assistant are recorded here. The format follows
 - Transmission begins disarmed and cannot be initiated directly by decoder
   output.
 
-[Unreleased]: https://github.com/alessiobravi/CW-Assistant/compare/HEAD
+[Unreleased]: https://github.com/alessiobravi/CW-Buddy/compare/HEAD

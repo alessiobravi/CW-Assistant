@@ -71,6 +71,18 @@ std::string squeeze(std::string value) {
   return begin == std::string::npos ? std::string{} : result.substr(begin);
 }
 
+float portableGaussianLike(std::mt19937& generator) noexcept {
+  // mt19937's integer sequence is standardized; normal_distribution's mapping
+  // is not. Summing twelve U(0,1) draws produces zero-mean, unit-variance
+  // Gaussian-like noise and keeps this acceptance waveform identical across
+  // libc++, libstdc++, and MSVC instead of silently changing it by platform.
+  constexpr double scale = 1.0 / 4'294'967'296.0;
+  double sum = 0.0;
+  for (int draw = 0; draw < 12; ++draw)
+    sum += (static_cast<double>(generator()) + 0.5) * scale;
+  return static_cast<float>(sum - 6.0);
+}
+
 std::vector<float> synthesize(const std::string& message, const double wpm,
                               const float snr_db, const double sample_rate,
                               const double tone_hz, const unsigned seed) {
@@ -98,7 +110,6 @@ std::vector<float> synthesize(const std::string& message, const double wpm,
       std::pow(10.0F, snr_db / 10.0F) /
       static_cast<float>(sample_rate / 2.0 / 120.0));
   std::mt19937 generator(seed);
-  std::normal_distribution<float> gaussian(0.0F, 1.0F);
   double phase = 0.0;
   std::size_t index = static_cast<std::size_t>(0.4 * sample_rate);
   for (const auto& run : runs) {
@@ -119,7 +130,7 @@ std::vector<float> synthesize(const std::string& message, const double wpm,
     }
   }
   for (std::size_t step = 0; step < count; ++step)
-    audio[step] += noise * gaussian(generator);
+    audio[step] += noise * portableGaussianLike(generator);
   return audio;
 }
 
@@ -129,9 +140,12 @@ struct Decoded {
 };
 
 Decoded decodeChannel(const std::vector<float>& audio,
-                      const double sample_rate) {
+                      const double sample_rate,
+                      const bool robust_level_history = true) {
   SpectrumAnalyzer analyzer({.audio_upper_frequency_hz = 3'000.0});
-  CwChannelBank bank;
+  CwChannelBankConfig config;
+  config.robust_keying_level_history = robust_level_history;
+  CwChannelBank bank(config);
   RealtimeSampleBlock block;
   block.stream.sample_rate_hz = sample_rate;
   Decoded best;
@@ -214,9 +228,13 @@ int main(int argc, char** argv) {
   std::size_t wrong_callsigns = 0;
   std::size_t right_callsigns = 0;
   std::vector<double> per_set;
+  std::vector<double> baseline_per_set;
   per_set.reserve(seed_sets.size());
+  baseline_per_set.reserve(seed_sets.size());
+  std::size_t baseline_wrong_callsigns = 0;
   for (std::size_t set = 0; set < seed_sets.size(); ++set) {
     double total = 0.0;
+    double baseline_total = 0.0;
     std::size_t cells = 0;
     for (const double wpm : speeds) {
       for (const float snr_db : ratios) {
@@ -225,8 +243,12 @@ int main(int argc, char** argv) {
           const auto audio = synthesize(message, wpm, snr_db, sample_rate,
                                         700.0, seed);
           const auto decoded = decodeChannel(audio, sample_rate);
+          const auto baseline = decodeChannel(audio, sample_rate, false);
           accumulated += std::min<double>(
               1.0, static_cast<double>(editDistance(message, decoded.text)) /
+                       message.size());
+          baseline_total += std::min<double>(
+              1.0, static_cast<double>(editDistance(message, baseline.text)) /
                        message.size());
           // Naming the wrong station is worse than naming none: an operator
           // logs what the application asserts. A mis-decoded token sitting in
@@ -235,6 +257,10 @@ int main(int argc, char** argv) {
           if (!decoded.callsign.empty() && decoded.callsign != expected_call)
             ++wrong_callsigns;
           if (decoded.callsign == expected_call) ++right_callsigns;
+          if (!baseline.callsign.empty() &&
+              baseline.callsign != expected_call) {
+            ++baseline_wrong_callsigns;
+          }
         }
         total += accumulated / static_cast<double>(seed_sets[set].size());
         ++cells;
@@ -242,7 +268,12 @@ int main(int argc, char** argv) {
     }
     const double mean = total / static_cast<double>(cells);
     per_set.push_back(mean);
-    std::printf("  seed set %zu   mean character error %.4f\n", set, mean);
+    const double baseline_mean = baseline_total /
+        static_cast<double>(cells * seed_sets[set].size());
+    baseline_per_set.push_back(baseline_mean);
+    std::printf("  seed set %zu   mean character error %.4f"
+                " (without robust history %.4f)\n",
+                set, mean, baseline_mean);
   }
   const auto bounds = std::minmax_element(per_set.begin(), per_set.end());
   const double spread = *bounds.second - *bounds.first;
@@ -250,13 +281,36 @@ int main(int argc, char** argv) {
   for (const double value : per_set) sum += value;
   std::printf("  overall %.4f, spread across seed sets %.4f\n",
               sum / static_cast<double>(per_set.size()), spread);
-  std::printf("  callsign asserted correctly %zu, wrongly %zu\n",
-              right_callsigns, wrong_callsigns);
+  std::printf("  callsign asserted correctly %zu, wrongly %zu"
+              " (without robust history wrongly %zu)\n",
+              right_callsigns, wrong_callsigns, baseline_wrong_callsigns);
+  double baseline_sum = 0.0;
+  for (const double value : baseline_per_set) baseline_sum += value;
+  const double mean = sum / static_cast<double>(per_set.size());
+  const double baseline_mean =
+      baseline_sum / static_cast<double>(baseline_per_set.size());
   std::printf("  a difference smaller than %.4f is not a result: compare two"
               " builds on these same seed sets and read the paired\n"
               "  difference per set, never one absolute figure against"
               " another run\n", spread);
-  // Reports a measurement; it does not gate. Failing on an absolute threshold
-  // here would fail on the noise draw as readily as on a regression.
+  // The two paths consume the exact same generated audio in the same process,
+  // and the waveform generator itself is portable across the supported C++
+  // libraries. Do not gate on one absolute CER.
+  const bool paired_gain = mean + 0.03 <= baseline_mean;
+  bool no_seed_regression = true;
+  for (std::size_t set = 0; set < per_set.size(); ++set)
+    no_seed_regression = no_seed_regression &&
+        per_set[set] <= baseline_per_set[set];
+  const bool callsign_precision_not_worse =
+      wrong_callsigns <= baseline_wrong_callsigns;
+  if (!paired_gain || !no_seed_regression ||
+      !callsign_precision_not_worse) {
+    std::fprintf(stderr,
+                 "robust history regression: mean %.4f baseline %.4f,"
+                 " wrong calls %zu baseline %zu\n",
+                 mean, baseline_mean, wrong_callsigns,
+                 baseline_wrong_callsigns);
+    return EXIT_FAILURE;
+  }
   return EXIT_SUCCESS;
 }

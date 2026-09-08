@@ -1131,8 +1131,6 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
             track.keying_space_power, 0.0F));
         const float mark_amplitude = std::sqrt(std::max(
             track.keying_mark_power, 0.0F));
-        const float split_amplitude = 0.5F * (space_amplitude +
-                                              mark_amplitude);
         // Each observation updates only the level it currently belongs to, so
         // the two components stay separated instead of one slow envelope
         // chasing both states. Weighting both levels by how far the sample
@@ -1142,6 +1140,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         // ambiguous sample pulls the levels together instead of leaving them
         // alone, and at 12 WPM and 12 dB the model collapsed outright.
         // Measured, 0.388 mean character error against 0.295.
+        const float split_amplitude = 0.5F * (space_amplitude +
+                                              mark_amplitude);
         if (observed_power < split_amplitude * split_amplitude) {
           track.keying_space_power += (observed_power <
                                        track.keying_space_power ? 0.30F
@@ -1157,6 +1157,106 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         // the model onto one point and start slicing noise.
         track.keying_mark_power = std::max(track.keying_mark_power,
                                            track.keying_space_power * 2.0F);
+      }
+      // Periodically regularise the fast online levels against a bounded
+      // history.  Otsu's between-class criterion finds the strongest split;
+      // medians inside the two groups then represent steady space and mark
+      // without giving keying-edge samples the leverage that a mean or a
+      // per-frame assignment would.  A split is accepted only when both
+      // groups have support and steady-state amplitudes differ by at least
+      // two to one. A window containing only noise therefore cannot
+      // manufacture a second keying state.
+      const float observed_amplitude_for_history = std::sqrt(observed_power);
+      if (config_.robust_keying_level_history) {
+        track.keying_level_history[track.keying_level_history_index] =
+            observed_amplitude_for_history;
+        track.keying_level_history_index =
+            (track.keying_level_history_index + 1) %
+            Track::kKeyingLevelHistorySize;
+        track.keying_level_history_count = std::min(
+            track.keying_level_history_count + 1,
+            Track::kKeyingLevelHistorySize);
+      }
+      if (config_.robust_keying_level_history &&
+          ++track.keying_level_fit_countdown >= 16 &&
+          track.keying_level_history_count >= 64) {
+        track.keying_level_fit_countdown = 0;
+        std::array<float, Track::kKeyingLevelHistorySize> ordered{};
+        std::copy_n(track.keying_level_history.begin(),
+                    track.keying_level_history_count, ordered.begin());
+        std::sort(ordered.begin(),
+                  ordered.begin() + static_cast<std::ptrdiff_t>(
+                      track.keying_level_history_count));
+        const std::size_t count = track.keying_level_history_count;
+        const std::size_t minimum_group = std::max<std::size_t>(8, count / 10);
+        double total = 0.0;
+        double total_squared = 0.0;
+        for (std::size_t sample = 0; sample < count; ++sample) {
+          total += ordered[sample];
+          total_squared += static_cast<double>(ordered[sample]) *
+              ordered[sample];
+        }
+        double lower_sum = 0.0;
+        double best_separation = -1.0;
+        std::size_t best_split = 0;
+        for (std::size_t split = 1; split < count; ++split) {
+          lower_sum += ordered[split - 1];
+          if (split < minimum_group || count - split < minimum_group) continue;
+          const double lower_mean = lower_sum / static_cast<double>(split);
+          const double upper_mean =
+              (total - lower_sum) / static_cast<double>(count - split);
+          const double difference = upper_mean - lower_mean;
+          const double separation = static_cast<double>(split) *
+              static_cast<double>(count - split) * difference * difference;
+          if (separation > best_separation) {
+            best_separation = separation;
+            best_split = split;
+          }
+        }
+        if (best_split >= minimum_group &&
+            count - best_split >= minimum_group) {
+          const double total_variation = std::max(
+              total_squared - total * total / static_cast<double>(count),
+              1.0e-12);
+          const double explained_variation =
+              (best_separation / static_cast<double>(count)) /
+              total_variation;
+          track.keying_level_explained_variation = static_cast<float>(
+              std::clamp(explained_variation, 0.0, 1.0));
+          track.robust_keying_level_anchor_active = false;
+          const float robust_space_amplitude = ordered[best_split / 2];
+          const float robust_mark_amplitude =
+              ordered[best_split + (count - best_split) / 2];
+          // Require at least 6 dB of steady-state power separation before a
+          // historical split may steer the live tracker.  Otsu necessarily
+          // finds a split even in one broad noise population; its two halves
+          // commonly clear the tracker's minimal sqrt(2) amplitude ordering,
+          // but not this stronger evidence gate.
+          constexpr float kMinimumAmplitudeSeparation = 2.0F;
+          constexpr double kMinimumExplainedVariation = 0.70;
+          if (explained_variation >= kMinimumExplainedVariation &&
+              robust_space_amplitude > 0.0F &&
+              robust_mark_amplitude >=
+                  robust_space_amplitude * kMinimumAmplitudeSeparation) {
+            constexpr float kRobustAnchorRate = 0.015F;
+            const float current_space_amplitude = std::sqrt(
+                std::max(track.keying_space_power, 0.0F));
+            const float current_mark_amplitude = std::sqrt(
+                std::max(track.keying_mark_power, 0.0F));
+            const float anchored_space_amplitude = current_space_amplitude +
+                kRobustAnchorRate *
+                    (robust_space_amplitude - current_space_amplitude);
+            const float anchored_mark_amplitude = current_mark_amplitude +
+                kRobustAnchorRate *
+                    (robust_mark_amplitude - current_mark_amplitude);
+            track.keying_space_power = anchored_space_amplitude *
+                anchored_space_amplitude;
+            track.keying_mark_power = std::max(
+                anchored_mark_amplitude * anchored_mark_amplitude,
+                track.keying_space_power * 2.0F);
+            track.robust_keying_level_anchor_active = true;
+          }
+        }
       }
       // Mark level in dB above the side-noise reference the powers are
       // already measured against. Held for presentation so the operator sees
@@ -1382,6 +1482,12 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.keying_mark_power = 0.0F;
   track.keying_space_variance = 0.0F;
   track.keying_mark_variance = 0.0F;
+  track.keying_level_history = {};
+  track.keying_level_history_count = 0;
+  track.keying_level_history_index = 0;
+  track.keying_level_fit_countdown = 0;
+  track.keying_level_explained_variation = 0.0F;
+  track.robust_keying_level_anchor_active = false;
   track.keying_envelope_initialized = false;
   track.filter_initialized = false;
 }
@@ -1978,6 +2084,14 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
         .acoustic_wpm = track.update.acoustic_wpm,
         .acoustic_cadence_confidence =
             track.update.acoustic_cadence_confidence,
+        .keying_level_separation_db = 10.0F * std::log10(std::max(
+            track.keying_mark_power /
+                std::max(track.keying_space_power, 1.0e-12F),
+            1.0F)),
+        .keying_level_explained_variation =
+            track.keying_level_explained_variation,
+        .robust_keying_level_anchor_active =
+            track.robust_keying_level_anchor_active,
         .text = track.update.text,
         .refined_text = track.update.refined_text,
         .acoustic_alternatives = track.update.acoustic_alternatives,

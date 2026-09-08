@@ -91,22 +91,22 @@ function(cwa_configure_onnx_runtime)
     endif()
   elseif(APPLE)
     install(FILES "${cwa_ort_runtime}"
-      DESTINATION "cw-assistant-desktop.app/Contents/Frameworks"
+      DESTINATION "cw-buddy-desktop.app/Contents/Frameworks"
       RENAME "libonnxruntime.1.dylib")
   else()
     install(FILES "${cwa_ort_runtime}"
-      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cw-assistant"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cw-buddy"
       RENAME "libonnxruntime.so.1")
     if(EXISTS "${cwa_ort_provider}")
       install(FILES "${cwa_ort_provider}"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cw-assistant")
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cw-buddy")
     endif()
   endif()
 
   install(FILES "${cwa_ort_license}" "${cwa_ort_notices}"
     "${cwa_ort_privacy}"
     DESTINATION
-      "${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-assistant/third-party/onnxruntime")
+      "${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/third-party/onnxruntime")
 
   set(CWA_ONNXRUNTIME_ROOT "${cwa_ort_root}" PARENT_SCOPE)
 endfunction()
@@ -143,6 +143,6 @@ function(cwa_target_link_onnx_runtime target_name)
       INSTALL_RPATH "@executable_path/../Frameworks")
   elseif(UNIX)
     set_property(TARGET "${target_name}" APPEND PROPERTY
-      INSTALL_RPATH "$ORIGIN/../lib/cw-assistant")
+      INSTALL_RPATH "$ORIGIN/../lib/cw-buddy")
   endif()
 endfunction()

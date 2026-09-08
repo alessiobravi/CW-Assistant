@@ -1,9 +1,9 @@
 [Desktop Entry]
 Type=Application
-Name=CW Assistant
+Name=CW Buddy
 Comment=Multichannel amateur-radio CW receiver and operator assistant
-Exec=cw-assistant-desktop
-Icon=cw-assistant
+Exec=cw-buddy-desktop
+Icon=cw-buddy
 Terminal=false
 Categories=HamRadio;AudioVideo;Network;
 Keywords=CW;Morse;Ham Radio;SDR;CAT;

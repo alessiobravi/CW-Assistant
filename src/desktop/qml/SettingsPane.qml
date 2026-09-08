@@ -753,7 +753,7 @@ Pane {
                     width: parent.width
                     anchors.margins: 22
                     spacing: 14
-                    Label { text: "About CW Assistant"; font.pixelSize: 22; font.weight: Font.DemiBold }
+                    Label { text: "About CW Buddy"; font.pixelSize: 22; font.weight: Font.DemiBold }
                     Label {
                         objectName: "aboutVersionLabel"
                         text: "Version " + Qt.application.version

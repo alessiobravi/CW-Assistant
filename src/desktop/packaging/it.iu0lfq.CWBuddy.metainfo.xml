@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
-  <id>it.iu0lfq.CWAssistant</id>
-  <name>CW Assistant</name>
+  <id>it.iu0lfq.CWBuddy</id>
+  <name>CW Buddy</name>
   <summary>Multichannel amateur-radio CW receiver and operator assistant</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
@@ -9,10 +9,10 @@
     <name>Alessio Bravi (IU0LFQ / AD2FC)</name>
   </developer>
   <url type="homepage">https://iu0lfq.it/</url>
-  <url type="vcs-browser">https://github.com/alessiobravi/CW-Assistant</url>
-  <launchable type="desktop-id">cw-assistant.desktop</launchable>
+  <url type="vcs-browser">https://github.com/alessiobravi/CW-Buddy</url>
+  <launchable type="desktop-id">cw-buddy.desktop</launchable>
   <provides>
-    <binary>cw-assistant-desktop</binary>
+    <binary>cw-buddy-desktop</binary>
   </provides>
   <content_rating type="oars-1.1"/>
 </component>

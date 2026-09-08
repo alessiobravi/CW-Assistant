@@ -6,6 +6,8 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSettings>
+#include <QStandardPaths>
 #include <QTimer>
 #include <qqml.h>
 
@@ -14,17 +16,34 @@
 
 #include "replay/replay_controller.hpp"
 #include "settings/app_settings.hpp"
+#include "settings/product_migration.hpp"
 #include "updates/callsign_database_updater.hpp"
 #include "updates/update_checker.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
 
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  // Resolve the legacy locations before adopting the new public identity.
+  // The old bundle identifier remains stable for installer compatibility,
+  // while Qt settings and the managed SCP cache move forward once and safely.
   QCoreApplication::setOrganizationName(QStringLiteral("CW Assistant"));
   QCoreApplication::setOrganizationDomain(QStringLiteral("cw-assistant.org"));
   QCoreApplication::setApplicationName(QStringLiteral("CW Assistant"));
+  const QString legacy_app_data_path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QSettings legacy_settings;
+
+  QCoreApplication::setOrganizationName(QStringLiteral("CW Buddy"));
+  QCoreApplication::setOrganizationDomain(QStringLiteral("cw-buddy.org"));
+  QCoreApplication::setApplicationName(QStringLiteral("CW Buddy"));
+  const QString current_app_data_path =
+      QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  QSettings current_settings;
+  static_cast<void>(cwassistant::desktop::migrateLegacyProductState(
+      legacy_settings, current_settings, legacy_app_data_path,
+      current_app_data_path));
   QCoreApplication::setApplicationVersion(QStringLiteral(CWA_VERSION));
-  application.setWindowIcon(QIcon(QStringLiteral(":/icons/cw-assistant.png")));
+  application.setWindowIcon(QIcon(QStringLiteral(":/icons/cw-buddy.png")));
 
   QCommandLineParser parser;
   parser.setApplicationDescription(
@@ -195,7 +214,7 @@ int main(int argc, char* argv[]) {
       &cwassistant::desktop::AppSettings::localDecoderConfigurationCommitted,
       &replay_controller, apply_local_character_decoder);
   qmlRegisterType<cwassistant::desktop::SpectrumWaterfallItem>(
-      "CWAssistant", 1, 0, "SpectrumWaterfall");
+      "CWBuddy", 1, 0, "SpectrumWaterfall");
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty(QStringLiteral("appSettings"),
                                            &settings);
@@ -223,7 +242,7 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &engine, &QQmlApplicationEngine::objectCreationFailed, &application,
       [] { QCoreApplication::exit(EXIT_FAILURE); }, Qt::QueuedConnection);
-  engine.loadFromModule(QStringLiteral("CWAssistant"), QStringLiteral("Main"));
+  engine.loadFromModule(QStringLiteral("CWBuddy"), QStringLiteral("Main"));
   if (parser.isSet(smoke_test_option)) {
     QTimer::singleShot(250, &application, [&engine] {
       QObject* root_object = engine.rootObjects().isEmpty()

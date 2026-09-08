@@ -15,7 +15,7 @@ cable manuals.
   cable.
 
 The radio's CAT connector gives RTS another function in DATA operation. CW
-Assistant therefore treats CAT and direct key/PTT as separate configured
+Buddy therefore treats CAT and direct key/PTT as separate configured
 interfaces in the first hardware milestone. Never attach the direct-keying
 adapter to an assumed connector or line.
 

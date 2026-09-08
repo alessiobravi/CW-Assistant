@@ -1,6 +1,10 @@
-# CW Assistant
+# CW Buddy
 
-CW Assistant is a modular, cross-platform C++ application for receiving,
+<p align="center">
+  <img src="src/desktop/packaging/cw-buddy-icon.png" alt="CW Buddy application icon" width="260">
+</p>
+
+CW Buddy is a modular, cross-platform C++ application for receiving,
 visualizing, decoding, and operator-assisted replying to amateur-radio CW. The
 target platforms are Windows 11 or newer on x64, macOS Sonoma 14 or newer on
 Apple silicon and Intel x64, and Linux; Windows is the first packaging target.
@@ -72,11 +76,11 @@ ADIF release gates and official-fixture verification are documented in the
 The following unsigned builds are published only after the complete hosted
 matrix and core tests pass:
 
-- [Windows 11 x64 installer](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-windows11-x64.msi)
-- [Debian/Ubuntu x64 `.deb`](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-debian-ubuntu-x64.deb)
-- [Linux x64 portable archive](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-linux-x64.tar.gz)
-- [macOS Sonoma 14+ Apple silicon](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-arm64.tar.gz)
-- [macOS Sonoma 14+ Intel x64](https://github.com/alessiobravi/CW-Assistant/releases/download/continuous/cw-assistant-macos-x64.tar.gz)
+- [Windows 11 x64 installer](https://github.com/alessiobravi/CW-Buddy/releases/download/continuous/cw-buddy-windows11-x64.msi)
+- [Debian/Ubuntu x64 `.deb`](https://github.com/alessiobravi/CW-Buddy/releases/download/continuous/cw-buddy-debian-ubuntu-x64.deb)
+- [Linux x64 portable archive](https://github.com/alessiobravi/CW-Buddy/releases/download/continuous/cw-buddy-linux-x64.tar.gz)
+- [macOS Sonoma 14+ Apple silicon](https://github.com/alessiobravi/CW-Buddy/releases/download/continuous/cw-buddy-macos-arm64.tar.gz)
+- [macOS Sonoma 14+ Intel x64](https://github.com/alessiobravi/CW-Buddy/releases/download/continuous/cw-buddy-macos-x64.tar.gz)
 
 See the repository [binary index](binaries/README.md) for checksums, the
 machine-readable manifest, and installation notes. The public release assets
@@ -95,7 +99,7 @@ ctest --preset dev
 The development host starts in a hardware-safe state:
 
 ```sh
-./build/dev/src/app/cw-assistant
+./build/dev/src/app/cw-buddy
 ```
 
 The Qt desktop shell requires Qt 6.5 or newer with Quick, Quick Controls, QML,
@@ -104,7 +108,7 @@ SerialPort, and WebSockets:
 ```sh
 cmake -S . -B build/desktop -DCWA_BUILD_DESKTOP=ON
 cmake --build build/desktop
-./build/desktop/src/desktop/cw-assistant-desktop --profile default
+./build/desktop/src/desktop/cw-buddy-desktop --profile default
 ```
 
 When multiple station profiles exist, the desktop opens a profile chooser.
@@ -131,7 +135,7 @@ release are required before hardware TX is enabled.
 
 ## License
 
-CW Assistant is licensed under the GNU General Public License v3.0 or later
+CW Buddy is licensed under the GNU General Public License v3.0 or later
 (`GPL-3.0-or-later`). See [LICENSE](LICENSE) and the
 [dependency licensing policy](docs/licensing.md).
 

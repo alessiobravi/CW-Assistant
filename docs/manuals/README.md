@@ -1,4 +1,4 @@
-# CW Assistant manuals
+# CW Buddy manuals
 
 These manuals describe the software from an operator's point of view. They are
 updated with every user-visible change. Features marked **planned** are not yet

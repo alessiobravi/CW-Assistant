@@ -17,7 +17,7 @@
 namespace cwassistant::desktop {
 
 // Native CAT4OM Control-channel client. It intentionally exposes frequency and
-// split only; transmitter control remains behind CW Assistant's independent
+// split only; transmitter control remains behind CW Buddy's independent
 // local safety boundary.
 class Cat4OmClient final : public QObject {
   Q_OBJECT

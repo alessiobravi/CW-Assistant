@@ -163,8 +163,12 @@ Initial acquisition stays at 120 Hz; WPM, drift, local SNR, and a centered-tone
 check drive hysteretic selection afterward. Lower and upper noise references
 are smoothed independently and combined geometrically so neither one quiet
 side nor one adjacent interferer dominates the local threshold. A per-track
-adaptive floor/peak envelope normalizes the keying evidence, while a bounded
-0–1 narrow/wide concentration metric replaces the former unbounded ratio.
+responsive two-level envelope model normalizes the keying evidence. A bounded
+recent amplitude history regularizes its space and mark levels only when a
+robust split has support, at least 6 dB power separation, and at least 70%
+explained variation; this supplies separation without the level collapse
+measured with plain soft assignment. A bounded 0–1 narrow/wide concentration
+metric replaces the former unbounded ratio.
 
 The bounded track bank uses explicit admission control: a strong new carrier
 may replace only the weakest unmatched unverified occupancy, never a verified
@@ -544,6 +548,6 @@ on the same mono-audio carrier.
   hardware-specific performance.
 
 Public implementation repositories are useful experimental references, but
-their self-reported results are not acceptance evidence. CW Assistant will not
+their self-reported results are not acceptance evidence. CW Buddy will not
 import a model, training data, or code until its license and data provenance are
 compatible with GPL-3.0-or-later and independently reproduced benchmarks.

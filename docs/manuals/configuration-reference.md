@@ -138,7 +138,10 @@ Key evidence is calculated from original input samples
 through phase-continuous 60, 120, and 240 Hz narrowband paths at 500
 updates/second. The key decision itself is a likelihood ratio
 between an estimated mark level and an estimated space level, taken in the
-linear power domain. Each level also carries its own measured scatter, and
+linear power domain. A responsive per-frame estimate follows fading and manual
+weighting; a bounded 512 ms history may anchor it to robust low/high populations
+only when they have adequate support, separation, and bimodality. Each level
+also carries its own measured scatter, and
 because a mark carries signal plus noise while a space carries noise alone the
 decision settles nearer the mark than half way between them, which is what
 stops noise excursions from producing marks on a weak signal. The ratio is
@@ -314,9 +317,9 @@ file remains the active fallback.
 update.
 
 Super Check Partial is maintained by W9KKN and is an activity-derived
-contesting aid, not an official callsign register. CW Assistant downloads it at
+contesting aid, not an official callsign register. CW Buddy downloads it at
 runtime from `supercheckpartial.com`; the database is not bundled or
-redistributed with CW Assistant. Update requests identify CW Assistant and its
+redistributed with CW Buddy. Update requests identify CW Buddy and its
 version but never send received audio, decoded text, station identity, or a
 callsign query. Absence from SCP never makes a decoded call invalid.
 

@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Controls.Material
 import QtQuick.Dialogs
-import CWAssistant 1.0
+import CWBuddy 1.0
 
 ApplicationWindow {
     id: window
@@ -12,7 +12,7 @@ ApplicationWindow {
     minimumWidth: 1080
     minimumHeight: 680
     visible: true
-    title: "CW Assistant — " + appSettings.profileName
+    title: "CW Buddy — " + appSettings.profileName
     color: "#0d1117"
     Material.theme: Material.Dark
     Material.accent: "#43c6ac"
@@ -97,7 +97,7 @@ ApplicationWindow {
             anchors.rightMargin: 16
             spacing: 16
             Label {
-                text: "CW Assistant"
+                text: "CW Buddy"
                 font.pixelSize: 21
                 font.weight: Font.DemiBold
             }

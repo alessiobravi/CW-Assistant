@@ -1,13 +1,13 @@
 # CAT4OM setup
 
-CW Assistant uses the native CAT4OM 1.x JSON WebSocket Control channel. This is
+CW Buddy uses the native CAT4OM 1.x JSON WebSocket Control channel. This is
 a network frequency provider: CAT4OM owns the physical radio connection and CW
-Assistant consumes its high-level state. It is not configured as a serial port
-inside CW Assistant.
+Buddy consumes its high-level state. It is not configured as a serial port
+inside CW Buddy.
 
 Protocol baseline: [CAT4OM Integration Manual, wire protocol 1.0.0,
 revision 2026-08-21](https://www.cat4om.com/cat4om/resources/Cat4OM_IntegrationManual.pdf).
-CW Assistant compares only the protocol major version and ignores unknown
+CW Buddy compares only the protocol major version and ignores unknown
 optional fields, messages, events, and error codes as required for 1.x forward
 compatibility.
 
@@ -39,7 +39,7 @@ profile.
 
 ## Control connection and ownership
 
-Select **Connect control** only when CW Assistant is meant to participate as an
+Select **Connect control** only when CW Buddy is meant to participate as an
 interactive controller. If the group requires a password, enter it immediately
 before connecting. The password is used to create the documented minute-based
 SHA-256 proof and is then erased from the settings object; it is never persisted
@@ -57,11 +57,11 @@ are treated as opaque names rather than assuming only A and B.
 
 With a control connection holding master ownership and `SetFrequency`
 advertised, the main RX readout becomes editable and the waterfall-edge tuning
-buttons appear. CW Assistant explicitly names the pushed active RX VFO in each
+buttons appear. CW Buddy explicitly names the pushed active RX VFO in each
 frequency request. A split radio's TX VFO and mode are not changed; split
 control remains a separate operation.
 
-CW Assistant's CAT4OM adapter intentionally does not expose PTT or CW commands.
+CW Buddy's CAT4OM adapter intentionally does not expose PTT or CW commands.
 Transmission remains behind the application's independent confirmation,
 interlock, watchdog, and station-server architecture.
 

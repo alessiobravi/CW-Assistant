@@ -20,7 +20,7 @@ namespace cwassistant::desktop {
 namespace {
 
 constexpr auto kManifestUrl =
-    "https://github.com/alessiobravi/CW-Assistant/releases/download/"
+    "https://github.com/alessiobravi/CW-Buddy/releases/download/"
     "continuous/latest.json";
 
 [[nodiscard]] std::array<int, 3> parseVersion(const QString& text) noexcept {

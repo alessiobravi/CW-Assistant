@@ -4,7 +4,7 @@ Version: 0.1, 2026-08-30
 
 ## Operating scope
 
-CW Assistant receives either demodulated audio or SDR IQ, discovers CW signals
+CW Buddy receives either demodulated audio or SDR IQ, discovers CW signals
 within the visible passband, decodes each tracked signal independently, and
 shows candidates on a spectrum/waterfall. The operator can select a decoded
 callsign and, after confirmation, conduct a guided CW QSO.

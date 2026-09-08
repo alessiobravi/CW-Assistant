@@ -1,7 +1,9 @@
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QFileInfo>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -20,6 +22,7 @@
 #include <vector>
 
 #include "updates/callsign_database_updater.hpp"
+#include "settings/product_migration.hpp"
 
 namespace {
 
@@ -178,6 +181,47 @@ bool writeFile(const QString &path, const QByteArray &bytes) {
 QByteArray readFile(const QString &path) {
   QFile file(path);
   return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray{};
+}
+
+void testProductIdentityMigration(const QTemporaryDir &directory) {
+  QSettings legacy(directory.filePath(QStringLiteral("legacy.ini")),
+                   QSettings::IniFormat);
+  QSettings current(directory.filePath(QStringLiteral("current.ini")),
+                    QSettings::IniFormat);
+  legacy.setValue(QStringLiteral("profiles/default/station/ownCallsign"),
+                  QStringLiteral("IU0LFQ"));
+  legacy.setValue(QStringLiteral("display/targetFps"), 30);
+  current.setValue(QStringLiteral("display/targetFps"), 60);
+
+  const QString legacy_data =
+      directory.filePath(QStringLiteral("legacy-data"));
+  const QString current_data =
+      directory.filePath(QStringLiteral("current-data"));
+  const QString relative =
+      QStringLiteral("callsign-databases/supercheckpartial/MASTER.SCP");
+  const QString legacy_database = QDir(legacy_data).filePath(relative);
+  expect(QDir().mkpath(QFileInfo(legacy_database).absolutePath()) &&
+             writeFile(legacy_database, QByteArray("IU0LFQ\n")),
+         "legacy migration fixture is writable");
+
+  expect(cwassistant::desktop::migrateLegacyProductState(
+             legacy, current, legacy_data, current_data),
+         "legacy product state migrates");
+  expect(current.value(QStringLiteral(
+             "profiles/default/station/ownCallsign")) ==
+             QStringLiteral("IU0LFQ"),
+         "legacy migration imports missing settings");
+  expect(current.value(QStringLiteral("display/targetFps")).toInt() == 60,
+         "legacy migration preserves existing CW Buddy settings");
+  expect(readFile(QDir(current_data).filePath(relative)) ==
+             QByteArray("IU0LFQ\n"),
+         "legacy migration copies the managed callsign database");
+
+  legacy.setValue(QStringLiteral("newLegacyValue"), 1);
+  expect(cwassistant::desktop::migrateLegacyProductState(
+             legacy, current, legacy_data, current_data) &&
+             !current.contains(QStringLiteral("newLegacyValue")),
+         "legacy product state is imported only once");
 }
 
 void clearSettings() {
@@ -442,7 +486,7 @@ void testLimitsRedirectAndOfflineFallback(const QString &path) {
 
 int main(int argc, char *argv[]) {
   QCoreApplication application(argc, argv);
-  QCoreApplication::setOrganizationName(QStringLiteral("CW Assistant Tests"));
+  QCoreApplication::setOrganizationName(QStringLiteral("CW Buddy Tests"));
   QCoreApplication::setOrganizationDomain(QStringLiteral("invalid.test"));
   QCoreApplication::setApplicationName(
       QStringLiteral("Callsign Database Updater Test"));
@@ -453,6 +497,8 @@ int main(int argc, char *argv[]) {
   if (!directory.isValid())
     return 90;
   const QString path = directory.filePath(QStringLiteral("MASTER.SCP"));
+
+  testProductIdentityMigration(directory);
 
   testDisabledModeMakesNoRequest(path);
   testAutomaticOptOutMakesNoRequest(path);

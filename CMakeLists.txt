@@ -5,8 +5,8 @@ if(APPLE AND NOT DEFINED CMAKE_OSX_DEPLOYMENT_TARGET)
     "Minimum supported macOS version (Sonoma or newer)")
 endif()
 
-project(CWAssistant VERSION 0.1.0 LANGUAGES CXX
-  HOMEPAGE_URL "https://github.com/alessiobravi/CW-Assistant")
+project(CWBuddy VERSION 0.1.0 LANGUAGES CXX
+  HOMEPAGE_URL "https://github.com/alessiobravi/CW-Buddy")
 
 set(CWA_PACKAGE_REVISION "${PROJECT_VERSION_PATCH}" CACHE STRING
   "Numeric hosted-build revision used by upgrade-capable packages")
@@ -18,9 +18,9 @@ if(CWA_PACKAGE_REVISION GREATER 65535)
 endif()
 set(CWA_BUILD_VERSION
   "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${CWA_PACKAGE_REVISION}")
-file(WRITE "${CMAKE_BINARY_DIR}/cw-assistant-version.txt"
+file(WRITE "${CMAKE_BINARY_DIR}/cw-buddy-version.txt"
   "${CWA_BUILD_VERSION}\n")
-message(STATUS "CW Assistant effective build version: ${CWA_BUILD_VERSION}")
+message(STATUS "CW Buddy effective build version: ${CWA_BUILD_VERSION}")
 
 option(CWA_BUILD_APP "Build the command-line development host" ON)
 option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
@@ -58,17 +58,17 @@ if(CWA_BUILD_TESTS)
 endif()
 
 if(CWA_BUILD_DESKTOP)
-  set(CPACK_PACKAGE_NAME "cw-assistant")
+  set(CPACK_PACKAGE_NAME "cw-buddy")
   set(CPACK_PACKAGE_VERSION "${CWA_BUILD_VERSION}")
   set(CPACK_PACKAGE_VENDOR "Alessio Bravi (IU0LFQ / AD2FC)")
   set(CPACK_PACKAGE_CONTACT "Alessio Bravi <alessio@bravi.org>")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
-      "Cross-platform multichannel amateur-radio CW assistant")
+      "Cross-platform multichannel amateur-radio CW companion")
   set(CPACK_PACKAGE_HOMEPAGE_URL "https://iu0lfq.it/")
-  set(CPACK_PACKAGE_INSTALL_DIRECTORY "CW Assistant")
+  set(CPACK_PACKAGE_INSTALL_DIRECTORY "CW Buddy")
   set(CPACK_PACKAGE_EXECUTABLES
-      "cw-assistant-desktop" "CW Assistant")
-  set(CPACK_CREATE_DESKTOP_LINKS "cw-assistant-desktop")
+      "cw-buddy-desktop" "CW Buddy")
+  set(CPACK_CREATE_DESKTOP_LINKS "cw-buddy-desktop")
   set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
   set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Alessio Bravi <alessio@bravi.org>")
   set(CPACK_DEBIAN_PACKAGE_SECTION "hamradio")
@@ -76,6 +76,11 @@ if(CWA_BUILD_DESKTOP)
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  # The public package name changes with the product, but package managers must
+  # still replace the previously installed application instead of keeping both.
+  set(CPACK_DEBIAN_PACKAGE_CONFLICTS "cw-assistant")
+  set(CPACK_DEBIAN_PACKAGE_REPLACES "cw-assistant")
+  set(CPACK_DEBIAN_PACKAGE_PROVIDES "cw-assistant")
   if(WIN32)
     # CPack's WiX generator accepts UTF-8 .txt or RTF license input. Keep the
     # canonical GPL text extensionless in the repository and copy it at build
@@ -88,7 +93,7 @@ if(CWA_BUILD_DESKTOP)
     set(CPACK_WIX_INSTALL_SCOPE perMachine)
     set(CPACK_WIX_UPGRADE_GUID "3310FD2E-106F-4A39-A031-A602683BCB19")
     set(CPACK_WIX_PRODUCT_ICON
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/cw-assistant.ico")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/cw-buddy.ico")
     set(CPACK_WIX_PATCH_FILE
         "${CMAKE_CURRENT_SOURCE_DIR}/src/desktop/packaging/windows/windows-installer-patch.xml")
     set(CPACK_WIX_EXTENSIONS WixUtilExtension)
@@ -97,10 +102,10 @@ if(CWA_BUILD_DESKTOP)
     # Keep the launcher inside its own Start-menu program group. The matching
     # CPACK_PACKAGE_EXECUTABLES/CPACK_CREATE_DESKTOP_LINKS pair above also
     # creates the all-users desktop shortcut through the WiX generator.
-    set(CPACK_WIX_PROGRAM_MENU_FOLDER "CW Assistant")
+    set(CPACK_WIX_PROGRAM_MENU_FOLDER "CW Buddy")
     set(CPACK_WIX_PROPERTY_ARPURLINFOABOUT "https://iu0lfq.it/")
     set(CPACK_WIX_PROPERTY_ARPURLUPDATEINFO
-        "https://github.com/alessiobravi/CW-Assistant/releases/tag/continuous")
+        "https://github.com/alessiobravi/CW-Buddy/releases/tag/continuous")
   endif()
   include(CPack)
 endif()

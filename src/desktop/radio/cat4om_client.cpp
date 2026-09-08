@@ -200,7 +200,7 @@ void Cat4OmClient::sendHello() {
        QString::fromLatin1(cwassistant::core::kCat4OmProtocolVersion.data(),
                            static_cast<qsizetype>(
                                cwassistant::core::kCat4OmProtocolVersion.size()))},
-      {QStringLiteral("appName"), QStringLiteral("CW Assistant")},
+      {QStringLiteral("appName"), QStringLiteral("CW Buddy")},
       {QStringLiteral("appVersion"), QStringLiteral(CWA_VERSION)},
       {QStringLiteral("requestMaster"), false},
   };

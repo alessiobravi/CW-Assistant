@@ -80,14 +80,14 @@ SELECT `Value` FROM `Property`
 WHERE `Property`='WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'
 '@
     Assert-Equal (Read-ComField $launchText "StringData" 1) `
-        "Launch CW Assistant" `
+        "Launch CW Buddy" `
         "The finish-page launch choice is missing"
 
     $launchTarget = Read-Record $database @'
 SELECT `Value` FROM `Property` WHERE `Property`='WixShellExecTarget'
 '@
     Assert-Equal (Read-ComField $launchTarget "StringData" 1) `
-        "[INSTALL_ROOT]bin\cw-assistant-desktop.exe" `
+        "[INSTALL_ROOT]bin\cw-buddy-desktop.exe" `
         "The launch action does not target the installed executable"
 
     $uncheckedDefault = Read-Record $database @'
@@ -146,7 +146,7 @@ FROM `WixCloseApplication`
 WHERE `WixCloseApplication`='CwaCloseRunningApplicationDuringUpgrade'
 '@
     Assert-Equal (Read-ComField $closeApplication "StringData" 1) `
-        "cw-assistant-desktop.exe" `
+        "cw-buddy-desktop.exe" `
         "The application closer targets the wrong process"
     Assert-Equal (Read-ComField $closeApplication "StringData" 2) `
         "WIX_UPGRADE_DETECTED" `
@@ -165,6 +165,20 @@ WHERE `WixCloseApplication`='CwaCloseRunningApplicationDuringUpgrade'
         "The close/terminate behavior is incomplete"
     Assert-Equal ($closeAttributes -band 2) 0 `
         "The installer must not request reboot instead of completing the update"
+
+    $legacyCloseApplication = Read-Record $database @'
+SELECT `Target`, `Condition`, `Timeout`
+FROM `WixCloseApplication`
+WHERE `WixCloseApplication`='CwaCloseLegacyApplicationDuringUpgrade'
+'@
+    Assert-Equal (Read-ComField $legacyCloseApplication "StringData" 1) `
+        "cw-assistant-desktop.exe" `
+        "The first renamed upgrade cannot close the previous executable"
+    Assert-Equal (Read-ComField $legacyCloseApplication "StringData" 2) `
+        "WIX_UPGRADE_DETECTED" `
+        "The legacy application closer is not confined to upgrades"
+    Assert-Equal (Read-ComField $legacyCloseApplication "IntegerData" 3) 15000 `
+        "The legacy graceful-close timeout is not 15 seconds"
 
     $defaultAction = Read-Record $database @'
 SELECT `Source`, `Target` FROM `CustomAction`

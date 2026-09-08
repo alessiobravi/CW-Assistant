@@ -148,8 +148,9 @@ audio block using a phase-continuous complex mixer, parallel three-stage 60,
 500 Hz evidence updates. Acquisition holds the 120 Hz path before measured WPM,
 drift, and SNR select another width. A bounded 0–1 center-concentration measure
 helps reject wide energy. The geometric mean of both side references and a
-per-track adaptive floor/peak envelope drive smoothed key probability and
-adaptive timing; display
+per-track two-level envelope model drive smoothed key probability and adaptive
+timing. The responsive levels are periodically regularized by a bounded robust
+history only when it contains two well-separated populations; display
 averaging, gain, palette, and guide settings cannot assert key-down. This work
 runs inside the live/WAV DSP workers rather than the UI thread.
 
@@ -320,7 +321,7 @@ by one QSO state machine.
 CAT4OM is modeled as a remote CAT service rather than a serial adapter. Its
 Control WebSocket supplies authoritative pushed snapshots and group-wide master
 ownership. The adapter may read/set frequency and split when advertised, but it
-does not route network PTT or CW around CW Assistant's station-local transmit
+does not route network PTT or CW around CW Buddy's station-local transmit
 guard. Profile passwords are never persisted.
 
 The operating panel expresses tuning requests in displayed actual RX RF. A

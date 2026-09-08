@@ -33,8 +33,8 @@ constexpr auto kInstalledHashKey = "callsignDatabase/installedSha256";
 constexpr auto kInstalledModifiedKey = "callsignDatabase/installedModified";
 
 [[nodiscard]] QString userAgent() {
-  return QStringLiteral("CW-Assistant/%1 (+https://github.com/alessiobravi/"
-                        "CW-Assistant)")
+  return QStringLiteral("CW-Buddy/%1 (+https://github.com/alessiobravi/"
+                        "CW-Buddy)")
       .arg(QCoreApplication::applicationVersion());
 }
 
