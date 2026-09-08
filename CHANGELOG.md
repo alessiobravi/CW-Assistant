@@ -8,6 +8,33 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
+- Receiver monitoring now offers **Off**, the complete receiver window, and a
+  selected-signal mode. Selected-signal monitoring reuses that decoder track's
+  carrier-following narrow filter and re-pitches it to the configured CW tone;
+  the Audio settings select the PC output device and the receiver toolbar sets
+  level without allowing queued audio to grow without bound.
+
+- The first guarded transmit-workflow slice adds an operator-facing TX/QSO
+  drawer, exact callsign and normalized-message confirmation, free-text/own-call
+  and report preparation, standard 5–80 WPM Morse timing plans, inert Auto-QSO
+  suggestions, emergency release, and a distinct TUNE safety state with a hard
+  15-second continuous-KEY limit. Decoder output can only propose text. No
+  message or TUNE action can key hardware in this build because the tested
+  serial KEY/PTT adapter is intentionally still absent.
+
+- A selected station with checked absolute-RF context can now be explicitly
+  anchored to the configured CW reference tone from the QSO drawer. The action
+  uses the existing provider-neutral, capability-gated RX-frequency route and
+  leaves TX frequency, split, and mode unchanged, placing an ordinary UP pileup
+  to the right of a runner centered at the default 700 Hz.
+
+- A verified simplex stream now recognizes the high-confidence
+  `CALL1 DE CALL2` handover as one two-party QSO on one carrier. The decoder
+  card retains both participants and labels the session `QSO CALL1 ↔ CALL2`
+  instead of incorrectly treating one frequency track as one station. The
+  rule requires two complete, distinct, structurally plausible callsigns and
+  does not guess which participant is currently sending.
+
 - A recognised calling or contest token is now evidence that a channel carries
   real Morse. A station whose decoded text plainly reads `TEST` was being
   discarded because one timing measure sat under its threshold for the track's
@@ -48,6 +75,19 @@ All notable changes to CW Buddy are recorded here. The format follows
   its label entirely.
 
 ### Changed
+
+- Live decode workers no longer rebuild the complete, deeply nested decoder
+  snapshot for each character-model window. A bounded lightweight refinement
+  view carries only the lane evidence the asynchronous model frontend needs,
+  while the full operator snapshot is still rebuilt for presentation.
+
+- The TX activity indicator uses a compact transparent ON AIR mark and remains
+  dim unless the guarded hardware state reports that KEY is actually asserted.
+
+- The CW Buddy application and README icon now use true transparency outside
+  the rounded-square edge, so launchers and light backgrounds no longer print
+  or display opaque black corners. The PNG, Windows ICO, and macOS ICNS assets
+  share the same alpha-aware master.
 
 - The application is now **CW Buddy** throughout its public identity, including
   the desktop UI, executable and package names, installer text, update assets,

@@ -39,9 +39,7 @@ bool readSource(const char* path, std::string& contents) {
 // averaging cannot change which signals are found. The detector applies its
 // own fixed-time smoothing internally.
 bool feedsDetectorUnaveragedBins(const std::string& source) {
-  return contains(source,
-                  "snapshot.upper_frequency_hz, "
-                  "snapshot.instantaneous_bins_dbfs))") &&
+  return contains(source, "snapshot.instantaneous_bins_dbfs") &&
          !contains(source,
                    "snapshot.upper_frequency_hz, snapshot.bins_dbfs))");
 }

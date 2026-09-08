@@ -101,6 +101,10 @@ int main() {
       !contains(qml, "property string advisoryCallsignSuggestion:") ||
       !contains(qml, "property string callsignSuggestionSource:") ||
       !contains(qml, "\"≈ \" + sessionCard.advisoryCallsignSuggestion") ||
+      !contains(qml, "modelData.qsoParticipants.length >= 2") ||
+      !contains(qml, "modelData.qsoParticipants[0]") ||
+      !contains(qml, "modelData.qsoParticipants[1]") ||
+      !contains(qml, "text: \"TX \" + modelData.callsign") ||
       !contains(qml, "Advisory acoustic consensus") ||
       !contains(qml, "sessionCard.localModelCallsign") ||
       !contains(qml, "function applyStableText(nextText)") ||

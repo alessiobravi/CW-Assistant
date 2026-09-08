@@ -32,6 +32,8 @@ qt_add_executable(cw-buddy-desktop
   replay/live_audio_worker.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
+  transmit/transmit_controller.cpp
+  transmit/transmit_controller.hpp
   settings/app_settings.cpp
   settings/app_settings.hpp
   settings/product_migration.cpp
@@ -67,9 +69,11 @@ set_target_properties(cw-buddy-desktop PROPERTIES
 
 set_source_files_properties(packaging/cw-buddy.png PROPERTIES
   QT_RESOURCE_ALIAS cw-buddy.png)
+set_source_files_properties(packaging/on-air-active.png PROPERTIES
+  QT_RESOURCE_ALIAS on-air-active.png)
 qt_add_resources(cw-buddy-desktop "cwa_application_icons"
   PREFIX "/icons"
-  FILES packaging/cw-buddy.png)
+  FILES packaging/cw-buddy.png packaging/on-air-active.png)
 
 if(WIN32)
   configure_file(packaging/cw-buddy.rc.in
@@ -120,6 +124,18 @@ target_compile_definitions(cw-buddy-desktop PRIVATE
   CWA_VERSION="${CWA_BUILD_VERSION}")
 
 if(CWA_BUILD_TESTS)
+  qt_add_executable(cwa_transmit_controller_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/transmit_controller_test.cpp
+    transmit/transmit_controller.cpp
+    transmit/transmit_controller.hpp)
+  target_link_libraries(cwa_transmit_controller_test PRIVATE
+    cwa_core Qt6::Core)
+  target_include_directories(cwa_transmit_controller_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_transmit_controller_test
+    COMMAND cwa_transmit_controller_test)
+  set_tests_properties(cwa_transmit_controller_test PROPERTIES TIMEOUT 10)
+
   qt_add_executable(cwa_live_audio_pipeline_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/live_audio_pipeline_test.cpp
     replay/live_audio_worker.cpp

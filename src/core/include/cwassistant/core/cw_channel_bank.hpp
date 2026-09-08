@@ -224,6 +224,10 @@ struct CwChannelSnapshot {
   std::string provisional_text;
   std::string pending_elements;
   std::string callsign;
+  // High-confidence CALL1 DE CALL2 participants heard on one carrier. A
+  // simplex QSO is one frequency observation containing alternating senders,
+  // not two artificial frequency tracks.
+  std::vector<std::string> qso_participants;
 };
 
 // Full private per-track state, including tracks never shown to the
@@ -266,6 +270,27 @@ struct CwTrackDiagnostic {
   bool operator_selected{false};
 };
 
+// Allocation-light view used by the optional character frontend on every
+// audio block. Keeping transcript strings, character vectors, and acoustic
+// alternatives out of this hot path avoids deep diagnostic snapshots at the
+// capture cadence; the complete structure above remains available for the
+// explicitly rate-limited debug capture.
+struct CwCharacterTrackSnapshot {
+  std::uint64_t id{0};
+  double frequency_hz{0.0};
+  double presentation_frequency_hz{0.0};
+  float snr_db{0.0F};
+  CwTrackState verification_state{CwTrackState::Candidate};
+  bool active{false};
+  bool operator_selected{false};
+};
+
+enum class CwMonitorMode : std::uint8_t {
+  Off,
+  FullReceiver,
+  SelectedTrack,
+};
+
 class CwChannelBank {
  public:
   explicit CwChannelBank(CwChannelBankConfig config = {});
@@ -301,11 +326,30 @@ class CwChannelBank {
   // known, deliberate retune should not interrupt an already-identified
   // signal's identity.
   void shiftTrackedFrequencies(double audio_hz_delta) noexcept;
+  // Callers that immediately follow with processSamples() may defer snapshot
+  // rebuilding to that call, avoiding a duplicate deep presentation copy for
+  // the same audio block. The returned reference then remains the prior view.
   [[nodiscard]] const std::vector<CwChannelSnapshot>& updateSpectrum(
       std::uint64_t timestamp_ns, double lower_frequency_hz,
-      double upper_frequency_hz, std::span<const float> bins_dbfs);
+      double upper_frequency_hz, std::span<const float> bins_dbfs,
+      bool rebuild_snapshot = true);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& processSamples(
       const RealtimeSampleBlock& block);
+  // Selects the provider-neutral receive monitor. Selected-track audio is
+  // taken from the same tracking mixer and adaptive narrow filter used by the
+  // decoder, then translated to the requested sidetone. It never affects
+  // decoding, radio state, PTT, or KEY.
+  void setMonitor(CwMonitorMode mode, std::uint64_t track_id = 0,
+                  double reference_tone_hz = 700.0) noexcept;
+  [[nodiscard]] CwMonitorMode monitorMode() const noexcept {
+    return monitor_mode_;
+  }
+  [[nodiscard]] std::uint64_t monitoredTrackId() const noexcept {
+    return monitored_track_id_;
+  }
+  [[nodiscard]] const std::vector<float>& monitorAudio() const noexcept {
+    return monitor_audio_;
+  }
   // Creates or refreshes a bounded analysis probe at an operator-selected
   // frequency. Returns its track ID, or zero when no valid spectrum range is
   // available or the frequency is outside that range.
@@ -318,6 +362,8 @@ class CwChannelBank {
       std::uint64_t evidence_timestamp_ns);
   [[nodiscard]] const std::vector<CwChannelSnapshot>& channels() const noexcept;
   [[nodiscard]] CwVerificationDiagnostics verificationDiagnostics() const;
+  [[nodiscard]] const std::vector<CwCharacterTrackSnapshot>&
+  characterRefinementTracks() const noexcept;
   [[nodiscard]] std::vector<CwTrackDiagnostic> allTrackDiagnostics() const;
 
  private:
@@ -462,6 +508,7 @@ class CwChannelBank {
     std::uint64_t source_track_id{0};
     std::string inherited_text_prefix;
     std::string confirmed_callsign;
+    std::vector<std::string> confirmed_qso_participants;
     std::uint64_t last_seen_ns{0};
     bool refreshed{false};
   };
@@ -505,9 +552,15 @@ class CwChannelBank {
   CwChannelBankConfig config_;
   std::vector<Track> tracks_;
   std::vector<CwChannelSnapshot> snapshots_;
+  std::vector<CwCharacterTrackSnapshot> character_refinement_tracks_;
+  std::vector<float> monitor_audio_;
   std::vector<RetainedObservation> retained_observations_;
   std::array<ColorLease, kColorLeaseCount> color_leases_{};
   std::uint64_t next_track_id_{1};
+  CwMonitorMode monitor_mode_{CwMonitorMode::Off};
+  std::uint64_t monitored_track_id_{0};
+  double monitor_reference_tone_hz_{700.0};
+  std::complex<float> monitor_oscillator_{1.0F, 0.0F};
   StreamDescriptor stream_{};
   std::uint64_t expected_sample_timestamp_ns_{0};
   std::uint64_t last_spectrum_timestamp_ns_{0};

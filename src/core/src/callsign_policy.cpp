@@ -144,6 +144,36 @@ std::optional<std::string> CallsignPolicy::latest_complete_in_text(
   return latest_in_text(stable_text.substr(0, completed_end + 1));
 }
 
+std::vector<std::string> CallsignPolicy::qso_participants_in_text(
+    const std::string_view stable_text) {
+  const auto completed_end = stable_text.find_last_of(" \t\r\n");
+  if (completed_end == std::string_view::npos) return {};
+  std::vector<std::string> words;
+  std::string token;
+  for (const unsigned char character :
+       stable_text.substr(0, completed_end + 1)) {
+    if (std::isalnum(character) != 0 || character == '/') {
+      token.push_back(static_cast<char>(std::toupper(character)));
+    } else if (!token.empty()) {
+      words.push_back(std::move(token));
+      token.clear();
+    }
+  }
+  std::vector<std::string> latest_pair;
+  for (std::size_t index = 1; index + 1 < words.size(); ++index) {
+    if (words[index] != "DE") continue;
+    const auto left = normalize(words[index - 1]);
+    const auto right = normalize(words[index + 1]);
+    if (!left || !right || *left == *right ||
+        !isPlausibleDecodedCallsign(*left) ||
+        !isPlausibleDecodedCallsign(*right)) {
+      continue;
+    }
+    latest_pair = {*left, *right};
+  }
+  return latest_pair;
+}
+
 std::optional<std::string> CallsignPolicy::best_complete_in_text(
     const std::string_view stable_text) {
   return best_complete_in_text(stable_text, CwOperatorRole::Monitor,

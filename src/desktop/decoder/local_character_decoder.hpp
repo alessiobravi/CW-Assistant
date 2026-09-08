@@ -31,7 +31,7 @@ class LocalCharacterFrontendBank final {
   void reset() noexcept;
   [[nodiscard]] std::vector<CwCharacterFeatureWindowPtr> process(
       const cwassistant::core::RealtimeSampleBlock& block,
-      std::span<const cwassistant::core::CwTrackDiagnostic> tracks);
+      std::span<const cwassistant::core::CwCharacterTrackSnapshot> tracks);
 
  private:
   struct Lane {

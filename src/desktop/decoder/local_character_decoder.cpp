@@ -14,7 +14,7 @@ namespace cwassistant::desktop {
 namespace {
 
 double stableLaneCenter(
-    const cwassistant::core::CwTrackDiagnostic& track) noexcept {
+    const cwassistant::core::CwCharacterTrackSnapshot& track) noexcept {
   return std::isfinite(track.presentation_frequency_hz) &&
           track.presentation_frequency_hz > 0.0
       ? track.presentation_frequency_hz
@@ -49,12 +49,12 @@ void LocalCharacterFrontendBank::reset() noexcept {
 
 std::vector<CwCharacterFeatureWindowPtr> LocalCharacterFrontendBank::process(
     const cwassistant::core::RealtimeSampleBlock& block,
-    const std::span<const cwassistant::core::CwTrackDiagnostic> tracks) {
+    const std::span<const cwassistant::core::CwCharacterTrackSnapshot> tracks) {
   std::vector<CwCharacterFeatureWindowPtr> result;
   if (!enabled_) return result;
   ++input_sequence_;
 
-  std::vector<const cwassistant::core::CwTrackDiagnostic*> eligible;
+  std::vector<const cwassistant::core::CwCharacterTrackSnapshot*> eligible;
   eligible.reserve(tracks.size());
   for (const auto& track : tracks) {
     const bool qualified =

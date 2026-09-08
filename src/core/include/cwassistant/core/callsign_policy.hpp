@@ -61,6 +61,11 @@ class CallsignPolicy {
       std::string_view decoded_text);
   [[nodiscard]] static std::optional<std::string> latest_complete_in_text(
       std::string_view stable_text);
+  // Recognizes the high-confidence ordinary-QSO handover CALL1 DE CALL2.
+  // Both tokens must already be complete, structurally plausible callsigns;
+  // this identifies participants but does not choose which one is transmitting.
+  [[nodiscard]] static std::vector<std::string> qso_participants_in_text(
+      std::string_view stable_text);
   // Returns a completed, structurally plausible callsign only when decoded
   // word context or exact repetition makes a random call-shaped token
   // unlikely. Intended for automatic stream labels, not operator input.

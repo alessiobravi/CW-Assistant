@@ -8,6 +8,7 @@
 #include <limits>
 #include <numbers>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 #include "cwassistant/core/adif.hpp"
@@ -15,6 +16,7 @@
 #include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include "cwassistant/core/cw_transmit_encoder.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/remote_control.hpp"
@@ -28,6 +30,10 @@
 #include "cwassistant/core/wav_writer.hpp"
 
 namespace {
+
+static_assert(std::is_trivially_copyable_v<
+              cwassistant::core::CwCharacterTrackSnapshot>);
+static_assert(sizeof(cwassistant::core::CwCharacterTrackSnapshot) <= 64U);
 
 int failures = 0;
 
@@ -1690,8 +1696,31 @@ void test_transmit_guard() {
   expect(guard.request_qso("i1abc"), "valid selected call requests QSO");
   expect(!guard.confirm("I1XYZ"), "confirmation must match selected call");
   expect(guard.confirm("I1ABC"), "operator confirms selected call");
+  expect(!guard.stage_message("CQ <SCRIPT>"),
+         "free text rejects unsupported or executable-looking syntax");
+  expect(guard.stage_message("  de iu0lfq   pse k  "),
+         "operator can stage bounded Morse free text");
+  expect(guard.pending_message() == "DE IU0LFQ PSE K",
+         "free text is normalized for an exact preview");
+  expect(!guard.confirm_message("DE IU0LFQ K"),
+         "changed preview cannot be confirmed");
+  expect(!guard.begin_transmission(),
+         "unconfirmed free text cannot reach transmission");
+  expect(guard.confirm_message("de iu0lfq pse k"),
+         "operator confirms the exact normalized preview");
   expect(guard.begin_transmission(), "confirmed QSO permits TX");
-  expect(guard.finish_transmission(), "TX completes back to armed state");
+  expect(!guard.key_down(),
+         "transmit intent does not claim that KEY is asserted");
+  expect(guard.observe_key_state(true, 1'000'000'000ULL),
+         "guard observes the first KEY assertion");
+  expect(guard.key_down(), "an observed KEY assertion is exposed");
+  expect(guard.observe_key_state(false, 1'100'000'000ULL),
+         "KEY release clears the continuous-key timer");
+  expect(!guard.key_down(), "an observed KEY release clears ON AIR state");
+  expect(guard.finish_transmission(), "TX completes inside the confirmed QSO");
+  expect(guard.state() == cwassistant::core::TransmitState::Confirmed,
+         "QSO callsign confirmation survives between messages");
+  expect(guard.end_qso(), "operator explicitly ends the confirmed QSO");
   expect(policy.add_ignored("w1aw"), "operator can ignore a callsign");
   expect(!guard.request_qso("W1AW"), "ignored callsign cannot request QSO");
   expect(guard.request_qso("K1ABC"), "another call can request QSO");
@@ -1699,9 +1728,144 @@ void test_transmit_guard() {
   expect(!guard.confirm("K1ABC"), "new ignore rule cancels confirmation");
   expect(guard.state() == cwassistant::core::TransmitState::Armed,
          "ignore rule returns TX guard to armed state");
+  guard.disarm();
+  expect(!guard.observe_key_state(true, 2'000'000'000ULL) &&
+             guard.state() == cwassistant::core::TransmitState::Fault,
+         "KEY assertion outside guarded TX latches a fault");
+  expect(guard.reset_fault(), "out-of-state KEY fault resets to disarmed");
+  expect(guard.arm() && guard.request_qso("K2XYZ") &&
+             guard.confirm("K2XYZ") && guard.stage_message("TEST") &&
+             guard.confirm_message("TEST") && guard.begin_transmission(),
+         "watchdog fixture reaches guarded transmission");
+  expect(guard.observe_key_state(true, 3'000'000'000ULL) &&
+             !guard.observe_key_state(
+                 true, 3'000'000'000ULL +
+                           TransmitGuard::kMaximumContinuousKeyDownNs + 1ULL) &&
+             guard.state() == cwassistant::core::TransmitState::Fault,
+         "continuous KEY beyond the deadline latches a fault");
+  expect(guard.reset_fault(), "watchdog fault reset returns to disarmed");
+  expect(guard.arm(), "guard can re-arm after an explicit fault reset");
+  expect(guard.begin_tune(), "an armed operator can start TUNE");
+  expect(guard.state() == cwassistant::core::TransmitState::Tuning &&
+             guard.observe_key_state(true, 10'000'000'000ULL),
+         "TUNE enters its distinct guarded KEY state");
+  expect(guard.observe_key_state(
+             true, 10'000'000'000ULL +
+                       TransmitGuard::kMaximumTuneKeyDownNs),
+         "TUNE remains valid through its exact 15-second limit");
+  expect(guard.finish_tune() &&
+             guard.state() == cwassistant::core::TransmitState::Armed,
+         "pressing TUNE again releases KEY and restores the armed state");
+  expect(guard.begin_tune() &&
+             guard.observe_key_state(true, 30'000'000'000ULL) &&
+             !guard.observe_key_state(
+                 true, 30'000'000'000ULL +
+                           TransmitGuard::kMaximumTuneKeyDownNs + 1ULL) &&
+             guard.state() == cwassistant::core::TransmitState::Fault,
+         "TUNE beyond 15 seconds releases KEY and latches a fault");
+  expect(guard.reset_fault() && guard.arm(),
+         "TUNE watchdog fault requires reset before re-arming");
+  guard.emergency_release();
+  expect(guard.state() == cwassistant::core::TransmitState::Fault,
+         "emergency release clears pending TX and latches a fault");
   guard.trip_fault();
   expect(!guard.arm(), "fault cannot be bypassed by arming");
   expect(guard.reset_fault(), "fault reset returns to disarmed");
+}
+
+void test_cw_transmit_encoder() {
+  using cwassistant::core::CwTransmitEncoder;
+  const auto plan = CwTransmitEncoder::encode("SOS TEST", 20U);
+  expect(plan.has_value(), "confirmed free text has a Morse timing plan");
+  if (plan.has_value()) {
+    expect(plan->dot_duration_ns == 60'000'000ULL,
+           "PARIS timing gives a 60 ms dot at 20 WPM");
+    expect(!plan->spans.empty() && plan->spans.front().key_down &&
+               plan->spans.back().key_down,
+           "timing plan starts and ends on keyed elements");
+    std::uint64_t units = 0U;
+    std::uint32_t longest_key_down = 0U;
+    bool saw_word_gap = false;
+    for (const auto& span : plan->spans) {
+      units += span.duration_units;
+      if (span.key_down)
+        longest_key_down = std::max(longest_key_down, span.duration_units);
+      else if (span.duration_units == 7U)
+        saw_word_gap = true;
+    }
+    expect(units == 55U && plan->total_duration_ns == 3'300'000'000ULL,
+           "SOS TEST uses exact standard Morse spacing");
+    expect(longest_key_down == 3U && saw_word_gap,
+           "plan distinguishes dashes and seven-unit word gaps");
+  }
+  expect(!CwTransmitEncoder::encode("SOS  TEST", 20U).has_value(),
+         "encoder rejects non-normalized repeated spaces");
+  expect(!CwTransmitEncoder::encode("sos", 20U).has_value(),
+         "encoder accepts only the exact normalized preview");
+  expect(!CwTransmitEncoder::encode("TEST", 4U).has_value() &&
+             !CwTransmitEncoder::encode("TEST", 81U).has_value(),
+         "encoder enforces the bounded operating-speed range");
+  expect(CwTransmitEncoder::encode("CQ IU0LFQ/P?", 25U).has_value(),
+         "portable callsigns and supported punctuation are encodable");
+}
+
+void test_selected_track_audio_monitor() {
+  using cwassistant::core::CwChannelBank;
+  using cwassistant::core::CwMonitorMode;
+  using cwassistant::core::RealtimeSampleBlock;
+
+  CwChannelBank bank({.minimum_verification_symbols = 0});
+  std::vector<float> spectrum(291U, -100.0F);
+  spectrum[60U] = -20.0F;  // 700 Hz in the 100..3000 Hz test range.
+  static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 100.0, 3'000.0,
+                                        spectrum));
+  const std::uint64_t selected = bank.selectFrequency(700.0);
+  expect(selected != 0U, "monitor fixture creates an operator-selected lane");
+
+  constexpr double sample_rate = 48'000.0;
+  RealtimeSampleBlock block;
+  block.stream.sample_rate_hz = sample_rate;
+  block.sample_count = block.samples.size();
+  double target_phase = 0.0;
+  double interferer_phase = 0.0;
+  bank.setMonitor(CwMonitorMode::SelectedTrack, selected, 700.0);
+  for (std::uint64_t block_index = 0; block_index < 24U; ++block_index) {
+    block.timestamp_ns = 1'000'000'000ULL + block_index * 21'333'333ULL;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      target_phase += 2.0 * std::numbers::pi * 700.0 / sample_rate;
+      interferer_phase += 2.0 * std::numbers::pi * 1'200.0 / sample_rate;
+      block.samples[index] = {
+          0.20F * static_cast<float>(std::sin(target_phase)) +
+              0.20F * static_cast<float>(std::sin(interferer_phase)),
+          0.0F};
+    }
+    static_cast<void>(bank.processSamples(block));
+  }
+  const auto& isolated = bank.monitorAudio();
+  expect(isolated.size() == block.sample_count,
+         "selected monitor returns one audio sample per input sample");
+  const auto magnitude_at = [&](const double frequency_hz) {
+    double real = 0.0;
+    double imaginary = 0.0;
+    for (std::size_t index = 0; index < isolated.size(); ++index) {
+      const double phase = 2.0 * std::numbers::pi * frequency_hz *
+                           static_cast<double>(index) / sample_rate;
+      real += isolated[index] * std::cos(phase);
+      imaginary -= isolated[index] * std::sin(phase);
+    }
+    return std::hypot(real, imaginary);
+  };
+  expect(magnitude_at(700.0) > 8.0 * magnitude_at(1'200.0),
+         "selected monitor re-pitches its lane and rejects the adjacent tone");
+
+  bank.setMonitor(CwMonitorMode::FullReceiver);
+  static_cast<void>(bank.processSamples(block));
+  expect(bank.monitorAudio().size() == block.sample_count &&
+             bank.monitorAudio().front() == block.samples[0].real(),
+         "full receiver monitor preserves the complete input window");
+  bank.setMonitor(CwMonitorMode::Off);
+  static_cast<void>(bank.processSamples(block));
+  expect(bank.monitorAudio().empty(), "monitor off emits no audio");
 }
 
 void test_presented_speed_requires_evidence() {
@@ -1836,6 +2000,23 @@ void test_callsign_policy() {
          "a valid numeric-leading international prefix is retained");
   expect(!CallsignPolicy::best_complete_in_text("EA7G2NX 599 P7FN "),
          "report context and random callsign-shaped fragments are not labels");
+
+  const auto participants = CallsignPolicy::qso_participants_in_text(
+      "FB CARO EMILIO IK1WJQ DE IU8NMZ + K ");
+  expect(participants == std::vector<std::string>({"IK1WJQ", "IU8NMZ"}),
+         "CALL1 DE CALL2 identifies both participants on one simplex carrier");
+  expect(CallsignPolicy::qso_participants_in_text(
+             "IK1WJQ DE IU8NMZ")
+             .empty(),
+         "an unfinished participant handover is not exposed");
+  expect(CallsignPolicy::qso_participants_in_text(
+             "IK1WJQ DE IK1WJQ K ")
+             .empty(),
+         "one repeated callsign is not presented as a two-party QSO");
+  expect(CallsignPolicy::qso_participants_in_text(
+             "REPORT DE 599 K ")
+             .empty(),
+         "ordinary DE text without two callsigns does not invent participants");
 }
 
 void test_spectrum_settings() {
@@ -2591,6 +2772,8 @@ int main() {
   test_spectrum_analyzer();
   test_remote_control_lease();
   test_transmit_guard();
+  test_cw_transmit_encoder();
+  test_selected_track_audio_monitor();
   test_adif();
   test_split_transverter_and_satellite_adif();
   test_negative_transverter_offset_and_invalid_frequency();

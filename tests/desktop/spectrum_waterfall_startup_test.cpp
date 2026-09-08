@@ -29,7 +29,7 @@ using CharacterWindow =
 
 std::vector<CharacterWindow> feedFrontend(
     cwassistant::desktop::LocalCharacterFrontendBank& bank,
-    const std::span<const cwassistant::core::CwTrackDiagnostic> channels,
+    const std::span<const cwassistant::core::CwCharacterTrackSnapshot> channels,
     const std::span<const double> tones_hz, const std::size_t block_count,
     std::uint64_t& sequence, std::uint64_t& timestamp_ns,
     std::uint64_t& sample_cursor) {
@@ -73,7 +73,7 @@ bool testLocalCharacterFrontendBank() {
   std::uint64_t timestamp_ns = 1'000'000'000ULL;
   std::uint64_t sample_cursor = 0U;
   const std::array<double, 5> tones{600.0, 700.0, 800.0, 900.0, 1'000.0};
-  std::array<cwassistant::core::CwTrackDiagnostic, 5> channels{};
+  std::array<cwassistant::core::CwCharacterTrackSnapshot, 5> channels{};
   channels[0] = {.id = 101, .frequency_hz = 600.0, .snr_db = 2.0F,
                  .verification_state = cwassistant::core::CwTrackState::Verified,
                  .active = true};
@@ -98,7 +98,7 @@ bool testLocalCharacterFrontendBank() {
 
   cwassistant::desktop::LocalCharacterFrontendBank ineligible_bank{2U};
   ineligible_bank.setEnabled(true);
-  std::array<cwassistant::core::CwTrackDiagnostic, 2> ineligible{
+  std::array<cwassistant::core::CwCharacterTrackSnapshot, 2> ineligible{
       channels[2], channels[3]};
   if (!feedFrontend(ineligible_bank, ineligible, tones, 9U, sequence,
                     timestamp_ns, sample_cursor).empty()) {
@@ -168,7 +168,7 @@ bool testLocalCharacterFrontendBank() {
 
   cwassistant::desktop::LocalCharacterFrontendBank likely_bank{1U};
   likely_bank.setEnabled(true);
-  const std::array<cwassistant::core::CwTrackDiagnostic, 1> likely_track{
+  const std::array<cwassistant::core::CwCharacterTrackSnapshot, 1> likely_track{
       channels[4]};
   const std::array<double, 1> likely_tone{1'000.0};
   const auto likely_windows = feedFrontend(
@@ -187,7 +187,7 @@ bool testLocalCharacterFrontendBank() {
   centered_track.presentation_frequency_hz = 800.0;
   centered_track.verification_state =
       cwassistant::core::CwTrackState::MorseLikely;
-  const std::array<cwassistant::core::CwTrackDiagnostic, 1> centered_tracks{
+  const std::array<cwassistant::core::CwCharacterTrackSnapshot, 1> centered_tracks{
       centered_track};
   const std::array<double, 1> centered_tone{800.0};
   const auto centered_windows = feedFrontend(

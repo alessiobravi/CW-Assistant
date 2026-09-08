@@ -107,6 +107,10 @@ decoding hints rather than sharing one assumed contest sequence.
 - Provide configurable noise blanking, AGC, key-click suppression, audio mute,
   and a sharp continuously adjustable CW monitor filter without coupling these
   controls to decoder correctness.
+- Provide monitor-off, complete-receiver, and selected-track audio modes with a
+  chosen local output device and level. Selected-track audio must reuse the
+  decoder's own carrier-following center/filter, re-pitch to the configured CW
+  tone, remain bounded in latency, and become silent when its track is lost.
 - Automatically calibrate or manually correct frequency offset and I/Q
   gain/phase imbalance for quadrature inputs, with visible diagnostics and a
   resettable calibration state.
@@ -140,6 +144,10 @@ decoding hints rather than sharing one assumed contest sequence.
 - Clicking a trace opens its decoded-text session in the decoder pane. Keep an
   operator-opened session attached across a same-frequency/color tracker
   reacquisition; clicking a callsign opens the QSO confirmation panel.
+- Treat alternating operators on one simplex carrier as one frequency session,
+  not two artificial signal tracks. A completed `CALL1 DE CALL2` handover may
+  attach both distinct, structurally plausible participants to that session;
+  current-sender attribution requires separate unambiguous turn evidence.
 - Follow appended decoder text unless the operator is selecting earlier text,
   emphasize a confirmed remote callsign, and raise a bounded visual alert when
   stable text contains an exact complete-token match for the active profile's
@@ -240,6 +248,19 @@ decoding hints rather than sharing one assumed contest sequence.
   Automatic reply is separately enabled and armed, previews the exact message,
   remains cancellable, and cannot bypass exact-call confirmation, maximum-key-
   down, emergency release, or any other transmit guard.
+- Permit operator-authored free text only after normalization to the supported
+  Morse alphabet and exact visible-preview confirmation. Derive a bounded
+  standard-timing plan at the selected WPM before any adapter request.
+- Provide an operator-only TUNE toggle after explicit TX arming. TUNE asserts
+  KEY/tone without accepting decoder input, releases on the second press or
+  emergency stop, and has an independent hard maximum of 15 seconds.
+- Show ON AIR only from authoritative guarded KEY state, never from a queued
+  message, decoder suggestion, CAT frequency, or optimistic UI transition.
+- In split-pileup search-and-pounce mode, permit an explicit checked retune that
+  places the runner inside the configured 700 Hz guide and lays out the pileup
+  on its receive-frequency side. Quiet-slot and latest-completed-QSO frequency
+  hints remain advisory, expire with evidence, abstain on ambiguity, and require
+  explicit operator confirmation before changing TX frequency.
 - Release KEY then PTT on timeout, adapter error, device removal, workflow
   failure, or emergency stop.
 - Never perform serial discovery by toggling RTS/DTR on unknown ports.

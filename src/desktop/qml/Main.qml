@@ -116,8 +116,10 @@ ApplicationWindow {
                 Label {
                     id: safeLabel
                     anchors.centerIn: parent
-                    text: "TX DISARMED"
-                    color: "#f3bd55"
+                    text: transmitController.onAir ? "TX ON AIR"
+                          : transmitController.armed ? "TX ARMED"
+                          : "TX DISARMED"
+                    color: transmitController.onAir ? "#ff6b6b" : "#f3bd55"
                     font.pixelSize: 11
                     font.weight: Font.Bold
                 }
@@ -149,6 +151,10 @@ ApplicationWindow {
                         flat: true
                         text: modelData
                         font.pixelSize: 10
+                        onClicked: {
+                            if (modelData === "QSO")
+                                txDrawer.open()
+                        }
                     }
                 }
             }
@@ -169,6 +175,46 @@ ApplicationWindow {
                     model: ["Live audio", "WAV replay"]
                     currentIndex: replayController.sourceMode
                     onActivated: replayController.sourceMode = currentIndex
+                }
+                Rectangle { width: 1; height: 28; color: "#303a46" }
+                Label { text: "Monitor"; color: "#91a0b1"; font.pixelSize: 11 }
+                ToolButton {
+                    objectName: "monitorOffButton"
+                    text: "OFF"
+                    checkable: true
+                    checked: replayController.monitorMode === 0
+                    onClicked: replayController.setMonitorMode(0)
+                }
+                ToolButton {
+                    objectName: "monitorReceiverButton"
+                    text: "RX"
+                    checkable: true
+                    checked: replayController.monitorMode === 1
+                    enabled: replayController.activeSource
+                    onClicked: replayController.setMonitorMode(1)
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Monitor the complete receiver audio window"
+                }
+                ToolButton {
+                    objectName: "monitorSignalButton"
+                    text: "SIGNAL"
+                    checkable: true
+                    checked: replayController.monitorMode === 2
+                    enabled: replayController.activeSource
+                    onClicked: replayController.setMonitorMode(2)
+                    ToolTip.visible: hovered
+                    ToolTip.text: replayController.monitorStatus
+                }
+                Slider {
+                    objectName: "monitorLevelSlider"
+                    from: 0
+                    to: 1
+                    value: replayController.monitorLevel
+                    enabled: replayController.monitorMode !== 0
+                    Layout.preferredWidth: 82
+                    onMoved: replayController.setMonitorLevel(value)
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Monitor level " + Math.round(value * 100) + "%"
                 }
                 Item { Layout.fillWidth: true }
                 Label {
@@ -397,8 +443,10 @@ ApplicationWindow {
                     }
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 650
-                    ToolTip.text: hoveredStreamId !== 0
-                                  ? "Left-click to open this decoded stream"
+                        ToolTip.text: hoveredStreamId !== 0
+                                  ? (replayController.monitorMode === 2
+                                     ? "Left-click to open and monitor this decoded stream"
+                                     : "Left-click to open this decoded stream")
                                   : "Right-click an unmarked signal to open a manual decoding slice"
                 }
                 ToolButton {
@@ -1135,44 +1183,31 @@ ApplicationWindow {
                         Rectangle {
                             id: onAirIndicator
                             objectName: "onAirIndicator"
-                            // Placeholder only: no backend currently reports
-                            // live PTT/transmit state. OmniRig's Tx flag is
-                            // consulted only as a transient RX-write safety
-                            // gate, not retained as authoritative UI telemetry;
-                            // CAT4OM has no such field. Local key/PTT hardware
-                            // control is also not implemented — see KEY-001 and
-                            // SAFE-001. "active" remains false until an
-                            // authoritative provider is wired here.
-                            property bool active: false
+                            // Bound only to guarded local KEY state. Preparing
+                            // text, decoder suggestions, CAT state, and merely
+                            // arming TX can never illuminate this indicator.
+                            // It remains dim until the tested hardware adapter
+                            // is implemented and the guard reports KEY down.
+                            property bool active: transmitController.onAir
                             radius: 6
-                            implicitWidth: onAirRow.implicitWidth + 16
-                            implicitHeight: onAirRow.implicitHeight + 8
+                            implicitWidth: 54
+                            implicitHeight: 48
                             color: active ? "#4d0d0d" : "#1c2229"
                             border.color: active ? "#ff3b30" : "#3a4552"
                             border.width: 1
-                            RowLayout {
-                                id: onAirRow
+                            Image {
                                 anchors.centerIn: parent
-                                spacing: 6
-                                Rectangle {
-                                    width: 10
-                                    height: 10
-                                    radius: 5
-                                    color: onAirIndicator.active ? "#ff3b30" : "#4a1414"
-                                    border.color: onAirIndicator.active ? "#ff8a80" : "#5c2020"
-                                    border.width: 1
-                                }
-                                Label {
-                                    text: "ON AIR"
-                                    color: onAirIndicator.active ? "#ff8a80" : "#5c6a78"
-                                    font.pixelSize: 11
-                                    font.weight: Font.Bold
-                                    font.letterSpacing: 1
-                                }
+                                source: "qrc:/icons/on-air-active.png"
+                                width: 42
+                                height: 42
+                                fillMode: Image.PreserveAspectFit
+                                opacity: onAirIndicator.active ? 1.0 : 0.18
                             }
                             ToolTip.visible: onAirMouse.containsMouse
                             ToolTip.delay: 300
-                            ToolTip.text: "Placeholder — not wired to live transmit state yet; no radio backend currently reports it."
+                            ToolTip.text: active
+                                ? "KEY is authoritatively asserted"
+                                : "Not transmitting"
                             MouseArea {
                                 id: onAirMouse
                                 anchors.fill: parent
@@ -1371,26 +1406,49 @@ ApplicationWindow {
                                 }
                                 Label {
                                     Layout.fillWidth: true
-                                    text: (modelData.callsign.length > 0
-                                           ? modelData.callsign
-                                           : (sessionCard.localModelCallsign.length > 0
-                                              ? sessionCard.localModelCallsign
-                                              : (sessionCard.advisoryCallsignSuggestion.length > 0
-                                                 ? "≈ " + sessionCard.advisoryCallsignSuggestion
-                                                 : "")))
-                                          .length > 0
-                                          ? (modelData.callsign.length > 0
-                                             ? modelData.callsign
-                                             : (sessionCard.localModelCallsign.length > 0
-                                                ? sessionCard.localModelCallsign
-                                                : "≈ " + sessionCard.advisoryCallsignSuggestion))
-                                            + "  •  "
-                                            + modelData.frequencyLabel
-                                          : modelData.frequencyLabel
+                                    text: {
+                                        if (modelData.qsoParticipants.length >= 2) {
+                                            return "QSO  "
+                                                + modelData.qsoParticipants[0]
+                                                + " ↔ "
+                                                + modelData.qsoParticipants[1]
+                                                + "  •  "
+                                                + modelData.frequencyLabel
+                                        }
+                                        var station = modelData.callsign
+                                        if (station.length === 0) {
+                                            station = sessionCard.localModelCallsign
+                                        }
+                                        if (station.length === 0
+                                                && sessionCard.advisoryCallsignSuggestion.length > 0) {
+                                            station = "≈ " + sessionCard.advisoryCallsignSuggestion
+                                        }
+                                        return station.length > 0
+                                            ? station + "  •  "
+                                                + modelData.frequencyLabel
+                                            : modelData.frequencyLabel
+                                    }
                                     color: modelData.color
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
                                     elide: Text.ElideRight
+                                }
+                                Button {
+                                    objectName: "decoderSessionTxButton"
+                                    text: "TX " + modelData.callsign
+                                    visible: modelData.callsign.length > 0
+                                    enabled: transmitController.armed
+                                    onClicked: {
+                                        transmitController.selectTarget(
+                                            modelData.id, modelData.callsign,
+                                            modelData.frequencyKind === "RF"
+                                            ? modelData.displayFrequencyHz : 0)
+                                        txDrawer.open()
+                                    }
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: transmitController.armed
+                                        ? "Select this exactly decoded station for guarded TX"
+                                        : "Open QSO and arm TX first"
                                 }
                                 Label {
                                     objectName: "callsignDatabaseBadge"
@@ -1864,6 +1922,222 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    Drawer {
+        id: txDrawer
+        edge: Qt.LeftEdge
+        width: Math.min(window.width * 0.46, 620)
+        height: window.height
+        modal: true
+        background: Rectangle { color: "#111720" }
+        ScrollView {
+            anchors.fill: parent
+            contentWidth: availableWidth
+            ColumnLayout {
+                width: Math.max(0, parent.width - 40)
+                x: 20
+                spacing: 12
+                Label {
+                    text: "Guarded TX / QSO"
+                    font.pixelSize: 22
+                    font.weight: Font.DemiBold
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b1"
+                    text: "Decoder output may suggest an action, but it cannot key the transmitter. Arm TX, exactly confirm the station, then confirm every normalized message preview."
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        objectName: "txArmButton"
+                        text: transmitController.armed ? "Disarm TX" : "Arm TX"
+                        onClicked: transmitController.armed
+                                   ? transmitController.disarm()
+                                   : transmitController.arm()
+                    }
+                    CheckBox {
+                        objectName: "autoQsoModeCheck"
+                        text: "Auto-QSO suggestions"
+                        checked: transmitController.autoQsoEnabled
+                        enabled: transmitController.armed
+                        onToggled: transmitController.autoQsoEnabled = checked
+                    }
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        text: "EMERGENCY RELEASE"
+                        highlighted: true
+                        onClicked: transmitController.emergencyRelease()
+                    }
+                    Button {
+                        objectName: "txTuneButton"
+                        text: transmitController.tuning ? "STOP TUNE" : "TUNE"
+                        enabled: transmitController.armed
+                        highlighted: transmitController.tuning
+                        onClicked: transmitController.toggleTune()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Operator-only KEY/tone toggle; hard 15-second watchdog"
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: transmitController.state === "fault"
+                           ? "#ff7b84" : "#f3bd55"
+                    text: transmitController.status
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.state === "fault"
+                    Button { text: "Reset fault (stays disarmed)"; onClicked: transmitController.resetFault() }
+                }
+                Label {
+                    text: transmitController.targetCallsign.length > 0
+                          ? "Selected station: " + transmitController.targetCallsign
+                          : "Select TX on an exactly decoded receiver card"
+                    color: "#62ffa2"
+                    font.pixelSize: 17
+                    font.weight: Font.Bold
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.targetCallsign.length > 0
+                             && !transmitController.qsoConfirmed
+                    TextField {
+                        id: txCallConfirmation
+                        objectName: "txCallConfirmationField"
+                        Layout.fillWidth: true
+                        placeholderText: "Retype callsign exactly"
+                        selectByMouse: true
+                    }
+                    Button {
+                        text: "Confirm station"
+                        onClicked: transmitController.confirmTarget(
+                                       txCallConfirmation.text)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.qsoConfirmed
+                    Button { text: "Send my call"; onClicked: transmitController.prepareOwnCall() }
+                    Button { text: "Send report " + transmitController.report; onClicked: transmitController.prepareReport() }
+                    Button { text: "End QSO"; onClicked: transmitController.endQso() }
+                }
+                Button {
+                    objectName: "anchorPileupRunnerButton"
+                    Layout.fillWidth: true
+                    visible: transmitController.targetCallsign.length > 0
+                    enabled: transmitController.targetRfHz > 0
+                             && appSettings.radioFrequencyWritable
+                    text: "Anchor runner at "
+                          + appSettings.cwGuideCenterHz.toFixed(0) + " Hz"
+                    onClicked: appSettings.setControlledRxFrequency(
+                                   (transmitController.targetRfHz / 1000)
+                                     .toFixed(3), 1000)
+                    ToolTip.visible: hovered
+                    ToolTip.text: enabled
+                        ? "Retune RX so this runner falls on the CW guide; TX and split remain unchanged"
+                        : "Requires a checked RF marker and a writable linked radio"
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.proposedMessage.length > 0
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: transmitController.proposedReason + ": "
+                              + transmitController.proposedMessage
+                        color: "#ffd54f"
+                    }
+                    Button { text: "Prepare"; onClicked: transmitController.acceptProposal() }
+                }
+                Label { text: "Free text"; font.weight: Font.Bold }
+                TextArea {
+                    id: txFreeText
+                    objectName: "txFreeTextArea"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 110
+                    enabled: transmitController.qsoConfirmed
+                    placeholderText: "Type operator-authored CW text"
+                    wrapMode: TextEdit.Wrap
+                    selectByMouse: true
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Button {
+                        text: "Prepare free text"
+                        enabled: transmitController.qsoConfirmed
+                        onClicked: transmitController.prepareFreeText(txFreeText.text)
+                    }
+                    Label { text: "WPM" }
+                    Slider {
+                        from: 5
+                        to: 80
+                        stepSize: 1
+                        value: transmitController.wordsPerMinute
+                        onMoved: transmitController.wordsPerMinute = Math.round(value)
+                        Layout.fillWidth: true
+                    }
+                    Label { text: transmitController.wordsPerMinute }
+                }
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: previewColumn.implicitHeight + 24
+                    visible: transmitController.preparedMessage.length > 0
+                    radius: 6
+                    color: "#07110e"
+                    border.color: transmitController.messageConfirmed
+                                  ? "#4dff88" : "#f3bd55"
+                    ColumnLayout {
+                        id: previewColumn
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        Label { text: "EXACT TX PREVIEW"; color: "#91a0b1"; font.weight: Font.Bold }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WrapAnywhere
+                            text: transmitController.preparedMessage
+                            color: "#ffffff"
+                            font.family: "monospace"
+                            font.pixelSize: 18
+                        }
+                        Label {
+                            text: transmitController.previewDurationSeconds.toFixed(2)
+                                  + " s at " + transmitController.wordsPerMinute + " WPM"
+                            color: "#91a0b1"
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            TextField {
+                                id: txPreviewConfirmation
+                                objectName: "txPreviewConfirmationField"
+                                Layout.fillWidth: true
+                                placeholderText: "Retype preview exactly"
+                                enabled: !transmitController.messageConfirmed
+                            }
+                            Button {
+                                text: "Confirm preview"
+                                enabled: !transmitController.messageConfirmed
+                                onClicked: transmitController.confirmPreview(
+                                               txPreviewConfirmation.text)
+                            }
+                        }
+                    }
+                }
+                Button {
+                    objectName: "transmitPreparedButton"
+                    Layout.fillWidth: true
+                    text: transmitController.hardwareAvailable
+                          ? "TRANSMIT PREPARED MESSAGE"
+                          : "KEY/PTT ADAPTER NOT YET AVAILABLE"
+                    enabled: transmitController.messageConfirmed
+                             && transmitController.hardwareAvailable
+                    onClicked: transmitController.transmitPrepared()
                 }
             }
         }

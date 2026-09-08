@@ -17,6 +17,7 @@
 #include "replay/replay_controller.hpp"
 #include "settings/app_settings.hpp"
 #include "settings/product_migration.hpp"
+#include "transmit/transmit_controller.hpp"
 #include "updates/callsign_database_updater.hpp"
 #include "updates/update_checker.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
@@ -71,6 +72,8 @@ int main(int argc, char* argv[]) {
   cwassistant::desktop::ReplayController replay_controller;
   cwassistant::desktop::UpdateChecker update_checker;
   cwassistant::desktop::CallsignDatabaseUpdater callsign_database_updater;
+  cwassistant::desktop::TransmitController transmit_controller;
+  transmit_controller.setOwnCallsign(settings.ownCallsign());
   const auto apply_spectrum_processing = [&settings, &replay_controller] {
     replay_controller.setAveragingFrames(settings.averagingFrames());
     replay_controller.setSpectrumProcessing(
@@ -142,6 +145,7 @@ int main(int argc, char* argv[]) {
   apply_offline_callsign_database();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
+  replay_controller.setMonitorOutputSelection(settings.audioOutputId());
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_spectrum_processing);
@@ -166,6 +170,19 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_own_callsign);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &transmit_controller,
+      [&settings, &transmit_controller] {
+        transmit_controller.setOwnCallsign(settings.ownCallsign());
+      });
+  QObject::connect(
+      &replay_controller, &cwassistant::desktop::ReplayController::decoderChanged,
+      &transmit_controller,
+      [&replay_controller, &transmit_controller] {
+        transmit_controller.observeDecoderChannels(
+            replay_controller.decoderChannels());
+      });
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
       &replay_controller, apply_radio_frequency);
@@ -210,6 +227,11 @@ int main(int argc, char* argv[]) {
             settings.audioInputId(), settings.audioInputDisplayName());
       });
   QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::audioOutputsChanged,
+      &replay_controller, [&settings, &replay_controller] {
+        replay_controller.setMonitorOutputSelection(settings.audioOutputId());
+      });
+  QObject::connect(
       &settings,
       &cwassistant::desktop::AppSettings::localDecoderConfigurationCommitted,
       &replay_controller, apply_local_character_decoder);
@@ -224,6 +246,8 @@ int main(int argc, char* argv[]) {
                                            &update_checker);
   engine.rootContext()->setContextProperty(
       QStringLiteral("callsignDatabaseUpdater"), &callsign_database_updater);
+  engine.rootContext()->setContextProperty(QStringLiteral("transmitController"),
+                                           &transmit_controller);
   if (!parser.isSet(smoke_test_option) && update_checker.autoCheckEnabled()) {
     // A short delay so the background check never competes with startup
     // rendering/audio work; never runs during the smoke test, which must

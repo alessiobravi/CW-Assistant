@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAudioFormat>
+#include <QByteArray>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -98,6 +99,7 @@ class LiveAudioDspWorker final : public QObject {
   void setOperatorRole(const QString& role);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setLocalCharacterFrontendEnabled(bool enabled);
+  void setMonitor(int mode, qulonglong channel_id, double reference_tone_hz);
   void acceptCharacterRefinement(qulonglong channel_id,
                                  const QString& stable_text,
                                  qulonglong evidence_timestamp_ns);
@@ -130,6 +132,8 @@ signals:
   void characterWindowProduced(
       int source_mode,
       cwassistant::desktop::CwCharacterFeatureWindowPtr window);
+  void monitorAudioProduced(const QByteArray& float_mono_audio,
+                            double sample_rate_hz);
 
  private slots:
   void drain();

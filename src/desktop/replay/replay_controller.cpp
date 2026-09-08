@@ -1,12 +1,17 @@
 #include "replay_controller.hpp"
 
 #include <QRegularExpression>
+#include <QAudioDevice>
+#include <QAudioFormat>
+#include <QAudioSink>
 #include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
 #include <QDir>
 #include <QHash>
+#include <QIODevice>
 #include <QMetaObject>
+#include <QMediaDevices>
 #include <QPermissions>
 #include <QDesktopServices>
 #include <QStandardPaths>
@@ -33,6 +38,29 @@
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
+namespace {
+
+QString encodedAudioDeviceId(const QAudioDevice& device) {
+  return QString::fromLatin1(
+      device.id().toBase64(QByteArray::Base64UrlEncoding |
+                           QByteArray::OmitTrailingEquals));
+}
+
+QAudioDevice monitorOutputDevice(const QString& requested_id) {
+  if (requested_id.isEmpty()) return QMediaDevices::defaultAudioOutput();
+  for (const auto& device : QMediaDevices::audioOutputs()) {
+    if (encodedAudioDeviceId(device) == requested_id) return device;
+  }
+  return {};
+}
+
+QByteArray monitorBytes(const std::vector<float>& samples) {
+  if (samples.empty()) return {};
+  return QByteArray(reinterpret_cast<const char*>(samples.data()),
+                    static_cast<qsizetype>(samples.size() * sizeof(float)));
+}
+
+}  // namespace
 
 QList<qulonglong> reconcileDecoderSessionOrder(
     const QList<qulonglong>& requested_order,
@@ -528,6 +556,16 @@ class ReplayWorker final : public QObject {
     character_frontends_.setEnabled(enabled);
   }
 
+  void setMonitor(const int mode, const qulonglong channel_id,
+                  const double reference_tone_hz) {
+    const auto selected_mode = mode == 1
+        ? cwassistant::core::CwMonitorMode::FullReceiver
+        : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
+                    : cwassistant::core::CwMonitorMode::Off;
+    decoder_.setMonitor(selected_mode, static_cast<std::uint64_t>(channel_id),
+                        reference_tone_hz);
+  }
+
   void acceptCharacterRefinement(const qulonglong channel_id,
                                  const QString& stable_text,
                                  const qulonglong evidence_timestamp_ns) {
@@ -558,6 +596,8 @@ class ReplayWorker final : public QObject {
   void characterWindowProduced(
       int source_mode,
       cwassistant::desktop::CwCharacterFeatureWindowPtr window);
+  void monitorAudioProduced(const QByteArray& float_mono_audio,
+                            double sample_rate_hz);
   void ended();
 
  private slots:
@@ -579,10 +619,14 @@ class ReplayWorker final : public QObject {
       // signals are discovered or how quickly they qualify.
       static_cast<void>(decoder_.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
+          false));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
-    const auto character_tracks = decoder_.allTrackDiagnostics();
+    const QByteArray monitor_audio = monitorBytes(decoder_.monitorAudio());
+    if (!monitor_audio.isEmpty())
+      emit monitorAudioProduced(monitor_audio, block.stream.sample_rate_hz);
+    const auto& character_tracks = decoder_.characterRefinementTracks();
     for (auto& window : character_frontends_.process(block, character_tracks))
       emit characterWindowProduced(1, std::move(window));
     for (auto& snapshot : snapshots) {
@@ -703,6 +747,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::setKeyingModel);
   connect(this, &ReplayController::operatorRoleRequested, worker,
           &ReplayWorker::setOperatorRole);
+  connect(this, &ReplayController::monitorConfigureRequested, worker,
+          &ReplayWorker::setMonitor);
   connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
           worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::replayCharacterRefinementRequested,
@@ -754,6 +800,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             verification_diagnostics_ = diagnostics;
             emit decoderChanged();
           });
+  connect(worker, &ReplayWorker::monitorAudioProduced, this,
+          &ReplayController::writeMonitorAudio);
   connect(worker, &ReplayWorker::ended, this, [this] {
     playing_ = false;
     status_text_ = QStringLiteral("Replay complete");
@@ -793,6 +841,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           dsp_worker, &LiveAudioDspWorker::setDebugCaptureMaximumSeconds);
   connect(this, &ReplayController::liveOperatorRoleRequested, dsp_worker,
           &LiveAudioDspWorker::setOperatorRole);
+  connect(this, &ReplayController::liveMonitorConfigureRequested, dsp_worker,
+          &LiveAudioDspWorker::setMonitor);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::liveCharacterRefinementRequested,
@@ -873,6 +923,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             verification_diagnostics_ = diagnostics;
             emit decoderChanged();
           });
+  connect(dsp_worker, &LiveAudioDspWorker::monitorAudioProduced, this,
+          &ReplayController::writeMonitorAudio);
   audio_capture_thread_.setObjectName(QStringLiteral("Live audio capture"));
   audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
   audio_capture_thread_.start();
@@ -880,6 +932,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
 }
 
 ReplayController::~ReplayController() {
+  stopMonitorOutput();
   if (audio_capture_worker_ != nullptr && audio_capture_thread_.isRunning()) {
     QMetaObject::invokeMethod(audio_capture_worker_, "stop",
                               Qt::BlockingQueuedConnection);
@@ -993,6 +1046,16 @@ qulonglong ReplayController::radioTxFrequencyHz() const noexcept {
 }
 bool ReplayController::radioSplitActive() const noexcept {
   return radio_split_active_;
+}
+int ReplayController::monitorMode() const noexcept { return monitor_mode_; }
+qulonglong ReplayController::monitoredChannelId() const noexcept {
+  return monitored_channel_id_;
+}
+const QString& ReplayController::monitorStatus() const noexcept {
+  return monitor_status_;
+}
+double ReplayController::monitorLevel() const noexcept {
+  return monitor_level_;
 }
 
 void ReplayController::setAveragingFrames(const int value) {
@@ -1293,6 +1356,22 @@ void ReplayController::rebuildDecoderModels() {
     item.insert(QStringLiteral("sessionOpen"), true);
     decoder_sessions_.push_back(item);
   }
+  if (monitor_mode_ == 2 && monitored_channel_id_ != 0) {
+    const QList<qulonglong> reconciled_monitor = reconcileDecoderSessionOrder(
+        QList<qulonglong>{monitored_channel_id_}, previous_sessions,
+        decoder_channels_);
+    const qulonglong next_id = reconciled_monitor.isEmpty()
+        ? 0U : reconciled_monitor.front();
+    if (next_id != monitored_channel_id_) {
+      monitored_channel_id_ = next_id;
+      stopMonitorOutput();
+      monitor_status_ = next_id == 0
+          ? QStringLiteral("Selected signal ended; click another signal")
+          : QStringLiteral("Monitoring reacquired signal");
+      publishMonitorConfiguration();
+      emit monitorChanged();
+    }
+  }
   publishLivePresentationDiagnostics(false);
   emit decoderChanged();
 }
@@ -1380,8 +1459,103 @@ void ReplayController::setRadioFrequencyContext(
   rebuildDecoderModels();
 }
 
+void ReplayController::setMonitorMode(const int mode) {
+  const int sanitized = std::clamp(mode, 0, 2);
+  if (monitor_mode_ == sanitized) return;
+  monitor_mode_ = sanitized;
+  if (monitor_mode_ != 2) monitored_channel_id_ = 0;
+  if (monitor_mode_ == 0) {
+    monitor_status_ = QStringLiteral("Monitor off");
+    stopMonitorOutput();
+  } else if (monitor_mode_ == 1) {
+    monitor_status_ = QStringLiteral("Monitoring full receiver window");
+  } else {
+    monitor_status_ = QStringLiteral("Click a signal to monitor it");
+  }
+  publishMonitorConfiguration();
+  emit monitorChanged();
+}
+
+void ReplayController::setMonitorLevel(const double level) {
+  const double sanitized = std::clamp(level, 0.0, 1.0);
+  if (monitor_level_ == sanitized) return;
+  monitor_level_ = sanitized;
+  if (monitor_audio_sink_) monitor_audio_sink_->setVolume(monitor_level_);
+  emit monitorChanged();
+}
+
+void ReplayController::setMonitorOutputSelection(QString encoded_device_id) {
+  if (monitor_output_device_id_ == encoded_device_id) return;
+  monitor_output_device_id_ = std::move(encoded_device_id);
+  stopMonitorOutput();
+  if (monitor_mode_ != 0) {
+    monitor_status_ = monitor_mode_ == 1
+        ? QStringLiteral("Monitoring full receiver window")
+        : (monitored_channel_id_ == 0
+               ? QStringLiteral("Click a signal to monitor it")
+               : QStringLiteral("Monitoring selected signal"));
+  }
+  emit monitorChanged();
+}
+
+void ReplayController::publishMonitorConfiguration() {
+  emit monitorConfigureRequested(monitor_mode_, monitored_channel_id_,
+                                 cw_reference_tone_hz_);
+  emit liveMonitorConfigureRequested(monitor_mode_, monitored_channel_id_,
+                                     cw_reference_tone_hz_);
+}
+
+void ReplayController::stopMonitorOutput() {
+  monitor_audio_device_ = nullptr;
+  if (monitor_audio_sink_) monitor_audio_sink_->stop();
+  monitor_audio_sink_.reset();
+  monitor_audio_sample_rate_ = 0;
+}
+
+void ReplayController::writeMonitorAudio(const QByteArray& float_mono_audio,
+                                         const double sample_rate_hz) {
+  if (monitor_mode_ == 0 || float_mono_audio.isEmpty() ||
+      !std::isfinite(sample_rate_hz) || sample_rate_hz < 8'000.0 ||
+      sample_rate_hz > 192'000.0) {
+    return;
+  }
+  const int requested_rate = static_cast<int>(std::lround(sample_rate_hz));
+  if (!monitor_audio_sink_ || monitor_audio_sample_rate_ != requested_rate) {
+    stopMonitorOutput();
+    const QAudioDevice device = monitorOutputDevice(monitor_output_device_id_);
+    QAudioFormat format;
+    format.setSampleRate(requested_rate);
+    format.setChannelCount(1);
+    format.setSampleFormat(QAudioFormat::Float);
+    if (device.isNull() || !device.isFormatSupported(format)) {
+      monitor_status_ = QStringLiteral(
+          "Selected monitor output does not support %1 Hz mono float audio")
+                            .arg(requested_rate);
+      emit monitorChanged();
+      return;
+    }
+    monitor_audio_sink_ = std::make_unique<QAudioSink>(device, format, this);
+    monitor_audio_sink_->setBufferSize(requested_rate *
+                                       static_cast<int>(sizeof(float)) / 4);
+    monitor_audio_sink_->setVolume(monitor_level_);
+    monitor_audio_device_ = monitor_audio_sink_->start();
+    monitor_audio_sample_rate_ = requested_rate;
+    if (monitor_audio_device_ == nullptr) {
+      monitor_status_ = QStringLiteral("Could not start the monitor output");
+      stopMonitorOutput();
+      emit monitorChanged();
+      return;
+    }
+  }
+  if (monitor_audio_sink_->bytesFree() < float_mono_audio.size()) return;
+  if (monitor_audio_device_->write(float_mono_audio) < 0) {
+    monitor_status_ = QStringLiteral("Monitor output write failed");
+    stopMonitorOutput();
+    emit monitorChanged();
+  }
+}
+
 void ReplayController::openDecoderSession(const qulonglong channel_id) {
-  if (decoder_session_order_.contains(channel_id)) return;
   const bool exists = std::any_of(
       decoder_channels_.cbegin(), decoder_channels_.cend(),
       [channel_id](const QVariant& value) {
@@ -1389,6 +1563,14 @@ void ReplayController::openDecoderSession(const qulonglong channel_id) {
                channel_id;
       });
   if (!exists) return;
+  if (monitor_mode_ == 2 && monitored_channel_id_ != channel_id) {
+    monitored_channel_id_ = channel_id;
+    monitor_status_ = QStringLiteral("Monitoring selected signal");
+    stopMonitorOutput();
+    publishMonitorConfiguration();
+    emit monitorChanged();
+  }
+  if (decoder_session_order_.contains(channel_id)) return;
   decoder_session_order_.push_back(channel_id);
   rebuildDecoderModels();
 }

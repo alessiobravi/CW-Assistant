@@ -161,7 +161,8 @@ Decoded decodeChannel(const std::vector<float>& audio,
     for (const auto& snapshot : analyzer.process(block)) {
       static_cast<void>(bank.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
+          false));
     }
     for (const auto& channel : bank.processSamples(block)) {
       if (channel.text.size() > best.text.size()) best.text = channel.text;
@@ -193,7 +194,8 @@ std::string decode(const std::vector<float>& audio, const double sample_rate) {
     for (const auto& snapshot : analyzer.process(block)) {
       static_cast<void>(bank.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
+          false));
     }
     for (const auto& channel : bank.processSamples(block))
       if (channel.text.size() > best.size()) best = channel.text;

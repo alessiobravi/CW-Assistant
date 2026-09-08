@@ -226,6 +226,12 @@ requires decoded exchange evidence (`DE`, `CQ`, `TU`, callsign-before-`UP`) or
 exact repetition; this ranks existing decoder output and never repairs or
 invents characters.
 
+An ordinary simplex conversation remains one carrier observation even though
+two operators alternate. A completed `CALL1 DE CALL2` token sequence can add
+both distinct, structurally valid participants to the retained presentation;
+it does not duplicate the channel or infer the active sender. Sender turns and
+per-turn timing adaptation require explicit transmission-boundary evidence.
+
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session
 cards. Each retained observation records its current source track and an
@@ -357,24 +363,37 @@ stateDiagram-v2
   ARMED --> AWAITING_CONFIRMATION
   AWAITING_CONFIRMATION --> CONFIRMED
   CONFIRMED --> TRANSMITTING
-  TRANSMITTING --> ARMED: QSO complete
+  TRANSMITTING --> CONFIRMED: message complete
+  CONFIRMED --> ARMED: QSO complete
+  ARMED --> TUNING: operator TUNE
+  CONFIRMED --> TUNING: operator TUNE
+  TUNING --> ARMED: second press / prior state
+  TUNING --> CONFIRMED: second press / prior state
   TRANSMITTING --> DISARMED: disarm / restart
+  TUNING --> DISARMED: disarm / restart
   ARMED --> DISARMED: disarm / restart
   DISARMED --> FAULT: any state
   ARMED --> FAULT: any state
   TRANSMITTING --> FAULT: any state
+  TUNING --> FAULT: timeout / any fault
   FAULT --> DISARMED: explicit reset
 ```
 
-Transmission is reached only through disarmed, armed, awaiting confirmation and
-confirmed, in that order. Completing a QSO returns to armed, and disarming or
-restarting returns to disarmed. Any state can enter fault, which is left only
-by an explicit reset back to disarmed.
+Message transmission is reached only through disarmed, armed, awaiting
+confirmation, exact target confirmation, staged text, and exact message
+confirmation, in that order. Completing one message preserves the confirmed
+target; explicitly ending the QSO returns to armed. Operator-only TUNE may start
+from armed or confirmed and returns to its prior state on the second press.
+Disarming or restarting returns to disarmed. Any state can enter fault, which
+is left only by an explicit reset back to disarmed.
 
-The application state machine grants permission; the serial adapter remains
-responsible for a hard maximum-key-down timer and best-effort line release on
-close. Callsign confidence may enable the confirmation button but cannot bypass
-it.
+The application state machine grants permission and independently checks
+continuous KEY evidence: ordinary elements have a three-second hard bound and
+TUNE has a non-extendable 15-second bound. The serial adapter additionally
+owns a monotonic deadline and best-effort KEY-then-PTT release on close, device
+error, or process shutdown. Callsign confidence may enable the confirmation
+button but cannot bypass it. Decoder evidence may prepare an inert suggestion
+only; it has no path to arming, confirmation, TUNE, PTT, or KEY.
 
 ## QSO panels
 

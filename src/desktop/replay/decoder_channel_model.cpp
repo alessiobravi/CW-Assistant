@@ -157,6 +157,14 @@ QVariantList decoderChannelModel(
     item.insert(QStringLiteral("callsign"),
                 expose_verified_content
                     ? QString::fromStdString(channel.callsign) : QString{});
+    QVariantList qso_participants;
+    if (expose_verified_content) {
+      qso_participants.reserve(
+          static_cast<qsizetype>(channel.qso_participants.size()));
+      for (const auto& participant : channel.qso_participants)
+        qso_participants.push_back(QString::fromStdString(participant));
+    }
+    item.insert(QStringLiteral("qsoParticipants"), qso_participants);
     const auto local = std::find_if(
         local_decoder.begin(), local_decoder.end(),
         [&channel](const LocalDecoderChannelPresentation& candidate) {

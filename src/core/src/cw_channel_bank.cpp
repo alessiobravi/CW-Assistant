@@ -256,6 +256,9 @@ void CwChannelBank::sanitizeConfig() noexcept {
 void CwChannelBank::reset() noexcept {
   tracks_.clear();
   snapshots_.clear();
+  character_refinement_tracks_.clear();
+  monitor_audio_.clear();
+  monitor_oscillator_ = {1.0F, 0.0F};
   retained_observations_.clear();
   color_leases_ = {};
   next_track_id_ = 1;
@@ -271,10 +274,30 @@ void CwChannelBank::reset() noexcept {
   decoder_reacquisitions_ = 0;
 }
 
+void CwChannelBank::setMonitor(const CwMonitorMode mode,
+                               const std::uint64_t track_id,
+                               const double reference_tone_hz) noexcept {
+  const double sanitized_tone =
+      std::isfinite(reference_tone_hz)
+          ? std::clamp(reference_tone_hz, 200.0, 1'500.0)
+          : 700.0;
+  const std::uint64_t sanitized_track =
+      mode == CwMonitorMode::SelectedTrack ? track_id : 0U;
+  if (monitor_mode_ != mode || monitored_track_id_ != sanitized_track ||
+      monitor_reference_tone_hz_ != sanitized_tone) {
+    monitor_oscillator_ = {1.0F, 0.0F};
+  }
+  monitor_mode_ = mode;
+  monitored_track_id_ = sanitized_track;
+  monitor_reference_tone_hz_ = sanitized_tone;
+  monitor_audio_.clear();
+}
+
 const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     const std::uint64_t timestamp_ns, const double lower_frequency_hz,
     const double upper_frequency_hz,
-    const std::span<const float> raw_bins_dbfs) {
+    const std::span<const float> raw_bins_dbfs,
+    const bool rebuild_snapshot) {
   if (raw_bins_dbfs.size() < 3 ||
       !std::isfinite(lower_frequency_hz) ||
       !std::isfinite(upper_frequency_hz) ||
@@ -815,7 +838,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   std::erase_if(tracks_, [](const Track& track) {
     return track.verification_state == CwTrackState::Lost;
   });
-  rebuildSnapshots(timestamp_ns);
+  if (rebuild_snapshot) rebuildSnapshots(timestamp_ns);
   return snapshots_;
 }
 
@@ -892,6 +915,7 @@ std::uint64_t CwChannelBank::selectFrequency(
 
 const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
     const RealtimeSampleBlock& block) {
+  monitor_audio_.clear();
   if (block.sample_count == 0 || block.sample_count > block.samples.size() ||
       !std::isfinite(block.stream.sample_rate_hz) ||
       block.stream.sample_rate_hz <= 0.0) {
@@ -927,6 +951,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
   }
 
   const double sample_rate_hz = block.stream.sample_rate_hz;
+  if (monitor_mode_ == CwMonitorMode::FullReceiver) {
+    monitor_audio_.reserve(block.sample_count);
+    for (std::size_t index = 0; index < block.sample_count; ++index)
+      monitor_audio_.push_back(block.samples[index].real());
+  }
   const std::size_t evidence_samples = static_cast<std::size_t>(
       std::max(1.0, std::round(sample_rate_hz / config_.evidence_rate_hz)));
   std::array<float, kNarrowbandWidthsHz.size()> filter_alphas{};
@@ -937,8 +966,17 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         -2.0 * std::numbers::pi * cutoff_hz / sample_rate_hz));
   }
   const float reference_alpha = filter_alphas[1];
+  const double monitor_angle = 2.0 * std::numbers::pi *
+      monitor_reference_tone_hz_ / sample_rate_hz;
+  const std::complex<float> monitor_step{
+      static_cast<float>(std::cos(monitor_angle)),
+      static_cast<float>(std::sin(monitor_angle))};
 
   for (auto& track : tracks_) {
+    const bool monitored_track =
+        monitor_mode_ == CwMonitorMode::SelectedTrack &&
+        track.id == monitored_track_id_;
+    if (monitored_track) monitor_audio_.reserve(block.sample_count);
     const double center_hz = block.stream.kind == StreamKind::Audio
         ? track.frequency_hz
         : track.frequency_hz - block.stream.center_frequency_hz;
@@ -975,6 +1013,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         const auto center = filtered(center_mixed, filter_alphas[width],
                                      track.center_filters[width]);
         track.center_power_sums[width] += std::norm(center);
+        if (monitored_track && width == track.selected_width_index) {
+          monitor_audio_.push_back(std::clamp(
+              2.0F * (center * monitor_oscillator_).real(), -1.0F, 1.0F));
+        }
       }
       const auto lower = filtered(sample * track.lower_oscillator,
                                   reference_alpha, track.lower_filter);
@@ -987,6 +1029,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.center_oscillator *= center_step;
       track.lower_oscillator *= lower_step;
       track.upper_oscillator *= upper_step;
+      if (monitored_track) monitor_oscillator_ *= monitor_step;
       if ((index & 1'023U) == 1'023U) {
         const auto normalize = [](std::complex<float>& oscillator) {
           const float magnitude = std::abs(oscillator);
@@ -995,6 +1038,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         normalize(track.center_oscillator);
         normalize(track.lower_oscillator);
         normalize(track.upper_oscillator);
+        if (monitored_track) normalize(monitor_oscillator_);
       }
 
       if (track.accumulated_samples < evidence_samples) continue;
@@ -2107,7 +2151,31 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
   return result;
 }
 
+const std::vector<CwCharacterTrackSnapshot>&
+CwChannelBank::characterRefinementTracks() const noexcept {
+  return character_refinement_tracks_;
+}
+
 void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
+  character_refinement_tracks_.clear();
+  character_refinement_tracks_.reserve(tracks_.size());
+  for (const auto& track : tracks_) {
+    const double match_age_seconds =
+        timestamp_ns > track.last_candidate_match_ns
+            ? static_cast<double>(timestamp_ns - track.last_candidate_match_ns) /
+                  1'000'000'000.0
+            : 0.0;
+    character_refinement_tracks_.push_back({
+        .id = track.id,
+        .frequency_hz = track.frequency_hz,
+        .presentation_frequency_hz = track.presentation_frequency_hz,
+        .snr_db = track.keying_envelope_initialized
+            ? track.keying_mark_snr_db : track.snr_db,
+        .verification_state = track.verification_state,
+        .active = match_age_seconds <= kCandidateMatchHoldSeconds,
+        .operator_selected = track.operator_selected,
+    });
+  }
   for (RetainedObservation& observation : retained_observations_)
     observation.refreshed = false;
 
@@ -2167,6 +2235,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           .provisional_text = {},
           .pending_elements = {},
           .callsign = {},
+          .qso_participants = {},
       });
     }
     if (track.verification_state != CwTrackState::Verified) continue;
@@ -2244,6 +2313,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .provisional_text = track.update.provisional_text,
         .pending_elements = track.update.pending_elements,
         .callsign = callsign,
+        .qso_participants = CallsignPolicy::qso_participants_in_text(
+            track.update.text),
     };
 
     auto retained = std::find_if(
@@ -2289,6 +2360,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       retained->source_track_id = track.id;
       retained->inherited_text_prefix.clear();
       retained->confirmed_callsign.clear();
+      retained->confirmed_qso_participants.clear();
     } else if (replacement) {
       // A replacement tracker at the same retained identity starts with a
       // fresh timing decoder, but the operator's session is continuous.
@@ -2307,6 +2379,11 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       snapshot.callsign = retained->confirmed_callsign;
     } else {
       retained->confirmed_callsign = snapshot.callsign;
+    }
+    if (snapshot.qso_participants.empty()) {
+      snapshot.qso_participants = retained->confirmed_qso_participants;
+    } else {
+      retained->confirmed_qso_participants = snapshot.qso_participants;
     }
     snapshot.text = composePresentationText(
         retained->inherited_text_prefix, snapshot.text);

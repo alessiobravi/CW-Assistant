@@ -29,6 +29,9 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY audioInputsChanged)
   Q_PROPERTY(int audioInputIndex READ audioInputIndex NOTIFY audioInputsChanged)
   Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY audioInputsChanged)
+  Q_PROPERTY(QStringList audioOutputNames READ audioOutputNames NOTIFY audioOutputsChanged)
+  Q_PROPERTY(int audioOutputIndex READ audioOutputIndex NOTIFY audioOutputsChanged)
+  Q_PROPERTY(QString audioOutputDisplayName READ audioOutputDisplayName NOTIFY audioOutputsChanged)
   Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE setAudioDcRejection NOTIFY settingsChanged)
   Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE setAudioAutomaticGain NOTIFY settingsChanged)
   Q_PROPERTY(double audioGainDb READ audioGainDb WRITE setAudioGainDb NOTIFY settingsChanged)
@@ -118,6 +121,10 @@ class AppSettings final : public QObject {
   [[nodiscard]] int audioInputIndex() const noexcept;
   [[nodiscard]] QString audioInputDisplayName() const;
   [[nodiscard]] const QString& audioInputId() const noexcept;
+  [[nodiscard]] const QStringList& audioOutputNames() const noexcept;
+  [[nodiscard]] int audioOutputIndex() const noexcept;
+  [[nodiscard]] QString audioOutputDisplayName() const;
+  [[nodiscard]] const QString& audioOutputId() const noexcept;
   [[nodiscard]] bool audioDcRejection() const noexcept;
   [[nodiscard]] bool audioAutomaticGain() const noexcept;
   [[nodiscard]] double audioGainDb() const noexcept;
@@ -254,6 +261,8 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void refreshSerialPorts();
   Q_INVOKABLE void refreshAudioInputs();
   Q_INVOKABLE void selectAudioInput(int index);
+  Q_INVOKABLE void refreshAudioOutputs();
+  Q_INVOKABLE void selectAudioOutput(int index);
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
@@ -280,6 +289,7 @@ class AppSettings final : public QObject {
   void settingsChanged();
   void serialPortsChanged();
   void audioInputsChanged();
+  void audioOutputsChanged();
   void statusMessageChanged();
   void setupCompleteChanged();
   void profileChanged();
@@ -325,6 +335,10 @@ class AppSettings final : public QObject {
   QStringList audio_input_ids_;
   QString audio_input_id_;
   QString audio_input_name_;
+  QStringList audio_output_names_;
+  QStringList audio_output_ids_;
+  QString audio_output_id_;
+  QString audio_output_name_;
   bool audio_dc_rejection_{true};
   bool audio_automatic_gain_{false};
   double audio_gain_db_{0.0};

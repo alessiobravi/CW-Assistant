@@ -1,6 +1,35 @@
 #include "cwassistant/core/transmit_guard.hpp"
 
+#include <algorithm>
+#include <cctype>
+#include <utility>
+
 namespace cwassistant::core {
+
+std::string TransmitGuard::normalize_message(const std::string_view message) {
+  constexpr std::string_view supported_punctuation = ".,?'/!()&:;=+-\"$@";
+  constexpr std::size_t maximum_message_characters = 512;
+  std::string result;
+  result.reserve(std::min(message.size(), maximum_message_characters));
+  bool pending_space = false;
+  for (const unsigned char raw : message) {
+    if (std::isspace(raw) != 0) {
+      pending_space = !result.empty();
+      continue;
+    }
+    if (raw > 0x7fU) return {};
+    const char character = static_cast<char>(std::toupper(raw));
+    const bool supported = (character >= 'A' && character <= 'Z') ||
+        (character >= '0' && character <= '9') ||
+        supported_punctuation.find(character) != std::string_view::npos;
+    if (!supported) return {};
+    if (pending_space) result.push_back(' ');
+    pending_space = false;
+    result.push_back(character);
+    if (result.size() > maximum_message_characters) return {};
+  }
+  return result;
+}
 
 std::string_view TransmitGuard::state_name() const noexcept {
   switch (state_) {
@@ -9,6 +38,7 @@ std::string_view TransmitGuard::state_name() const noexcept {
     case TransmitState::AwaitingConfirmation: return "awaiting-confirmation";
     case TransmitState::Confirmed: return "confirmed";
     case TransmitState::Transmitting: return "transmitting";
+    case TransmitState::Tuning: return "tuning";
     case TransmitState::Fault: return "fault";
   }
   return "unknown";
@@ -24,6 +54,10 @@ bool TransmitGuard::arm() noexcept {
 
 void TransmitGuard::disarm() noexcept {
   pending_callsign_.clear();
+  pending_message_.clear();
+  message_confirmed_ = false;
+  key_down_ = false;
+  key_down_since_ns_ = 0;
   state_ = TransmitState::Disarmed;
 }
 
@@ -53,16 +87,75 @@ bool TransmitGuard::confirm(const std::string_view callsign) {
   return true;
 }
 
+bool TransmitGuard::stage_message(std::string message) {
+  if (state_ != TransmitState::Confirmed) return false;
+  std::string normalized = normalize_message(message);
+  if (normalized.empty()) return false;
+  pending_message_ = std::move(normalized);
+  message_confirmed_ = false;
+  return true;
+}
+
+bool TransmitGuard::confirm_message(const std::string_view message) {
+  if (state_ != TransmitState::Confirmed || pending_message_.empty())
+    return false;
+  const std::string normalized = normalize_message(message);
+  message_confirmed_ = !normalized.empty() && normalized == pending_message_;
+  return message_confirmed_;
+}
+
 bool TransmitGuard::begin_transmission() {
-  if (state_ != TransmitState::Confirmed) {
+  if (state_ != TransmitState::Confirmed || pending_message_.empty() ||
+      !message_confirmed_) {
     return false;
   }
   if (callsign_policy_.is_ignored(pending_callsign_)) {
     pending_callsign_.clear();
+    pending_message_.clear();
+    message_confirmed_ = false;
     state_ = TransmitState::Armed;
     return false;
   }
+  key_down_ = false;
+  key_down_since_ns_ = 0;
   state_ = TransmitState::Transmitting;
+  return true;
+}
+
+bool TransmitGuard::begin_tune() noexcept {
+  if (state_ != TransmitState::Armed && state_ != TransmitState::Confirmed)
+    return false;
+  tune_return_state_ = state_;
+  key_down_ = false;
+  key_down_since_ns_ = 0;
+  state_ = TransmitState::Tuning;
+  return true;
+}
+
+bool TransmitGuard::observe_key_state(
+    const bool key_down, const std::uint64_t timestamp_ns) noexcept {
+  if (state_ != TransmitState::Transmitting &&
+      state_ != TransmitState::Tuning) {
+    if (key_down) trip_fault();
+    return !key_down;
+  }
+  if (!key_down) {
+    key_down_ = false;
+    key_down_since_ns_ = 0;
+    return true;
+  }
+  if (!key_down_) {
+    key_down_ = true;
+    key_down_since_ns_ = timestamp_ns;
+    return true;
+  }
+  const std::uint64_t deadline = state_ == TransmitState::Tuning
+      ? kMaximumTuneKeyDownNs : kMaximumContinuousKeyDownNs;
+  if (timestamp_ns < key_down_since_ns_ ||
+      timestamp_ns - key_down_since_ns_ > deadline) {
+    trip_fault();
+    return false;
+  }
   return true;
 }
 
@@ -70,13 +163,41 @@ bool TransmitGuard::finish_transmission() noexcept {
   if (state_ != TransmitState::Transmitting) {
     return false;
   }
+  key_down_ = false;
+  key_down_since_ns_ = 0;
+  pending_message_.clear();
+  message_confirmed_ = false;
+  // Exact callsign confirmation remains valid for this QSO only. A later
+  // message still needs its own exact preview confirmation.
+  state_ = TransmitState::Confirmed;
+  return true;
+}
+
+bool TransmitGuard::finish_tune() noexcept {
+  if (state_ != TransmitState::Tuning) return false;
+  key_down_ = false;
+  key_down_since_ns_ = 0;
+  state_ = tune_return_state_;
+  return true;
+}
+
+bool TransmitGuard::end_qso() noexcept {
+  if (state_ != TransmitState::Confirmed) return false;
   pending_callsign_.clear();
+  pending_message_.clear();
+  message_confirmed_ = false;
   state_ = TransmitState::Armed;
   return true;
 }
 
+void TransmitGuard::emergency_release() noexcept { trip_fault(); }
+
 void TransmitGuard::trip_fault() noexcept {
   pending_callsign_.clear();
+  pending_message_.clear();
+  message_confirmed_ = false;
+  key_down_ = false;
+  key_down_since_ns_ = 0;
   state_ = TransmitState::Fault;
 }
 

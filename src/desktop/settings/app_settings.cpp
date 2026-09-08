@@ -171,7 +171,10 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   media_devices_ = std::make_unique<QMediaDevices>();
   connect(media_devices_.get(), &QMediaDevices::audioInputsChanged, this,
           &AppSettings::refreshAudioInputs);
+  connect(media_devices_.get(), &QMediaDevices::audioOutputsChanged, this,
+          &AppSettings::refreshAudioOutputs);
   refreshAudioInputs();
+  refreshAudioOutputs();
   cat4om_client_ = std::make_unique<Cat4OmClient>(this);
   connect(cat4om_client_.get(), &Cat4OmClient::statusChanged, this, [this] {
     setStatusMessage(cat4om_client_->statusText());
@@ -244,6 +247,22 @@ QString AppSettings::audioInputDisplayName() const {
 
 const QString& AppSettings::audioInputId() const noexcept {
   return audio_input_id_;
+}
+const QStringList& AppSettings::audioOutputNames() const noexcept {
+  return audio_output_names_;
+}
+int AppSettings::audioOutputIndex() const noexcept {
+  return static_cast<int>(std::max<qsizetype>(
+      0, audio_output_ids_.indexOf(audio_output_id_)));
+}
+QString AppSettings::audioOutputDisplayName() const {
+  const int index = audioOutputIndex();
+  return index > 0 && index < audio_output_names_.size()
+      ? audio_output_names_.at(index)
+      : QStringLiteral("System default output");
+}
+const QString& AppSettings::audioOutputId() const noexcept {
+  return audio_output_id_;
 }
 bool AppSettings::audioDcRejection() const noexcept {
   return audio_dc_rejection_;
@@ -983,6 +1002,52 @@ void AppSettings::selectAudioInput(const int index) {
   emit settingsChanged();
 }
 
+void AppSettings::refreshAudioOutputs() {
+  QStringList names{QStringLiteral("System default output (recommended)")};
+  QStringList ids{QString{}};
+  for (const auto& device : QMediaDevices::audioOutputs()) {
+    const QString id = QString::fromLatin1(
+        device.id().toBase64(QByteArray::Base64UrlEncoding |
+                             QByteArray::OmitTrailingEquals));
+    if (id.isEmpty() || ids.contains(id)) continue;
+    QString name = device.description().trimmed();
+    if (name.isEmpty()) name = QStringLiteral("Audio output %1").arg(ids.size());
+    if (device.isDefault()) name += QStringLiteral(" (current default)");
+    names.push_back(name);
+    ids.push_back(id);
+  }
+  if (!audio_output_id_.isEmpty() && !ids.contains(audio_output_id_)) {
+    const QString unavailable_name = audio_output_name_.isEmpty()
+        ? QStringLiteral("Previously selected output") : audio_output_name_;
+    names.push_back(unavailable_name + QStringLiteral(" (unavailable)"));
+    ids.push_back(audio_output_id_);
+  }
+  const int selected_index = ids.indexOf(audio_output_id_);
+  if (selected_index > 0) {
+    audio_output_name_ = names.at(selected_index);
+    if (audio_output_name_.endsWith(QStringLiteral(" (unavailable)")))
+      audio_output_name_.chop(QStringLiteral(" (unavailable)").size());
+  }
+  if (names != audio_output_names_ || ids != audio_output_ids_) {
+    audio_output_names_ = std::move(names);
+    audio_output_ids_ = std::move(ids);
+    emit audioOutputsChanged();
+  }
+}
+
+void AppSettings::selectAudioOutput(const int index) {
+  if (index < 0 || index >= audio_output_ids_.size()) return;
+  audio_output_id_ = audio_output_ids_.at(index);
+  audio_output_name_ = index == 0 ? QStringLiteral("System default output")
+                                  : audio_output_names_.at(index);
+  if (audio_output_name_.endsWith(QStringLiteral(" (unavailable)")))
+    audio_output_name_.chop(QStringLiteral(" (unavailable)").size());
+  setStatusMessage(QStringLiteral(
+      "Monitor output selected. Monitoring remains off until the operator enables it."));
+  emit audioOutputsChanged();
+  emit settingsChanged();
+}
+
 void AppSettings::refreshDetectedRadios() {
   QStringList names;
   QList<int> detected_slots;
@@ -1105,6 +1170,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
   settings.setValue(storageKey(QStringLiteral("audio/inputId")), audio_input_id_);
   settings.setValue(storageKey(QStringLiteral("audio/inputName")), audio_input_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/outputId")), audio_output_id_);
+  settings.setValue(storageKey(QStringLiteral("audio/outputName")), audio_output_name_);
   settings.setValue(storageKey(QStringLiteral("audio/dcRejection")), audio_dc_rejection_);
   settings.setValue(storageKey(QStringLiteral("audio/automaticGain")), audio_automatic_gain_);
   settings.setValue(storageKey(QStringLiteral("audio/gainDb")), audio_gain_db_);
@@ -1199,6 +1266,12 @@ void AppSettings::load() {
                           .value(storageKey(QStringLiteral("audio/inputName")),
                                  QStringLiteral("System default input"))
                           .toString();
+  audio_output_id_ =
+      settings.value(storageKey(QStringLiteral("audio/outputId"))).toString();
+  audio_output_name_ = settings
+                           .value(storageKey(QStringLiteral("audio/outputName")),
+                                  QStringLiteral("System default output"))
+                           .toString();
   audio_dc_rejection_ =
       settings.value(storageKey(QStringLiteral("audio/dcRejection")), true).toBool();
   audio_automatic_gain_ =

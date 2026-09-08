@@ -51,6 +51,12 @@ QAudioFormat capture_format(const QAudioDevice& device) {
   return device.preferredFormat();
 }
 
+QByteArray monitor_bytes(const std::vector<float>& samples) {
+  if (samples.empty()) return {};
+  return QByteArray(reinterpret_cast<const char*>(samples.data()),
+                    static_cast<qsizetype>(samples.size() * sizeof(float)));
+}
+
 }  // namespace
 
 LiveAudioCaptureWorker::LiveAudioCaptureWorker(
@@ -531,6 +537,17 @@ void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
   character_frontends_.setEnabled(enabled);
 }
 
+void LiveAudioDspWorker::setMonitor(const int mode,
+                                    const qulonglong channel_id,
+                                    const double reference_tone_hz) {
+  const auto selected_mode = mode == 1
+      ? cwassistant::core::CwMonitorMode::FullReceiver
+      : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
+                  : cwassistant::core::CwMonitorMode::Off;
+  decoder_.setMonitor(selected_mode, static_cast<std::uint64_t>(channel_id),
+                      reference_tone_hz);
+}
+
 void LiveAudioDspWorker::acceptCharacterRefinement(
     const qulonglong channel_id, const QString& stable_text,
     const qulonglong evidence_timestamp_ns) {
@@ -566,10 +583,14 @@ void LiveAudioDspWorker::drain() {
       // signals are discovered or how quickly they qualify.
       static_cast<void>(decoder_.updateSpectrum(
           snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
+          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
+          false));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
-    const auto character_tracks = decoder_.allTrackDiagnostics();
+    const QByteArray monitor_audio = monitor_bytes(decoder_.monitorAudio());
+    if (!monitor_audio.isEmpty())
+      emit monitorAudioProduced(monitor_audio, block.stream.sample_rate_hz);
+    const auto& character_tracks = decoder_.characterRefinementTracks();
     for (auto& window : character_frontends_.process(block, character_tracks))
       emit characterWindowProduced(0, std::move(window));
     for (auto& snapshot : snapshots) {

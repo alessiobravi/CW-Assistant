@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QByteArray>
 #include <QList>
 #include <QString>
 #include <QThread>
@@ -17,6 +18,9 @@
 #include "../visualization/spectrum_frame.hpp"
 #include "cwassistant/core/cw_character_decoder.hpp"
 #include "cwassistant/core/offline_callsign_database.hpp"
+
+class QAudioSink;
+class QIODevice;
 
 namespace cwassistant::desktop {
 
@@ -118,6 +122,13 @@ class ReplayController final : public QObject {
                  NOTIFY radioFrequencyChanged)
   Q_PROPERTY(bool radioSplitActive READ radioSplitActive
                  NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(int monitorMode READ monitorMode WRITE setMonitorMode
+                 NOTIFY monitorChanged)
+  Q_PROPERTY(qulonglong monitoredChannelId READ monitoredChannelId
+                 NOTIFY monitorChanged)
+  Q_PROPERTY(QString monitorStatus READ monitorStatus NOTIFY monitorChanged)
+  Q_PROPERTY(double monitorLevel READ monitorLevel WRITE setMonitorLevel
+                 NOTIFY monitorChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -154,6 +165,10 @@ class ReplayController final : public QObject {
   [[nodiscard]] qulonglong radioRxFrequencyHz() const noexcept;
   [[nodiscard]] qulonglong radioTxFrequencyHz() const noexcept;
   [[nodiscard]] bool radioSplitActive() const noexcept;
+  [[nodiscard]] int monitorMode() const noexcept;
+  [[nodiscard]] qulonglong monitoredChannelId() const noexcept;
+  [[nodiscard]] const QString& monitorStatus() const noexcept;
+  [[nodiscard]] double monitorLevel() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -177,6 +192,9 @@ class ReplayController final : public QObject {
                                 qulonglong tx_rf_hz, bool split_active,
                                 int sideband_index,
                                 double reference_tone_hz);
+  Q_INVOKABLE void setMonitorMode(int mode);
+  Q_INVOKABLE void setMonitorLevel(double level);
+  void setMonitorOutputSelection(QString encoded_device_id);
 
   Q_INVOKABLE void openFile(const QUrl& url);
   Q_INVOKABLE void play();
@@ -206,6 +224,7 @@ class ReplayController final : public QObject {
   void frameReady(const cwassistant::desktop::SpectrumFrame& frame);
   void averagingFramesChanged();
   void decoderChanged();
+  void monitorChanged();
 
   void openRequested(const QString& path);
   void playRequested();
@@ -255,6 +274,10 @@ class ReplayController final : public QObject {
                                                const QString& metadata_path);
   void replayCharacterFrontendEnabledRequested(bool enabled);
   void liveCharacterFrontendEnabledRequested(bool enabled);
+  void monitorConfigureRequested(int mode, qulonglong channel_id,
+                                 double reference_tone_hz);
+  void liveMonitorConfigureRequested(int mode, qulonglong channel_id,
+                                     double reference_tone_hz);
   void replayCharacterRefinementRequested(qulonglong channel_id,
                                           const QString& stable_text,
                                           qulonglong evidence_timestamp_ns);
@@ -271,6 +294,10 @@ class ReplayController final : public QObject {
   void rebuildDecoderModels();
   void publishLivePresentationDiagnostics(bool force);
   void resetDecoder();
+  void publishMonitorConfiguration();
+  void writeMonitorAudio(const QByteArray& float_mono_audio,
+                         double sample_rate_hz);
+  void stopMonitorOutput();
 
   QThread worker_thread_;
   QObject* worker_{nullptr};
@@ -330,6 +357,14 @@ class ReplayController final : public QObject {
   bool radio_split_active_{false};
   int cw_sideband_index_{0};
   double cw_reference_tone_hz_{700.0};
+  int monitor_mode_{0};
+  qulonglong monitored_channel_id_{0};
+  double monitor_level_{0.65};
+  QString monitor_output_device_id_;
+  QString monitor_status_{QStringLiteral("Monitor off")};
+  std::unique_ptr<QAudioSink> monitor_audio_sink_;
+  QIODevice* monitor_audio_device_{nullptr};
+  int monitor_audio_sample_rate_{0};
 };
 
 }  // namespace cwassistant::desktop

@@ -67,6 +67,16 @@ Pane {
                     }
                     Label { text: "Selected input" }
                     Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: appSettings.audioInputDisplayName; color: "#43c6ac" }
+                    Label { text: "Monitor output" }
+                    ComboBox {
+                        objectName: "audioMonitorOutputCombo"
+                        Layout.fillWidth: true
+                        model: appSettings.audioOutputNames
+                        currentIndex: appSettings.audioOutputIndex
+                        onActivated: appSettings.selectAudioOutput(currentIndex)
+                    }
+                    Label { text: "Selected output" }
+                    Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: appSettings.audioOutputDisplayName; color: "#43c6ac" }
                     Label { text: "Radio audio association" }
                     CheckBox {
                         text: "This input carries RX audio from the configured radio"
@@ -75,7 +85,13 @@ Pane {
                         onToggled: appSettings.audioInputRadioLinked = checked
                     }
                     Label { text: "" }
-                    Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
+                    Button {
+                        text: "Refresh audio devices"
+                        onClicked: {
+                            appSettings.refreshAudioInputs()
+                            appSettings.refreshAudioOutputs()
+                        }
+                    }
                     Label { text: "DC rejection" }
                     CheckBox {
                         objectName: "audioDcRejectionCheck"

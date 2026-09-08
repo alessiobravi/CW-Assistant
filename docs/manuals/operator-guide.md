@@ -55,6 +55,12 @@ the speed, the signal-to-noise ratio and the confidence are shown. The status
 line reports the audio device and sample rate, the linked radio's frequency
 where one is connected, and whether a debug capture is running.
 
+Two operators in an ordinary simplex QSO normally alternate on the same
+carrier. When the stable text contains a complete `CALL1 DE CALL2` handover,
+the one decoder card is labelled **QSO CALL1 ↔ CALL2** and retains both
+participants. CW Buddy does not create a second frequency marker or claim
+which person is currently sending from frequency alone.
+
 ## Receive live radio audio
 
 1. Open **Settings → Audio**, select the sound-card input connected to the
@@ -67,6 +73,15 @@ where one is connected, and whether a debug capture is running.
 4. Confirm the status line names the device and sample rate. Spectrum and
    waterfall frames now come from that device.
 5. Select **Stop live RX** before changing cables or audio routing.
+
+To listen through CW Buddy, choose a **Monitor output** under **Settings →
+Audio**, then use the receiver toolbar's **OFF / RX / SIGNAL** controls. **RX**
+passes the complete receiver window. **SIGNAL** stays silent until you click a
+detected marker, then uses that exact track's carrier-following decoder filter
+and moves its pitch to the configured CW reference tone. The adjacent slider
+sets local playback level. Monitoring does not change decoder evidence. Output
+is intentionally bounded; if the sound device cannot keep up, old audio is
+dropped instead of accumulating delay.
 
 Capture requests 48 kHz mono floating-point audio when supported. Otherwise it
 uses the input's preferred PCM format, safely averages channels to mono, and
@@ -208,6 +223,37 @@ verification.
 
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
+
+## Guarded TX preparation
+
+Open **QSO** to use the first transmit-workflow preview. Configure your own
+callsign, select **Arm TX**, then choose **TX** on a decoder card whose callsign
+was decoded exactly. Retype that station before preparing **Send my call**, the
+default `599` report, or operator-authored free text. CW Buddy normalizes the
+message to uppercase Morse-compatible text and shows its duration at the
+selected 5–80 WPM; retype that exact preview as a separate confirmation.
+
+**Auto-QSO suggestions** only prepares an operator-visible suggestion when the
+selected stream contains a listening cue such as `CQ`, `QRZ`, or `UP`, or when
+your exact callsign is decoded. A callsign within two edits of yours must appear
+twice in the raw acoustic transcript before it can propose repeating your call.
+It never arms, confirms, retunes, or keys.
+
+When the selected card has checked live-radio RF context, **Anchor runner at
+700 Hz** (or the profile's configured CW reference) explicitly retunes RX so
+that station lands on the guide. TX frequency, split, and mode are not changed.
+For normal `UP` operation, callers then appear at higher audio frequencies to
+the runner's right. The control is unavailable for WAV/AF-only streams or a
+read-only/unlinked provider. It is not yet a quiet-slot TX selector.
+**EMERGENCY RELEASE** clears pending transmission state and latches a fault;
+resetting that fault leaves TX disarmed.
+
+**TUNE** is specified as an armed, operator-only KEY/tone toggle: press once to
+start, press again to release, with a non-extendable 15-second watchdog. The
+current build deliberately disables actual messages and TUNE at the hardware
+boundary because the cross-platform serial KEY/PTT adapter has not completed
+loopback acceptance. The controls therefore prepare and test the safe workflow
+without asserting a radio line.
 New characters are appended to the existing text rather than replacing it, so
 the view stays where it is instead of shifting as each one arrives, and when
 the transcript is following the tail it stays pinned to the bottom in the same
@@ -215,7 +261,10 @@ frame the text grows. The transcript remains plain text so incoming characters
 cannot cause styled text or scrollbar-driven line reflow. Short content fills the complete
 transcript viewport instead of leaving a differently sized inner box; longer
 content grows vertically inside the same scroller. A confirmed remote callsign
-is bold and shown in the card header using the stream color. If
+is bold and shown in the card header using the stream color. A completed
+two-callsign handover shows both participants in that header. The guarded TX
+button includes the exact callsign it will select, so a two-party card never
+hides the target behind an ambiguous generic **TX** label. If
 stable text contains an exact match for **Settings → Station → Own station
 callsign**, the card displays **YOUR CALL HEARD** and its border flashes five
 times. This notification is visual and receive-only;

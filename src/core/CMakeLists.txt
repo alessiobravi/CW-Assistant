@@ -11,6 +11,7 @@ add_library(cwa_core
   src/cw_event_lattice.cpp
   src/cw_probabilistic_decoder.cpp
   src/cw_semi_markov_segmenter.cpp
+  src/cw_transmit_encoder.cpp
   src/conversation_profile.cpp
   src/frequency_plan.cpp
   src/offline_callsign_database.cpp

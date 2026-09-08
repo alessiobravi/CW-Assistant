@@ -465,6 +465,14 @@ to match an electrically verified interface. Port enumeration is passive.
 The direct keying adapter and line test are not implemented yet, so no profile
 can transmit through this path in the current build.
 
+The **QSO** drawer is a hardware-inert preview of the guarded workflow. It
+requires explicit arming, an exactly decoded and retyped target callsign, and a
+second exact confirmation of the normalized outgoing message. Own-call,
+`599`-report, and free-text actions all use the same boundary. **Auto-QSO** can
+propose one of those messages from decoded context but cannot confirm or send
+it. **TUNE** is reserved for an operator-only toggle with a hard 15-second KEY
+watchdog; it remains blocked until a tested adapter is available.
+
 ## Display page
 
 - **Spectrum view:** profile-persisted **Audio spectrum** (smoothed) or **CW

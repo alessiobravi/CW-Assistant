@@ -95,7 +95,8 @@ creates **Start → All → CW Buddy → CW Buddy** as a dedicated program
 group plus a **CW Buddy** desktop shortcut, registers the application in
 **Settings → Apps → Installed apps**, and provides normal uninstall/repair
 behavior. The executable, shortcuts, and installed-app entry use the CW
-Morse-key application icon.
+Morse-key application icon. Its rounded corners use native transparency, so the
+surrounding desktop or launcher color remains visible.
 
 Every hosted package has a monotonically increasing numeric package revision
 and a stable Windows Installer upgrade identity. Running a newer MSI performs a
