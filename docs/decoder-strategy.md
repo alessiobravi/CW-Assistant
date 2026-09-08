@@ -51,6 +51,104 @@ A tracked signal is state, not a dedicated operating-system thread. One FFT is
 shared by all candidates and bounded worker-pool jobs process active tracks.
 Inactive or low-value tracks do not invoke the optional learned path.
 
+## Selectable keying models
+
+Deciding where the key goes down and comes back up is one stage, and there is
+more than one reasonable technique for it. That stage is therefore a selection
+rather than a fixed part of the decoder. Everything after it -- element
+assembly, the event lattice, the verification gate, callsign policy -- consumes
+only the same run description, so a technique is an implementation of one
+interface and an entry in one enumeration.
+
+```mermaid
+flowchart TB
+  LLR["per-frame keying log-likelihood<br/>(from the two-level envelope model)"]
+  LLR --> SEL{"keying model<br/>Settings, Decoder page"}
+  SEL -->|"Adaptive threshold (default)"| THR["per-frame hysteresis,<br/>then element ratios"]
+  SEL -->|"Semi-Markov (HSMM)"| SMK["explicit duration model over<br/>dot, dash, element/character/word gap"]
+  SEL -.->|"future"| ML["learned model<br/>(operator-supplied)"]
+  THR --> RUNS["runs: kind, length, evidence"]
+  SMK --> RUNS
+  ML -.-> RUNS
+  RUNS --> REST["element assembly, event lattice,<br/>verification, callsign policy"]
+```
+
+One per-frame keying log-likelihood, produced by the two-level envelope model,
+feeds whichever keying model the operator has selected in Settings. The adaptive
+threshold decides each frame with hysteresis and classifies elements afterwards
+by duration ratio; the semi-Markov model scores whole runs against explicit
+duration distributions. A future learned model plugs in at the same point. All
+of them emit the same run description -- kind, length and evidence -- which is
+what element assembly, the event lattice, verification and callsign policy
+consume, so nothing downstream knows or cares which technique produced it.
+
+### Adaptive threshold (default)
+
+Hysteresis on the smoothed keying probability decides key-up and key-down one
+frame at a time; a completed run is classified afterwards by comparing its
+length against the tracked element length. It is cheap, it emits text with the
+least delay, and it degrades gracefully when the sender's timing wanders,
+because no single run has to fit a model for the rest to survive.
+
+### Semi-Markov (HSMM)
+
+Dot, dash, and the element, character and word gaps each get an explicit
+log-normal length distribution centred on their true multiple of the element
+length. A transition *is* a whole segment, scored as the evidence accumulated
+across it plus the log density of its duration under that class; accumulated
+evidence comes from a running prefix sum, so a segment of any length costs one
+subtraction. Because every competing segmentation covers the same frames, their
+scores compare directly.
+
+This is what a two-state hidden Markov model cannot express. Giving key-down its
+own state and letting it self-loop makes its length geometric -- mode at zero,
+no characteristic scale -- so such a model can only be more or less reluctant to
+switch, never encode "a mark lasts about one element, or about three".
+
+Two properties are worth knowing before extending it. Morse timing is
+self-similar at a factor of three: read three times too fast, every dash becomes
+a dot and every character gap becomes an element gap, producing legal Morse of
+entirely known symbols that fits its own duration model perfectly. Speed
+hypotheses are therefore also scored on how much it costs them to describe the
+signal, because a hypothesis three times too fast must break solid marks apart
+to make the interval tile at all. Second, silence between transmissions is
+unbounded, so word gaps may follow one another; without that, silence longer
+than the widest single gap has no legal parse and the search invents marks
+inside it to make the interval tile.
+
+### Choosing between them
+
+Neither is better everywhere, which is why both ship. Measured on the keying
+style bench at 20 WPM and 20 dB:
+
+| keying style | adaptive threshold | semi-Markov |
+|---|---|---|
+| machine | **0.117** | 0.242 |
+| heavy weighting 1.15 | 0.133 | **0.058** |
+| light weighting 0.85 | 0.133 | **0.108** |
+| Farnsworth gap 5 | 0.100 | **0.075** |
+| jitter 10% | **0.075** | 0.283 |
+| jitter 20% | **0.267** | 0.458 |
+| bug-like 0.8 weight + 15% jitter | **0.092** | 0.167 |
+
+Lower is better; the figures are mean character error. The duration model wins
+where the sender is systematically off the textbook ratios, which is what
+weighted keying and Farnsworth spacing are, and loses where their timing
+wanders. Hand and bug sending produce exactly that wander, so the adaptive
+threshold remains the default. Across the synthetic accuracy surface the two are
+level (0.2884 against 0.2946, against a spread of 0.03) and equal on receiver
+captures, so the choice is about the sender, not about general accuracy.
+
+### Adding another technique
+
+Implement `CwKeyingSegmenter` (`cw_keying_segmenter.hpp`), add an entry to
+`CwKeyingModel`, and add the option to Settings. The interface is deliberately
+narrow: frames of calibrated log-likelihood in, committed runs out, plus a score
+used to compare speed hypotheses and a state-size report. Note that
+`cwEvidenceBoundNats` selects how much per-frame likelihood a model is given --
+a per-frame threshold gains nothing past about three nats and is destabilised by
+more, while a model integrating across a run gains a great deal.
+
 ## First pass: fast causal decode
 
 The always-on path mixes each tracked tone to baseband and decimates it to a
@@ -233,6 +331,41 @@ hypotheses/unknown intervals. Phase-coherent antennas or receivers can add
 spatial evidence, and non-coherent receiver diversity can add independent
 fading evidence, but both require measured alignment and a safe single-source
 fallback.
+
+### Operator role
+
+Exchange context alone cannot always say which station a call belongs to. `TU`
+precedes a runner identifying itself (`TU IU0LFQ`) and equally the station it
+has just worked (`TU DL1NKB`), and both score the same, so a run can be labelled
+with the station that was worked rather than the one being listened to.
+
+What settles it is knowing what the operator is doing, which is configured under
+Settings -> Station:
+
+```mermaid
+flowchart LR
+  R{"operating role"}
+  R -->|"Monitoring (default)"| M["no assumption:<br/>exchange context alone ranks candidates"]
+  R -->|"Search and pounce"| SP["the monitored stream is a runner:<br/>an unambiguous runner context<br/>outranks the ambiguous TU"]
+  R -->|"Running"| RU["the monitored stream is answering you:<br/>a repeated bare call outranks<br/>one introduced by someone else's CQ"]
+  M --> OWN["in every role, the operator's own call<br/>is removed from candidate scoring"]
+  SP --> OWN
+  RU --> OWN
+```
+
+Monitoring makes no assumption and ranks candidates on exchange context alone,
+as the decoder always has. Searching and pouncing, the stream being listened to
+is a runner, so a call introduced as the sender's own outranks one merely
+mentioned after `TU`. Running, the stream is somebody answering, so a call sent
+bare and repeated outranks one introduced by a `CQ` that belongs to another
+transmission. In all three the operator's own callsign is removed from candidate
+scoring rather than blanked after the fact, so a transmission that mentions the
+operator is still labelled with the station actually being heard.
+
+Measured on exactly that ambiguity, `5NN TU DL1NKB OK5OO UP K` labels DL1NKB --
+the station just worked -- with no role, and OK5OO, the split runner, when
+hunting. Role knowledge changes only which candidate is ranked highest; it never
+creates, rewrites, or corrects decoded characters.
 
 ### Exchange-role inference
 

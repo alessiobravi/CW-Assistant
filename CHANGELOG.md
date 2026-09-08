@@ -282,7 +282,7 @@ All notable changes to CW Assistant are recorded here. The format follows
   was never sent. It stays advisory in either case and cannot rewrite the
   transcript, become the confirmed callsign on its own, or affect verification,
   and it never substitutes where more than one entry is equally close.
-- Every diagram in the documentation is now rendered rather than drawn in ASCII (DOC-003).
+- Every diagram in the documentation is now rendered rather than drawn in ASCII (DOC-002).
   The layer stack, realtime data flow and transmit-safety states in the
   architecture document, the decoder pipeline in the decoder strategy, and the
   renderer node tree in the first design decision are Mermaid: the source stays

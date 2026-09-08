@@ -236,6 +236,40 @@ not universal RF accuracy claims; real recording coverage remains backlog work.
 
 ## Decoder page
 
+### Keying model
+
+**Keying model** chooses how the decoder decides where the key goes down and
+comes back up. Everything after that decision is shared, so the choice affects
+only that one stage.
+
+| | when to use it |
+|---|---|
+| **Adaptive threshold** (default) | Hand and bug sending, and anything where the sender's timing wanders. Decides key-up and key-down from the envelope moment by moment, and shows text soonest. |
+| **Semi-Markov (HSMM)** | Machine-sent, heavily weighted, or Farnsworth-spaced sending. Weighs each mark and gap against the lengths Morse expects, at the cost of about one character of delay. |
+
+Neither is better in general, which is why both are offered. Measured at 20 WPM
+and 20 dB, the duration model roughly halves character error on heavy weighting
+(0.058 against 0.133) and improves Farnsworth spacing (0.075 against 0.100),
+while the threshold is three to four times better under 10% timing jitter
+(0.075 against 0.283). Across the general accuracy surface and on receiver
+recordings the two are level, so pick on the sender rather than expecting one to
+be better everywhere.
+
+Changing the model restarts the decoders but keeps every track, so a station can
+be compared under both while it is still sending. The setting is stored by name,
+so it survives future additions to the list.
+
+### Debug capture
+
+The **Debug capture** control also appears here, not only in the decoder panel
+header, together with a button that opens the capture folder in the file
+manager and a **Stop automatically after** value between 30 and 1800 seconds
+(default 300). Increase it for a signal that only misbehaves occasionally;
+reduce it for a quick reproduction, so there is less to review before sharing.
+See the operator guide's Debug capture section for what is recorded.
+
+### Local character model
+
 Native builds that include the optional local-model backend expose **Settings
 → Decoder**. Enable **Local character refinement**, then select both a local
 `.onnx` model and its matching JSON metadata file. The application never
@@ -330,6 +364,26 @@ provisional elements do not alert. Audio and remote notifications remain future
 optional additions. The future optional closing
 macro remains subject to explicit configuration, arming, QSO-context checks,
 and cancellation before transmission.
+
+### Operating role
+
+**Operating role** tells the decoder whose callsign a monitored stream is
+expected to carry. Exchange context alone cannot always say: `TU` precedes a
+runner identifying itself and equally the station it has just worked.
+
+| role | meaning |
+|---|---|
+| **Monitoring** (default) | No assumption. Exchange context alone ranks callsign candidates. |
+| **Search and pounce** | You are hunting stations that are calling, so the stream you are listening to is a runner and its own call is the label. |
+| **Running** | You are calling and others answer, so the stream is somebody answering you. |
+
+In every role your own callsign is removed from callsign candidates for other
+stations' streams, so a transmission that mentions you is still labelled with
+the station actually being heard. Your call being heard is a separate thing, and
+still raises the **YOUR CALL HEARD** notification described above.
+
+The role only changes which candidate is ranked highest. It never creates,
+rewrites, or corrects decoded characters.
 
 ## Radio page
 

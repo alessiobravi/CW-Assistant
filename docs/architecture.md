@@ -78,6 +78,14 @@ their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
 tone/envelope estimation, adaptive dit timing, symbol decoding, and language
 confidence scoring. This avoids repeating a wide FFT for every signal.
 
+Within that pipeline, deciding where the key goes down and comes back up is a
+replaceable stage rather than a fixed one. Implementations satisfy a single
+interface and emit the same run description, so element assembly, the event
+lattice, verification and callsign policy are unaffected by which is selected.
+Two ship today and the operator chooses between them; see
+`docs/decoder-strategy.md` for the techniques, their measured trade-offs, and
+how to add another.
+
 The decoder uses an explainable semi-Markov timing path and now has an
 experimental optional boundary for compact causal learned key/CW likelihoods.
 The learned component does not emit text: the same dependency-free timing

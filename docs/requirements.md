@@ -47,6 +47,12 @@ decoding hints rather than sharing one assumed contest sequence.
 - Preserve soft tone/envelope/timing evidence and combine an explainable
   adaptive timing decoder with an optional compact causal learned likelihood
   model; decoding must continue when that model is unavailable.
+- Keep the technique that decides keying replaceable and operator-selectable.
+  Every technique must emit the same run description so that element assembly,
+  verification, and callsign policy are independent of the choice; an
+  explainable deterministic technique must remain available and selected by
+  default, and selecting a technique must never be required for decoding to
+  work.
 - Run a low-latency causal pass plus bounded delayed refinement passes over a
   rolling narrowband buffer. Later passes may revise only visibly provisional
   text and must never block capture.

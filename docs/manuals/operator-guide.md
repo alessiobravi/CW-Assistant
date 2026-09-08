@@ -11,9 +11,11 @@ live sound-card input, and replay a WAV recording through the real spectrum and
 waterfall, and run a receive-only decoder across the complete processed
 passband. Each tracked frequency now obtains keying evidence from a narrowband
 filter over the original audio rather than the display spectrum. Bounded
-multi-speed acquisition is active; weak-signal refinement, direct keying
-output, logging connection, SDR capture, and remote-station runtime remain
-under implementation.
+multi-speed acquisition is active, and the technique that decides keying is
+selectable between two: an adaptive threshold, which suits hand and bug
+sending, and a duration model that suits machine-sent, weighted and Farnsworth
+keying. Weak-signal refinement, direct keying output, logging connection, SDR
+capture, and remote-station runtime remain under implementation.
 A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
@@ -408,11 +410,68 @@ list, or cluster spot must preserve the same separation and provenance.
 the list only changes the badge to **DB** when it independently contains the
 same acoustic winner.
 
+## Choose the keying model for the sender
+
+**Settings → Decoder → Keying model** selects how the decoder decides where the
+key goes down and comes back up. Two are available, and neither is better in
+general — they suit different senders.
+
+```mermaid
+flowchart TB
+  Q{"How is the station sending?"}
+  Q -->|"By hand, or with a bug"| T["Adaptive threshold<br/>(the default)"]
+  Q -->|"Timing sounds uneven"| T
+  Q -->|"Keyer or computer"| S["Semi-Markov (HSMM)"]
+  Q -->|"Heavy or light weighting"| S
+  Q -->|"Wide Farnsworth spacing"| S
+  T --> N["Follows the envelope moment by moment.<br/>Shows text soonest."]
+  S --> M["Weighs each mark and gap against the<br/>lengths Morse expects. About one<br/>character more delay."]
+```
+
+Choose by how the station sounds. Hand and bug sending has timing that wanders,
+and the adaptive threshold copes with that far better — roughly three to four
+times fewer character errors on a signal with ten per cent timing jitter. A
+keyer or computer sends to a machine's timing, and a station using heavy or
+light weighting, or wide Farnsworth spacing, is systematically off the textbook
+ratios rather than random; the semi-Markov model handles that better, roughly
+halving character errors on heavy weighting.
+
+If you are not sure, leave it on the default. On general accuracy across speeds
+and signal levels the two measure the same, so the choice is only worth making
+when you can hear what kind of sending it is.
+
+You can switch while a station is still sending. The decoder restarts but the
+stream, its colour and its history are kept, so you can hear the same station
+under both and keep whichever reads better.
+
+## Tell the decoder what you are doing
+
+**Settings → Station → Operating role** tells the decoder whose callsign a
+stream is expected to carry. It matters because the text alone is sometimes
+genuinely ambiguous: `TU` comes before a runner identifying itself, and equally
+before the station it has just worked.
+
+- **Monitoring** — the default. No assumption is made; the exchange text alone
+  decides.
+- **Search and pounce** — you are hunting stations that are calling. The station
+  you are listening to is a runner, so its own call is the one shown.
+- **Running** — you are calling and others answer, so the stream is somebody
+  answering you.
+
+In every role your own callsign is never used to label another station's
+stream, so a station calling you is still labelled with *its* call rather than
+losing its label. Your call being heard is separate and still raises the
+**YOUR CALL HEARD** notification.
+
+The role only changes which candidate is chosen as the label. It never changes,
+corrects, or invents the decoded text itself.
+
 ## Debug capture
 
 When a visible signal will not decode and the on-demand **Diagnostics**
-readout is not enough to explain why, use **Debug capture** in the decoder
-panel header. It is only available while live RX is running. Selecting it
+readout is not enough to explain why, use **Debug capture**, in the decoder
+panel header or under **Settings → Decoder**. It is only available while live
+RX is running. Selecting it
 starts a bounded recording:
 
 - The exact raw audio feeding the decoder, written to `audio.wav`.
@@ -432,9 +491,13 @@ starts a bounded recording:
 
 Both files are written to a timestamped folder under the application's
 standard per-user data location; the panel shows the exact path while
-recording and after it stops. Capture is capped at five minutes and always
-requires an explicit click to start; it is never silent or automatic. Select
-**Stop capture** to end it early. Because the WAV file is exactly what the
+recording and after it stops, and **Settings → Decoder** has an **Open capture
+folder** button that opens it in your file manager. Capture stops itself after
+the **Stop automatically after** value in Settings (30 to 1800 seconds, 300 by
+default) and always requires an explicit click to start; it is never silent or
+automatic. Select **Stop capture** to end it early. Raise the limit for a signal
+that only misbehaves occasionally; lower it for a quick reproduction, so there
+is less to review before sharing. Because the WAV file is exactly what the
 selected audio input picked up, review its contents before sharing the
 capture folder with anyone.
 
