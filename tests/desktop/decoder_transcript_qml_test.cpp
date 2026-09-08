@@ -294,6 +294,13 @@ int main() {
       !contains(qml, "objectName: \"vfoTxFrequencyField\"") ||
       !contains(qml, "appSettings.radioRxMode") ||
       !contains(qml, "appSettings.radioTxMode") ||
+      !contains(qml, "appSettings.radioTxModeTarget") ||
+      !contains(qml, "appSettings.radioTxModeConfirmed") ||
+      !contains(qml, "? \"CONFIRMED\" : \"TARGET\"") ||
+      !contains(qml, "objectName: \"vfoFrequencySyncButton\"") ||
+      !contains(qml, "appSettings.radioTxFrequencySyncAvailable") ||
+      !contains(qml, "appSettings.syncControlledTxFrequencyToRx()") ||
+      !contains(qml, "TX mode is not copied") ||
       !contains(qml, "appSettings.setControlledTxFrequency(") ||
       contains(qml, "appSettings.cwToneSidebandIndex === 0") ||
       !contains(qml, "? \"SPLIT\" : \"SIMPLEX\"") ||

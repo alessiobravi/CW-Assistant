@@ -128,6 +128,17 @@ std::string_view radio_mode_token(const RadioMode mode) noexcept {
   return "?";
 }
 
+bool radio_tx_mode_target_is_valid(const RadioMode mode) noexcept {
+  return mode == RadioMode::Cw || mode == RadioMode::CwReverse;
+}
+
+bool radio_mode_target_is_confirmed(
+    const RadioModeState& observation, const RadioMode target) noexcept {
+  return radio_tx_mode_target_is_valid(target) &&
+         observation.observation == RadioObservation::Known &&
+         observation.mode == target;
+}
+
 bool radio_vfo_identifier_is_valid(const std::string& identifier) noexcept {
   return !identifier.empty() &&
          identifier.size() <= kMaximumRadioVfoIdentifierLength &&

@@ -1420,32 +1420,79 @@ ApplicationWindow {
                                 }
                                 Rectangle {
                                     objectName: "vfoTxModeBadge"
-                                    Layout.preferredWidth: 62
+                                    Layout.preferredWidth: 72
                                     Layout.fillHeight: true
                                     radius: 2
-                                    color: appSettings.radioTxMode === "?"
-                                           ? "#242d38" : "#ffbd63"
-                                    Label {
+                                    color: appSettings.radioTxModeConfirmed
+                                           ? "#ffbd63" : "#332918"
+                                    Column {
                                         anchors.centerIn: parent
-                                        text: appSettings.radioTxMode
-                                        color: appSettings.radioTxMode === "?"
-                                               ? "#718092" : "#1d1004"
-                                        font.pixelSize: 13
-                                        font.weight: Font.Bold
+                                        spacing: 1
+                                        Label {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            text: appSettings.radioTxModeTarget
+                                            color: appSettings.radioTxModeConfirmed
+                                                   ? "#1d1004" : "#ffbd63"
+                                            font.pixelSize: 13
+                                            font.weight: Font.Bold
+                                        }
+                                        Label {
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                            text: appSettings.radioTxModeConfirmed
+                                                  ? "CONFIRMED" : "TARGET"
+                                            color: appSettings.radioTxModeConfirmed
+                                                   ? "#48300e" : "#d69a48"
+                                            font.pixelSize: 7
+                                            font.weight: Font.DemiBold
+                                        }
                                     }
                                     ToolTip.visible: txModeMouse.containsMouse
-                                    ToolTip.text: appSettings.radioTxModeWritable
-                                        ? "Click to toggle the TX VFO between CW and CW-R"
-                                        : "TX mode is provider read-only or unavailable"
+                                    ToolTip.text: appSettings.radioTxModeConfirmed
+                                        ? "The provider confirms this TX mode. Click to toggle CW / CW-R."
+                                        : appSettings.radioTxModeWritable
+                                          ? "Operator TX target; provider readback is "
+                                            + appSettings.radioTxMode
+                                            + ". Click to request the other CW mode."
+                                          : "Operator TX target; this provider cannot apply or confirm the TX-VFO mode. Click to toggle CW / CW-R."
                                     MouseArea {
                                         id: txModeMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
-                                        enabled: appSettings.radioTxModeWritable
-                                        cursorShape: enabled ? Qt.PointingHandCursor
-                                                             : Qt.ArrowCursor
+                                        cursorShape: Qt.PointingHandCursor
                                         onClicked: appSettings.toggleControlledTxMode()
                                     }
+                                }
+                                Rectangle {
+                                    objectName: "vfoFrequencySyncButton"
+                                    Layout.preferredWidth: 48
+                                    Layout.fillHeight: true
+                                    radius: 2
+                                    color: syncFrequencyMouse.containsMouse
+                                           ? "#243746" : "#1d2833"
+                                    border.color: appSettings.radioTxFrequencySyncAvailable
+                                                  ? "#6d91a8" : "#394550"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "SYNC"
+                                        color: appSettings.radioTxFrequencySyncAvailable
+                                               ? "#d8edf7" : "#65727e"
+                                        font.pixelSize: 9
+                                        font.weight: Font.Bold
+                                    }
+                                    MouseArea {
+                                        id: syncFrequencyMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: appSettings.radioTxFrequencySyncAvailable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.syncControlledTxFrequencyToRx()
+                                    }
+                                    ToolTip.visible: syncFrequencyMouse.containsMouse
+                                    ToolTip.text: appSettings.radioTxFrequencySyncAvailable
+                                        ? "Copy VFO A / RX frequency to VFO B / TX; TX mode is not copied"
+                                        : "Frequency sync requires known RX state plus writable TX frequency and split control"
                                 }
                                 Item {
                                     id: vfoTxEditor

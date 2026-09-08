@@ -180,6 +180,18 @@ decoding hints rather than sharing one assumed contest sequence.
   target only the receive VFO, preserve split TX and mode, and leave provider
   readback authoritative. Reject invalid, unavailable, or ambiguous requests
   visibly.
+- Keep provider observations and operator control targets as distinct
+  provider-neutral state for every radio backend. VFO A/RX and VFO B/TX retain
+  independent frequency and mode state. The operator TX-mode target is always
+  an explicit persisted CW or CW-R value; matching known provider readback is
+  required before it is marked confirmed. Missing capability or readback must
+  neither make the target unusable nor fabricate a hardware mode. Each adapter
+  applies and confirms only the operations it advertises, and a future TX
+  arming gate must reject an unconfirmed required mode.
+- Provide an explicit VFO frequency-sync action that copies checked RX actual
+  RF to the independent TX endpoint through advertised TX-frequency and split
+  capabilities. Apply the TX transverter offset independently and never copy
+  RX mode; the TX target remains CW/CW-R.
 - Permit an explicit operator-selected decoder probe at a pointed audio
   frequency. It opens a clearly identified manual session but does not assign
   a verified color/callsign, increment detected-signal counts, or expose text

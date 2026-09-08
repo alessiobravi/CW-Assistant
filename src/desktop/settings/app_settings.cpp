@@ -426,6 +426,11 @@ bool AppSettings::radioTxFrequencyWritable() const noexcept {
       radio_state_.capabilities,
       cwassistant::core::RadioCapability::SetTxFrequency);
 }
+bool AppSettings::radioTxFrequencySyncAvailable() const noexcept {
+  return controlledRxRfHz().has_value() && radioTxFrequencyWritable() &&
+         (radio_state_.split.split == cwassistant::core::RadioSplit::Enabled ||
+          radioSplitWritable());
+}
 bool AppSettings::radioRxModeWritable() const noexcept {
   return cwassistant::core::radio_has_capability(
       radio_state_.capabilities, cwassistant::core::RadioCapability::SetRxMode);
@@ -449,6 +454,16 @@ QString AppSettings::radioTxMode() const {
       cwassistant::core::radio_mode_token(radio_state_.tx_mode.mode);
   return QString::fromLatin1(token.data(),
                              static_cast<qsizetype>(token.size()));
+}
+QString AppSettings::radioTxModeTarget() const {
+  const auto token =
+      cwassistant::core::radio_mode_token(radio_tx_mode_target_);
+  return QString::fromLatin1(token.data(),
+                             static_cast<qsizetype>(token.size()));
+}
+bool AppSettings::radioTxModeConfirmed() const noexcept {
+  return cwassistant::core::radio_mode_target_is_confirmed(
+      radio_state_.tx_mode, radio_tx_mode_target_);
 }
 QString AppSettings::radioRxVfo() const {
   return radio_state_.rx_vfo.observation ==
@@ -873,9 +888,37 @@ bool AppSettings::cycleControlledRxMode() {
 
 bool AppSettings::toggleControlledTxMode() {
   using cwassistant::core::RadioMode;
-  const auto next = radio_state_.tx_mode.mode == RadioMode::Cw
+  const auto next = radio_tx_mode_target_ == RadioMode::Cw
                         ? RadioMode::CwReverse : RadioMode::Cw;
-  return writeControlledMode(next, true);
+  radio_tx_mode_target_ = next;
+  QSettings settings;
+  settings.setValue(storageKey(QStringLiteral("radio/txModeTarget")),
+                    radioTxModeTarget());
+  emit radioFrequencyChanged();
+
+  if (!radioTxModeWritable()) {
+    setStatusMessage(QStringLiteral(
+        "TX target set to %1. The selected provider cannot apply or confirm the TX-VFO mode.")
+                         .arg(radioTxModeTarget()));
+    return true;
+  }
+  if (!writeControlledMode(next, true)) {
+    setStatusMessage(QStringLiteral(
+        "TX target remains %1, but the provider did not accept the mode request.")
+                         .arg(radioTxModeTarget()));
+    return true;
+  }
+  return true;
+}
+
+bool AppSettings::syncControlledTxFrequencyToRx() {
+  const auto rx_rf_hz = controlledRxRfHz();
+  if (!rx_rf_hz || !radioTxFrequencySyncAvailable()) {
+    setStatusMessage(QStringLiteral(
+        "VFO frequency sync is unavailable from the selected radio provider."));
+    return false;
+  }
+  return setControlledTxFrequency(QString::number(*rx_rf_hz), 1U);
 }
 
 bool AppSettings::setControlledSplit(const bool enabled) {
@@ -1559,6 +1602,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
   settings.setValue(storageKey(QStringLiteral("radio/tuningStepHz")),
                     radio_tuning_step_hz_);
+  settings.setValue(storageKey(QStringLiteral("radio/txModeTarget")),
+                    radioTxModeTarget());
   settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
   settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")), cat4om_radio_id_.trimmed());
@@ -1683,6 +1728,15 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("radio/tuningStepHz")), 1'000)
           .toInt(),
       1'000, 100'000);
+  radio_tx_mode_target_ = cwassistant::core::radio_mode_from_token(
+      settings.value(storageKey(QStringLiteral("radio/txModeTarget")),
+                     QStringLiteral("CW"))
+          .toString()
+          .toStdString());
+  if (!cwassistant::core::radio_tx_mode_target_is_valid(
+          radio_tx_mode_target_)) {
+    radio_tx_mode_target_ = cwassistant::core::RadioMode::Cw;
+  }
   omnirig_slot_ = settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1).toInt();
   cat4om_url_ = settings
                     .value(storageKey(QStringLiteral("radio/cat4omUrl")),
@@ -1932,6 +1986,7 @@ void AppSettings::resetInMemorySettings() {
   reference_rig_index_ = 0;
   frequency_backend_index_ = 0;
   radio_tuning_step_hz_ = 1'000;
+  radio_tx_mode_target_ = cwassistant::core::RadioMode::Cw;
   omnirig_slot_ = 1;
   cat4om_url_ = QStringLiteral("ws://127.0.0.1:5001/");
   cat4om_radio_id_.clear();

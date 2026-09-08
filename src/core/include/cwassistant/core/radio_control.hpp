@@ -142,6 +142,9 @@ enum class RadioCommandValidation {
     const std::string& identifier) noexcept;
 [[nodiscard]] RadioMode radio_mode_from_token(std::string_view token) noexcept;
 [[nodiscard]] std::string_view radio_mode_token(RadioMode mode) noexcept;
+[[nodiscard]] bool radio_tx_mode_target_is_valid(RadioMode mode) noexcept;
+[[nodiscard]] bool radio_mode_target_is_confirmed(
+    const RadioModeState& observation, RadioMode target) noexcept;
 [[nodiscard]] bool radio_state_is_valid(const RadioState& state) noexcept;
 [[nodiscard]] bool radio_has_capability(
     const RadioCapabilities& capabilities,

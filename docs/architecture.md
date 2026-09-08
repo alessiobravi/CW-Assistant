@@ -367,6 +367,22 @@ and validates the complete live state again before changing frequency.
 OmniRig split/TX readback remains future work, so preserving rig state is not a
 claim that the current OmniRig display can describe that state.
 
+Radio control separates operator targets from observed hardware state at the
+provider-neutral boundary. In particular, the transmit-mode target is always
+an explicit CW or CW-R value saved with the profile, while the provider's TX
+mode observation may independently be known, unknown, or unavailable. A target
+is confirmed only by matching readback. OmniRig, CAT4OM, direct CAT, Hamlib,
+SDR and future adapters all advertise the operations and observations they can
+actually support; an adapter may neither copy RX state into TX nor promote an
+accepted command to confirmed state. The faceplate therefore remains usable
+when an inactive VFO cannot be read, but makes the unconfirmed condition
+visible. Hardware TX integration must require the applicable confirmed target
+rather than treating the operator target itself as proof of radio state.
+Frequency synchronization is likewise a provider-neutral command: it resolves
+checked RX actual RF back through the independent TX offset and writes only the
+TX-frequency endpoint, enabling split through an advertised operation when
+needed. It never copies RX mode to TX.
+
 A network SDR is a receive-only source with its own tuned frequency. It is not a
 CAT rig and cannot acquire TX ownership. Any action that copies its frequency to
 a local rig crosses an explicit operator-confirmation boundary.

@@ -729,10 +729,11 @@ unavailable frequency providers deliberately show **AF** rather than guessing.
 
 The **CW Decoder** panel shows the resolved radio state as a compact faceplate
 above the signal list: grouped whole-hertz RX and TX digits, a dim/red ON AIR
-area, explicit VFO and SIMPLEX/SPLIT state, provider-reported RX/TX modes, and
-an orange TX frequency. Unknown TX, split, VFO, or mode state is shown as
-unavailable; CW Buddy never manufactures a simplex value or derives the radio
-mode from its audio-decoder setting. The faceplate disappears
+area, explicit VFO and SIMPLEX/SPLIT state, provider-reported RX mode, a
+separate CW/CW-R operator TX target, and an orange TX frequency. Unknown
+frequency, split, VFO, or observed mode state is shown as unavailable; CW Buddy
+never manufactures a simplex value or derives observed radio state from its
+audio decoder. The faceplate disappears
 entirely for receive-only SWL setups, WAV replay, and whenever no radio is
 currently linked, rather than showing a stale or meaningless value. Note
 that showing this readout at all requires **both** Settings → Radio
@@ -750,11 +751,19 @@ otherwise incapable providers.
 
 When the linked provider reports the matching write capability, click the TX
 frequency to enter an independent actual-RF value, click the split badge to
-toggle split, click the RX mode badge to cycle supported receive modes, and
-click the TX mode badge to toggle CW/CW-R. Unsupported operations remain
-read-only. Entering a separate TX frequency explicitly enables split if the
-provider supports both operations; a connection or state refresh never changes
-the rig merely to make the faceplate complete.
+toggle split, and click the RX mode badge to cycle supported receive modes.
+The TX mode badge always toggles the profile's CW/CW-R operator target. It says
+**CONFIRMED** only when the provider reports that exact mode; otherwise it says
+**TARGET**, and its tooltip explains whether the provider can request or read
+the mode. A read-only backend keeps the chosen target but does not claim to
+have changed the radio. Entering a separate TX frequency explicitly enables
+split if the provider supports both operations; a connection or state refresh
+never changes the rig merely to make the faceplate complete.
+
+Use **SYNC** to copy the checked VFO A/RX actual-RF frequency into VFO B/TX.
+The same provider-neutral route performs independent transverter-offset
+conversion and enables split when the backend advertises both operations. SYNC
+changes frequency only: it never copies the RX mode into the CW/CW-R TX target.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic

@@ -6,7 +6,21 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The transmit-mode faceplate no longer renders an unobserved standby VFO as
+  `?`. It now keeps the operator's persisted CW/CW-R target separate from
+  provider readback and marks it **CONFIRMED** only after matching hardware
+  state is observed. Backends that cannot write or independently read TX mode
+  leave the target visibly unconfirmed instead of copying RX state or claiming
+  a hardware change.
+
 ### Added
+
+- A provider-neutral **SYNC** control copies the checked VFO A/RX actual-RF
+  frequency to VFO B/TX through advertised TX-frequency and split
+  capabilities. It deliberately does not copy RX mode into the CW/CW-R TX
+  target.
 
 - The secure remote-operation specification now defines mutually authenticated
   TLS 1.3, local pairing, unique client credentials, station pinning, strict

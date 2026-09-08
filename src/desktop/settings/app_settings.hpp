@@ -53,11 +53,14 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int radioTuningStepHz READ radioTuningStepHz WRITE setRadioTuningStepHz NOTIFY settingsChanged)
   Q_PROPERTY(bool radioFrequencyWritable READ radioFrequencyWritable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(bool radioTxFrequencyWritable READ radioTxFrequencyWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioTxFrequencySyncAvailable READ radioTxFrequencySyncAvailable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(bool radioRxModeWritable READ radioRxModeWritable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(bool radioTxModeWritable READ radioTxModeWritable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(bool radioSplitWritable READ radioSplitWritable NOTIFY radioFrequencyControlChanged)
   Q_PROPERTY(QString radioRxMode READ radioRxMode NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioTxMode READ radioTxMode NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(QString radioTxModeTarget READ radioTxModeTarget NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(bool radioTxModeConfirmed READ radioTxModeConfirmed NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioRxVfo READ radioRxVfo NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioTxVfo READ radioTxVfo NOTIFY radioFrequencyChanged)
   Q_PROPERTY(qulonglong radioTxVfoFrequencyHz READ radioTxVfoFrequencyHz
@@ -160,11 +163,14 @@ class AppSettings final : public QObject {
   [[nodiscard]] int radioTuningStepHz() const noexcept;
   [[nodiscard]] bool radioFrequencyWritable() const noexcept;
   [[nodiscard]] bool radioTxFrequencyWritable() const noexcept;
+  [[nodiscard]] bool radioTxFrequencySyncAvailable() const noexcept;
   [[nodiscard]] bool radioRxModeWritable() const noexcept;
   [[nodiscard]] bool radioTxModeWritable() const noexcept;
   [[nodiscard]] bool radioSplitWritable() const noexcept;
   [[nodiscard]] QString radioRxMode() const;
   [[nodiscard]] QString radioTxMode() const;
+  [[nodiscard]] QString radioTxModeTarget() const;
+  [[nodiscard]] bool radioTxModeConfirmed() const noexcept;
   [[nodiscard]] QString radioRxVfo() const;
   [[nodiscard]] QString radioTxVfo() const;
   [[nodiscard]] qulonglong radioTxVfoFrequencyHz() const noexcept;
@@ -318,6 +324,7 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool stepControlledRxFrequency(int direction);
   Q_INVOKABLE bool setControlledTxFrequency(const QString& value,
                                             qulonglong unit_hz);
+  Q_INVOKABLE bool syncControlledTxFrequencyToRx();
   Q_INVOKABLE bool cycleControlledRxMode();
   Q_INVOKABLE bool toggleControlledTxMode();
   Q_INVOKABLE bool setControlledSplit(bool enabled);
@@ -396,6 +403,8 @@ class AppSettings final : public QObject {
   int reference_rig_index_{0};
   int frequency_backend_index_{0};
   int radio_tuning_step_hz_{1'000};
+  cwassistant::core::RadioMode radio_tx_mode_target_{
+      cwassistant::core::RadioMode::Cw};
   int omnirig_slot_{1};
   QString cat4om_url_{QStringLiteral("ws://127.0.0.1:5001/")};
   QString cat4om_radio_id_;

@@ -68,6 +68,24 @@ void test_mode_tokens_are_provider_neutral() {
          "radio modes have stable UI tokens");
 }
 
+void test_tx_mode_target_is_separate_from_provider_observation() {
+  using namespace cwassistant::core;
+  expect(radio_tx_mode_target_is_valid(RadioMode::Cw) &&
+             radio_tx_mode_target_is_valid(RadioMode::CwReverse) &&
+             !radio_tx_mode_target_is_valid(RadioMode::UpperSideband) &&
+             !radio_tx_mode_target_is_valid(RadioMode::Unknown),
+         "operator TX targets are restricted to CW and CW-R");
+  expect(radio_mode_target_is_confirmed(
+             {RadioObservation::Known, RadioMode::Cw}, RadioMode::Cw) &&
+             !radio_mode_target_is_confirmed(
+                 {RadioObservation::Known, RadioMode::CwReverse},
+                 RadioMode::Cw) &&
+             !radio_mode_target_is_confirmed(
+                 {RadioObservation::Unknown, RadioMode::Unknown},
+                 RadioMode::Cw),
+         "only matching known provider readback confirms an operator target");
+}
+
 void test_unknown_and_unavailable_are_not_fabricated() {
   using namespace cwassistant::core;
   RadioState state;
@@ -204,6 +222,7 @@ void test_invalid_commands_and_indeterminate_capabilities() {
 int main() {
   test_complete_state_and_capabilities();
   test_mode_tokens_are_provider_neutral();
+  test_tx_mode_target_is_separate_from_provider_observation();
   test_unknown_and_unavailable_are_not_fabricated();
   test_invalid_state_combinations();
   test_every_command_and_capability();
