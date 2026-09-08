@@ -82,7 +82,7 @@ struct CwChannelBankConfig {
   // reaches the decoded text often -- a caller sends it before its own -- and
   // without this a pileup answering the operator would label every stream with
   // the operator's own call.
-  std::string own_callsign;
+  std::string own_callsign{};
   float acquisition_snr_db{7.0F};
   float retention_snr_db{2.5F};
   float detection_dynamic_range_db{96.0F};
@@ -342,16 +342,23 @@ class CwChannelBank {
   [[nodiscard]] const std::vector<CwChannelSnapshot>& processSamples(
       const RealtimeSampleBlock& block);
   // Selects the provider-neutral receive monitor. Selected-track audio is
-  // taken from the same tracking mixer and adaptive narrow filter used by the
-  // decoder, then translated to the requested sidetone. It never affects
-  // decoding, radio state, PTT, or KEY.
+  // taken from the same tracking mixers and adaptive narrow filters used by
+  // the decoder, mixed with bounded gain, then translated to the requested
+  // sidetone. It never affects decoding, radio state, PTT, or KEY.
   void setMonitor(CwMonitorMode mode, std::uint64_t track_id = 0,
                   double reference_tone_hz = 700.0) noexcept;
+  void setMonitorTracks(CwMonitorMode mode,
+                        std::span<const std::uint64_t> track_ids,
+                        double reference_tone_hz = 700.0) noexcept;
   [[nodiscard]] CwMonitorMode monitorMode() const noexcept {
     return monitor_mode_;
   }
   [[nodiscard]] std::uint64_t monitoredTrackId() const noexcept {
-    return monitored_track_id_;
+    return monitored_track_count_ == 0 ? 0U : monitored_track_ids_[0];
+  }
+  [[nodiscard]] std::span<const std::uint64_t> monitoredTrackIds()
+      const noexcept {
+    return {monitored_track_ids_.data(), monitored_track_count_};
   }
   [[nodiscard]] const std::vector<float>& monitorAudio() const noexcept {
     return monitor_audio_;
@@ -564,7 +571,8 @@ class CwChannelBank {
   std::array<ColorLease, kColorLeaseCount> color_leases_{};
   std::uint64_t next_track_id_{1};
   CwMonitorMode monitor_mode_{CwMonitorMode::Off};
-  std::uint64_t monitored_track_id_{0};
+  std::array<std::uint64_t, kColorLeaseCount> monitored_track_ids_{};
+  std::size_t monitored_track_count_{0};
   double monitor_reference_tone_hz_{700.0};
   std::complex<float> monitor_oscillator_{1.0F, 0.0F};
   StreamDescriptor stream_{};

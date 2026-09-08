@@ -222,6 +222,12 @@ QString omni_rig_vfo_label(const wchar_t* property) {
   if (property == nullptr) return {};
   return property[4] == L'A' ? QStringLiteral("A") : QStringLiteral("B");
 }
+
+const wchar_t* omni_rig_other_frequency_property(
+    const wchar_t* receive_property) noexcept {
+  if (receive_property == nullptr) return nullptr;
+  return receive_property[4] == L'A' ? L"FreqB" : L"FreqA";
+}
 #endif
 
 template <typename T>
@@ -456,6 +462,19 @@ QString AppSettings::radioTxVfo() const {
       ? QString::fromStdString(radio_state_.tx_vfo.identifier)
       : QStringLiteral("?");
 }
+qulonglong AppSettings::radioTxVfoFrequencyHz() const noexcept {
+  if (radio_state_.tx_frequency.observation !=
+      cwassistant::core::RadioObservation::Known) {
+    return 0U;
+  }
+  const auto resolved = cwassistant::core::resolve_frequencies(
+      {.rx_dial_hz = radio_state_.tx_frequency.hz,
+       .tx_dial_hz = radio_state_.tx_frequency.hz,
+       .split_enabled = true},
+      {.rx_offset_hz = tx_transverter_offset_hz_,
+       .tx_offset_hz = tx_transverter_offset_hz_});
+  return resolved ? static_cast<qulonglong>(resolved->tx_rf_hz) : 0U;
+}
 bool AppSettings::radioSplitKnown() const noexcept {
   return radio_state_.split.observation ==
          cwassistant::core::RadioObservation::Known;
@@ -598,10 +617,15 @@ void AppSettings::refreshControlledFrequency() {
           const auto vfo = integer_property(L"Vfo");
           const auto split = integer_property(L"Split");
           const auto mode = integer_property(L"Mode");
+          const bool split_on = split && *split == kOmniRigSplitOn;
           const wchar_t* rx_property =
               vfo ? omni_rig_frequency_property(*vfo, false) : nullptr;
-          const wchar_t* tx_property =
-              vfo ? omni_rig_frequency_property(*vfo, true) : nullptr;
+          // In simplex the effective transmitter is the RX VFO, but the
+          // second faceplate row represents the standby VFO the operator will
+          // use for split. Read that VFO independently instead of cloning RX.
+          const wchar_t* tx_property = split_on
+              ? (vfo ? omni_rig_frequency_property(*vfo, true) : nullptr)
+              : omni_rig_other_frequency_property(rx_property);
           auto rx = rx_property ? frequency_property(rx_property)
                                 : frequency_property(L"Freq");
           auto tx = tx_property ? frequency_property(tx_property) : std::nullopt;
@@ -620,22 +644,30 @@ void AppSettings::refreshControlledFrequency() {
           }
           if (split && (*split == kOmniRigSplitOn ||
                         *split == kOmniRigSplitOff)) {
-            const bool split_on = *split == kOmniRigSplitOn;
             next_state.split = {RadioObservation::Known,
                                 split_on ? RadioSplit::Enabled
                                          : RadioSplit::Disabled};
-            if (!split_on && rx) {
-              next_state.tx_frequency = {RadioObservation::Known, *rx};
-              next_state.tx_vfo = next_state.rx_vfo;
-            }
           }
           if (mode) {
             const auto mapped = omni_rig_mode(*mode);
             if (mapped != RadioMode::Unknown) {
               next_state.rx_mode = {RadioObservation::Known, mapped};
-              if (next_state.split.split == RadioSplit::Disabled)
-                next_state.tx_mode = next_state.rx_mode;
+              const std::size_t slot_index =
+                  static_cast<std::size_t>(std::clamp(omnirig_slot_, 1, 2) - 1);
+              if (rx_property && rx_property[4] == L'A')
+                omnirig_vfo_a_modes_[slot_index] = mapped;
+              else if (rx_property && rx_property[4] == L'B')
+                omnirig_vfo_b_modes_[slot_index] = mapped;
             }
+          }
+          if (tx_property != nullptr) {
+            const std::size_t slot_index =
+                static_cast<std::size_t>(std::clamp(omnirig_slot_, 1, 2) - 1);
+            const auto tx_mode = tx_property[4] == L'A'
+                ? omnirig_vfo_a_modes_[slot_index]
+                : omnirig_vfo_b_modes_[slot_index];
+            if (tx_mode != RadioMode::Unknown)
+              next_state.tx_mode = {RadioObservation::Known, tx_mode};
           }
           if (write_target != OmniRigRxFrequencyTarget::None)
             next_state.capabilities.bits |=

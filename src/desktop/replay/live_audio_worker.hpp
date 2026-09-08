@@ -99,7 +99,8 @@ class LiveAudioDspWorker final : public QObject {
   void setOperatorRole(const QString& role);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setLocalCharacterFrontendEnabled(bool enabled);
-  void setMonitor(int mode, qulonglong channel_id, double reference_tone_hz);
+  void setMonitor(int mode, const QVariantList& channel_ids,
+                  double reference_tone_hz);
   void acceptCharacterRefinement(qulonglong channel_id,
                                  const QString& stable_text,
                                  qulonglong evidence_timestamp_ns);

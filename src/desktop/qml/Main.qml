@@ -252,8 +252,8 @@ ApplicationWindow {
                     enabled: replayController.activeSource
                     onClicked: replayController.setMonitorMode(2)
                     ToolTip.visible: hovered
-                    ToolTip.text: replayController.monitoredChannelId === 0
-                        ? "Select a CW stream in the spectrum or waterfall to hear only that stream"
+                    ToolTip.text: replayController.monitoredChannelIds.length === 0
+                        ? "Use the speaker on one or more decoder cards to monitor those streams"
                         : replayController.monitorStatus
                 }
                 Slider {
@@ -519,11 +519,11 @@ ApplicationWindow {
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 350
                     ToolTip.text: hoveredStreamId !== 0
-                        ? "Left click: open and monitor this decoded stream\n"
-                          + "Right click: move the guide and start a manual decoder probe\n"
+                        ? "Left click: open this stream's decoder card\n"
+                          + "Right click: start a manual decoder probe at this frequency\n"
                           + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
                         : "Left click: no decoded stream at this position\n"
-                          + "Right click: move the guide and start a manual decoder probe\n"
+                          + "Right click: start a manual decoder probe at this frequency\n"
                           + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
                 }
                 Rectangle {
@@ -545,7 +545,7 @@ ApplicationWindow {
                         id: pointerHelpText
                         anchors.centerIn: parent
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open + monitor stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
+                              ? "LEFT: open decoder   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
                               : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
                         color: "#d4dbe4"
                         font.pixelSize: 11
@@ -1458,10 +1458,10 @@ ApplicationWindow {
                                     function beginEdit() {
                                         if (!appSettings.radioTxFrequencyWritable)
                                             return
-                                        inputUnitHz = replayController.radioTxFrequencyHz
+                                        inputUnitHz = appSettings.radioTxVfoFrequencyHz
                                                       >= 30000000 ? 1000000 : 1000
                                         vfoTxFrequencyField.text = window.formatVfoInput(
-                                                    replayController.radioTxFrequencyHz,
+                                                    appSettings.radioTxVfoFrequencyHz,
                                                     inputUnitHz)
                                         invalidEntry = false
                                         editing = true
@@ -1501,8 +1501,8 @@ ApplicationWindow {
                                         visible: !vfoTxEditor.editing
                                         text: "VFO " + appSettings.radioTxVfo + "  ·  TX  "
                                               + window.formatRigFrequency(
-                                                  replayController.radioTxFrequencyHz > 0
-                                                  ? replayController.radioTxFrequencyHz
+                                                  appSettings.radioTxVfoFrequencyHz > 0
+                                                  ? appSettings.radioTxVfoFrequencyHz
                                                   : replayController.radioRxFrequencyHz)
                                         color: replayController.radioSplitActive
                                                ? "#ff6a24" : "#9b694e"
@@ -1707,6 +1707,10 @@ ApplicationWindow {
                             modelData.localModelCallsign
                         property string advisoryCallsignSuggestion:
                             modelData.callsignSuggestion
+                        property bool streamMonitored:
+                            replayController.monitorMode === 2
+                            && replayController.monitoredChannelIds.indexOf(
+                                modelData.id) >= 0
                         property string callsignSuggestionSource:
                             modelData.callsignSuggestionSource
                         property bool localModelHasText:
@@ -1789,6 +1793,24 @@ ApplicationWindow {
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
                                     elide: Text.ElideRight
+                                }
+                                ToolButton {
+                                    objectName: "decoderSessionMonitorButton"
+                                    text: sessionCard.streamMonitored ? "🔊" : "🔈"
+                                    flat: true
+                                    font.pixelSize: 17
+                                    Accessible.name: sessionCard.streamMonitored
+                                        ? "Stop monitoring this CW stream"
+                                        : "Monitor this CW stream"
+                                    Accessible.description:
+                                        "Several decoder-card streams can be monitored together"
+                                    onClicked: replayController.toggleMonitorChannel(
+                                                   modelData.id)
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 350
+                                    ToolTip.text: sessionCard.streamMonitored
+                                        ? "Stop listening to this stream"
+                                        : "Listen to this filtered stream; other enabled stream speakers remain active"
                                 }
                                 Button {
                                     objectName: "decoderSessionTxButton"

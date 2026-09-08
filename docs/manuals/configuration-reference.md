@@ -455,6 +455,13 @@ and provider-reported RX/TX modes. Each RX/TX frequency, mode, and split action
 is independently enabled only when the provider advertises that exact write;
 unknown state remains visibly unavailable rather than being inferred.
 
+The TX row represents the independent standby/transmit VFO even in simplex;
+the effective transmitted frequency remains the RX frequency until split is
+enabled. CAT4OM can report both VFO modes independently. OmniRig exposes only
+one mode value, so CW Buddy remembers a mode for A or B only after that VFO has
+actually been observed as the receiver. An inactive VFO whose mode has never
+been observed remains `?`; CW Buddy never copies the other VFO's mode into it.
+
 ### Serial CAT values
 
 The port, baud rate, data bits, parity, stop bits, RTS flow-control mode,

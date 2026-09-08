@@ -55,9 +55,11 @@ or policy disallows it.
 
 ## Control and TX safety
 
-Each rig has at most one controlling client lease. A short lease is renewed by
-authenticated heartbeats and expires automatically. Observers never receive a
-lease. A lease permits requests but cannot itself key hardware.
+Each station profile has one station-wide controlling-client lease covering all
+of its coupled receivers, transmitters, VFOs, audio routes and operating
+workflows. A short lease is renewed by authenticated heartbeats and expires
+automatically. Multiple observers may receive concurrently, but observers never
+receive a lease. A lease permits requests but cannot itself key hardware.
 
 The client sends complete CW text plus speed/weight and an operator-confirmed
 callsign. It never sends dot, dash, PTT, or KEY edge timing. The station validates

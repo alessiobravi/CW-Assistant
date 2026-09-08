@@ -222,7 +222,7 @@ int main() {
       contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
-      !contains(manual, "LEFT: open + monitor stream") ||
+      !contains(manual, "LEFT: open decoder") ||
       !contains(manual, "RIGHT: manual probe") ||
       !contains(manual, "CTRL: TX VFO unavailable") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
@@ -307,6 +307,9 @@ int main() {
       !contains(qml, "Keys.onUpPressed") ||
       !contains(qml, "Keys.onDownPressed") ||
       !contains(qml, "replayController.moveDecoderSession(") ||
+      !contains(qml, "objectName: \"decoderSessionMonitorButton\"") ||
+      !contains(qml, "replayController.toggleMonitorChannel(") ||
+      !contains(qml, "replayController.monitoredChannelIds.indexOf(") ||
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
       !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
     return 8;

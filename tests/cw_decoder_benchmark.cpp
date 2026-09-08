@@ -64,19 +64,19 @@ std::string trimSpaces(std::string value) {
 }
 
 struct ReplayResult {
-  std::string text;
-  std::string refined_text;
+  std::string text{};
+  std::string refined_text{};
   double wpm{0.0};
   std::uint64_t updates{0};
   double simulated_seconds{0.0};
   std::size_t state_bytes{0};
   bool refined_append_only{true};
-  std::string best_alternative;
+  std::string best_alternative{};
   float alternative_confidence{0.0F};
   std::size_t maximum_alternatives{0};
   bool refined_segment_terminated{false};
-  std::vector<cwassistant::core::CwTransmissionTurn> transmissions;
-  std::vector<cwassistant::core::CwSenderCadence> sender_cadences;
+  std::vector<cwassistant::core::CwTransmissionTurn> transmissions{};
+  std::vector<cwassistant::core::CwSenderCadence> sender_cadences{};
 };
 
 ReplayResult replayMessage(const std::string_view message, const double wpm,

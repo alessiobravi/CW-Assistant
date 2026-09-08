@@ -75,10 +75,12 @@ int main(int argc, char* argv[]) {
           application.setProperty("validDecoder", true);
           if (!application.property("monitorConfigured").toBool()) {
             application.setProperty("monitorConfigured", true);
+            const QVariantList monitor_ids{
+                QVariant::fromValue<qulonglong>(
+                    channel.value(QStringLiteral("id")).toULongLong())};
             QMetaObject::invokeMethod(
                 worker, "setMonitor", Qt::QueuedConnection, Q_ARG(int, 2),
-                Q_ARG(qulonglong,
-                      channel.value(QStringLiteral("id")).toULongLong()),
+                Q_ARG(QVariantList, monitor_ids),
                 Q_ARG(double, 700.0));
           }
         }

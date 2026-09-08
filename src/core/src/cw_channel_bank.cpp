@@ -22,6 +22,21 @@ void trimPresentationText(std::string& text) {
   text.erase(0, text.size() - kMaximumPresentationText);
 }
 
+template <std::size_t Size>
+void sortPrefix(std::array<double, Size>& values,
+                const std::size_t requested_count) noexcept {
+  const std::size_t count = std::min(requested_count, Size);
+  for (std::size_t index = 1; index < count; ++index) {
+    const double value = values[index];
+    std::size_t insertion = index;
+    while (insertion > 0U && values[insertion - 1U] > value) {
+      values[insertion] = values[insertion - 1U];
+      --insertion;
+    }
+    values[insertion] = value;
+  }
+}
+
 [[nodiscard]] std::string composePresentationText(
     const std::string& prefix, const std::string& source_text) {
   if (prefix.empty()) {
@@ -276,18 +291,47 @@ void CwChannelBank::reset() noexcept {
 void CwChannelBank::setMonitor(const CwMonitorMode mode,
                                const std::uint64_t track_id,
                                const double reference_tone_hz) noexcept {
+  const std::array ids{track_id};
+  setMonitorTracks(mode, ids, reference_tone_hz);
+}
+
+void CwChannelBank::setMonitorTracks(
+    const CwMonitorMode mode,
+    const std::span<const std::uint64_t> track_ids,
+    const double reference_tone_hz) noexcept {
   const double sanitized_tone =
       std::isfinite(reference_tone_hz)
           ? std::clamp(reference_tone_hz, 200.0, 1'500.0)
           : 700.0;
-  const std::uint64_t sanitized_track =
-      mode == CwMonitorMode::SelectedTrack ? track_id : 0U;
-  if (monitor_mode_ != mode || monitored_track_id_ != sanitized_track ||
+  std::array<std::uint64_t, kColorLeaseCount> sanitized_tracks{};
+  std::size_t sanitized_count = 0;
+  if (mode == CwMonitorMode::SelectedTrack) {
+    for (const std::uint64_t track_id : track_ids) {
+      if (track_id == 0U || sanitized_count >= sanitized_tracks.size() ||
+          std::find(sanitized_tracks.cbegin(),
+                    sanitized_tracks.cbegin() +
+                        static_cast<std::ptrdiff_t>(sanitized_count),
+                    track_id) != sanitized_tracks.cbegin() +
+                                     static_cast<std::ptrdiff_t>(
+                                         sanitized_count)) {
+        continue;
+      }
+      sanitized_tracks[sanitized_count++] = track_id;
+    }
+  }
+  const bool tracks_changed =
+      sanitized_count != monitored_track_count_ ||
+      !std::equal(sanitized_tracks.cbegin(),
+                  sanitized_tracks.cbegin() +
+                      static_cast<std::ptrdiff_t>(sanitized_count),
+                  monitored_track_ids_.cbegin());
+  if (monitor_mode_ != mode || tracks_changed ||
       monitor_reference_tone_hz_ != sanitized_tone) {
     monitor_oscillator_ = {1.0F, 0.0F};
   }
   monitor_mode_ = mode;
-  monitored_track_id_ = sanitized_track;
+  monitored_track_ids_ = sanitized_tracks;
+  monitored_track_count_ = sanitized_count;
   monitor_reference_tone_hz_ = sanitized_tone;
   monitor_audio_.clear();
 }
@@ -959,11 +1003,31 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       static_cast<float>(std::cos(monitor_angle)),
       static_cast<float>(std::sin(monitor_angle))};
 
+  const auto is_monitored = [this](const std::uint64_t track_id) {
+    return monitor_mode_ == CwMonitorMode::SelectedTrack &&
+        std::find(monitored_track_ids_.cbegin(),
+                  monitored_track_ids_.cbegin() +
+                      static_cast<std::ptrdiff_t>(monitored_track_count_),
+                  track_id) != monitored_track_ids_.cbegin() +
+                                   static_cast<std::ptrdiff_t>(
+                                       monitored_track_count_);
+  };
+  const std::size_t active_monitor_count = static_cast<std::size_t>(
+      std::count_if(tracks_.cbegin(), tracks_.cend(),
+                    [&is_monitored](const Track& track) {
+                      return is_monitored(track.id);
+                    }));
+  if (active_monitor_count > 0U) {
+    monitor_audio_.assign(block.sample_count, 0.0F);
+  }
+  const float monitor_mix_gain = active_monitor_count > 0U
+      ? 1.0F / std::sqrt(static_cast<float>(active_monitor_count))
+      : 0.0F;
+  std::complex<float> advanced_monitor_oscillator = monitor_oscillator_;
+
   for (auto& track : tracks_) {
-    const bool monitored_track =
-        monitor_mode_ == CwMonitorMode::SelectedTrack &&
-        track.id == monitored_track_id_;
-    if (monitored_track) monitor_audio_.reserve(block.sample_count);
+    const bool monitored_track = is_monitored(track.id);
+    std::complex<float> track_monitor_oscillator = monitor_oscillator_;
     const double center_hz = block.stream.kind == StreamKind::Audio
         ? track.frequency_hz
         : track.frequency_hz - block.stream.center_frequency_hz;
@@ -1001,8 +1065,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                                      track.center_filters[width]);
         track.center_power_sums[width] += std::norm(center);
         if (monitored_track && width == track.selected_width_index) {
-          monitor_audio_.push_back(std::clamp(
-              2.0F * (center * monitor_oscillator_).real(), -1.0F, 1.0F));
+          monitor_audio_[index] += 2.0F * monitor_mix_gain *
+              (center * track_monitor_oscillator).real();
         }
       }
       const auto lower = filtered(sample * track.lower_oscillator,
@@ -1016,7 +1080,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.center_oscillator *= center_step;
       track.lower_oscillator *= lower_step;
       track.upper_oscillator *= upper_step;
-      if (monitored_track) monitor_oscillator_ *= monitor_step;
+      if (monitored_track) track_monitor_oscillator *= monitor_step;
       if ((index & 1'023U) == 1'023U) {
         const auto normalize = [](std::complex<float>& oscillator) {
           const float magnitude = std::abs(oscillator);
@@ -1025,7 +1089,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         normalize(track.center_oscillator);
         normalize(track.lower_oscillator);
         normalize(track.upper_oscillator);
-        if (monitored_track) normalize(monitor_oscillator_);
+        if (monitored_track) normalize(track_monitor_oscillator);
       }
 
       if (track.accumulated_samples < evidence_samples) continue;
@@ -1406,6 +1470,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.upper_power_sum = 0.0F;
       track.accumulated_samples = 0;
     }
+    if (monitored_track)
+      advanced_monitor_oscillator = track_monitor_oscillator;
+  }
+
+  if (active_monitor_count > 0U) {
+    monitor_oscillator_ = advanced_monitor_oscillator;
+    for (float& sample : monitor_audio_)
+      sample = std::clamp(sample, -1.0F, 1.0F);
   }
 
   expected_sample_timestamp_ns_ =
@@ -1834,9 +1906,7 @@ void CwChannelBank::reanchorPresentationOnFirstVerification(
     std::array<double, Track::kPresentationEvidenceWindow> values{};
     std::copy_n(track.presentation_frequency_evidence.begin(),
                 track.presentation_frequency_evidence_count, values.begin());
-    std::sort(values.begin(),
-              values.begin() + static_cast<std::ptrdiff_t>(
-                                   track.presentation_frequency_evidence_count));
+    sortPrefix(values, track.presentation_frequency_evidence_count);
     const std::size_t middle = track.presentation_frequency_evidence_count / 2U;
     const double median = values[middle];
     std::array<double, Track::kPresentationEvidenceWindow> deviations{};
@@ -1844,9 +1914,7 @@ void CwChannelBank::reanchorPresentationOnFirstVerification(
          index < track.presentation_frequency_evidence_count; ++index) {
       deviations[index] = std::abs(values[index] - median);
     }
-    std::sort(deviations.begin(),
-              deviations.begin() + static_cast<std::ptrdiff_t>(
-                                       track.presentation_frequency_evidence_count));
+    sortPrefix(deviations, track.presentation_frequency_evidence_count);
     // A broad/multimodal candidate history is not safe re-centering evidence.
     // Fall back to the adaptive DSP center, which is already innovation- and
     // identity-bounded, instead of choosing one of two adjacent carriers.

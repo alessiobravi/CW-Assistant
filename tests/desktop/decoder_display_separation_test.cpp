@@ -59,6 +59,23 @@ bool resetsOnlyOnSignalPathChange(const std::string& source) {
                    "    decoder_.reset();");
 }
 
+// Opening a decoder card is a visual/session action. Audio monitoring is an
+// independent operator choice made by the toolbar or the card's speaker.
+bool openingDecoderDoesNotStartMonitoring(const std::string& source) {
+  const auto begin = source.find(
+      "void ReplayController::openDecoderSession(const qulonglong channel_id)");
+  const auto end = source.find(
+      "void ReplayController::openManualDecoderSession", begin);
+  if (begin == std::string::npos || end == std::string::npos || end <= begin) {
+    return false;
+  }
+  const std::string method = source.substr(begin, end - begin);
+  return contains(method, "decoder_session_order_.push_back(channel_id)") &&
+         !contains(method, "monitor_mode_") &&
+         !contains(method, "monitored_channel_ids_") &&
+         !contains(method, "publishMonitorConfiguration");
+}
+
 }  // namespace
 
 int main() {
@@ -75,6 +92,7 @@ int main() {
   if (!feedsDetectorUnaveragedBins(replay_controller)) return 5;
   if (!resetsOnlyOnSignalPathChange(live_worker)) return 6;
   if (!resetsOnlyOnSignalPathChange(replay_controller)) return 7;
+  if (!openingDecoderDoesNotStartMonitoring(replay_controller)) return 8;
 
   return 0;
 }

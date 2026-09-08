@@ -176,36 +176,6 @@ Decoded decodeChannel(const std::vector<float>& audio,
   return best;
 }
 
-std::string decode(const std::vector<float>& audio, const double sample_rate) {
-  SpectrumAnalyzer analyzer({.audio_upper_frequency_hz = 3'000.0});
-  CwChannelBank bank;
-  RealtimeSampleBlock block;
-  block.stream.sample_rate_hz = sample_rate;
-  std::string best;
-  std::size_t position = 0;
-  std::uint64_t now = 0;
-  while (position < audio.size()) {
-    const std::size_t take = std::min<std::size_t>(1'024,
-                                                   audio.size() - position);
-    block.sample_count = take;
-    block.timestamp_ns = now;
-    for (std::size_t index = 0; index < take; ++index)
-      block.samples[index] = {audio[position + index], 0.0F};
-    for (const auto& snapshot : analyzer.process(block)) {
-      static_cast<void>(bank.updateSpectrum(
-          snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
-          false));
-    }
-    for (const auto& channel : bank.processSamples(block))
-      if (channel.text.size() > best.size()) best = channel.text;
-    position += take;
-    now += static_cast<std::uint64_t>(
-        static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
-  }
-  return squeeze(best);
-}
-
 }  // namespace
 
 int main(int argc, char** argv) {

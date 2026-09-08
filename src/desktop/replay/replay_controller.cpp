@@ -556,14 +556,17 @@ class ReplayWorker final : public QObject {
     character_frontends_.setEnabled(enabled);
   }
 
-  void setMonitor(const int mode, const qulonglong channel_id,
+  void setMonitor(const int mode, const QVariantList& channel_ids,
                   const double reference_tone_hz) {
     const auto selected_mode = mode == 1
         ? cwassistant::core::CwMonitorMode::FullReceiver
         : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
                     : cwassistant::core::CwMonitorMode::Off;
-    decoder_.setMonitor(selected_mode, static_cast<std::uint64_t>(channel_id),
-                        reference_tone_hz);
+    std::vector<std::uint64_t> ids;
+    ids.reserve(static_cast<std::size_t>(channel_ids.size()));
+    for (const QVariant& value : channel_ids)
+      ids.push_back(static_cast<std::uint64_t>(value.toULongLong()));
+    decoder_.setMonitorTracks(selected_mode, ids, reference_tone_hz);
   }
 
   void acceptCharacterRefinement(const qulonglong channel_id,
@@ -1049,7 +1052,14 @@ bool ReplayController::radioSplitActive() const noexcept {
 }
 int ReplayController::monitorMode() const noexcept { return monitor_mode_; }
 qulonglong ReplayController::monitoredChannelId() const noexcept {
-  return monitored_channel_id_;
+  return monitored_channel_ids_.isEmpty() ? 0U
+                                          : monitored_channel_ids_.front();
+}
+QVariantList ReplayController::monitoredChannelIds() const {
+  QVariantList result;
+  result.reserve(monitored_channel_ids_.size());
+  for (const qulonglong id : monitored_channel_ids_) result.push_back(id);
+  return result;
 }
 const QString& ReplayController::monitorStatus() const noexcept {
   return monitor_status_;
@@ -1356,18 +1366,21 @@ void ReplayController::rebuildDecoderModels() {
     item.insert(QStringLiteral("sessionOpen"), true);
     decoder_sessions_.push_back(item);
   }
-  if (monitor_mode_ == 2 && monitored_channel_id_ != 0) {
+  if (monitor_mode_ == 2 && !monitored_channel_ids_.isEmpty()) {
     const QList<qulonglong> reconciled_monitor = reconcileDecoderSessionOrder(
-        QList<qulonglong>{monitored_channel_id_}, previous_sessions,
-        decoder_channels_);
-    const qulonglong next_id = reconciled_monitor.isEmpty()
-        ? 0U : reconciled_monitor.front();
-    if (next_id != monitored_channel_id_) {
-      monitored_channel_id_ = next_id;
+        monitored_channel_ids_, previous_sessions, decoder_channels_);
+    if (reconciled_monitor != monitored_channel_ids_) {
+      monitored_channel_ids_ = reconciled_monitor;
       stopMonitorOutput();
-      monitor_status_ = next_id == 0
-          ? QStringLiteral("Selected signal ended; click another signal")
-          : QStringLiteral("Monitoring reacquired signal");
+      if (monitored_channel_ids_.isEmpty()) {
+        monitor_mode_ = 0;
+        monitor_status_ = QStringLiteral("Monitor off");
+      } else {
+        monitor_status_ = monitored_channel_ids_.size() == 1
+            ? QStringLiteral("Monitoring reacquired stream")
+            : QStringLiteral("Monitoring %1 streams")
+                  .arg(monitored_channel_ids_.size());
+      }
       publishMonitorConfiguration();
       emit monitorChanged();
     }
@@ -1463,26 +1476,54 @@ void ReplayController::setMonitorMode(const int mode) {
   const int sanitized = std::clamp(mode, 0, 2);
   if (monitor_mode_ == sanitized) return;
   monitor_mode_ = sanitized;
-  if (monitor_mode_ != 2) monitored_channel_id_ = 0;
-  // Opening a decoder card and then enabling selected-signal monitoring is the
-  // natural UI order. Preserve that selection when it is unambiguous instead
-  // of publishing SelectedTrack with ID zero (which intentionally produces no
-  // audio in both DSP workers). With multiple open cards the operator still
-  // chooses explicitly from the spectrum.
-  if (monitor_mode_ == 2 && monitored_channel_id_ == 0 &&
-      decoder_session_order_.size() == 1) {
-    monitored_channel_id_ = decoder_session_order_.front();
-  }
+  if (monitor_mode_ != 2) monitored_channel_ids_.clear();
   if (monitor_mode_ == 0) {
     monitor_status_ = QStringLiteral("Monitor off");
     stopMonitorOutput();
   } else if (monitor_mode_ == 1) {
     monitor_status_ = QStringLiteral("Monitoring full receiver window");
-  } else if (monitored_channel_id_ != 0) {
-    monitor_status_ = QStringLiteral("Monitoring selected signal");
+  } else if (!monitored_channel_ids_.isEmpty()) {
+    monitor_status_ = monitored_channel_ids_.size() == 1
+        ? QStringLiteral("Monitoring 1 stream")
+        : QStringLiteral("Monitoring %1 streams")
+              .arg(monitored_channel_ids_.size());
   } else {
-    monitor_status_ = QStringLiteral("Click a signal to monitor it");
+    monitor_status_ = QStringLiteral("Use a decoder-card speaker to listen");
   }
+  publishMonitorConfiguration();
+  emit monitorChanged();
+}
+
+void ReplayController::toggleMonitorChannel(const qulonglong channel_id) {
+  const bool exists = std::any_of(
+      decoder_channels_.cbegin(), decoder_channels_.cend(),
+      [channel_id](const QVariant& value) {
+        return value.toMap().value(QStringLiteral("id")).toULongLong() ==
+               channel_id;
+      });
+  if (!exists || channel_id == 0U) return;
+
+  const qsizetype existing_index = monitored_channel_ids_.indexOf(channel_id);
+  if (monitor_mode_ == 2 && existing_index >= 0) {
+    monitored_channel_ids_.removeAt(existing_index);
+    if (monitored_channel_ids_.isEmpty()) {
+      monitor_mode_ = 0;
+      monitor_status_ = QStringLiteral("Monitor off");
+      stopMonitorOutput();
+    }
+  } else {
+    if (monitor_mode_ != 2) monitored_channel_ids_.clear();
+    monitor_mode_ = 2;
+    if (!monitored_channel_ids_.contains(channel_id))
+      monitored_channel_ids_.push_back(channel_id);
+  }
+  if (monitor_mode_ == 2) {
+    monitor_status_ = monitored_channel_ids_.size() == 1
+        ? QStringLiteral("Monitoring 1 stream")
+        : QStringLiteral("Monitoring %1 streams")
+              .arg(monitored_channel_ids_.size());
+  }
+  stopMonitorOutput();
   publishMonitorConfiguration();
   emit monitorChanged();
 }
@@ -1502,17 +1543,20 @@ void ReplayController::setMonitorOutputSelection(QString encoded_device_id) {
   if (monitor_mode_ != 0) {
     monitor_status_ = monitor_mode_ == 1
         ? QStringLiteral("Monitoring full receiver window")
-        : (monitored_channel_id_ == 0
-               ? QStringLiteral("Click a signal to monitor it")
-               : QStringLiteral("Monitoring selected signal"));
+        : (monitored_channel_ids_.isEmpty()
+               ? QStringLiteral("Use a decoder-card speaker to listen")
+               : monitored_channel_ids_.size() == 1
+                     ? QStringLiteral("Monitoring 1 stream")
+                     : QStringLiteral("Monitoring %1 streams")
+                           .arg(monitored_channel_ids_.size()));
   }
   emit monitorChanged();
 }
 
 void ReplayController::publishMonitorConfiguration() {
-  emit monitorConfigureRequested(monitor_mode_, monitored_channel_id_,
+  emit monitorConfigureRequested(monitor_mode_, monitoredChannelIds(),
                                  cw_reference_tone_hz_);
-  emit liveMonitorConfigureRequested(monitor_mode_, monitored_channel_id_,
+  emit liveMonitorConfigureRequested(monitor_mode_, monitoredChannelIds(),
                                      cw_reference_tone_hz_);
 }
 
@@ -1574,17 +1618,6 @@ void ReplayController::openDecoderSession(const qulonglong channel_id) {
                channel_id;
       });
   if (!exists) return;
-  // A signal selection is an explicit request to hear that stream. Keep the
-  // full-window monitor as a separately selectable mode, but do not require
-  // the operator to enable SelectedTrack before clicking a signal.
-  if (monitor_mode_ != 2 || monitored_channel_id_ != channel_id) {
-    monitor_mode_ = 2;
-    monitored_channel_id_ = channel_id;
-    monitor_status_ = QStringLiteral("Monitoring selected signal");
-    stopMonitorOutput();
-    publishMonitorConfiguration();
-    emit monitorChanged();
-  }
   if (decoder_session_order_.contains(channel_id)) return;
   decoder_session_order_.push_back(channel_id);
   rebuildDecoderModels();
@@ -1601,7 +1634,22 @@ void ReplayController::openManualDecoderSession(
 }
 
 void ReplayController::closeDecoderSession(const qulonglong channel_id) {
-  if (decoder_session_order_.removeAll(channel_id) > 0) rebuildDecoderModels();
+  if (decoder_session_order_.removeAll(channel_id) == 0) return;
+  if (monitored_channel_ids_.removeAll(channel_id) > 0) {
+    if (monitored_channel_ids_.isEmpty()) {
+      monitor_mode_ = 0;
+      monitor_status_ = QStringLiteral("Monitor off");
+      stopMonitorOutput();
+    } else {
+      monitor_status_ = monitored_channel_ids_.size() == 1
+          ? QStringLiteral("Monitoring 1 stream")
+          : QStringLiteral("Monitoring %1 streams")
+                .arg(monitored_channel_ids_.size());
+    }
+    publishMonitorConfiguration();
+    emit monitorChanged();
+  }
+  rebuildDecoderModels();
 }
 
 void ReplayController::moveDecoderSession(const qulonglong channel_id,

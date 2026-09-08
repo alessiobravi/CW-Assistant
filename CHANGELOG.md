@@ -8,11 +8,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
-- Receiver monitoring now distinguishes **All RX** from **Stream**. Opening a
-  detected stream immediately selects its carrier-following narrow filter,
-  rejects adjacent audio, and re-pitches that carrier to the configured CW
-  tone; selecting Stream with one open card also adopts that card instead of
-  silently monitoring channel zero. The Audio settings select the PC output
+- The secure remote-operation specification now defines mutually authenticated
+  TLS 1.3, local pairing, unique client credentials, station pinning, strict
+  per-message authorization, encrypted bounded media, replay protection,
+  fail-safe remote TX and a station-wide exclusive control lease. Multiple
+  authenticated receive-only clients may operate concurrently, while exactly
+  one lease holder can change any coupled station resource.
+
+- Receiver monitoring now distinguishes **All RX** from **Stream** without
+  coupling listening to decoder-card selection. Opening a detected stream only
+  opens its card. Each card has an independent speaker control, and several
+  selected streams can be mixed after their carrier-following narrow filters
+  reject adjacent audio and re-pitch each carrier to the configured CW tone.
+  Stream mode with no selected speakers stays silent; disabling the final
+  speaker returns monitoring to Off. The Audio settings select the PC output
   device and the receiver toolbar sets level without allowing queued audio to
   grow without bound.
 
@@ -102,6 +111,16 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Experimental CW likelihood-model training utilities are no longer part of
+  the distributed source tree or release CI. The optional, sandboxed runtime
+  boundary for an operator-supplied local model remains available, and the
+  deterministic decoder remains the default.
+
+- Small bounded presentation-frequency samples now use an explicit
+  bounds-safe prefix sort, and aggregate test fixtures initialize owned
+  containers explicitly. This keeps the dependency-free core and tests clean
+  under the stricter GCC 16 warning analysis without changing decoder results.
+
 - Right-click manual decoding no longer moves the independent red CW guide.
   It creates a temporary decoder region at the pointed frequency; measured
   carrier associations move its DSP and displayed centers through the same
@@ -119,6 +138,14 @@ All notable changes to CW Buddy are recorded here. The format follows
   window opens maximized, the decoder pane has more room, spectrum hover shows
   the left/right/Ctrl pointer actions, and every push button in the main,
   settings, setup, and profile views has contextual hover help.
+
+- The radio faceplate now retains the provider's independent standby/transmit
+  VFO frequency in simplex instead of replacing it with the RX frequency.
+  CAT4OM always presents its explicit TX VFO state. Because OmniRig exposes
+  only one mode property, CW Buddy keeps separate last-observed A/B modes and
+  leaves a never-observed inactive VFO unknown instead of copying the active
+  VFO mode into it. Enabling split therefore preserves real per-VFO state and
+  cannot manufacture a mode.
 
 - Live decode workers no longer rebuild the complete, deeply nested decoder
   snapshot for each character-model window. A bounded lightweight refinement

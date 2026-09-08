@@ -144,6 +144,7 @@ cwassistant::core::CwCharacterHypothesis hypothesis(
       .window_ended_ns = 2'000'000'000ULL,
       .valid_started_ns = 50'000'000ULL,
       .valid_ended_ns = 1'950'000'000ULL,
+      .characters = {},
   };
   std::uint64_t at = 200'000'000ULL + shift_ns;
   for (const char symbol : text) {

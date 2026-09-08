@@ -1864,22 +1864,32 @@ void test_selected_track_audio_monitor() {
   static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 100.0, 3'000.0,
                                         spectrum));
   const std::uint64_t selected = bank.selectFrequency(1'000.0);
-  expect(selected != 0U, "monitor fixture creates an operator-selected lane");
+  const std::uint64_t selected_second = bank.selectFrequency(1'500.0);
+  expect(selected != 0U && selected_second != 0U &&
+             selected != selected_second,
+         "monitor fixture creates two operator-selected lanes");
 
   constexpr double sample_rate = 48'000.0;
   RealtimeSampleBlock block;
   block.stream.sample_rate_hz = sample_rate;
   block.sample_count = block.samples.size();
   double target_phase = 0.0;
+  double second_target_phase = 0.0;
   double interferer_phase = 0.0;
-  bank.setMonitor(CwMonitorMode::SelectedTrack, selected, 700.0);
+  const std::array selected_tracks{selected, selected_second, selected};
+  bank.setMonitorTracks(CwMonitorMode::SelectedTrack, selected_tracks, 700.0);
+  expect(bank.monitoredTrackIds().size() == 2U,
+         "multi-stream monitor keeps a bounded unique track set");
   for (std::uint64_t block_index = 0; block_index < 24U; ++block_index) {
     block.timestamp_ns = 1'000'000'000ULL + block_index * 21'333'333ULL;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       target_phase += 2.0 * std::numbers::pi * 1'000.0 / sample_rate;
-      interferer_phase += 2.0 * std::numbers::pi * 1'500.0 / sample_rate;
+      second_target_phase +=
+          2.0 * std::numbers::pi * 1'500.0 / sample_rate;
+      interferer_phase += 2.0 * std::numbers::pi * 2'200.0 / sample_rate;
       block.samples[index] = {
           0.20F * static_cast<float>(std::sin(target_phase)) +
+              0.20F * static_cast<float>(std::sin(second_target_phase)) +
               0.20F * static_cast<float>(std::sin(interferer_phase)),
           0.0F};
     }
@@ -1900,8 +1910,9 @@ void test_selected_track_audio_monitor() {
     return std::hypot(real, imaginary);
   };
   expect(magnitude_at(700.0) > 8.0 * magnitude_at(1'000.0) &&
-             magnitude_at(700.0) > 8.0 * magnitude_at(1'500.0),
-         "selected monitor re-pitches its carrier and rejects adjacent audio");
+             magnitude_at(700.0) > 8.0 * magnitude_at(1'500.0) &&
+             magnitude_at(700.0) > 8.0 * magnitude_at(2'200.0),
+         "selected monitor mixes selected carriers at one pitch and rejects unselected audio");
 
   bank.setMonitor(CwMonitorMode::FullReceiver);
   static_cast<void>(bank.processSamples(block));
@@ -2631,9 +2642,11 @@ void test_cat4om_protocol_contract() {
          "CAT4OM command capability matching tolerates case only");
   const auto simplex_radio = cat4om_radio_state(simplex, true);
   expect(simplex_radio.rx_mode.mode == RadioMode::UpperSideband &&
-             simplex_radio.tx_mode.mode == RadioMode::UpperSideband &&
+             simplex_radio.tx_mode.mode == RadioMode::Cw &&
+             simplex_radio.tx_frequency.hz == 7'010'000 &&
+             simplex_radio.tx_vfo.identifier == "SUB" &&
              simplex_radio.split.split == RadioSplit::Disabled,
-         "CAT4OM maps authoritative active-VFO mode and simplex state");
+         "CAT4OM keeps the standby TX VFO independent in simplex state");
 
   auto split = simplex;
   split.split = true;

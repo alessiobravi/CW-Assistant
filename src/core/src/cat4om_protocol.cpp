@@ -113,16 +113,18 @@ RadioState cat4om_radio_state(const Cat4OmRadioState& state,
   }
 
   const auto* rx = find_vfo(state, state.active_vfo);
-  const auto* tx = state.split ? find_vfo(state, state.tx_vfo) : rx;
+  // The faceplate presents both physical/logical VFOs even in simplex. The
+  // split flag decides which one is effective for transmission; it must not
+  // make the standby VFO inherit the active VFO's mode or frequency.
+  const auto* tx = find_vfo(state, state.tx_vfo);
   if (rx != nullptr && rx->frequency_hz != 0U)
     result.rx_frequency = {RadioObservation::Known, rx->frequency_hz};
   if (tx != nullptr && tx->frequency_hz != 0U)
     result.tx_frequency = {RadioObservation::Known, tx->frequency_hz};
   if (radio_vfo_identifier_is_valid(state.active_vfo))
     result.rx_vfo = {RadioObservation::Known, state.active_vfo};
-  const std::string& tx_vfo = state.split ? state.tx_vfo : state.active_vfo;
-  if (radio_vfo_identifier_is_valid(tx_vfo))
-    result.tx_vfo = {RadioObservation::Known, tx_vfo};
+  if (radio_vfo_identifier_is_valid(state.tx_vfo))
+    result.tx_vfo = {RadioObservation::Known, state.tx_vfo};
   result.split = {RadioObservation::Known,
                   state.split ? RadioSplit::Enabled : RadioSplit::Disabled};
 

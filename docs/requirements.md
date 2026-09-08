@@ -386,7 +386,9 @@ decoding hints rather than sharing one assumed contest sequence.
   Plaintext is loopback-test-only; public raw port forwarding is unsupported.
 - Pair clients to a station identity and assign observer/operator/administrator
   roles. Support credential revocation and rotation without reinstalling.
-- Grant an authenticated operator a short exclusive control lease per rig.
+- Grant one authenticated operator a short station-wide exclusive control
+  lease covering every coupled RX/TX device and shared route in the station
+  profile. Permit multiple authenticated receive-only clients concurrently.
   Heartbeat loss expires the lease, cancels queued TX, and releases KEY/PTT.
 - Transmit complete CW messages timed by the server. Never transport paddle,
   dot/dash, KEY, or PTT edges as remote timing commands.

@@ -476,8 +476,11 @@ bandwidth profiles. Each rig has one expiring operator lease, while multiple
 observer clients may subscribe. Complete CW messages are scheduled locally at
 the station, preventing network jitter from changing Morse element timing.
 
-See [ADR 0002](decisions/0002-secure-remote-operation.md) for authentication,
-failure, reconnect, and TX safety rules.
+See [ADR 0002](decisions/0002-secure-remote-operation.md) for the accepted
+security boundary and the
+[secure remote-operation specification](remote-operation-specification.md) for
+the normative protocol, multi-client, authorization, resource-limit, failure,
+verification, and staged implementation requirements.
 
 ## Planned external libraries
 

@@ -559,14 +559,17 @@ void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
 }
 
 void LiveAudioDspWorker::setMonitor(const int mode,
-                                    const qulonglong channel_id,
+                                    const QVariantList& channel_ids,
                                     const double reference_tone_hz) {
   const auto selected_mode = mode == 1
       ? cwassistant::core::CwMonitorMode::FullReceiver
       : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
                   : cwassistant::core::CwMonitorMode::Off;
-  decoder_.setMonitor(selected_mode, static_cast<std::uint64_t>(channel_id),
-                      reference_tone_hz);
+  std::vector<std::uint64_t> ids;
+  ids.reserve(static_cast<std::size_t>(channel_ids.size()));
+  for (const QVariant& value : channel_ids)
+    ids.push_back(static_cast<std::uint64_t>(value.toULongLong()));
+  decoder_.setMonitorTracks(selected_mode, ids, reference_tone_hz);
 }
 
 void LiveAudioDspWorker::acceptCharacterRefinement(

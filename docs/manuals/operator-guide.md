@@ -78,21 +78,22 @@ not create a second frequency marker or infer a sender from frequency alone.
 5. Select **Stop live RX** before changing cables or audio routing.
 
 Hover over the spectrum or waterfall to see its pointer legend: left-click
-opens and monitors an already detected stream, while right-click starts a
-neutral manual probe at that audio frequency. The Ctrl+click TX-VFO action is
-marked unavailable
+opens the decoder card for an already detected stream without changing audio
+monitoring, while right-click starts a neutral manual probe at that audio
+frequency. The Ctrl+click TX-VFO action is marked unavailable
 until the linked provider supports guarded TX-frequency writes. Action buttons
 throughout the receiver, settings, setup, and profile views explain their
 effect and any disabled state when hovered.
 
 To listen through CW Buddy, choose a **Monitor output** under **Settings →
 Audio**, then use the receiver toolbar's **OFF / ALL RX / STREAM** controls.
-**ALL RX** passes the complete receiver window without filtering. Clicking a
-detected stream automatically opens its decoder card and selects **STREAM**;
-only that track then passes through its carrier-following narrow filter and is
-moved to the configured CW reference tone. If exactly one decoder card is open,
-choosing **STREAM** adopts it; otherwise choose the wanted marker. The adjacent
-slider
+**ALL RX** passes the complete receiver window without filtering. **STREAM**
+stays silent until the operator presses the speaker button in a decoder card.
+Each enabled card passes through its own carrier-following narrow filter and is
+moved to the configured CW reference tone. Enable several card speakers to mix
+several isolated streams; disable the last speaker to return monitoring to
+**OFF**. Opening or closing an ordinary decoder card does not start listening.
+The adjacent slider
 sets local playback level. Monitoring does not change decoder evidence. Output
 is intentionally bounded; if the sound device cannot keep up, old audio is
 dropped instead of accumulating delay.

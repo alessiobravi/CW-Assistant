@@ -10,6 +10,7 @@
 #include <QUrl>
 
 #include <memory>
+#include <array>
 #include <cstdint>
 #include <optional>
 
@@ -59,6 +60,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QString radioTxMode READ radioTxMode NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioRxVfo READ radioRxVfo NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioTxVfo READ radioTxVfo NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(qulonglong radioTxVfoFrequencyHz READ radioTxVfoFrequencyHz
+                 NOTIFY radioFrequencyChanged)
   Q_PROPERTY(bool radioSplitKnown READ radioSplitKnown NOTIFY radioFrequencyChanged)
   Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY settingsChanged)
@@ -164,6 +167,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] QString radioTxMode() const;
   [[nodiscard]] QString radioRxVfo() const;
   [[nodiscard]] QString radioTxVfo() const;
+  [[nodiscard]] qulonglong radioTxVfoFrequencyHz() const noexcept;
   [[nodiscard]] bool radioSplitKnown() const noexcept;
   [[nodiscard]] int omniRigSlot() const noexcept;
   [[nodiscard]] const QString& cat4omUrl() const noexcept;
@@ -460,6 +464,11 @@ class AppSettings final : public QObject {
   cwassistant::core::RadioState radio_state_;
   cwassistant::core::OmniRigRxFrequencyTarget omnirig_rx_write_target_{
       cwassistant::core::OmniRigRxFrequencyTarget::None};
+  // OmniRig exposes only the currently selected Mode, not ModeA/ModeB.
+  // Remember each VFO only when it has actually been observed as RX; never
+  // copy one VFO's mode into the other faceplate field.
+  std::array<cwassistant::core::RadioMode, 2> omnirig_vfo_a_modes_{};
+  std::array<cwassistant::core::RadioMode, 2> omnirig_vfo_b_modes_{};
 };
 
 }  // namespace cwassistant::desktop

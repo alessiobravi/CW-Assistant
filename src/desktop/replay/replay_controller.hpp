@@ -126,6 +126,8 @@ class ReplayController final : public QObject {
                  NOTIFY monitorChanged)
   Q_PROPERTY(qulonglong monitoredChannelId READ monitoredChannelId
                  NOTIFY monitorChanged)
+  Q_PROPERTY(QVariantList monitoredChannelIds READ monitoredChannelIds
+                 NOTIFY monitorChanged)
   Q_PROPERTY(QString monitorStatus READ monitorStatus NOTIFY monitorChanged)
   Q_PROPERTY(double monitorLevel READ monitorLevel WRITE setMonitorLevel
                  NOTIFY monitorChanged)
@@ -167,6 +169,7 @@ class ReplayController final : public QObject {
   [[nodiscard]] bool radioSplitActive() const noexcept;
   [[nodiscard]] int monitorMode() const noexcept;
   [[nodiscard]] qulonglong monitoredChannelId() const noexcept;
+  [[nodiscard]] QVariantList monitoredChannelIds() const;
   [[nodiscard]] const QString& monitorStatus() const noexcept;
   [[nodiscard]] double monitorLevel() const noexcept;
   void setAveragingFrames(int value);
@@ -194,6 +197,7 @@ class ReplayController final : public QObject {
                                 double reference_tone_hz);
   Q_INVOKABLE void setMonitorMode(int mode);
   Q_INVOKABLE void setMonitorLevel(double level);
+  Q_INVOKABLE void toggleMonitorChannel(qulonglong channel_id);
   void setMonitorOutputSelection(QString encoded_device_id);
 
   Q_INVOKABLE void openFile(const QUrl& url);
@@ -274,9 +278,10 @@ class ReplayController final : public QObject {
                                                const QString& metadata_path);
   void replayCharacterFrontendEnabledRequested(bool enabled);
   void liveCharacterFrontendEnabledRequested(bool enabled);
-  void monitorConfigureRequested(int mode, qulonglong channel_id,
+  void monitorConfigureRequested(int mode, const QVariantList& channel_ids,
                                  double reference_tone_hz);
-  void liveMonitorConfigureRequested(int mode, qulonglong channel_id,
+  void liveMonitorConfigureRequested(int mode,
+                                     const QVariantList& channel_ids,
                                      double reference_tone_hz);
   void replayCharacterRefinementRequested(qulonglong channel_id,
                                           const QString& stable_text,
@@ -358,7 +363,7 @@ class ReplayController final : public QObject {
   int cw_sideband_index_{0};
   double cw_reference_tone_hz_{700.0};
   int monitor_mode_{0};
-  qulonglong monitored_channel_id_{0};
+  QList<qulonglong> monitored_channel_ids_;
   double monitor_level_{0.65};
   QString monitor_output_device_id_;
   QString monitor_status_{QStringLiteral("Monitor off")};

@@ -31,7 +31,7 @@ struct CwCharacterHypothesis {
   std::uint64_t window_ended_ns{0};
   std::uint64_t valid_started_ns{0};
   std::uint64_t valid_ended_ns{0};
-  std::vector<CwTimedCharacter> characters;
+  std::vector<CwTimedCharacter> characters{};
 };
 
 struct CwCharacterConsensusConfig {
