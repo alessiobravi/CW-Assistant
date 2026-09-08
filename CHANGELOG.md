@@ -17,11 +17,22 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
-- A provider-neutral **SYNC** control copies the checked VFO A/RX actual-RF
+- A provider-neutral **A=B** control copies the checked VFO A/RX actual-RF
   frequency to VFO B/TX through advertised TX-frequency and split
   capabilities. Its core availability check fails closed on invalid or unknown
   provider state. It deliberately does not copy RX mode into the CW/CW-R TX
   target.
+
+- The radio faceplate now uses equal 52-pixel control tiles, a substantially
+  smaller ON AIR symbol, compact two-line TX labelling, and a protected
+  frequency readout that scales its digits instead of replacing them with an
+  ellipsis at the minimum decoder-pane width. Both readouts accommodate
+  grouped frequencies through 99 GHz. The right column now presents Radio
+  Control and CW Decoder as separate sections, with Diagnostics and Debug
+  capture owned by the decoder header. RX and TX mode occupy the same rightmost
+  column in their respective VFO rows. The guarded TUNE control is also
+  available as an equal-sized Radio Control tile and retains its explicit
+  arming requirement and hard 15-second watchdog.
 
 - The secure remote-operation specification now defines mutually authenticated
   TLS 1.3, local pairing, unique client credentials, station pinning, strict

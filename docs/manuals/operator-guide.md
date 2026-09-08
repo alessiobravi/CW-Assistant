@@ -760,12 +760,27 @@ have changed the radio. Entering a separate TX frequency explicitly enables
 split if the provider supports both operations; a connection or state refresh
 never changes the rig merely to make the faceplate complete.
 
-Use **SYNC** to copy the checked VFO A/RX actual-RF frequency into VFO B/TX.
+Use **A=B** to copy the checked VFO A/RX actual-RF frequency into VFO B/TX.
 The same provider-neutral route performs independent transverter-offset
 conversion and enables split when the backend advertises both operations. SYNC
 is disabled when RX state is unknown or either required capability is absent.
 It changes frequency only: it never copies the RX mode into the CW/CW-R TX
 target.
+
+The faceplate gives ON AIR, RX mode, SIMPLEX/SPLIT, TX mode, and A=B the same
+compact tile dimensions. ON AIR uses a smaller status symbol so the frequencies
+remain visually dominant. At the minimum decoder-pane width, the TX caption
+moves above its digits and both RX and TX digits scale to fit rather than
+becoming `…`; grouped frequencies through 99 GHz are accommodated. The
+RX and TX mode tiles occupy the same rightmost position in their VFO rows. The
+right-hand **Radio Control** heading owns this faceplate. The separate
+**CW Decoder** heading below it owns Diagnostics and Debug capture, so receiver
+control state and decoding tools are not presented as one panel.
+
+The equal-sized **TUNE** tile in Radio Control invokes the same guarded action
+as TUNE in the QSO panel. It remains disabled until TX is explicitly armed,
+never bypasses the hardware-readiness gate, and retains the hard 15-second
+continuous-KEY watchdog.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic

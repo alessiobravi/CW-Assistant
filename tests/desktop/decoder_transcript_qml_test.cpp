@@ -257,8 +257,31 @@ int main() {
   const std::size_t vfo_editor_start = qml.find("id: vfoRxEditor");
   const std::size_t vfo_badge_start = qml.find("objectName: \"vfoSplitBadge\"",
                                                vfo_editor_start);
+  const std::size_t rx_mode_start =
+      qml.find("objectName: \"vfoRxModeBadge\"", vfo_editor_start);
+  const std::size_t sync_start =
+      qml.find("objectName: \"vfoFrequencySyncButton\"", vfo_badge_start);
+  const std::size_t tx_editor_start = qml.find("id: vfoTxEditor", sync_start);
+  const std::size_t tx_mode_start =
+      qml.find("objectName: \"vfoTxModeBadge\"", tx_editor_start);
+  const std::size_t radio_heading_start = qml.find("text: \"Radio Control\"");
+  const std::size_t decoder_heading_start =
+      qml.find("text: \"CW Decoder\"", radio_heading_start);
+  const std::size_t diagnostics_start =
+      qml.find("objectName: \"diagnosticsToggle\"", decoder_heading_start);
   if (vfo_editor_start == std::string::npos ||
-      vfo_badge_start == std::string::npos) {
+      vfo_badge_start == std::string::npos ||
+      rx_mode_start == std::string::npos || sync_start == std::string::npos ||
+      tx_editor_start == std::string::npos ||
+      tx_mode_start == std::string::npos ||
+      radio_heading_start == std::string::npos ||
+      decoder_heading_start == std::string::npos ||
+      diagnostics_start == std::string::npos ||
+      rx_mode_start >= vfo_badge_start || vfo_badge_start >= sync_start ||
+      sync_start >= tx_editor_start || tx_editor_start >= tx_mode_start ||
+      radio_heading_start >= vfo_editor_start ||
+      tx_mode_start >= decoder_heading_start ||
+      decoder_heading_start >= diagnostics_start) {
     return 8;
   }
   const std::string vfo_editor = qml.substr(
@@ -289,6 +312,9 @@ int main() {
       !contains(qml, "function formatRigFrequency(hz)") ||
       !contains(qml, "objectName: \"vfoRxModeBadge\"") ||
       !contains(qml, "objectName: \"onAirIndicator\"") ||
+      !contains(qml, "objectName: \"radioTuneButton\"") ||
+      !contains(qml, "onClicked: transmitController.toggleTune()") ||
+      !contains(qml, "hard 15-second watchdog") ||
       !contains(qml, "objectName: \"vfoTxLabel\"") ||
       !contains(qml, "objectName: \"vfoTxModeBadge\"") ||
       !contains(qml, "objectName: \"vfoTxFrequencyField\"") ||
@@ -298,6 +324,15 @@ int main() {
       !contains(qml, "appSettings.radioTxModeConfirmed") ||
       !contains(qml, "? \"CONFIRMED\" : \"TARGET\"") ||
       !contains(qml, "objectName: \"vfoFrequencySyncButton\"") ||
+      !contains(qml, "property int controlButtonSize: 52") ||
+      !contains(qml, "text: \"A=B\"") ||
+      !contains(qml, "width: 28") ||
+      !contains(qml, "Layout.minimumWidth: 150") ||
+      !contains(qml, "fontSizeMode: Text.Fit") ||
+      !contains(qml, "elide: Text.ElideNone") ||
+      !contains(qml, "text: \"Radio Control\"") ||
+      !contains(qml, "text: \"CW Decoder\"") ||
+      !contains(qml, "text: appSettings.radioDisplayName") ||
       !contains(qml, "appSettings.radioTxFrequencySyncAvailable") ||
       !contains(qml, "appSettings.syncControlledTxFrequencyToRx()") ||
       !contains(qml, "TX mode is not copied") ||
