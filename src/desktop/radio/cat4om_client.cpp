@@ -132,6 +132,24 @@ bool Cat4OmClient::canSetFrequency() const noexcept {
          frequencyPlan().has_value();
 }
 
+bool Cat4OmClient::canSetTxFrequency() const noexcept {
+  const auto state = radioState();
+  return cwassistant::core::radio_has_capability(
+      state.capabilities, cwassistant::core::RadioCapability::SetTxFrequency);
+}
+
+bool Cat4OmClient::canSetMode() const noexcept {
+  const auto state = radioState();
+  return cwassistant::core::radio_has_capability(
+      state.capabilities, cwassistant::core::RadioCapability::SetRxMode);
+}
+
+bool Cat4OmClient::canSetSplit() const noexcept {
+  const auto state = radioState();
+  return cwassistant::core::radio_has_capability(
+      state.capabilities, cwassistant::core::RadioCapability::SetSplit);
+}
+
 QString Cat4OmClient::statusText() const { return status_; }
 QString Cat4OmClient::radioId() const {
   return QString::fromStdString(selected_radio_.radio_id);
@@ -140,6 +158,10 @@ QString Cat4OmClient::radioId() const {
 std::optional<cwassistant::core::VfoFrequencyPlan>
 Cat4OmClient::frequencyPlan() const noexcept {
   return cwassistant::core::cat4om_frequency_plan(selected_radio_);
+}
+
+cwassistant::core::RadioState Cat4OmClient::radioState() const noexcept {
+  return cwassistant::core::cat4om_radio_state(selected_radio_, canWrite());
 }
 
 bool Cat4OmClient::requestOwnership() {
@@ -178,6 +200,39 @@ bool Cat4OmClient::setRxFrequency(const std::uint64_t frequency_hz) {
   return setFrequency(
       frequency_hz,
       QString::fromStdString(selected_radio_.active_vfo));
+}
+
+bool Cat4OmClient::setTxFrequency(const std::uint64_t frequency_hz) {
+  const auto state = radioState();
+  if (cwassistant::core::validate_radio_command(
+          state, cwassistant::core::SetTxFrequency{frequency_hz}) !=
+      cwassistant::core::RadioCommandValidation::Valid) {
+    setStatus(QStringLiteral("TX frequency write is unavailable for this connection/radio."));
+    return false;
+  }
+  return setFrequency(frequency_hz,
+                      QString::fromStdString(selected_radio_.tx_vfo));
+}
+
+bool Cat4OmClient::setMode(const cwassistant::core::RadioMode mode,
+                           const QString& vfo,
+                           const bool transmit_vfo) {
+  const auto state = radioState();
+  const cwassistant::core::RadioCommand command = transmit_vfo
+      ? cwassistant::core::RadioCommand(cwassistant::core::SetTxMode{mode})
+      : cwassistant::core::RadioCommand(cwassistant::core::SetRxMode{mode});
+  if (cwassistant::core::validate_radio_command(state, command) !=
+      cwassistant::core::RadioCommandValidation::Valid) {
+    setStatus(QStringLiteral("Mode control is unavailable for this connection/radio."));
+    return false;
+  }
+  const auto mode_token = cwassistant::core::radio_mode_token(mode);
+  QJsonObject parameters{{
+      QStringLiteral("mode"),
+      QString::fromLatin1(mode_token.data(),
+                          static_cast<qsizetype>(mode_token.size()))}};
+  if (!vfo.isEmpty()) parameters.insert(QStringLiteral("vfo"), vfo);
+  return sendRequest(QStringLiteral("setMode"), parameters, true);
 }
 
 bool Cat4OmClient::setSplit(const bool enabled, const QString& tx_vfo) {
@@ -444,7 +499,11 @@ cwassistant::core::Cat4OmRadioState Cat4OmClient::parseRadio(
     state.vfos.push_back({.id = iterator.key().toStdString(),
                           .frequency_hz = jsonFrequency(
                               iterator.value().toObject().value(
-                                  QStringLiteral("frequency")))});
+                                  QStringLiteral("frequency"))),
+                          .mode = iterator.value().toObject()
+                                      .value(QStringLiteral("mode"))
+                                      .toString()
+                                      .toStdString()});
   }
   for (const auto& command :
        radio.value(QStringLiteral("availableCommands")).toArray()) {

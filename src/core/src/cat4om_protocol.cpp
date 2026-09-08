@@ -94,4 +94,65 @@ std::optional<VfoFrequencyPlan> cat4om_frequency_plan(
   };
 }
 
+RadioState cat4om_radio_state(const Cat4OmRadioState& state,
+                              const bool writable) noexcept {
+  RadioState result;
+  const bool connected = state.connection_status == "connected";
+  result.availability = connected ? RadioObservation::Known
+                                  : RadioObservation::Unavailable;
+  if (!connected) {
+    result.rx_frequency.observation = RadioObservation::Unavailable;
+    result.tx_frequency.observation = RadioObservation::Unavailable;
+    result.rx_mode.observation = RadioObservation::Unavailable;
+    result.tx_mode.observation = RadioObservation::Unavailable;
+    result.rx_vfo.observation = RadioObservation::Unavailable;
+    result.tx_vfo.observation = RadioObservation::Unavailable;
+    result.split.observation = RadioObservation::Unavailable;
+    result.capabilities.observation = RadioObservation::Unavailable;
+    return result;
+  }
+
+  const auto* rx = find_vfo(state, state.active_vfo);
+  const auto* tx = state.split ? find_vfo(state, state.tx_vfo) : rx;
+  if (rx != nullptr && rx->frequency_hz != 0U)
+    result.rx_frequency = {RadioObservation::Known, rx->frequency_hz};
+  if (tx != nullptr && tx->frequency_hz != 0U)
+    result.tx_frequency = {RadioObservation::Known, tx->frequency_hz};
+  if (radio_vfo_identifier_is_valid(state.active_vfo))
+    result.rx_vfo = {RadioObservation::Known, state.active_vfo};
+  const std::string& tx_vfo = state.split ? state.tx_vfo : state.active_vfo;
+  if (radio_vfo_identifier_is_valid(tx_vfo))
+    result.tx_vfo = {RadioObservation::Known, tx_vfo};
+  result.split = {RadioObservation::Known,
+                  state.split ? RadioSplit::Enabled : RadioSplit::Disabled};
+
+  if (rx != nullptr) {
+    const auto mode = radio_mode_from_token(rx->mode);
+    if (mode != RadioMode::Unknown)
+      result.rx_mode = {RadioObservation::Known, mode};
+  }
+  if (tx != nullptr) {
+    const auto mode = radio_mode_from_token(tx->mode);
+    if (mode != RadioMode::Unknown)
+      result.tx_mode = {RadioObservation::Known, mode};
+  }
+
+  result.capabilities.observation = RadioObservation::Known;
+  if (writable && cat4om_has_command(state, "SetFrequency")) {
+    result.capabilities.bits = RadioCapability::SetRxFrequency |
+                               RadioCapability::SetTxFrequency;
+  }
+  if (writable && cat4om_has_command(state, "SetMode")) {
+    result.capabilities.bits |= RadioCapability::SetRxMode |
+                                RadioCapability::SetTxMode;
+  }
+  if (writable && cat4om_has_command(state, "SetVfo")) {
+    result.capabilities.bits |= RadioCapability::SelectRxVfo |
+                                RadioCapability::SelectTxVfo;
+  }
+  if (writable && cat4om_has_command(state, "SetSplit"))
+    result.capabilities.bits |= radio_capability_bit(RadioCapability::SetSplit);
+  return result;
+}
+
 }  // namespace cwassistant::core

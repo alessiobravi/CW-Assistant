@@ -222,10 +222,13 @@ evidence; ambiguous and conflicting evidence leave them blank. Up to eight
 identified senders retain independent cadence summaries, used only as a
 bounded prior when a later live timing estimate already agrees.
 Right-clicking an unmarked spectrum/waterfall position creates a neutral
-manual probe at that exact center and opens its card. It is not included in the
-detected count, exposes no decoded content before ordinary verification, reuses
-only another manual center within 12 Hz, and expires after 30 seconds if it
-cannot verify. Successful verification promotes the same session normally.
+manual probe at that center and opens its card without moving the independent
+CW guide. Measured carrier evidence can move its DSP and presentation centers
+through the ordinary bounded stream tracker. It is not included in the detected
+count, exposes no decoded content before ordinary verification, reuses only
+another manual center within 12 Hz, and expires after the configured decoded
+stream timeout if it cannot verify. Successful verification promotes the same
+session normally.
 Left-click opens an existing detected stream and never creates a manual probe.
 Unverified candidates expire after 750 ms and never appear in the signal count.
 A callsign label additionally requires stable text and a completed word gap;
@@ -447,10 +450,10 @@ changing it does not tune the radio until one of those buttons is activated.
 Exact readout entry is not rounded to this step.
 
 When authoritative radio state is available, the decoder pane shows a compact
-faceplate with grouped whole-hertz RX/TX digits, ON AIR, SIMPLEX/SPLIT, and
-CW/CW-R status. RX remains the only editable route in this release. TX
-frequency, split, and mode are display-only until their provider-neutral,
-capability-gated write paths are implemented.
+faceplate with grouped whole-hertz RX/TX digits, ON AIR, VFO, SIMPLEX/SPLIT,
+and provider-reported RX/TX modes. Each RX/TX frequency, mode, and split action
+is independently enabled only when the provider advertises that exact write;
+unknown state remains visibly unavailable rather than being inferred.
 
 ### Serial CAT values
 
@@ -485,8 +488,10 @@ Select a dedicated serial port and assign different lines to PTT and KEY.
 Defaults are RTS for PTT and DTR for KEY, both active high. Change polarity only
 to match an electrically verified interface. Port enumeration is passive.
 
-The direct keying adapter and line test are not implemented yet, so no profile
-can transmit through this path in the current build.
+The direct serial adapter and worker-thread Morse scheduler have deterministic
+fake-backend coverage, including safe inactive initialization, ordered release,
+watchdog, and fault handling. They are not yet connected to the application TX
+controller, so no profile can transmit through this path in the current build.
 
 The **QSO** drawer is a hardware-inert preview of the guarded workflow. It
 requires explicit arming, an exactly decoded and retyped target callsign, and a

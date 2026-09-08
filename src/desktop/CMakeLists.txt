@@ -34,6 +34,10 @@ qt_add_executable(cw-buddy-desktop
   radio/cat4om_client.hpp
   transmit/transmit_controller.cpp
   transmit/transmit_controller.hpp
+  transmit/direct_keying_adapter.cpp
+  transmit/direct_keying_adapter.hpp
+  transmit/direct_transmit_engine.cpp
+  transmit/direct_transmit_engine.hpp
   settings/app_settings.cpp
   settings/app_settings.hpp
   settings/product_migration.cpp
@@ -126,15 +130,44 @@ target_compile_definitions(cw-buddy-desktop PRIVATE
 if(CWA_BUILD_TESTS)
   qt_add_executable(cwa_transmit_controller_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/transmit_controller_test.cpp
+    transmit/direct_keying_adapter.cpp
+    transmit/direct_keying_adapter.hpp
+    transmit/direct_transmit_engine.cpp
+    transmit/direct_transmit_engine.hpp
     transmit/transmit_controller.cpp
     transmit/transmit_controller.hpp)
   target_link_libraries(cwa_transmit_controller_test PRIVATE
-    cwa_core Qt6::Core)
+    cwa_core Qt6::Core Qt6::SerialPort)
   target_include_directories(cwa_transmit_controller_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_transmit_controller_test
     COMMAND cwa_transmit_controller_test)
   set_tests_properties(cwa_transmit_controller_test PROPERTIES TIMEOUT 10)
+
+  qt_add_executable(cwa_direct_keying_adapter_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/direct_keying_adapter_test.cpp
+    transmit/direct_keying_adapter.cpp
+    transmit/direct_keying_adapter.hpp)
+  target_link_libraries(cwa_direct_keying_adapter_test PRIVATE
+    Qt6::Core Qt6::SerialPort)
+  target_include_directories(cwa_direct_keying_adapter_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_direct_keying_adapter_test
+    COMMAND cwa_direct_keying_adapter_test)
+
+  qt_add_executable(cwa_direct_transmit_engine_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/direct_transmit_engine_test.cpp
+    transmit/direct_keying_adapter.cpp
+    transmit/direct_keying_adapter.hpp
+    transmit/direct_transmit_engine.cpp
+    transmit/direct_transmit_engine.hpp)
+  target_link_libraries(cwa_direct_transmit_engine_test PRIVATE
+    cwa_core Qt6::Core Qt6::SerialPort)
+  target_include_directories(cwa_direct_transmit_engine_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_direct_transmit_engine_test
+    COMMAND cwa_direct_transmit_engine_test)
+  set_tests_properties(cwa_direct_transmit_engine_test PROPERTIES TIMEOUT 10)
 
   qt_add_executable(cwa_live_audio_pipeline_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/live_audio_pipeline_test.cpp

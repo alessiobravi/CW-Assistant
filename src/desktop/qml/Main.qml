@@ -12,7 +12,8 @@ ApplicationWindow {
     minimumWidth: 1180
     minimumHeight: 720
     visible: true
-    title: "CW Buddy — " + appSettings.profileName
+    title: "CW BUDDY " + Qt.application.version + " — "
+           + appSettings.profileName
     color: "#0d1117"
     Material.theme: Material.Dark
     Material.accent: "#43c6ac"
@@ -107,10 +108,27 @@ ApplicationWindow {
             anchors.leftMargin: 20
             anchors.rightMargin: 16
             spacing: 16
+            ColumnLayout {
+                spacing: -2
+                Label {
+                    text: "CW BUDDY"
+                    font.pixelSize: 20
+                    font.weight: Font.Bold
+                    font.letterSpacing: 0.8
+                }
+                Label {
+                    text: "by IU0LFQ"
+                    color: "#8d9aaa"
+                    font.pixelSize: 10
+                    font.italic: true
+                    Layout.alignment: Qt.AlignHCenter
+                }
+            }
             Label {
-                text: "CW Buddy"
-                font.pixelSize: 21
-                font.weight: Font.DemiBold
+                text: "v" + Qt.application.version
+                color: "#718092"
+                font.pixelSize: 11
+                font.family: "monospace"
             }
             Rectangle { width: 1; height: 28; color: "#303a46" }
             ColumnLayout {
@@ -206,7 +224,7 @@ ApplicationWindow {
                     ToolTip.text: "Choose live receiver audio or a recorded WAV replay"
                 }
                 Rectangle { width: 1; height: 28; color: "#303a46" }
-                Label { text: "Monitor"; color: "#91a0b1"; font.pixelSize: 11 }
+                Label { text: "Listen"; color: "#91a0b1"; font.pixelSize: 11 }
                 ToolButton {
                     objectName: "monitorOffButton"
                     text: "OFF"
@@ -218,23 +236,25 @@ ApplicationWindow {
                 }
                 ToolButton {
                     objectName: "monitorReceiverButton"
-                    text: "RX"
+                    text: "ALL RX"
                     checkable: true
                     checked: replayController.monitorMode === 1
                     enabled: replayController.activeSource
                     onClicked: replayController.setMonitorMode(1)
                     ToolTip.visible: hovered
-                    ToolTip.text: "Monitor the complete receiver audio window"
+                    ToolTip.text: "Play the complete receiver passband without a stream filter"
                 }
                 ToolButton {
                     objectName: "monitorSignalButton"
-                    text: "SIGNAL"
+                    text: "STREAM"
                     checkable: true
                     checked: replayController.monitorMode === 2
                     enabled: replayController.activeSource
                     onClicked: replayController.setMonitorMode(2)
                     ToolTip.visible: hovered
-                    ToolTip.text: replayController.monitorStatus
+                    ToolTip.text: replayController.monitoredChannelId === 0
+                        ? "Select a CW stream in the spectrum or waterfall to hear only that stream"
+                        : replayController.monitorStatus
                 }
                 Slider {
                     objectName: "monitorLevelSlider"
@@ -494,15 +514,12 @@ ApplicationWindow {
                             return
                         }
                         var frequencyHz = frequencyAtX(mouse.x)
-                        appSettings.cwGuideCenterHz = frequencyHz
                         replayController.openManualDecoderSession(frequencyHz)
                     }
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 350
                     ToolTip.text: hoveredStreamId !== 0
-                        ? (replayController.monitorMode === 2
-                           ? "Left click: open and monitor this decoded stream\n"
-                           : "Left click: open this decoded stream\n")
+                        ? "Left click: open and monitor this decoded stream\n"
                           + "Right click: move the guide and start a manual decoder probe\n"
                           + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
                         : "Left click: no decoded stream at this position\n"
@@ -528,7 +545,7 @@ ApplicationWindow {
                         id: pointerHelpText
                         anchors.centerIn: parent
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
+                              ? "LEFT: open + monitor stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
                               : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
                         color: "#d4dbe4"
                         font.pixelSize: 11
@@ -1092,17 +1109,18 @@ ApplicationWindow {
                     visible: replayController.radioFrequencyAvailable
                              && replayController.sourceMode === 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 126
-                    radius: 5
-                    color: "#20262e"
-                    border.color: "#59636f"
+                    Layout.preferredHeight: 166
+                    Layout.minimumHeight: 166
+                    radius: 8
+                    color: "#111821"
+                    border.color: "#3b5267"
                     border.width: 1
                     clip: true
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.margins: 5
-                        spacing: 6
+                        anchors.margins: 7
+                        spacing: 8
                         Rectangle {
                             id: onAirIndicator
                             objectName: "onAirIndicator"
@@ -1112,19 +1130,19 @@ ApplicationWindow {
                             // It remains dim until the tested hardware adapter
                             // is implemented and the guard reports KEY down.
                             property bool active: transmitController.onAir
-                            Layout.preferredWidth: 68
+                            Layout.preferredWidth: 76
                             Layout.fillHeight: true
-                            radius: 4
-                            color: active ? "#4d0d18" : "#252b33"
+                            radius: 6
+                            color: active ? "#4d0d18" : "#171e27"
                             border.color: active ? "#ff3b30" : "#3a4552"
                             border.width: 1
                             Image {
                                 anchors.centerIn: parent
                                 source: "qrc:/icons/on-air-active.png"
-                                width: 58
-                                height: 58
+                                width: 68
+                                height: 68
                                 fillMode: Image.PreserveAspectFit
-                                opacity: onAirIndicator.active ? 1.0 : 0.24
+                                opacity: onAirIndicator.active ? 1.0 : 0.16
                             }
                             ToolTip.visible: onAirMouse.containsMouse
                             ToolTip.delay: 300
@@ -1152,7 +1170,8 @@ ApplicationWindow {
                                 property string inputUnitLabel: inputUnitHz === 1000000
                                                                 ? "MHz" : "kHz"
                                 Layout.fillWidth: true
-                                Layout.fillHeight: true
+                                Layout.preferredHeight: 78
+                                Layout.minimumHeight: 78
                                 function beginEdit() {
                                     if (!appSettings.radioFrequencyWritable)
                                         return
@@ -1190,7 +1209,7 @@ ApplicationWindow {
                                 Rectangle {
                                     anchors.fill: parent
                                     radius: 3
-                                    color: "#080c10"
+                                    color: "#050b10"
                                     border.color: vfoRxEditor.invalidEntry
                                                   ? "#ff7b84" : "#46515e"
                                     border.width: vfoRxEditor.editing ? 2 : 1
@@ -1201,14 +1220,14 @@ ApplicationWindow {
                                     anchors.left: parent.left
                                     anchors.leftMargin: 12
                                     anchors.right: parent.right
-                                    anchors.rightMargin: 8
+                                    anchors.rightMargin: 76
                                     anchors.verticalCenter: parent.verticalCenter
                                     visible: !vfoRxEditor.editing
                                     text: window.formatRigFrequency(
                                               replayController.radioRxFrequencyHz)
                                     color: "#f5f8fb"
                                     font.family: "monospace"
-                                    font.pixelSize: 34
+                                    font.pixelSize: 28
                                     font.weight: Font.Bold
                                     font.letterSpacing: 2
                                     horizontalAlignment: Text.AlignRight
@@ -1220,15 +1239,51 @@ ApplicationWindow {
                                     anchors.top: parent.top
                                     anchors.topMargin: 6
                                     visible: !vfoRxEditor.editing
-                                    text: "RX"
+                                    text: "VFO " + appSettings.radioRxVfo + "  ·  RX"
                                     color: "#64dff0"
                                     font.pixelSize: 11
                                     font.weight: Font.Bold
+                                }
+                                Rectangle {
+                                    objectName: "vfoRxModeBadge"
+                                    z: 2
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 7
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 62
+                                    height: 48
+                                    radius: 5
+                                    color: appSettings.radioRxMode === "?"
+                                           ? "#242d38" : "#dbe8f4"
+                                    border.color: appSettings.radioRxModeWritable
+                                                  ? "#64dff0" : "#46515e"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: appSettings.radioRxMode
+                                        color: appSettings.radioRxMode === "?"
+                                               ? "#718092" : "#07121b"
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+                                    MouseArea {
+                                        id: rxModeMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: appSettings.radioRxModeWritable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.cycleControlledRxMode()
+                                    }
+                                    ToolTip.visible: rxModeMouse.containsMouse
+                                    ToolTip.text: appSettings.radioRxModeWritable
+                                        ? "Click to select the next RX mode"
+                                        : "RX mode is provider read-only or unavailable"
                                 }
                                 MouseArea {
                                     id: vfoRxEditHitArea
                                     objectName: "vfoRxEditHitArea"
                                     anchors.fill: parent
+                                    anchors.rightMargin: 72
                                     visible: !vfoRxEditor.editing
                                     enabled: appSettings.radioFrequencyWritable
                                     hoverEnabled: true
@@ -1325,11 +1380,12 @@ ApplicationWindow {
 
                             RowLayout {
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 38
+                                Layout.preferredHeight: 62
+                                Layout.minimumHeight: 62
                                 spacing: 5
                                 Rectangle {
                                     objectName: "vfoSplitBadge"
-                                    Layout.preferredWidth: 68
+                                    Layout.preferredWidth: 76
                                     Layout.fillHeight: true
                                     radius: 2
                                     color: replayController.radioSplitActive
@@ -1337,41 +1393,104 @@ ApplicationWindow {
                                     Label {
                                         id: splitBadgeLabel
                                         anchors.centerIn: parent
-                                        text: replayController.radioSplitActive
-                                              ? "SPLIT" : "SIMPLEX"
+                                        text: !appSettings.radioSplitKnown ? "SPLIT ?"
+                                              : replayController.radioSplitActive
+                                                ? "SPLIT" : "SIMPLEX"
                                         color: replayController.radioSplitActive
                                                ? "#111318" : "#7b8794"
                                         font.pixelSize: 11
                                         font.weight: Font.Bold
                                     }
+                                    MouseArea {
+                                        id: splitModeMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: appSettings.radioSplitWritable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.setControlledSplit(
+                                                       !replayController.radioSplitActive)
+                                    }
+                                    ToolTip.visible: splitModeMouse.containsMouse
+                                    ToolTip.text: appSettings.radioSplitWritable
+                                        ? (replayController.radioSplitActive
+                                           ? "Click to return the radio to simplex"
+                                           : "Click to enable independent RX/TX VFO split")
+                                        : "Split state is provider read-only or unavailable"
                                 }
                                 Rectangle {
-                                    objectName: "vfoRxModeBadge"
-                                    Layout.preferredWidth: 58
+                                    objectName: "vfoTxModeBadge"
+                                    Layout.preferredWidth: 62
                                     Layout.fillHeight: true
                                     radius: 2
-                                    color: "#f0f21c"
+                                    color: appSettings.radioTxMode === "?"
+                                           ? "#242d38" : "#ffbd63"
                                     Label {
                                         anchors.centerIn: parent
-                                        text: appSettings.cwToneSidebandIndex === 0
-                                              ? "CW" : "CW-R"
-                                        color: "#111318"
+                                        text: appSettings.radioTxMode
+                                        color: appSettings.radioTxMode === "?"
+                                               ? "#718092" : "#1d1004"
                                         font.pixelSize: 13
                                         font.weight: Font.Bold
                                     }
-                                    ToolTip.visible: rxModeMouse.containsMouse
-                                    ToolTip.text: "Mode display; provider-neutral mode control is not available yet"
+                                    ToolTip.visible: txModeMouse.containsMouse
+                                    ToolTip.text: appSettings.radioTxModeWritable
+                                        ? "Click to toggle the TX VFO between CW and CW-R"
+                                        : "TX mode is provider read-only or unavailable"
                                     MouseArea {
-                                        id: rxModeMouse
+                                        id: txModeMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
+                                        enabled: appSettings.radioTxModeWritable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.toggleControlledTxMode()
                                     }
                                 }
-                                Rectangle {
+                                Item {
+                                    id: vfoTxEditor
+                                    objectName: "vfoTxEditor"
+                                    property bool editing: false
+                                    property bool invalidEntry: false
+                                    property int inputUnitHz: 1000
                                     Layout.fillWidth: true
                                     Layout.fillHeight: true
-                                    radius: 2
-                                    color: "#15110c"
+                                    function beginEdit() {
+                                        if (!appSettings.radioTxFrequencyWritable)
+                                            return
+                                        inputUnitHz = replayController.radioTxFrequencyHz
+                                                      >= 30000000 ? 1000000 : 1000
+                                        vfoTxFrequencyField.text = window.formatVfoInput(
+                                                    replayController.radioTxFrequencyHz,
+                                                    inputUnitHz)
+                                        invalidEntry = false
+                                        editing = true
+                                        vfoTxFrequencyField.forceActiveFocus()
+                                        vfoTxFrequencyField.selectAll()
+                                    }
+                                    function dismissEdit() {
+                                        invalidEntry = false
+                                        editing = false
+                                    }
+                                    function acceptEdit() {
+                                        if (appSettings.setControlledTxFrequency(
+                                                    vfoTxFrequencyField.text,
+                                                    inputUnitHz)) {
+                                            dismissEdit()
+                                            window.contentItem.forceActiveFocus()
+                                        } else {
+                                            invalidEntry = true
+                                            vfoTxFrequencyField.forceActiveFocus()
+                                            vfoTxFrequencyField.selectAll()
+                                        }
+                                    }
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        radius: 5
+                                        color: "#110d08"
+                                        border.color: vfoTxEditor.invalidEntry
+                                                      ? "#ff7b84" : "#59452f"
+                                    }
                                     Label {
                                         objectName: "vfoTxLabel"
                                         anchors.left: parent.left
@@ -1379,7 +1498,9 @@ ApplicationWindow {
                                         anchors.right: parent.right
                                         anchors.rightMargin: 8
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "TX  " + window.formatRigFrequency(
+                                        visible: !vfoTxEditor.editing
+                                        text: "VFO " + appSettings.radioTxVfo + "  ·  TX  "
+                                              + window.formatRigFrequency(
                                                   replayController.radioTxFrequencyHz > 0
                                                   ? replayController.radioTxFrequencyHz
                                                   : replayController.radioRxFrequencyHz)
@@ -1392,12 +1513,65 @@ ApplicationWindow {
                                         horizontalAlignment: Text.AlignRight
                                         elide: Text.ElideLeft
                                     }
-                                    ToolTip.visible: txFrequencyMouse.containsMouse
-                                    ToolTip.text: "TX frequency display; provider-neutral TX editing follows in the radio-control slice"
                                     MouseArea {
                                         id: txFrequencyMouse
                                         anchors.fill: parent
                                         hoverEnabled: true
+                                        visible: !vfoTxEditor.editing
+                                        enabled: appSettings.radioTxFrequencyWritable
+                                        cursorShape: enabled ? Qt.IBeamCursor : Qt.ArrowCursor
+                                        onClicked: vfoTxEditor.beginEdit()
+                                    }
+                                    ToolTip.visible: txFrequencyMouse.containsMouse
+                                    ToolTip.text: appSettings.radioTxFrequencyWritable
+                                        ? "Click to enter the VFO B / TX frequency; this enables split if needed"
+                                        : "TX frequency is provider read-only or unavailable"
+                                    RowLayout {
+                                        anchors.fill: parent
+                                        anchors.margins: 6
+                                        visible: vfoTxEditor.editing
+                                        Label {
+                                            text: "TX"
+                                            color: "#ff9b54"
+                                            font.weight: Font.Bold
+                                        }
+                                        TextField {
+                                            id: vfoTxFrequencyField
+                                            objectName: "vfoTxFrequencyField"
+                                            Layout.fillWidth: true
+                                            selectByMouse: true
+                                            color: vfoTxEditor.invalidEntry ? "#ff7b84" : "#fff3df"
+                                            selectionColor: "#ff9b54"
+                                            selectedTextColor: "#1b0d03"
+                                            font.family: "monospace"
+                                            font.pixelSize: 17
+                                            font.weight: Font.Bold
+                                            background: Rectangle {
+                                                radius: 3
+                                                color: "#050302"
+                                                border.color: vfoTxEditor.invalidEntry
+                                                              ? "#ff7b84" : "#795f40"
+                                            }
+                                            Keys.onPressed: function(event) {
+                                                if (event.key === Qt.Key_Escape) {
+                                                    vfoTxEditor.dismissEdit()
+                                                    window.contentItem.forceActiveFocus()
+                                                    event.accepted = true
+                                                } else if (event.key === Qt.Key_Return
+                                                           || event.key === Qt.Key_Enter) {
+                                                    vfoTxEditor.acceptEdit()
+                                                    event.accepted = true
+                                                }
+                                            }
+                                            onActiveFocusChanged: {
+                                                if (!activeFocus && vfoTxEditor.editing)
+                                                    vfoTxEditor.dismissEdit()
+                                            }
+                                        }
+                                        Label {
+                                            text: vfoTxEditor.inputUnitHz === 1000000 ? "MHz" : "kHz"
+                                            color: "#b59c80"
+                                        }
                                     }
                                 }
                             }
@@ -1406,7 +1580,8 @@ ApplicationWindow {
                 }
                 Label {
                     objectName: "vfoRxEditErrorLabel"
-                    visible: vfoDisplay.visible && vfoRxEditor.invalidEntry
+                    visible: vfoDisplay.visible &&
+                             (vfoRxEditor.invalidEntry || vfoTxEditor.invalidEntry)
                     text: appSettings.statusMessage
                     color: "#ff7b84"
                     font.pixelSize: 11
@@ -1624,7 +1799,10 @@ ApplicationWindow {
                                         transmitController.selectTarget(
                                             modelData.id, modelData.callsign,
                                             modelData.frequencyKind === "RF"
-                                            ? modelData.displayFrequencyHz : 0)
+                                            ? modelData.displayFrequencyHz : 0,
+                                            modelData.currentSenderWpm > 0
+                                            ? modelData.currentSenderWpm
+                                            : modelData.wpm)
                                         txDrawer.open()
                                     }
                                     ToolTip.visible: hovered
@@ -2323,18 +2501,15 @@ ApplicationWindow {
                             ? "Normalize this operator-authored text and open exact preview confirmation"
                             : "Confirm the selected station first"
                     }
-                    Label { text: "WPM" }
-                    Slider {
-                        from: 5
-                        to: 80
-                        stepSize: 1
-                        value: transmitController.wordsPerMinute
-                        onMoved: transmitController.wordsPerMinute = Math.round(value)
+                    Label {
                         Layout.fillWidth: true
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Transmit speed " + Math.round(value) + " WPM"
+                        text: "TX speed  " + transmitController.wordsPerMinute
+                              + " WPM  •  " + transmitController.speedSource
+                        color: "#91a0b1"
+                        ToolTip.visible: txSpeedHelp.hovered
+                        ToolTip.text: "Configured in Settings → Radio; RX matching is snapshotted before message preparation"
+                        HoverHandler { id: txSpeedHelp }
                     }
-                    Label { text: transmitController.wordsPerMinute }
                 }
                 Rectangle {
                     Layout.fillWidth: true

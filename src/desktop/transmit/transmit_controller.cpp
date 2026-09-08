@@ -6,6 +6,7 @@
 #include <QVector>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace cwassistant::desktop {
@@ -84,6 +85,9 @@ double TransmitController::previewDurationSeconds() const noexcept {
 int TransmitController::wordsPerMinute() const noexcept {
   return words_per_minute_;
 }
+const QString& TransmitController::speedSource() const noexcept {
+  return speed_source_;
+}
 const QString& TransmitController::report() const noexcept { return report_; }
 bool TransmitController::autoQsoEnabled() const noexcept {
   return auto_qso_enabled_;
@@ -100,6 +104,17 @@ const QString& TransmitController::proposedMessage() const noexcept {
 const QString& TransmitController::proposedReason() const noexcept {
   return proposed_reason_;
 }
+bool TransmitController::hardwareAvailable() const noexcept {
+  return hardware_enabled_ && hardware_ && hardware_->available();
+}
+bool TransmitController::transmitting() const noexcept {
+  return hardware_ && hardware_->busy();
+}
+const QString& TransmitController::hardwareStatus() const noexcept {
+  static const QString unavailable =
+      QStringLiteral("Direct transmit adapter is not configured");
+  return hardware_ ? hardware_->status() : unavailable;
+}
 
 void TransmitController::setStatus(QString status) {
   status_ = std::move(status);
@@ -112,6 +127,27 @@ void TransmitController::setOwnCallsign(const QString& callsign) {
   own_callsign_ = normalized ? QString::fromStdString(*normalized) : QString{};
   if (own_callsign_.isEmpty() && armed()) disarm();
   emit changed();
+}
+
+void TransmitController::configureTxSpeed(const int mode,
+                                          const int fixed_wpm) {
+  tx_speed_mode_ = std::clamp(mode, 0, 1);
+  fixed_tx_wpm_ = std::clamp(fixed_wpm, 5, 80);
+  const bool can_match = tx_speed_mode_ == 0 &&
+      std::isfinite(selected_rx_wpm_) && selected_rx_wpm_ >= 5.0 &&
+      selected_rx_wpm_ <= 80.0;
+  const int selected = can_match
+      ? std::clamp(static_cast<int>(std::lround(selected_rx_wpm_)), 5, 80)
+      : fixed_tx_wpm_;
+  const QString source = can_match
+      ? QStringLiteral("Matched selected RX")
+      : (tx_speed_mode_ == 0 ? QStringLiteral("Fixed fallback; RX WPM unavailable")
+                             : QStringLiteral("Fixed setting"));
+  const bool source_changed = speed_source_ != source;
+  speed_source_ = source;
+  const int previous_speed = words_per_minute_;
+  setWordsPerMinute(selected);
+  if (source_changed && previous_speed == words_per_minute_) emit changed();
 }
 
 void TransmitController::setWordsPerMinute(const int value) {
@@ -159,6 +195,7 @@ void TransmitController::disarm() {
   guard_.disarm();
   target_channel_id_ = 0;
   target_rf_hz_ = 0;
+  selected_rx_wpm_ = 0.0;
   observed_text_length_ = 0;
   proposed_message_.clear();
   proposed_reason_.clear();
@@ -168,7 +205,8 @@ void TransmitController::disarm() {
 
 bool TransmitController::selectTarget(const qulonglong channel_id,
                                       const QString& callsign,
-                                      const qulonglong rf_frequency_hz) {
+                                      const qulonglong rf_frequency_hz,
+                                      const double received_wpm) {
   if (!armed()) {
     setStatus(QStringLiteral("Arm TX before selecting a station"));
     return false;
@@ -182,6 +220,10 @@ bool TransmitController::selectTarget(const qulonglong channel_id,
   }
   target_channel_id_ = channel_id;
   target_rf_hz_ = rf_frequency_hz;
+  selected_rx_wpm_ = std::isfinite(received_wpm) && received_wpm >= 5.0 &&
+          received_wpm <= 80.0
+      ? received_wpm : 0.0;
+  configureTxSpeed(tx_speed_mode_, fixed_tx_wpm_);
   observed_text_length_ = 0;
   clearPrepared();
   setStatus(QStringLiteral("Retype %1 exactly to confirm this QSO target")
@@ -270,6 +312,7 @@ bool TransmitController::endQso() {
   if (!guard_.end_qso()) return false;
   target_channel_id_ = 0;
   target_rf_hz_ = 0;
+  selected_rx_wpm_ = 0.0;
   observed_text_length_ = 0;
   clearPrepared();
   setStatus(QStringLiteral("QSO ended; TX remains armed"));
@@ -280,6 +323,7 @@ void TransmitController::emergencyRelease() {
   guard_.emergency_release();
   target_channel_id_ = 0;
   target_rf_hz_ = 0;
+  selected_rx_wpm_ = 0.0;
   observed_text_length_ = 0;
   clearPrepared();
   proposed_message_.clear();

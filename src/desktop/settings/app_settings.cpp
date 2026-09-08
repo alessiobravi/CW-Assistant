@@ -30,6 +30,22 @@ constexpr auto kSchemaVersion = 1;
 #ifdef Q_OS_WIN
 constexpr long kOmniRigOnlineStatus = 4;
 constexpr long kOmniRigReceiveState = 0x00200000;
+constexpr long kOmniRigVfoAa = 0x00000080;
+constexpr long kOmniRigVfoAb = 0x00000100;
+constexpr long kOmniRigVfoBa = 0x00000200;
+constexpr long kOmniRigVfoBb = 0x00000400;
+constexpr long kOmniRigVfoA = 0x00000800;
+constexpr long kOmniRigVfoB = 0x00001000;
+constexpr long kOmniRigSplitOn = 0x00008000;
+constexpr long kOmniRigSplitOff = 0x00010000;
+constexpr long kOmniRigCwUpper = 0x00800000;
+constexpr long kOmniRigCwLower = 0x01000000;
+constexpr long kOmniRigSsbUpper = 0x02000000;
+constexpr long kOmniRigSsbLower = 0x04000000;
+constexpr long kOmniRigDigitalUpper = 0x08000000;
+constexpr long kOmniRigDigitalLower = 0x10000000;
+constexpr long kOmniRigAm = 0x20000000;
+constexpr long kOmniRigFm = 0x40000000;
 
 bool automation_property(IDispatch* object, const wchar_t* name,
                          VARIANT* value) {
@@ -139,6 +155,72 @@ bool automation_put_frequency(IDispatch* object, const wchar_t* name,
   return SUCCEEDED(object->Invoke(property_id, IID_NULL, LOCALE_USER_DEFAULT,
                                   DISPATCH_PROPERTYPUT, &parameters, nullptr,
                                   nullptr, nullptr));
+}
+
+bool automation_put_integer(IDispatch* object, const wchar_t* name,
+                            const long integer) {
+  OLECHAR* property_name = const_cast<OLECHAR*>(name);
+  DISPID property_id{};
+  if (FAILED(object->GetIDsOfNames(IID_NULL, &property_name, 1,
+                                   LOCALE_USER_DEFAULT, &property_id))) {
+    return false;
+  }
+  VARIANT value;
+  VariantInit(&value);
+  value.vt = VT_I4;
+  value.lVal = integer;
+  DISPID named_argument = DISPID_PROPERTYPUT;
+  DISPPARAMS parameters{&value, &named_argument, 1, 1};
+  return SUCCEEDED(object->Invoke(property_id, IID_NULL, LOCALE_USER_DEFAULT,
+                                  DISPATCH_PROPERTYPUT, &parameters, nullptr,
+                                  nullptr, nullptr));
+}
+
+cwassistant::core::RadioMode omni_rig_mode(const long mode) noexcept {
+  using cwassistant::core::RadioMode;
+  switch (mode) {
+    case kOmniRigCwUpper: return RadioMode::Cw;
+    case kOmniRigCwLower: return RadioMode::CwReverse;
+    case kOmniRigSsbUpper: return RadioMode::UpperSideband;
+    case kOmniRigSsbLower: return RadioMode::LowerSideband;
+    case kOmniRigDigitalUpper: return RadioMode::DigitalUpper;
+    case kOmniRigDigitalLower: return RadioMode::DigitalLower;
+    case kOmniRigAm: return RadioMode::Am;
+    case kOmniRigFm: return RadioMode::Fm;
+    default: return RadioMode::Unknown;
+  }
+}
+
+std::optional<long> omni_rig_mode_value(
+    const cwassistant::core::RadioMode mode) noexcept {
+  using cwassistant::core::RadioMode;
+  switch (mode) {
+    case RadioMode::Cw: return kOmniRigCwUpper;
+    case RadioMode::CwReverse: return kOmniRigCwLower;
+    case RadioMode::UpperSideband: return kOmniRigSsbUpper;
+    case RadioMode::LowerSideband: return kOmniRigSsbLower;
+    case RadioMode::DigitalUpper: return kOmniRigDigitalUpper;
+    case RadioMode::DigitalLower: return kOmniRigDigitalLower;
+    case RadioMode::Am: return kOmniRigAm;
+    case RadioMode::Fm: return kOmniRigFm;
+    default: return std::nullopt;
+  }
+}
+
+const wchar_t* omni_rig_frequency_property(const long vfo,
+                                           const bool tx) noexcept {
+  const bool uses_a = tx
+      ? vfo == kOmniRigVfoAa || vfo == kOmniRigVfoBa || vfo == kOmniRigVfoA
+      : vfo == kOmniRigVfoAa || vfo == kOmniRigVfoAb || vfo == kOmniRigVfoA;
+  const bool uses_b = tx
+      ? vfo == kOmniRigVfoAb || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB
+      : vfo == kOmniRigVfoBa || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB;
+  return uses_a ? L"FreqA" : uses_b ? L"FreqB" : nullptr;
+}
+
+QString omni_rig_vfo_label(const wchar_t* property) {
+  if (property == nullptr) return {};
+  return property[4] == L'A' ? QStringLiteral("A") : QStringLiteral("B");
 }
 #endif
 
@@ -328,16 +410,55 @@ int AppSettings::radioTuningStepHz() const noexcept {
   return radio_tuning_step_hz_;
 }
 bool AppSettings::radioFrequencyWritable() const noexcept {
-  if (!radio_enabled_ || !audio_input_radio_linked_ ||
-      !controlledRxRfHz().has_value()) {
-    return false;
-  }
-  if (frequency_backend_index_ == 0) {
-    return omnirig_rx_write_target_ !=
-           cwassistant::core::OmniRigRxFrequencyTarget::None;
-  }
-  return frequency_backend_index_ == 2 && cat4om_client_ &&
-         cat4om_client_->canSetFrequency();
+  return controlledRxRfHz().has_value() &&
+         cwassistant::core::radio_has_capability(
+             radio_state_.capabilities,
+             cwassistant::core::RadioCapability::SetRxFrequency);
+}
+bool AppSettings::radioTxFrequencyWritable() const noexcept {
+  return cwassistant::core::radio_has_capability(
+      radio_state_.capabilities,
+      cwassistant::core::RadioCapability::SetTxFrequency);
+}
+bool AppSettings::radioRxModeWritable() const noexcept {
+  return cwassistant::core::radio_has_capability(
+      radio_state_.capabilities, cwassistant::core::RadioCapability::SetRxMode);
+}
+bool AppSettings::radioTxModeWritable() const noexcept {
+  return cwassistant::core::radio_has_capability(
+      radio_state_.capabilities, cwassistant::core::RadioCapability::SetTxMode);
+}
+bool AppSettings::radioSplitWritable() const noexcept {
+  return cwassistant::core::radio_has_capability(
+      radio_state_.capabilities, cwassistant::core::RadioCapability::SetSplit);
+}
+QString AppSettings::radioRxMode() const {
+  const auto token =
+      cwassistant::core::radio_mode_token(radio_state_.rx_mode.mode);
+  return QString::fromLatin1(token.data(),
+                             static_cast<qsizetype>(token.size()));
+}
+QString AppSettings::radioTxMode() const {
+  const auto token =
+      cwassistant::core::radio_mode_token(radio_state_.tx_mode.mode);
+  return QString::fromLatin1(token.data(),
+                             static_cast<qsizetype>(token.size()));
+}
+QString AppSettings::radioRxVfo() const {
+  return radio_state_.rx_vfo.observation ==
+                 cwassistant::core::RadioObservation::Known
+      ? QString::fromStdString(radio_state_.rx_vfo.identifier)
+      : QStringLiteral("?");
+}
+QString AppSettings::radioTxVfo() const {
+  return radio_state_.tx_vfo.observation ==
+                 cwassistant::core::RadioObservation::Known
+      ? QString::fromStdString(radio_state_.tx_vfo.identifier)
+      : QStringLiteral("?");
+}
+bool AppSettings::radioSplitKnown() const noexcept {
+  return radio_state_.split.observation ==
+         cwassistant::core::RadioObservation::Known;
 }
 int AppSettings::omniRigSlot() const noexcept { return omnirig_slot_; }
 const QString& AppSettings::cat4omUrl() const noexcept { return cat4om_url_; }
@@ -384,18 +505,21 @@ AppSettings::resolvedControlledFrequencies() const noexcept {
   if (!radio_enabled_ || !audio_input_radio_linked_) {
     return std::nullopt;
   }
-  std::optional<cwassistant::core::VfoFrequencyPlan> plan;
-  if (frequency_backend_index_ == 0 && omnirig_rx_dial_hz_) {
-    plan = cwassistant::core::VfoFrequencyPlan{
-        .rx_dial_hz = *omnirig_rx_dial_hz_,
-        .tx_dial_hz = *omnirig_rx_dial_hz_,
-        .split_enabled = false};
-  } else if (frequency_backend_index_ == 2 && cat4om_client_) {
-    plan = cat4om_client_->frequencyPlan();
+  if (radio_state_.rx_frequency.observation !=
+          cwassistant::core::RadioObservation::Known ||
+      radio_state_.tx_frequency.observation !=
+          cwassistant::core::RadioObservation::Known ||
+      radio_state_.split.observation !=
+          cwassistant::core::RadioObservation::Known) {
+    return std::nullopt;
   }
-  if (!plan) return std::nullopt;
+  const cwassistant::core::VfoFrequencyPlan plan{
+      .rx_dial_hz = radio_state_.rx_frequency.hz,
+      .tx_dial_hz = radio_state_.tx_frequency.hz,
+      .split_enabled = radio_state_.split.split ==
+                       cwassistant::core::RadioSplit::Enabled};
   return cwassistant::core::resolve_frequencies(
-      *plan, {.rx_offset_hz = rx_transverter_offset_hz_,
+      plan, {.rx_offset_hz = rx_transverter_offset_hz_,
               .tx_offset_hz = tx_transverter_offset_hz_});
 }
 
@@ -419,6 +543,16 @@ bool AppSettings::controlledSplitActive() const noexcept {
 void AppSettings::refreshControlledFrequency() {
   std::optional<std::uint64_t> frequency;
   auto write_target = cwassistant::core::OmniRigRxFrequencyTarget::None;
+  cwassistant::core::RadioState next_state;
+  next_state.availability = cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_frequency.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_frequency.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_mode.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_mode.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_vfo.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_vfo.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.split.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.capabilities.observation = cwassistant::core::RadioObservation::Unavailable;
 #ifdef Q_OS_WIN
   if (radio_enabled_ && audio_input_radio_linked_ &&
       frequency_backend_index_ == 0 && ensureOmniRigAutomation()) {
@@ -440,21 +574,89 @@ void AppSettings::refreshControlledFrequency() {
           write_target = omni_rig_rx_write_target(rig);
           omnirig_capability_refresh_clock_.restart();
         }
-        VARIANT status_value;
-        VARIANT frequency_value;
-        const bool has_status =
-            automation_property(rig, L"Status", &status_value);
-        const bool has_frequency =
-            automation_property(rig, L"Freq", &frequency_value);
-        const long status = has_status &&
-                                 (status_value.vt == VT_I4 ||
-                                  status_value.vt == VT_INT)
-            ? status_value.lVal : -1;
-        if (status == kOmniRigOnlineStatus && has_frequency) {
-          frequency = automation_frequency(frequency_value);
+        const auto integer_property = [rig](const wchar_t* name) {
+          VARIANT value;
+          const bool present = automation_property(rig, name, &value);
+          const auto result = present ? automation_integer(value) : std::nullopt;
+          if (present) VariantClear(&value);
+          return result;
+        };
+        const auto frequency_property = [rig](const wchar_t* name) {
+          VARIANT value;
+          const bool present = automation_property(rig, name, &value);
+          const auto result = present ? automation_frequency(value) : std::nullopt;
+          if (present) VariantClear(&value);
+          return result;
+        };
+        const auto status = integer_property(L"Status");
+        if (status && *status == kOmniRigOnlineStatus) {
+          using namespace cwassistant::core;
+          next_state = {};
+          next_state.availability = RadioObservation::Known;
+          next_state.capabilities.observation = RadioObservation::Known;
+          const auto writable = integer_property(L"WriteableParams");
+          const auto vfo = integer_property(L"Vfo");
+          const auto split = integer_property(L"Split");
+          const auto mode = integer_property(L"Mode");
+          const wchar_t* rx_property =
+              vfo ? omni_rig_frequency_property(*vfo, false) : nullptr;
+          const wchar_t* tx_property =
+              vfo ? omni_rig_frequency_property(*vfo, true) : nullptr;
+          auto rx = rx_property ? frequency_property(rx_property)
+                                : frequency_property(L"Freq");
+          auto tx = tx_property ? frequency_property(tx_property) : std::nullopt;
+          if (rx) {
+            frequency = rx;
+            next_state.rx_frequency = {RadioObservation::Known, *rx};
+          }
+          if (tx) next_state.tx_frequency = {RadioObservation::Known, *tx};
+          if (rx_property) {
+            next_state.rx_vfo = {RadioObservation::Known,
+                                 omni_rig_vfo_label(rx_property).toStdString()};
+          }
+          if (tx_property) {
+            next_state.tx_vfo = {RadioObservation::Known,
+                                 omni_rig_vfo_label(tx_property).toStdString()};
+          }
+          if (split && (*split == kOmniRigSplitOn ||
+                        *split == kOmniRigSplitOff)) {
+            const bool split_on = *split == kOmniRigSplitOn;
+            next_state.split = {RadioObservation::Known,
+                                split_on ? RadioSplit::Enabled
+                                         : RadioSplit::Disabled};
+            if (!split_on && rx) {
+              next_state.tx_frequency = {RadioObservation::Known, *rx};
+              next_state.tx_vfo = next_state.rx_vfo;
+            }
+          }
+          if (mode) {
+            const auto mapped = omni_rig_mode(*mode);
+            if (mapped != RadioMode::Unknown) {
+              next_state.rx_mode = {RadioObservation::Known, mapped};
+              if (next_state.split.split == RadioSplit::Disabled)
+                next_state.tx_mode = next_state.rx_mode;
+            }
+          }
+          if (write_target != OmniRigRxFrequencyTarget::None)
+            next_state.capabilities.bits |=
+                radio_capability_bit(RadioCapability::SetRxFrequency);
+          if (writable && tx_property != nullptr) {
+            const auto target_bit = tx_property[4] == L'A' ? 0x04L : 0x08L;
+            if ((*writable & target_bit) != 0)
+              next_state.capabilities.bits |=
+                  radio_capability_bit(RadioCapability::SetTxFrequency);
+          }
+          constexpr long kModeBits = kOmniRigCwUpper | kOmniRigCwLower |
+              kOmniRigSsbUpper | kOmniRigSsbLower | kOmniRigDigitalUpper |
+              kOmniRigDigitalLower | kOmniRigAm | kOmniRigFm;
+          if (writable && (*writable & kModeBits) != 0)
+            next_state.capabilities.bits |=
+                radio_capability_bit(RadioCapability::SetRxMode);
+          if (writable && (*writable & kOmniRigSplitOn) != 0 &&
+              (*writable & kOmniRigSplitOff) != 0)
+            next_state.capabilities.bits |=
+                radio_capability_bit(RadioCapability::SetSplit);
         }
-        if (has_status) VariantClear(&status_value);
-        if (has_frequency) VariantClear(&frequency_value);
       }
       VariantClear(&rig_value);
     }
@@ -462,10 +664,15 @@ void AppSettings::refreshControlledFrequency() {
     omnirig_capability_refresh_clock_.invalidate();
   }
 #endif
+  if (radio_enabled_ && audio_input_radio_linked_ &&
+      frequency_backend_index_ == 2 && cat4om_client_) {
+    next_state = cat4om_client_->radioState();
+  }
   if (frequency != omnirig_rx_dial_hz_ ||
-      write_target != omnirig_rx_write_target_) {
+      write_target != omnirig_rx_write_target_ || next_state != radio_state_) {
     omnirig_rx_dial_hz_ = frequency;
     omnirig_rx_write_target_ = write_target;
+    radio_state_ = std::move(next_state);
     emit radioFrequencyChanged();
     emit radioFrequencyControlChanged();
   }
@@ -593,11 +800,136 @@ bool AppSettings::writeControlledRxDialFrequency(
           : QStringLiteral("CAT4OM did not accept the RX-frequency request."));
   return false;
 }
+
+bool AppSettings::setControlledTxFrequency(const QString& value,
+                                           const qulonglong unit_hz) {
+  if (unit_hz != 1'000 && unit_hz != 1'000'000) return false;
+  const auto requested_rf = cwassistant::core::parse_frequency_value(
+      value.toStdString(), static_cast<std::uint64_t>(unit_hz));
+  if (!requested_rf) {
+    setStatusMessage(QStringLiteral("Enter a valid positive TX frequency."));
+    return false;
+  }
+  const auto dial = cwassistant::core::resolve_dial_frequency(
+      *requested_rf, tx_transverter_offset_hz_);
+  if (!dial) {
+    setStatusMessage(QStringLiteral(
+        "That TX frequency cannot be represented with the configured transverter offset."));
+    return false;
+  }
+  // A deliberate TX-frequency edit is the operator action that establishes
+  // independent VFO operation. Never silently change split merely on connect.
+  if (radio_state_.split.split != cwassistant::core::RadioSplit::Enabled &&
+      !setControlledSplit(true)) {
+    return false;
+  }
+  if (!writeControlledTxDialFrequency(*dial)) return false;
+  setStatusMessage(QStringLiteral(
+      "TX frequency requested on the provider's TX VFO; split remains enabled and provider readback is authoritative."));
+  return true;
+}
+
+bool AppSettings::cycleControlledRxMode() {
+  using cwassistant::core::RadioMode;
+  const auto current = radio_state_.rx_mode.mode;
+  const auto next = current == RadioMode::UpperSideband ? RadioMode::LowerSideband
+      : current == RadioMode::LowerSideband ? RadioMode::Cw
+      : current == RadioMode::Cw ? RadioMode::CwReverse
+                                 : RadioMode::UpperSideband;
+  return writeControlledMode(next, false);
+}
+
+bool AppSettings::toggleControlledTxMode() {
+  using cwassistant::core::RadioMode;
+  const auto next = radio_state_.tx_mode.mode == RadioMode::Cw
+                        ? RadioMode::CwReverse : RadioMode::Cw;
+  return writeControlledMode(next, true);
+}
+
+bool AppSettings::setControlledSplit(const bool enabled) {
+  const auto validation = cwassistant::core::validate_radio_command(
+      radio_state_, cwassistant::core::SetSplit{enabled});
+  if (validation != cwassistant::core::RadioCommandValidation::Valid) {
+    setStatusMessage(QStringLiteral(
+        "Split control is unavailable from the selected radio provider."));
+    return false;
+  }
+  bool accepted = false;
+  if (frequency_backend_index_ == 0) {
+#ifdef Q_OS_WIN
+    accepted = writeOmniRigSplit(enabled);
+#endif
+  } else if (frequency_backend_index_ == 2 && cat4om_client_) {
+    accepted = cat4om_client_->setSplit(enabled);
+  }
+  if (!accepted) {
+    setStatusMessage(QStringLiteral("The provider did not accept the split request."));
+    return false;
+  }
+  setStatusMessage(enabled ? QStringLiteral("Split requested; awaiting provider readback.")
+                           : QStringLiteral("Simplex requested; awaiting provider readback."));
+  return true;
+}
+
+bool AppSettings::writeControlledTxDialFrequency(
+    const std::uint64_t dial_frequency_hz) {
+  if (cwassistant::core::validate_radio_command(
+          radio_state_, cwassistant::core::SetTxFrequency{dial_frequency_hz}) !=
+      cwassistant::core::RadioCommandValidation::Valid) {
+    setStatusMessage(QStringLiteral("TX-frequency control is unavailable."));
+    return false;
+  }
+  if (frequency_backend_index_ == 0) {
+#ifdef Q_OS_WIN
+    return writeOmniRigTxFrequency(dial_frequency_hz);
+#else
+    return false;
+#endif
+  }
+  return frequency_backend_index_ == 2 && cat4om_client_ &&
+         cat4om_client_->setTxFrequency(dial_frequency_hz);
+}
+
+bool AppSettings::writeControlledMode(const cwassistant::core::RadioMode mode,
+                                      const bool tx) {
+  const cwassistant::core::RadioCommand command = tx
+      ? cwassistant::core::RadioCommand(cwassistant::core::SetTxMode{mode})
+      : cwassistant::core::RadioCommand(cwassistant::core::SetRxMode{mode});
+  if (cwassistant::core::validate_radio_command(radio_state_, command) !=
+      cwassistant::core::RadioCommandValidation::Valid) {
+    setStatusMessage(QStringLiteral("%1-mode control is unavailable from this provider.")
+                         .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
+    return false;
+  }
+  bool accepted = false;
+  if (frequency_backend_index_ == 0 && !tx) {
+#ifdef Q_OS_WIN
+    accepted = writeOmniRigMode(mode);
+#endif
+  } else if (frequency_backend_index_ == 2 && cat4om_client_) {
+    const auto& vfo = tx ? radio_state_.tx_vfo : radio_state_.rx_vfo;
+    accepted = cat4om_client_->setMode(
+        mode, QString::fromStdString(vfo.identifier), tx);
+  }
+  if (!accepted) {
+    setStatusMessage(QStringLiteral("The provider did not accept the mode request."));
+    return false;
+  }
+  setStatusMessage(QStringLiteral("%1 mode requested; awaiting provider readback.")
+                       .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
+  return true;
+}
+
 const QString& AppSettings::keyingPort() const noexcept { return keying_port_; }
+bool AppSettings::directKeyingEnabled() const noexcept {
+  return direct_keying_enabled_;
+}
 int AppSettings::pttLineIndex() const noexcept { return ptt_line_index_; }
 int AppSettings::keyLineIndex() const noexcept { return key_line_index_; }
 bool AppSettings::pttActiveHigh() const noexcept { return ptt_active_high_; }
 bool AppSettings::keyActiveHigh() const noexcept { return key_active_high_; }
+int AppSettings::txSpeedMode() const noexcept { return tx_speed_mode_; }
+int AppSettings::fixedTxWpm() const noexcept { return fixed_tx_wpm_; }
 int AppSettings::targetFps() const noexcept { return target_fps_; }
 int AppSettings::waterfallRate() const noexcept { return waterfall_rate_; }
 int AppSettings::waterfallTimeSpanSeconds() const noexcept {
@@ -724,10 +1056,19 @@ CWA_SETTER(setRxTransverterOffsetHz, rx_transverter_offset_hz_, qint64)
 CWA_SETTER(setTxTransverterOffsetHz, tx_transverter_offset_hz_, qint64)
 CWA_SETTER(setCwToneSidebandIndex, cw_tone_sideband_index_, int)
 CWA_SETTER(setKeyingPort, keying_port_, const QString&)
+CWA_SETTER(setDirectKeyingEnabled, direct_keying_enabled_, bool)
 CWA_SETTER(setPttLineIndex, ptt_line_index_, int)
 CWA_SETTER(setKeyLineIndex, key_line_index_, int)
 CWA_SETTER(setPttActiveHigh, ptt_active_high_, bool)
 CWA_SETTER(setKeyActiveHigh, key_active_high_, bool)
+void AppSettings::setTxSpeedMode(const int value) {
+  if (assign_if_changed(tx_speed_mode_, std::clamp(value, 0, 1)))
+    emit settingsChanged();
+}
+void AppSettings::setFixedTxWpm(const int value) {
+  if (assign_if_changed(fixed_tx_wpm_, std::clamp(value, 5, 80)))
+    emit settingsChanged();
+}
 CWA_SETTER(setTargetFps, target_fps_, int)
 CWA_SETTER(setWaterfallRate, waterfall_rate_, int)
 CWA_SETTER(setWaterfallTimeSpanSeconds, waterfall_time_span_seconds_, int)
@@ -1202,10 +1543,16 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), tx_transverter_offset_hz_);
   settings.setValue(storageKey(QStringLiteral("radio/cwToneSidebandIndex")), cw_tone_sideband_index_);
   settings.setValue(storageKey(QStringLiteral("keying/port")), keying_port_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("keying/directEnabled")),
+                    direct_keying_enabled_);
   settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/pttActiveHigh")), ptt_active_high_);
   settings.setValue(storageKey(QStringLiteral("keying/keyActiveHigh")), key_active_high_);
+  settings.setValue(storageKey(QStringLiteral("keying/txSpeedMode")),
+                    tx_speed_mode_);
+  settings.setValue(storageKey(QStringLiteral("keying/fixedTxWpm")),
+                    fixed_tx_wpm_);
   settings.setValue(storageKey(QStringLiteral("display/targetFps")), target_fps_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallRate")), waterfall_rate_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), waterfall_time_span_seconds_);
@@ -1328,10 +1675,19 @@ void AppSettings::load() {
           .toInt(),
       0, 1);
   keying_port_ = settings.value(storageKey(QStringLiteral("keying/port"))).toString();
+  direct_keying_enabled_ = settings
+      .value(storageKey(QStringLiteral("keying/directEnabled")), false)
+      .toBool();
   ptt_line_index_ = settings.value(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_).toInt();
   key_line_index_ = settings.value(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_).toInt();
   ptt_active_high_ = settings.value(storageKey(QStringLiteral("keying/pttActiveHigh")), true).toBool();
   key_active_high_ = settings.value(storageKey(QStringLiteral("keying/keyActiveHigh")), true).toBool();
+  tx_speed_mode_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("keying/txSpeedMode")), 0)
+          .toInt(), 0, 1);
+  fixed_tx_wpm_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("keying/fixedTxWpm")), 20)
+          .toInt(), 5, 80);
   target_fps_ = settings.value(storageKey(QStringLiteral("display/targetFps")), 60).toInt();
   waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60).toInt();
   waterfall_time_span_seconds_ =
@@ -1550,6 +1906,9 @@ void AppSettings::resetInMemorySettings() {
   cat4om_password_.clear();
   cat_port_.clear();
   keying_port_.clear();
+  direct_keying_enabled_ = false;
+  tx_speed_mode_ = 0;
+  fixed_tx_wpm_ = 20;
   split_enabled_ = false;
   rx_transverter_offset_hz_ = 0;
   tx_transverter_offset_hz_ = 0;
@@ -1671,6 +2030,82 @@ bool AppSettings::writeOmniRigRxFrequency(
                                   : nullptr;
     written = property != nullptr &&
               automation_put_frequency(rig, property, dial_frequency_hz);
+  }
+  VariantClear(&rig_value);
+  return written;
+}
+
+bool AppSettings::writeOmniRigTxFrequency(
+    const std::uint64_t dial_frequency_hz) {
+  if (!ensureOmniRigAutomation()) return false;
+  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+  VARIANT rig_value;
+  const auto rig_property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
+  if (!automation_property(automation, rig_property, &rig_value)) return false;
+  IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+  bool written = false;
+  if (rig != nullptr) {
+    VARIANT vfo_value;
+    VARIANT writable_value;
+    const bool has_vfo = automation_property(rig, L"Vfo", &vfo_value);
+    const bool has_writable =
+        automation_property(rig, L"WriteableParams", &writable_value);
+    const auto vfo = has_vfo ? automation_integer(vfo_value) : std::nullopt;
+    const auto writable = has_writable ? automation_integer(writable_value)
+                                       : std::nullopt;
+    const wchar_t* property =
+        vfo ? omni_rig_frequency_property(*vfo, true) : nullptr;
+    const long required = property && property[4] == L'A' ? 0x04L : 0x08L;
+    written = property && writable && ((*writable & required) != 0) &&
+              automation_put_frequency(rig, property, dial_frequency_hz);
+    if (has_vfo) VariantClear(&vfo_value);
+    if (has_writable) VariantClear(&writable_value);
+  }
+  VariantClear(&rig_value);
+  return written;
+}
+
+bool AppSettings::writeOmniRigMode(const cwassistant::core::RadioMode mode) {
+  const auto requested = omni_rig_mode_value(mode);
+  if (!requested || !ensureOmniRigAutomation()) return false;
+  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+  VARIANT rig_value;
+  const auto rig_property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
+  if (!automation_property(automation, rig_property, &rig_value)) return false;
+  IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+  bool written = false;
+  if (rig != nullptr) {
+    VARIANT writable_value;
+    const bool present =
+        automation_property(rig, L"WriteableParams", &writable_value);
+    const auto writable = present ? automation_integer(writable_value)
+                                  : std::nullopt;
+    written = writable && ((*writable & *requested) != 0) &&
+              automation_put_integer(rig, L"Mode", *requested);
+    if (present) VariantClear(&writable_value);
+  }
+  VariantClear(&rig_value);
+  return written;
+}
+
+bool AppSettings::writeOmniRigSplit(const bool enabled) {
+  if (!ensureOmniRigAutomation()) return false;
+  auto* automation = static_cast<IDispatch*>(omnirig_automation_);
+  VARIANT rig_value;
+  const auto rig_property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
+  if (!automation_property(automation, rig_property, &rig_value)) return false;
+  IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+  bool written = false;
+  if (rig != nullptr) {
+    const long requested = enabled ? kOmniRigSplitOn : kOmniRigSplitOff;
+    VARIANT writable_value;
+    const bool present =
+        automation_property(rig, L"WriteableParams", &writable_value);
+    const auto writable = present ? automation_integer(writable_value)
+                                  : std::nullopt;
+    written = writable && ((*writable & requested) != 0) &&
+              automation_put_integer(rig, L"Split", requested);
+    if (present) VariantClear(&writable_value);
   }
   VariantClear(&rig_value);
   return written;

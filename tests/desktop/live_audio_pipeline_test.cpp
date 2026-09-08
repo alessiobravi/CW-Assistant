@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <memory>
 #include <numbers>
 #include <string_view>
@@ -39,6 +40,7 @@ int main(int argc, char* argv[]) {
   QTemporaryDir capture_root;
   QVariantList last_channels;
   QVariantMap last_diagnostics;
+  std::vector<float> selected_monitor_audio;
   QObject::connect(
       worker, &cwassistant::desktop::LiveAudioDspWorker::debugCaptureStateChanged,
       &application,
@@ -69,10 +71,64 @@ int main(int argc, char* argv[]) {
             std::abs(channel.value(QStringLiteral("frequencyHz")).toDouble() -
                      1'000.0) < 30.0 &&
             channel.value(QStringLiteral("snrDb")).toDouble() > 6.0;
-        if (application.property("validFrame").toBool() && valid_decoder) {
-          QMetaObject::invokeMethod(worker, "stopDebugCapture",
-                                    Qt::BlockingQueuedConnection);
-          application.exit(0);
+        if (valid_decoder) {
+          application.setProperty("validDecoder", true);
+          if (!application.property("monitorConfigured").toBool()) {
+            application.setProperty("monitorConfigured", true);
+            QMetaObject::invokeMethod(
+                worker, "setMonitor", Qt::QueuedConnection, Q_ARG(int, 2),
+                Q_ARG(qulonglong,
+                      channel.value(QStringLiteral("id")).toULongLong()),
+                Q_ARG(double, 700.0));
+          }
+        }
+      });
+  QObject::connect(
+      worker, &cwassistant::desktop::LiveAudioDspWorker::monitorAudioProduced,
+      &application,
+      [&application, worker, &selected_monitor_audio](
+          const QByteArray& bytes, const double sample_rate_hz) {
+        if (!application.property("monitorConfigured").toBool() ||
+            sample_rate_hz != 48'000.0 ||
+            bytes.size() % static_cast<qsizetype>(sizeof(float)) != 0) {
+          return;
+        }
+        const qsizetype sample_count =
+            bytes.size() / static_cast<qsizetype>(sizeof(float));
+        const std::size_t old_size = selected_monitor_audio.size();
+        selected_monitor_audio.resize(
+            old_size + static_cast<std::size_t>(sample_count));
+        std::memcpy(selected_monitor_audio.data() + old_size, bytes.constData(),
+                    static_cast<std::size_t>(bytes.size()));
+        if (selected_monitor_audio.size() < 16'384U) return;
+
+        // Skip initial filter settling. The selected carrier is at 1000 Hz,
+        // while the requested monitor pitch is 700 Hz; observing energy at the
+        // latter proves this is the per-track mix/filter/re-pitch path rather
+        // than a copy of the full receiver audio.
+        const auto magnitude_at = [&selected_monitor_audio](
+                                      const double frequency_hz) {
+          double real = 0.0;
+          double imaginary = 0.0;
+          for (std::size_t index = 4'096U;
+               index < selected_monitor_audio.size(); ++index) {
+            const double phase = 2.0 * std::numbers::pi * frequency_hz *
+                                 static_cast<double>(index) / 48'000.0;
+            real += selected_monitor_audio[index] * std::cos(phase);
+            imaginary -= selected_monitor_audio[index] * std::sin(phase);
+          }
+          return std::hypot(real, imaginary);
+        };
+        const double monitor_magnitude = magnitude_at(700.0);
+        if (monitor_magnitude > 20.0 &&
+            monitor_magnitude > 5.0 * magnitude_at(1'000.0)) {
+          application.setProperty("validSelectedMonitor", true);
+          if (application.property("validFrame").toBool() &&
+              application.property("validDecoder").toBool()) {
+            QMetaObject::invokeMethod(worker, "stopDebugCapture",
+                                      Qt::BlockingQueuedConnection);
+            application.exit(0);
+          }
         }
       });
   QObject::connect(
@@ -176,10 +232,16 @@ int main(int argc, char* argv[]) {
   feeder.start();
 
   QTimer::singleShot(10'000, &application,
-                     [&application, &last_channels, &last_diagnostics] {
+                     [&application, &last_channels, &last_diagnostics,
+                      &selected_monitor_audio] {
     qCritical().noquote()
         << "live pipeline timeout: validFrame="
         << application.property("validFrame").toBool()
+        << "validDecoder="
+        << application.property("validDecoder").toBool()
+        << "validSelectedMonitor="
+        << application.property("validSelectedMonitor").toBool()
+        << "monitorSamples=" << selected_monitor_audio.size()
         << "channels=" << last_channels
         << "diagnostics=" << last_diagnostics;
     application.exit(3);

@@ -167,8 +167,11 @@ decoding hints rather than sharing one assumed contest sequence.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking an identified stream opens its decoder card. Right-clicking an
-  unmarked spectrum/waterfall frequency moves the local guide and starts a
-  neutral manual decoder probe; neither action retunes the radio.
+  unmarked spectrum/waterfall frequency starts a neutral temporary decoder
+  region without moving the independent CW guide or retuning the radio. The
+  region follows qualified carrier movement through normal bounded tracking
+  and expires after the configured stream timeout unless promoted by ordinary
+  CW verification.
 - Permit exact RX-frequency entry by activating the live VFO readout and
   provide stable down/up controls at the waterfall edges using a configurable,
   persisted step (1 kHz default). Enable them only for a linked provider with

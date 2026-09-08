@@ -14,7 +14,6 @@ namespace {
 constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
 constexpr double kCandidateMatchHoldSeconds = 0.75;
 constexpr double kManualSelectionReuseToleranceHz = 12.0;
-constexpr double kManualProbeLifetimeSeconds = 30.0;
 constexpr double kCharacterRefinementEvidenceSeconds = 3.0;
 constexpr std::size_t kMaximumPresentationText = 2'048;
 
@@ -541,12 +540,6 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
           candidate.frequency_hz - predicted_frequency);
       const double presentation_distance = std::abs(
           candidate.frequency_hz - track.presentation_frequency_hz);
-      if (track.operator_selected &&
-          std::abs(candidate.frequency_hz -
-                   track.identity_origin_frequency_hz) >
-              kManualSelectionReuseToleranceHz) {
-        continue;
-      }
       if (track.spectral_observations >=
               config_.minimum_spectral_observations &&
           (std::min(predicted_distance, presentation_distance) >
@@ -620,12 +613,6 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
                      std::abs(track->presentation_frequency_hz -
                               candidate.frequency_hz))
           : predicted_distance;
-      if (track->operator_selected &&
-          std::abs(candidate.frequency_hz -
-                   track->identity_origin_frequency_hz) >
-              kManualSelectionReuseToleranceHz) {
-        continue;
-      }
       // Once a track has accumulated enough evidence, a large innovation is
       // a different signal, not ordinary drift. Refusing that association is
       // what prevents an old decoder/text history from walking across nearby
@@ -731,12 +718,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         ? static_cast<double>(timestamp_ns - nearest->last_frequency_update_ns) /
               1'000'000'000.0
         : 0.0;
-    if (nearest->operator_selected && !nearest->ever_verified) {
-      // A manual probe analyzes the operator's exact center. Candidate-bin
-      // jitter inside the small association window proves presence but must
-      // not retune the mixer or make two close probes converge.
-      nearest->drift_hz_per_second = 0.0;
-    } else if (elapsed_seconds > 0.0 && elapsed_seconds <= 1.0) {
+    if (elapsed_seconds > 0.0 && elapsed_seconds <= 1.0) {
       const double predicted_frequency = nearest->frequency_hz +
           nearest->drift_hz_per_second * elapsed_seconds;
       const double innovation = candidate.frequency_hz - predicted_frequency;
@@ -754,11 +736,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     nearest->last_detected_ns = timestamp_ns;
     nearest->last_candidate_match_ns = timestamp_ns;
     nearest->consecutive_spectrum_misses = 0;
-    if (!nearest->operator_selected || nearest->ever_verified) {
-      observePresentationFrequency(*nearest, candidate.frequency_hz,
-                                   timestamp_ns);
-    }
-    if (nearest->verification_state == CwTrackState::Verified) {
+    observePresentationFrequency(*nearest, candidate.frequency_hz,
+                                 timestamp_ns);
+    if (nearest->verification_state == CwTrackState::Verified ||
+        (nearest->operator_selected && !nearest->ever_verified)) {
       followVerifiedPresentation(*nearest, timestamp_ns);
     }
     if (nearest->color_assigned && nearest->ever_verified) {
@@ -821,7 +802,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         static_cast<double>(timestamp_ns - last_activity_ns) /
         1'000'000'000.0;
     const double retention = unverified_manual
-        ? kManualProbeLifetimeSeconds
+        ? config_.decoded_track_retention_seconds
         : track.verification_state != CwTrackState::Verified
         ? (!track.update.text.empty() ||
                    !track.update.provisional_text.empty() ||
@@ -912,7 +893,9 @@ std::uint64_t CwChannelBank::selectFrequency(
     resetFilter(*selected);
   }
   // Selection is only an instruction to analyze this slice. It deliberately
-  // does not add persistence, keying, cadence, or text evidence.
+  // does not add persistence, keying, cadence, or text evidence. Subsequent
+  // measured carrier associations may move its DSP and presentation centers
+  // through the same bounded tracker used by automatically detected streams.
   rebuildSnapshots(last_spectrum_timestamp_ns_);
   return selected->id;
 }

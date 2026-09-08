@@ -32,14 +32,21 @@ class Cat4OmClient final : public QObject {
   [[nodiscard]] bool connected() const noexcept;
   [[nodiscard]] bool canWrite() const noexcept;
   [[nodiscard]] bool canSetFrequency() const noexcept;
+  [[nodiscard]] bool canSetTxFrequency() const noexcept;
+  [[nodiscard]] bool canSetMode() const noexcept;
+  [[nodiscard]] bool canSetSplit() const noexcept;
   [[nodiscard]] QString statusText() const;
   [[nodiscard]] QString radioId() const;
   [[nodiscard]] std::optional<cwassistant::core::VfoFrequencyPlan>
   frequencyPlan() const noexcept;
+  [[nodiscard]] cwassistant::core::RadioState radioState() const noexcept;
 
   bool requestOwnership();
   bool setFrequency(std::uint64_t frequency_hz, const QString& vfo = {});
   bool setRxFrequency(std::uint64_t frequency_hz);
+  bool setTxFrequency(std::uint64_t frequency_hz);
+  bool setMode(cwassistant::core::RadioMode mode, const QString& vfo,
+               bool transmit_vfo);
   bool setSplit(bool enabled, const QString& tx_vfo = {});
 
  signals:

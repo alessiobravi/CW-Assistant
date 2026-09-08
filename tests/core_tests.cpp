@@ -1340,7 +1340,7 @@ void test_cw_channel_bank_state_reason_consistency() {
 
 void test_operator_selected_cw_probe() {
   using namespace cwassistant::core;
-  CwChannelBank bank({.decoded_track_retention_seconds = 30.0,
+  CwChannelBank bank({.decoded_track_retention_seconds = 7.0,
                       .maximum_tracks = 2});
   std::vector<float> quiet_spectrum(101, -100.0F);
 
@@ -1392,14 +1392,50 @@ void test_operator_selected_cw_probe() {
   expect(!bank.channels().empty() && !bank.channels().front().verified_cw,
          "manual weak-signal priority still does not bypass verification");
 
-  static_cast<void>(bank.updateSpectrum(32'000'000'001ULL, 200.0, 1'200.0,
+  static_cast<void>(bank.updateSpectrum(8'000'000'001ULL, 200.0, 1'200.0,
                                         quiet_spectrum));
   expect(bank.channels().empty(),
-         "an unverified manual probe expires after the bounded hold");
+         "an unverified manual probe expires after the configured stream timeout");
+
+  CwChannelBank following_bank({
+      .decoded_track_retention_seconds = 7.0,
+      .detector_averaging_seconds = 0.0,
+      .detector_frame_interval_seconds = 0.0,
+      .minimum_spectral_observations = 200,
+      .minimum_narrowband_coherence = 0.0F,
+      .presentation_follow_deadband_hz = 1.0,
+      .presentation_follow_slew_hz_per_second = 100.0,
+      .presentation_follow_stable_seconds = 0.0,
+      .presentation_follow_maximum_drift_hz_per_second = 200.0,
+      .presentation_follow_maximum_mad_hz = 20.0,
+  });
+  std::vector<float> following_spectrum(1'001U, -100.0F);
+  static_cast<void>(following_bank.updateSpectrum(
+      1'000'000'000ULL, 200.0, 1'200.0, following_spectrum));
+  const std::uint64_t following_id = following_bank.selectFrequency(700.0);
+  for (std::uint64_t frame = 1; frame <= 26; ++frame) {
+    std::fill(following_spectrum.begin(), following_spectrum.end(), -100.0F);
+    following_spectrum[515U] = -20.0F;  // Carrier moved from 700 to 715 Hz.
+    static_cast<void>(following_bank.updateSpectrum(
+        1'000'000'000ULL + frame * 100'000'000ULL,
+        200.0, 1'200.0, following_spectrum));
+  }
+  const auto followed = std::find_if(
+      following_bank.channels().cbegin(), following_bank.channels().cend(),
+      [following_id](const CwChannelSnapshot& channel) {
+        return channel.id == following_id;
+      });
+  expect(followed != following_bank.channels().cend() &&
+             followed->operator_selected && !followed->verified_cw &&
+             followed->frequency_hz > 710.0 &&
+             followed->presentation_frequency_hz > 705.0,
+         "an unverified manual region follows sustained carrier movement");
 
   CwChannelBank close_lane_bank({.maximum_tracks = 3});
   static_cast<void>(close_lane_bank.updateSpectrum(
       1'000'000'000ULL, 200.0, 1'200.0, quiet_spectrum));
+  const std::uint64_t lower_lane_id =
+      close_lane_bank.selectFrequency(710.0);
   const std::uint64_t upper_lane_id =
       close_lane_bank.selectFrequency(739.0);
   std::vector<float> lower_lane_spectrum(101, -100.0F);
@@ -1412,11 +1448,18 @@ void test_operator_selected_cw_probe() {
       [upper_lane_id](const CwTrackDiagnostic& diagnostic) {
         return diagnostic.id == upper_lane_id;
       });
+  const auto lower_lane = std::find_if(
+      close_lane_diagnostics.cbegin(), close_lane_diagnostics.cend(),
+      [lower_lane_id](const CwTrackDiagnostic& diagnostic) {
+        return diagnostic.id == lower_lane_id;
+      });
   expect(close_lane_diagnostics.size() == 2 &&
+             lower_lane != close_lane_diagnostics.cend() &&
+             lower_lane->matched &&
              upper_lane != close_lane_diagnostics.cend() &&
              std::abs(upper_lane->frequency_hz - 739.0) < 0.1 &&
              !upper_lane->matched,
-         "manual probe cannot collapse onto a stronger lane 29 Hz away");
+         "two close manual regions preserve the specifically matched lane");
 }
 
 void test_cw_channel_presentation_frequency_model() {
@@ -1817,10 +1860,10 @@ void test_selected_track_audio_monitor() {
 
   CwChannelBank bank({.minimum_verification_symbols = 0});
   std::vector<float> spectrum(291U, -100.0F);
-  spectrum[60U] = -20.0F;  // 700 Hz in the 100..3000 Hz test range.
+  spectrum[90U] = -20.0F;  // 1000 Hz in the 100..3000 Hz test range.
   static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 100.0, 3'000.0,
                                         spectrum));
-  const std::uint64_t selected = bank.selectFrequency(700.0);
+  const std::uint64_t selected = bank.selectFrequency(1'000.0);
   expect(selected != 0U, "monitor fixture creates an operator-selected lane");
 
   constexpr double sample_rate = 48'000.0;
@@ -1833,8 +1876,8 @@ void test_selected_track_audio_monitor() {
   for (std::uint64_t block_index = 0; block_index < 24U; ++block_index) {
     block.timestamp_ns = 1'000'000'000ULL + block_index * 21'333'333ULL;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
-      target_phase += 2.0 * std::numbers::pi * 700.0 / sample_rate;
-      interferer_phase += 2.0 * std::numbers::pi * 1'200.0 / sample_rate;
+      target_phase += 2.0 * std::numbers::pi * 1'000.0 / sample_rate;
+      interferer_phase += 2.0 * std::numbers::pi * 1'500.0 / sample_rate;
       block.samples[index] = {
           0.20F * static_cast<float>(std::sin(target_phase)) +
               0.20F * static_cast<float>(std::sin(interferer_phase)),
@@ -1856,8 +1899,9 @@ void test_selected_track_audio_monitor() {
     }
     return std::hypot(real, imaginary);
   };
-  expect(magnitude_at(700.0) > 8.0 * magnitude_at(1'200.0),
-         "selected monitor re-pitches its lane and rejects the adjacent tone");
+  expect(magnitude_at(700.0) > 8.0 * magnitude_at(1'000.0) &&
+             magnitude_at(700.0) > 8.0 * magnitude_at(1'500.0),
+         "selected monitor re-pitches its carrier and rejects adjacent audio");
 
   bank.setMonitor(CwMonitorMode::FullReceiver);
   static_cast<void>(bank.processSamples(block));
@@ -2574,9 +2618,9 @@ void test_cat4om_protocol_contract() {
       .active_vfo = "MAIN",
       .tx_vfo = "SUB",
       .split = false,
-      .vfos = {{.id = "MAIN", .frequency_hz = 14'025'000},
-               {.id = "SUB", .frequency_hz = 7'010'000}},
-      .available_commands = {"SetFrequency", "SetSplit"},
+      .vfos = {{.id = "MAIN", .frequency_hz = 14'025'000, .mode = "USB"},
+               {.id = "SUB", .frequency_hz = 7'010'000, .mode = "CW"}},
+      .available_commands = {"SetFrequency", "SetMode", "SetSplit"},
   };
   const auto simplex_plan = cat4om_frequency_plan(simplex);
   expect(simplex_plan && simplex_plan->rx_dial_hz == 14'025'000 &&
@@ -2585,6 +2629,11 @@ void test_cat4om_protocol_contract() {
          "CAT4OM simplex state uses the active VFO for RX and TX");
   expect(cat4om_has_command(simplex, "setfrequency"),
          "CAT4OM command capability matching tolerates case only");
+  const auto simplex_radio = cat4om_radio_state(simplex, true);
+  expect(simplex_radio.rx_mode.mode == RadioMode::UpperSideband &&
+             simplex_radio.tx_mode.mode == RadioMode::UpperSideband &&
+             simplex_radio.split.split == RadioSplit::Disabled,
+         "CAT4OM maps authoritative active-VFO mode and simplex state");
 
   auto split = simplex;
   split.split = true;
@@ -2593,6 +2642,12 @@ void test_cat4om_protocol_contract() {
              split_plan->tx_dial_hz == 7'010'000 &&
              split_plan->split_enabled,
          "CAT4OM split state preserves independent opaque VFO names");
+  const auto split_radio = cat4om_radio_state(split, true);
+  expect(split_radio.tx_frequency.hz == 7'010'000 &&
+             split_radio.tx_mode.mode == RadioMode::Cw &&
+             radio_has_capability(split_radio.capabilities,
+                                  RadioCapability::SetTxFrequency),
+         "CAT4OM preserves independent TX VFO frequency and mode");
   split.tx_vfo = "missing";
   expect(!cat4om_frequency_plan(split),
          "CAT4OM refuses an incomplete split frequency snapshot");

@@ -13,10 +13,12 @@ add_library(cwa_core
   src/cw_probabilistic_decoder.cpp
   src/cw_semi_markov_segmenter.cpp
   src/cw_transmit_encoder.cpp
+  src/cw_transmit_scheduler.cpp
   src/conversation_profile.cpp
   src/frequency_plan.cpp
   src/offline_callsign_database.cpp
   src/reference_rig_profiles.cpp
+  src/radio_control.cpp
   src/remote_control.cpp
   src/station_equipment.cpp
   src/spectrum_analyzer.cpp

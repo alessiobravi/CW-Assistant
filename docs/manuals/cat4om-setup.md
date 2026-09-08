@@ -50,16 +50,17 @@ is a slave and cannot write until the operator selects **Request ownership**.
 Ownership covers every radio in that group. Keep unrelated operators/radios in
 separate CAT4OM groups when independent authority is required.
 
-Frequency and split writes are capability-gated by the selected radio's
+Frequency, mode, and split writes are capability-gated by the selected radio's
 `availableCommands`. A successful command response means accepted; the next
 pushed `stateUpdate` remains the authoritative displayed value. VFO identifiers
 are treated as opaque names rather than assuming only A and B.
 
 With a control connection holding master ownership and `SetFrequency`
-advertised, the main RX readout becomes editable and the waterfall-edge tuning
-buttons appear. CW Buddy explicitly names the pushed active RX VFO in each
-frequency request. A split radio's TX VFO and mode are not changed; split
-control remains a separate operation.
+advertised, the main RX/TX readouts become editable as their corresponding VFO
+state becomes available, and the waterfall-edge RX tuning buttons appear. CW
+Buddy explicitly names the pushed RX or TX VFO in every request. `SetMode` and
+`SetSplit` are exposed only when advertised; each accepted request still waits
+for the next pushed state before updating the authoritative display.
 
 CW Buddy's CAT4OM adapter intentionally does not expose PTT or CW commands.
 Transmission remains behind the application's independent confirmation,

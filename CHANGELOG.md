@@ -8,19 +8,28 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
-- Receiver monitoring now offers **Off**, the complete receiver window, and a
-  selected-signal mode. Selected-signal monitoring reuses that decoder track's
-  carrier-following narrow filter and re-pitches it to the configured CW tone;
-  the Audio settings select the PC output device and the receiver toolbar sets
-  level without allowing queued audio to grow without bound.
+- Receiver monitoring now distinguishes **All RX** from **Stream**. Opening a
+  detected stream immediately selects its carrier-following narrow filter,
+  rejects adjacent audio, and re-pitches that carrier to the configured CW
+  tone; selecting Stream with one open card also adopts that card instead of
+  silently monitoring channel zero. The Audio settings select the PC output
+  device and the receiver toolbar sets level without allowing queued audio to
+  grow without bound.
+
+- The application header now presents the `CW BUDDY` wordmark with
+  `by IU0LFQ`, and exposes the compiled application version in both the header
+  and native window title.
 
 - The first guarded transmit-workflow slice adds an operator-facing TX/QSO
   drawer, exact callsign and normalized-message confirmation, free-text/own-call
   and report preparation, standard 5–80 WPM Morse timing plans, inert Auto-QSO
   suggestions, emergency release, and a distinct TUNE safety state with a hard
-  15-second continuous-KEY limit. Decoder output can only propose text. No
-  message or TUNE action can key hardware in this build because the tested
-  serial KEY/PTT adapter is intentionally still absent.
+  15-second continuous-KEY limit. A worker-thread transmit scheduler and direct
+  RTS/DTR KEY/PTT adapter now have deterministic fake-backend tests, safe
+  inactive opening, ordered release, watchdog, and fault handling. Decoder
+  output can only propose text. The application controller does not yet connect
+  this adapter to operator actions, so no message or TUNE action can key
+  hardware in this build.
 
 - A selected station with checked absolute-RF context can now be explicitly
   anchored to the configured CW reference tone from the QSO drawer. The action
@@ -93,10 +102,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Right-click manual decoding no longer moves the independent red CW guide.
+  It creates a temporary decoder region at the pointed frequency; measured
+  carrier associations move its DSP and displayed centers through the same
+  bounded tracking logic as automatic streams. An unverified region expires
+  after the configured decoded-stream timeout, while a verified region is
+  promoted in place and follows normal stream retention.
+
 - The decoder pane now uses a compact radio-style VFO faceplate with grouped
-  whole-hertz RX/TX digits, ON AIR state, and explicit SIMPLEX/SPLIT and CW/CW-R
-  status. RX entry retains its capability-checked route; TX frequency and mode
-  are visibly read-only until their provider-neutral controls exist. The main
+  whole-hertz RX/TX digits, ON AIR state, and explicit VFO, SIMPLEX/SPLIT, and
+  provider-reported RX/TX modes. A dependency-free radio-control contract keeps
+  unavailable state explicit and capability-gates independent RX/TX frequency,
+  mode, and split writes. Windows OmniRig and CAT4OM map their authoritative
+  state and supported writes into that shared contract; unsupported providers
+  remain visibly read-only. The main
   window opens maximized, the decoder pane has more room, spectrum hover shows
   the left/right/Ctrl pointer actions, and every push button in the main,
   settings, setup, and profile views has contextual hover help.

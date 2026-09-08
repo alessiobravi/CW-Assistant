@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "cwassistant/core/frequency_plan.hpp"
+#include "cwassistant/core/radio_control.hpp"
 
 namespace cwassistant::core {
 
@@ -17,6 +18,7 @@ enum class Cat4OmRole { Observer, Slave, Master, Unknown };
 struct Cat4OmVfoState {
   std::string id;
   std::uint64_t frequency_hz{0};
+  std::string mode;
 };
 
 struct Cat4OmRadioState {
@@ -39,5 +41,7 @@ struct Cat4OmRadioState {
                                       std::string_view command) noexcept;
 [[nodiscard]] std::optional<VfoFrequencyPlan> cat4om_frequency_plan(
     const Cat4OmRadioState& state) noexcept;
+[[nodiscard]] RadioState cat4om_radio_state(
+    const Cat4OmRadioState& state, bool writable) noexcept;
 
 }  // namespace cwassistant::core

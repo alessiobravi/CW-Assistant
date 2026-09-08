@@ -1,20 +1,22 @@
 #pragma once
 
 #include <QObject>
+#include <QElapsedTimer>
 #include <QString>
 #include <QVariantList>
 
 #include <optional>
+#include <memory>
 
 #include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/cw_transmit_encoder.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
+#include "transmit/direct_transmit_engine.hpp"
 
 namespace cwassistant::desktop {
 
-// Operator-facing preparation boundary for future hardware keying. This class
-// can arm, confirm, encode, and queue a preview; it deliberately has no device
-// handle and cannot assert PTT or KEY.
+// Operator-facing preparation boundary. Decoder output only proposes text;
+// this controller owns the independently guarded hardware engine.
 class TransmitController final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QString state READ state NOTIFY changed)
@@ -29,12 +31,15 @@ class TransmitController final : public QObject {
                  NOTIFY changed)
   Q_PROPERTY(int wordsPerMinute READ wordsPerMinute WRITE setWordsPerMinute
                  NOTIFY changed)
+  Q_PROPERTY(QString speedSource READ speedSource NOTIFY changed)
   Q_PROPERTY(QString report READ report WRITE setReport NOTIFY changed)
   Q_PROPERTY(bool autoQsoEnabled READ autoQsoEnabled WRITE setAutoQsoEnabled
                  NOTIFY changed)
   Q_PROPERTY(QString proposedMessage READ proposedMessage NOTIFY changed)
   Q_PROPERTY(QString proposedReason READ proposedReason NOTIFY changed)
-  Q_PROPERTY(bool hardwareAvailable READ hardwareAvailable CONSTANT)
+  Q_PROPERTY(bool hardwareAvailable READ hardwareAvailable NOTIFY changed)
+  Q_PROPERTY(bool transmitting READ transmitting NOTIFY changed)
+  Q_PROPERTY(QString hardwareStatus READ hardwareStatus NOTIFY changed)
   Q_PROPERTY(bool onAir READ onAir NOTIFY changed)
   Q_PROPERTY(bool tuning READ tuning NOTIFY changed)
 
@@ -51,15 +56,23 @@ class TransmitController final : public QObject {
   [[nodiscard]] bool messageConfirmed() const noexcept;
   [[nodiscard]] double previewDurationSeconds() const noexcept;
   [[nodiscard]] int wordsPerMinute() const noexcept;
+  [[nodiscard]] const QString& speedSource() const noexcept;
   [[nodiscard]] const QString& report() const noexcept;
   [[nodiscard]] bool autoQsoEnabled() const noexcept;
   [[nodiscard]] const QString& proposedMessage() const noexcept;
   [[nodiscard]] const QString& proposedReason() const noexcept;
-  [[nodiscard]] bool hardwareAvailable() const noexcept { return false; }
+  [[nodiscard]] bool hardwareAvailable() const noexcept;
+  [[nodiscard]] bool transmitting() const noexcept;
+  [[nodiscard]] const QString& hardwareStatus() const noexcept;
   [[nodiscard]] bool onAir() const noexcept;
   [[nodiscard]] bool tuning() const noexcept;
 
   void setOwnCallsign(const QString& callsign);
+  void configureHardware(bool enabled, const QString& port_name,
+                         int ptt_line_index, int key_line_index,
+                         bool ptt_active_high, bool key_active_high,
+                         const QString& cat_port_name);
+  void configureTxSpeed(int mode, int fixed_wpm);
   void setWordsPerMinute(int value);
   void setReport(const QString& value);
   void setAutoQsoEnabled(bool enabled);
@@ -69,7 +82,8 @@ class TransmitController final : public QObject {
   Q_INVOKABLE void disarm();
   Q_INVOKABLE bool selectTarget(qulonglong channel_id,
                                 const QString& callsign,
-                                qulonglong rf_frequency_hz);
+                                qulonglong rf_frequency_hz,
+                                double received_wpm = 0.0);
   Q_INVOKABLE bool confirmTarget(const QString& callsign);
   Q_INVOKABLE bool prepareFreeText(const QString& text);
   Q_INVOKABLE bool prepareOwnCall();
@@ -89,20 +103,30 @@ class TransmitController final : public QObject {
   bool prepare(QString text);
   void clearPrepared();
   void setStatus(QString status);
+  void handleHardwareChanged();
 
   cwassistant::core::CallsignPolicy callsign_policy_;
   cwassistant::core::TransmitGuard guard_;
+  std::unique_ptr<DirectTransmitEngine> hardware_;
   std::optional<cwassistant::core::CwTransmitPlan> plan_;
   QString own_callsign_;
   QString report_{QStringLiteral("599")};
   QString status_{QStringLiteral("Transmit disarmed")};
   QString proposed_message_;
   QString proposed_reason_;
+  QString speed_source_{QStringLiteral("Fixed fallback")};
   qulonglong target_channel_id_{0};
   qulonglong target_rf_hz_{0};
   qsizetype observed_text_length_{0};
   int words_per_minute_{20};
+  int tx_speed_mode_{0};
+  int fixed_tx_wpm_{20};
+  double selected_rx_wpm_{0.0};
   bool auto_qso_enabled_{false};
+  bool hardware_enabled_{false};
+  bool hardware_was_busy_{false};
+  QString hardware_configuration_key_;
+  QElapsedTimer hardware_clock_;
 };
 
 }  // namespace cwassistant::desktop

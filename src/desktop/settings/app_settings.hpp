@@ -14,6 +14,7 @@
 #include <optional>
 
 #include "cwassistant/core/frequency_plan.hpp"
+#include "cwassistant/core/radio_control.hpp"
 
 namespace cwassistant::desktop {
 
@@ -50,6 +51,15 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int frequencyBackendIndex READ frequencyBackendIndex WRITE setFrequencyBackendIndex NOTIFY settingsChanged)
   Q_PROPERTY(int radioTuningStepHz READ radioTuningStepHz WRITE setRadioTuningStepHz NOTIFY settingsChanged)
   Q_PROPERTY(bool radioFrequencyWritable READ radioFrequencyWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioTxFrequencyWritable READ radioTxFrequencyWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioRxModeWritable READ radioRxModeWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioTxModeWritable READ radioTxModeWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioSplitWritable READ radioSplitWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(QString radioRxMode READ radioRxMode NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(QString radioTxMode READ radioTxMode NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(QString radioRxVfo READ radioRxVfo NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(QString radioTxVfo READ radioTxVfo NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(bool radioSplitKnown READ radioSplitKnown NOTIFY radioFrequencyChanged)
   Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omRadioId READ cat4omRadioId WRITE setCat4omRadioId NOTIFY settingsChanged)
@@ -70,10 +80,13 @@ class AppSettings final : public QObject {
   Q_PROPERTY(qint64 txTransverterOffsetHz READ txTransverterOffsetHz WRITE setTxTransverterOffsetHz NOTIFY settingsChanged)
   Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE setCwToneSidebandIndex NOTIFY settingsChanged)
   Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY settingsChanged)
+  Q_PROPERTY(bool directKeyingEnabled READ directKeyingEnabled WRITE setDirectKeyingEnabled NOTIFY settingsChanged)
   Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(bool pttActiveHigh READ pttActiveHigh WRITE setPttActiveHigh NOTIFY settingsChanged)
   Q_PROPERTY(bool keyActiveHigh READ keyActiveHigh WRITE setKeyActiveHigh NOTIFY settingsChanged)
+  Q_PROPERTY(int txSpeedMode READ txSpeedMode WRITE setTxSpeedMode NOTIFY settingsChanged)
+  Q_PROPERTY(int fixedTxWpm READ fixedTxWpm WRITE setFixedTxWpm NOTIFY settingsChanged)
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
@@ -143,6 +156,15 @@ class AppSettings final : public QObject {
   [[nodiscard]] int frequencyBackendIndex() const noexcept;
   [[nodiscard]] int radioTuningStepHz() const noexcept;
   [[nodiscard]] bool radioFrequencyWritable() const noexcept;
+  [[nodiscard]] bool radioTxFrequencyWritable() const noexcept;
+  [[nodiscard]] bool radioRxModeWritable() const noexcept;
+  [[nodiscard]] bool radioTxModeWritable() const noexcept;
+  [[nodiscard]] bool radioSplitWritable() const noexcept;
+  [[nodiscard]] QString radioRxMode() const;
+  [[nodiscard]] QString radioTxMode() const;
+  [[nodiscard]] QString radioRxVfo() const;
+  [[nodiscard]] QString radioTxVfo() const;
+  [[nodiscard]] bool radioSplitKnown() const noexcept;
   [[nodiscard]] int omniRigSlot() const noexcept;
   [[nodiscard]] const QString& cat4omUrl() const noexcept;
   [[nodiscard]] const QString& cat4omRadioId() const noexcept;
@@ -166,10 +188,13 @@ class AppSettings final : public QObject {
   [[nodiscard]] std::optional<std::uint64_t> controlledTxRfHz() const noexcept;
   [[nodiscard]] bool controlledSplitActive() const noexcept;
   [[nodiscard]] const QString& keyingPort() const noexcept;
+  [[nodiscard]] bool directKeyingEnabled() const noexcept;
   [[nodiscard]] int pttLineIndex() const noexcept;
   [[nodiscard]] int keyLineIndex() const noexcept;
   [[nodiscard]] bool pttActiveHigh() const noexcept;
   [[nodiscard]] bool keyActiveHigh() const noexcept;
+  [[nodiscard]] int txSpeedMode() const noexcept;
+  [[nodiscard]] int fixedTxWpm() const noexcept;
   [[nodiscard]] int targetFps() const noexcept;
   [[nodiscard]] int waterfallRate() const noexcept;
   [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
@@ -229,10 +254,13 @@ class AppSettings final : public QObject {
   void setTxTransverterOffsetHz(qint64 value);
   void setCwToneSidebandIndex(int value);
   void setKeyingPort(const QString& value);
+  void setDirectKeyingEnabled(bool value);
   void setPttLineIndex(int value);
   void setKeyLineIndex(int value);
   void setPttActiveHigh(bool value);
   void setKeyActiveHigh(bool value);
+  void setTxSpeedMode(int value);
+  void setFixedTxWpm(int value);
   void setTargetFps(int value);
   void setWaterfallRate(int value);
   void setWaterfallTimeSpanSeconds(int value);
@@ -284,6 +312,11 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool setControlledRxFrequency(const QString& value,
                                             qulonglong unit_hz);
   Q_INVOKABLE bool stepControlledRxFrequency(int direction);
+  Q_INVOKABLE bool setControlledTxFrequency(const QString& value,
+                                            qulonglong unit_hz);
+  Q_INVOKABLE bool cycleControlledRxMode();
+  Q_INVOKABLE bool toggleControlledTxMode();
+  Q_INVOKABLE bool setControlledSplit(bool enabled);
 
  signals:
   void settingsChanged();
@@ -320,9 +353,14 @@ class AppSettings final : public QObject {
   [[nodiscard]] std::optional<cwassistant::core::ResolvedFrequencies>
   resolvedControlledFrequencies() const noexcept;
   bool writeControlledRxDialFrequency(std::uint64_t dial_frequency_hz);
+  bool writeControlledTxDialFrequency(std::uint64_t dial_frequency_hz);
+  bool writeControlledMode(cwassistant::core::RadioMode mode, bool tx);
 #ifdef Q_OS_WIN
   [[nodiscard]] bool ensureOmniRigAutomation();
   bool writeOmniRigRxFrequency(std::uint64_t dial_frequency_hz);
+  bool writeOmniRigTxFrequency(std::uint64_t dial_frequency_hz);
+  bool writeOmniRigMode(cwassistant::core::RadioMode mode);
+  bool writeOmniRigSplit(bool enabled);
 #endif
 
   QString profile_name_;
@@ -371,10 +409,13 @@ class AppSettings final : public QObject {
   qint64 tx_transverter_offset_hz_{0};
   int cw_tone_sideband_index_{0};
   QString keying_port_;
+  bool direct_keying_enabled_{false};
   int ptt_line_index_{0};
   int key_line_index_{1};
   bool ptt_active_high_{true};
   bool key_active_high_{true};
+  int tx_speed_mode_{0};
+  int fixed_tx_wpm_{20};
   int target_fps_{60};
   int waterfall_rate_{60};
   int waterfall_time_span_seconds_{10};
@@ -416,6 +457,7 @@ class AppSettings final : public QObject {
   std::optional<std::uint64_t> pending_rx_rf_hz_;
   int pending_frequency_backend_index_{-1};
   std::optional<std::uint64_t> omnirig_rx_dial_hz_;
+  cwassistant::core::RadioState radio_state_;
   cwassistant::core::OmniRigRxFrequencyTarget omnirig_rx_write_target_{
       cwassistant::core::OmniRigRxFrequencyTarget::None};
 };

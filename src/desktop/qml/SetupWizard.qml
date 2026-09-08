@@ -286,6 +286,14 @@ Dialog {
                 columnSpacing: 18
                 rowSpacing: 12
                 Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#f3bd55"; text: "Select the dedicated direct-COM interface. Port discovery is passive and does not toggle either line." }
+                Label { text: "Hardware keying" }
+                CheckBox {
+                    text: "Enable direct RTS/DTR keying"
+                    checked: appSettings.directKeyingEnabled
+                    onToggled: appSettings.directKeyingEnabled = checked
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Opt in only after reading the disconnected-line and loopback test procedure"
+                }
                 Label { text: "Key/PTT COM port" }
                 ComboBox { Layout.fillWidth: true; editable: true; model: appSettings.serialPorts; currentIndex: find(appSettings.keyingPort); displayText: currentIndex >= 0 ? currentText : appSettings.keyingPort; onActivated: appSettings.keyingPort = currentText; onAccepted: appSettings.keyingPort = editText }
                 Label { text: "PTT" }
@@ -298,7 +306,25 @@ Dialog {
                     ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.keyLineIndex; onActivated: appSettings.keyLineIndex = currentIndex }
                     CheckBox { text: "Active high"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
                 }
-                Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "A hardware loopback test and maximum-key-down watchdog will be required before this profile can be armed for transmission." }
+                Label { text: "TX speed" }
+                ComboBox {
+                    model: ["Match selected RX", "Fixed"]
+                    currentIndex: appSettings.txSpeedMode
+                    onActivated: appSettings.txSpeedMode = currentIndex
+                    ToolTip.visible: hovered
+                    ToolTip.text: "RX matching snapshots a supported selected-stream speed; fixed WPM is the safe fallback"
+                }
+                Label { text: "Fixed/fallback WPM" }
+                LabeledSlider {
+                    Layout.fillWidth: true
+                    caption: "WPM"
+                    from: 5
+                    to: 80
+                    stepSize: 1
+                    value: appSettings.fixedTxWpm
+                    onMoved: value => appSettings.fixedTxWpm = Math.round(value)
+                }
+                Label { Layout.columnSpan: 2; Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: "Active-high interfaces only in this first hardware slice. Validate the inactive lines with the radio disconnected, then use physical loopback before a minimum-power dummy-load test. Every reconnect remains disarmed." }
             }
 
                 GridLayout {

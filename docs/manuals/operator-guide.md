@@ -78,17 +78,21 @@ not create a second frequency marker or infer a sender from frequency alone.
 5. Select **Stop live RX** before changing cables or audio routing.
 
 Hover over the spectrum or waterfall to see its pointer legend: left-click
-opens an already detected stream, right-click starts a neutral manual probe at
-that audio frequency, and the Ctrl+click TX-VFO action is marked unavailable
+opens and monitors an already detected stream, while right-click starts a
+neutral manual probe at that audio frequency. The Ctrl+click TX-VFO action is
+marked unavailable
 until the linked provider supports guarded TX-frequency writes. Action buttons
 throughout the receiver, settings, setup, and profile views explain their
 effect and any disabled state when hovered.
 
 To listen through CW Buddy, choose a **Monitor output** under **Settings →
-Audio**, then use the receiver toolbar's **OFF / RX / SIGNAL** controls. **RX**
-passes the complete receiver window. **SIGNAL** stays silent until you click a
-detected marker, then uses that exact track's carrier-following decoder filter
-and moves its pitch to the configured CW reference tone. The adjacent slider
+Audio**, then use the receiver toolbar's **OFF / ALL RX / STREAM** controls.
+**ALL RX** passes the complete receiver window without filtering. Clicking a
+detected stream automatically opens its decoder card and selects **STREAM**;
+only that track then passes through its carrier-following narrow filter and is
+moved to the configured CW reference tone. If exactly one decoder card is open,
+choosing **STREAM** adopts it; otherwise choose the wanted marker. The adjacent
+slider
 sets local playback level. Monitoring does not change decoder evidence. Output
 is intentionally bounded; if the sound device cannot keep up, old audio is
 dropped instead of accumulating delay.
@@ -161,13 +165,17 @@ is reserved for active verified CW tracks (see below). This guide is visual
 only: it does not select a decoder, limit decoding, change receiver tuning, or
 change decoder bandwidth.
 
-Right-click an unmarked spectrum or waterfall trace to move the local CW guide
-and immediately open a neutral manual decoder slice at that audio frequency.
+Right-click an unmarked spectrum or waterfall trace to create and immediately
+open a neutral manual decoder region at that audio frequency. This does not
+move the independent red CW guide. As measured carrier evidence shifts, the
+region follows it through the same bounded, smoothed tracker used by automatic
+streams rather than remaining frozen at the clicked coordinate.
 The slice uses real narrowband evidence but does not claim that the signal is
 CW: its text and callsign remain hidden and it is excluded from the detected
 count until the normal cadence, timing, symbol, and coherence gates pass. A
-verified slice becomes the ordinary colored stream with the same session; an
-unverified slice expires after 30 seconds. Click again to refresh it. Manual
+verified region becomes the ordinary colored stream with the same session; an
+unverified region expires after the configured **Decoded stream timeout**.
+Click again to refresh it. Manual
 centers within 12 Hz reuse the slice, while more distant centers can remain
 separate for close pileup inspection. Radio retuning remains a separate,
 capability-checked operation rather than a consequence of this click.
@@ -719,10 +727,11 @@ applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
 unavailable frequency providers deliberately show **AF** rather than guessing.
 
 The **CW Decoder** panel shows the resolved radio state as a compact faceplate
-above the signal list: grouped whole-hertz RX digits, a dim/red ON AIR area,
-explicit SIMPLEX/SPLIT and CW/CW-R status, and an orange TX frequency. TX falls
-back to the RX value when no independent authoritative TX value is available.
-It disappears
+above the signal list: grouped whole-hertz RX and TX digits, a dim/red ON AIR
+area, explicit VFO and SIMPLEX/SPLIT state, provider-reported RX/TX modes, and
+an orange TX frequency. Unknown TX, split, VFO, or mode state is shown as
+unavailable; CW Buddy never manufactures a simplex value or derives the radio
+mode from its audio-decoder setting. The faceplate disappears
 entirely for receive-only SWL setups, WAV replay, and whenever no radio is
 currently linked, rather than showing a stale or meaningless value. Note
 that showing this readout at all requires **both** Settings → Radio
@@ -738,14 +747,18 @@ Settings → Radio allows whole-kHz steps from 1 to 100 kHz. The controls are
 hidden for WAV/SWL operation and read-only, disconnected, non-master, or
 otherwise incapable providers.
 
-The TX frequency, split badge, and mode badge are status displays in this
-release. Clicking them does not write the radio; provider-neutral TX-frequency,
-split, and mode control remains a separate capability-gated implementation.
+When the linked provider reports the matching write capability, click the TX
+frequency to enter an independent actual-RF value, click the split badge to
+toggle split, click the RX mode badge to cycle supported receive modes, and
+click the TX mode badge to toggle CW/CW-R. Unsupported operations remain
+read-only. Entering a separate TX frequency explicitly enables split if the
+provider supports both operations; a connection or state refresh never changes
+the rig merely to make the faceplate complete.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic
-before sending the provider request. In split operation only the receive VFO is
-targeted: TX frequency and mode are left unchanged. The provider's subsequent
+before sending the provider request. RX edits and edge steps target only the
+receive VFO, while TX edits target only the transmit VFO. The provider's subsequent
 poll/pushed state remains authoritative, so the display changes only when the
 radio reports the new frequency. Windows OmniRig tuning is enabled only while
 the radio reports online receive state and a writable active RX-frequency

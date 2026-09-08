@@ -1464,11 +1464,22 @@ void ReplayController::setMonitorMode(const int mode) {
   if (monitor_mode_ == sanitized) return;
   monitor_mode_ = sanitized;
   if (monitor_mode_ != 2) monitored_channel_id_ = 0;
+  // Opening a decoder card and then enabling selected-signal monitoring is the
+  // natural UI order. Preserve that selection when it is unambiguous instead
+  // of publishing SelectedTrack with ID zero (which intentionally produces no
+  // audio in both DSP workers). With multiple open cards the operator still
+  // chooses explicitly from the spectrum.
+  if (monitor_mode_ == 2 && monitored_channel_id_ == 0 &&
+      decoder_session_order_.size() == 1) {
+    monitored_channel_id_ = decoder_session_order_.front();
+  }
   if (monitor_mode_ == 0) {
     monitor_status_ = QStringLiteral("Monitor off");
     stopMonitorOutput();
   } else if (monitor_mode_ == 1) {
     monitor_status_ = QStringLiteral("Monitoring full receiver window");
+  } else if (monitored_channel_id_ != 0) {
+    monitor_status_ = QStringLiteral("Monitoring selected signal");
   } else {
     monitor_status_ = QStringLiteral("Click a signal to monitor it");
   }
@@ -1563,7 +1574,11 @@ void ReplayController::openDecoderSession(const qulonglong channel_id) {
                channel_id;
       });
   if (!exists) return;
-  if (monitor_mode_ == 2 && monitored_channel_id_ != channel_id) {
+  // A signal selection is an explicit request to hear that stream. Keep the
+  // full-window monitor as a separately selectable mode, but do not require
+  // the operator to enable SelectedTrack before clicking a signal.
+  if (monitor_mode_ != 2 || monitored_channel_id_ != channel_id) {
+    monitor_mode_ = 2;
     monitored_channel_id_ = channel_id;
     monitor_status_ = QStringLiteral("Monitoring selected signal");
     stopMonitorOutput();

@@ -219,10 +219,10 @@ int main() {
       !contains(manual, "mouse.button === Qt.LeftButton") ||
       !contains(manual, "onClicked: function(mouse)") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
-      !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
+      contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
-      !contains(manual, "LEFT: open stream") ||
+      !contains(manual, "LEFT: open + monitor stream") ||
       !contains(manual, "RIGHT: manual probe") ||
       !contains(manual, "CTRL: TX VFO unavailable") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
@@ -284,14 +284,18 @@ int main() {
       contains(vfo_editor, "Keys.onReturnPressed:") ||
       contains(vfo_editor, "Keys.onEnterPressed:") ||
       !contains(vfo_editor, "font.family: \"monospace\"") ||
-      !contains(vfo_editor, "color: \"#080c10\"") ||
+      !contains(vfo_editor, "color: \"#050b10\"") ||
       !contains(vfo_editor, "Accessible.name: \"Edit RX frequency\"") ||
       !contains(qml, "function formatRigFrequency(hz)") ||
       !contains(qml, "objectName: \"vfoRxModeBadge\"") ||
       !contains(qml, "objectName: \"onAirIndicator\"") ||
       !contains(qml, "objectName: \"vfoTxLabel\"") ||
-      !contains(qml, "appSettings.cwToneSidebandIndex === 0") ||
-      !contains(qml, "text: replayController.radioSplitActive") ||
+      !contains(qml, "objectName: \"vfoTxModeBadge\"") ||
+      !contains(qml, "objectName: \"vfoTxFrequencyField\"") ||
+      !contains(qml, "appSettings.radioRxMode") ||
+      !contains(qml, "appSettings.radioTxMode") ||
+      !contains(qml, "appSettings.setControlledTxFrequency(") ||
+      contains(qml, "appSettings.cwToneSidebandIndex === 0") ||
       !contains(qml, "? \"SPLIT\" : \"SIMPLEX\"") ||
       !contains(qml, "Component.onCompleted: {") ||
       !contains(qml, "showMaximized()") ||

@@ -693,6 +693,17 @@ Pane {
                     columnSpacing: 18
                     rowSpacing: 12
                     anchors.margins: 22
+                    Label { text: "Hardware keying" }
+                    CheckBox {
+                        text: "Enable direct RTS/DTR keying"
+                        checked: appSettings.directKeyingEnabled
+                        enabled: appSettings.radioEnabled
+                        onToggled: appSettings.directKeyingEnabled = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Opt in to the dedicated local serial KEY/PTT adapter; every reconnect starts disarmed"
+                            : "Enable a radio profile before configuring transmit hardware"
+                    }
                     Label { text: "Direct key/PTT port" }
                     ComboBox {
                         Layout.fillWidth: true
@@ -711,12 +722,32 @@ Pane {
                     CheckBox { text: checked ? "Active high" : "Active low"; checked: appSettings.pttActiveHigh; onToggled: appSettings.pttActiveHigh = checked }
                     Label { text: "KEY polarity" }
                     CheckBox { text: checked ? "Active high" : "Active low"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
+                    Label { text: "TX speed" }
+                    ComboBox {
+                        model: ["Match selected RX", "Fixed"]
+                        currentIndex: appSettings.txSpeedMode
+                        onActivated: appSettings.txSpeedMode = currentIndex
+                        ToolTip.visible: hovered
+                        ToolTip.text: currentIndex === 0
+                            ? "Snapshot a supported selected-stream WPM when preparing text; otherwise use the fixed fallback"
+                            : "Always use the configured fixed transmit speed"
+                    }
+                    Label { text: "Fixed/fallback TX speed" }
+                    LabeledSlider {
+                        Layout.fillWidth: true
+                        caption: "WPM"
+                        from: 5
+                        to: 80
+                        stepSize: 1
+                        value: appSettings.fixedTxWpm
+                        onMoved: value => appSettings.fixedTxWpm = Math.round(value)
+                    }
                     Label { text: "" }
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#f3bd55"
-                        text: "Ports are enumerated without opening them. Applying settings never asserts PTT or KEY, and transmission remains disarmed."
+                        text: "Ports are enumerated without opening them. The first hardware slice accepts distinct RTS/DTR lines with active-high interfaces only. Opening or changing the adapter always drives KEY then PTT inactive and leaves transmission disarmed. Validate with the radio disconnected, then a physical loopback, before using a dummy load."
                     }
                 }
             }
