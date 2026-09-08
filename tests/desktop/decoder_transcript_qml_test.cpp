@@ -296,6 +296,15 @@ int main() {
       std::istreambuf_iterator<char>{settings_source},
       std::istreambuf_iterator<char>{}};
   if (!contains(settings_qml, "TabButton { text: \"Decoder\" }") ||
+      !contains(settings_qml,
+                "objectName: \"keyingModelAdaptiveThresholdRadio\"") ||
+      !contains(settings_qml,
+                "objectName: \"keyingModelSemiMarkovRadio\"") ||
+      // Stored by name, so the preference survives another technique being
+      // added to the list or the list being reordered.
+      !contains(settings_qml,
+                "appSettings.keyingModel = \"adaptive-threshold\"") ||
+      !contains(settings_qml, "appSettings.keyingModel = \"semi-markov\"") ||
       !contains(settings_qml, "objectName: \"localDecoderEnabledCheck\"") ||
       !contains(settings_qml, "appSettings.localDecoderBackendAvailable") ||
       !contains(settings_qml, "objectName: \"localDecoderModelDialog\"") ||

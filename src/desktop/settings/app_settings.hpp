@@ -89,6 +89,9 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
   Q_PROPERTY(bool localDecoderEnabled READ localDecoderEnabled WRITE setLocalDecoderEnabled NOTIFY settingsChanged)
   Q_PROPERTY(bool callsignDatabaseCorrectionEnabled READ callsignDatabaseCorrectionEnabled WRITE setCallsignDatabaseCorrectionEnabled NOTIFY settingsChanged)
+  // Stored by name rather than by position so the preference survives another
+  // technique being added to the list or the list being reordered.
+  Q_PROPERTY(QString keyingModel READ keyingModel WRITE setKeyingModel NOTIFY settingsChanged)
   Q_PROPERTY(QString localDecoderModelPath READ localDecoderModelPath NOTIFY settingsChanged)
   Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath NOTIFY settingsChanged)
   Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable CONSTANT)
@@ -176,6 +179,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] int decodedSignalTimeoutSeconds() const noexcept;
   [[nodiscard]] bool localDecoderEnabled() const noexcept;
   [[nodiscard]] bool callsignDatabaseCorrectionEnabled() const noexcept;
+  [[nodiscard]] const QString& keyingModel() const noexcept;
   [[nodiscard]] const QString& localDecoderModelPath() const noexcept;
   [[nodiscard]] const QString& localDecoderMetadataPath() const noexcept;
   [[nodiscard]] bool localDecoderBackendAvailable() const noexcept;
@@ -236,6 +240,7 @@ class AppSettings final : public QObject {
   void setDecodedSignalTimeoutSeconds(int value);
   void setLocalDecoderEnabled(bool value);
   void setCallsignDatabaseCorrectionEnabled(bool value);
+  void setKeyingModel(const QString& value);
   void setLocalCallsignDatabaseEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
@@ -370,6 +375,7 @@ class AppSettings final : public QObject {
   // Off by default. Two listed stations can differ by one character, so a
   // correction can name a station that was never heard; the operator opts in.
   bool callsign_database_correction_enabled_{false};
+  QString keying_model_{QStringLiteral("adaptive-threshold")};
   QString local_decoder_model_path_;
   QString local_decoder_metadata_path_;
   bool local_callsign_database_enabled_{false};

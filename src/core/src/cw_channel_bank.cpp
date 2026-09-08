@@ -116,6 +116,16 @@ void CwChannelBank::configure(CwChannelBankConfig config) noexcept {
   sanitizeConfig();
 }
 
+void CwChannelBank::setKeyingModel(const CwKeyingModel model) noexcept {
+  if (keying_model_ == model) return;
+  keying_model_ = model;
+  applyKeyingModel();
+}
+
+void CwChannelBank::applyKeyingModel() noexcept {
+  for (auto& track : tracks_) track.decoder.setKeyingModel(keying_model_);
+}
+
 void CwChannelBank::setOwnCallsign(std::string callsign) {
   config_.own_callsign = std::move(callsign);
 }
@@ -663,6 +673,9 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       tracks_.emplace_back(next_track_id_++, candidate.frequency_hz,
                            timestamp_ns);
       nearest = std::prev(tracks_.end());
+      // A track is created with the bank's default decoder, so a newly
+      // acquired signal has to be told which model is actually selected.
+      nearest->decoder.setKeyingModel(keying_model_);
     }
     nearest->matched = true;
     nearest->decoder_input_suspended = false;
@@ -831,6 +844,7 @@ std::uint64_t CwChannelBank::selectFrequency(
     tracks_.emplace_back(next_track_id_++, frequency_hz,
                          last_spectrum_timestamp_ns_);
     selected = std::prev(tracks_.end());
+    selected->decoder.setKeyingModel(keying_model_);
     selected->decoder_input_suspended = true;
   }
 
@@ -1099,7 +1113,13 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                                               mark_amplitude);
         // Each observation updates only the level it currently belongs to, so
         // the two components stay separated instead of one slow envelope
-        // chasing both states.
+        // chasing both states. Weighting both levels by how far the sample
+        // belongs to each -- the textbook soft assignment, and what the
+        // decoder above now does -- fails here for the opposite reason: near
+        // the middle the two responsibilities are both near a half, so an
+        // ambiguous sample pulls the levels together instead of leaving them
+        // alone, and at 12 WPM and 12 dB the model collapsed outright.
+        // Measured, 0.388 mean character error against 0.295.
         if (observed_power < split_amplitude * split_amplitude) {
           track.keying_space_power += (observed_power <
                                        track.keying_space_power ? 0.30F

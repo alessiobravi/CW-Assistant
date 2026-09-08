@@ -6,7 +6,29 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-07 (thirteenth entry) — tracks are verified as CW on
+Last reviewed: 2026-09-08 (fourteenth entry) -- the keying technique is now a
+choice rather than a fixed part of the decoder, and a duration-explicit model is
+offered beside the shipped threshold. Measured paired against the previous
+build, the two are level on the synthetic surface (0.2946 against 0.2884, inside
+the +/-0.03 spread that surface has) and equal on captures (8/9, 0/4 false), and
+they differ sharply by keying style rather than in general, so neither replaces
+the other. The default is unchanged and reproduces its previous figures exactly.
+
+Two things this measurement settled and that should not be re-derived. First,
+the duration model is four times better than the threshold in isolation on
+matched evidence (0.061 against 0.236) yet only level end to end, which places
+the remaining limit upstream, in the two-level envelope model that produces the
+keying likelihood: it assigns each frame to whichever level it is nearer, and at
+low SNR that is close to a coin toss that drags the levels together. Replacing
+that with plain soft assignment is worse, not better -- 0.3884 against 0.2946,
+collapsing outright at 12 WPM and 12 dB -- because near the middle both
+responsibilities sit near a half and an ambiguous frame pulls the levels
+together. Whatever replaces it needs a separation prior. Second, the calibrated
+likelihood was clamped to three nats per frame, a bound a per-frame threshold
+does not notice and an integrating model pays for; widening it for the latter
+moved capture recovery from seven of nine to eight.
+
+Previous review: 2026-09-07 (thirteenth entry) — tracks are verified as CW on
 recordings that contain none: eight across the four such captures, one to three
 each, published with text like "BL E EEHWE IH K I E". Nothing measured this. The
 quality checks count false callsigns, so a track wrongly accepted as a signal was

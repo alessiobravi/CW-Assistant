@@ -165,6 +165,8 @@ class ReplayController final : public QObject {
   void setSourceMode(int value);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setOwnCallsign(const QString& callsign);
+  Q_INVOKABLE void setKeyingModel(const QString& model);
+  [[nodiscard]] const QString& keyingModel() const noexcept;
   void configureLocalCharacterDecoder(bool enabled, const QString& model_path,
                                       const QString& metadata_path);
   void configureOfflineCallsignDatabase(bool enabled,
@@ -224,6 +226,9 @@ class ReplayController final : public QObject {
   void decodedSignalTimeoutRequested(int seconds);
   void ownCallsignRequested(const QString& callsign);
   void liveOwnCallsignRequested(const QString& callsign);
+  void keyingModelRequested(const QString& model);
+  void liveKeyingModelRequested(const QString& model);
+  void keyingModelChanged();
   void liveDecodedSignalTimeoutRequested(int seconds);
   void liveFrequencyShiftRequested(double audio_hz_delta);
   void manualDecoderFrequencyRequested(double audio_frequency_hz);
@@ -301,6 +306,7 @@ class ReplayController final : public QObject {
   cwassistant::core::OfflineCallsignDatabase offline_callsign_database_;
   bool callsign_database_correction_enabled_{false};
   QString own_callsign_;
+  QString keying_model_{QStringLiteral("adaptive-threshold")};
   QString offline_callsign_database_state_{QStringLiteral("disabled")};
   QString offline_callsign_database_status_{
       QStringLiteral("Offline callsign suggestions disabled.")};

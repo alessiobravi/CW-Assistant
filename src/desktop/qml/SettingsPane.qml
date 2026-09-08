@@ -158,6 +158,38 @@ Pane {
                         color: "#91a0b1"
                         text: "Optionally configure a compatible local decoding model. The deterministic decoder remains available and model output cannot control transmission."
                     }
+                    Label { text: "Keying model" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        RadioButton {
+                            objectName: "keyingModelAdaptiveThresholdRadio"
+                            text: "Adaptive threshold"
+                            checked: appSettings.keyingModel !== "semi-markov"
+                            onToggled: if (checked) appSettings.keyingModel = "adaptive-threshold"
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 26
+                            Layout.bottomMargin: 6
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "Decides key-up and key-down from the envelope, moment by moment. Steadiest on hand and bug sending, and shows text soonest."
+                        }
+                        RadioButton {
+                            objectName: "keyingModelSemiMarkovRadio"
+                            text: "Semi-Markov (HSMM)"
+                            checked: appSettings.keyingModel === "semi-markov"
+                            onToggled: if (checked) appSettings.keyingModel = "semi-markov"
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 26
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "Weighs each mark and gap against the lengths Morse expects. Stronger on machine-sent, weighted and Farnsworth keying; weaker when the sender's timing wanders. Costs about one character of delay."
+                        }
+                    }
                     Label { text: "Local model" }
                     CheckBox {
                         objectName: "localDecoderEnabledCheck"

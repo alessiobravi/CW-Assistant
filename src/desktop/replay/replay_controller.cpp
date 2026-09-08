@@ -507,6 +507,11 @@ class ReplayWorker final : public QObject {
     decoder_.setOwnCallsign(callsign.trimmed().toStdString());
   }
 
+  void setKeyingModel(const QString& model) {
+    decoder_.setKeyingModel(
+        cwassistant::core::cwKeyingModelFromName(model.toStdString()));
+  }
+
   void setDecodedSignalTimeoutSeconds(const int seconds) {
     decoder_.configure({.decoded_track_retention_seconds =
                             static_cast<double>(std::clamp(seconds, 5, 120))});
@@ -687,6 +692,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
   connect(this, &ReplayController::ownCallsignRequested, worker,
           &ReplayWorker::setOwnCallsign);
+  connect(this, &ReplayController::keyingModelRequested, worker,
+          &ReplayWorker::setKeyingModel);
   connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
           worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::replayCharacterRefinementRequested,
@@ -771,6 +778,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
   connect(this, &ReplayController::liveOwnCallsignRequested, dsp_worker,
           &LiveAudioDspWorker::setOwnCallsign);
+  connect(this, &ReplayController::liveKeyingModelRequested, dsp_worker,
+          &LiveAudioDspWorker::setKeyingModel);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::liveCharacterRefinementRequested,
@@ -1427,6 +1436,19 @@ void ReplayController::setSourceMode(const int value) {
 void ReplayController::setDecodedSignalTimeoutSeconds(const int seconds) {
   emit decodedSignalTimeoutRequested(seconds);
   emit liveDecodedSignalTimeoutRequested(seconds);
+}
+
+void ReplayController::setKeyingModel(const QString& model) {
+  // Both decode paths are told, so the choice holds whether the operator is on
+  // live audio or replaying a capture.
+  keying_model_ = model;
+  emit keyingModelRequested(keying_model_);
+  emit liveKeyingModelRequested(keying_model_);
+  emit keyingModelChanged();
+}
+
+const QString& ReplayController::keyingModel() const noexcept {
+  return keying_model_;
 }
 
 void ReplayController::setOwnCallsign(const QString& callsign) {

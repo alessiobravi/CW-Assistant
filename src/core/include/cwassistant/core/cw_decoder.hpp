@@ -3,10 +3,12 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
 #include "cwassistant/core/cw_event_lattice.hpp"
+#include "cwassistant/core/cw_semi_markov_segmenter.hpp"
 
 namespace cwassistant::core {
 
@@ -32,6 +34,11 @@ struct CwAcousticAlternative {
 };
 
 struct CwDecoderConfig {
+  // Which technique decides where the key goes down and comes back up.
+  // Everything after that decision -- element assembly, the event lattice, the
+  // verification gate, callsign policy -- is shared, so this selects a
+  // segmenter and changes nothing else.
+  CwKeyingModel keying_model{CwKeyingModel::AdaptiveThreshold};
   float key_on_snr_db{6.0F};
   float key_off_snr_db{3.0F};
   double initial_wpm{20.0};
@@ -104,8 +111,35 @@ class CwTimingDecoder {
   // ramp. Kept beside its inverse so the two cannot drift apart.
   [[nodiscard]] float evidenceForLogLikelihoodRatio(
       float log_likelihood_ratio) const noexcept;
+  // Runs committed by the most recent process() call, with the timestamps the
+  // segmenter decided rather than the frame clock they were reported on.
+  // Anything measuring run length -- cadence, the event lattice -- has to read
+  // them from here: sampling the key state once per incoming frame both dates
+  // a run to when it was noticed instead of when it happened, and loses every
+  // transition but the last when several are committed together.
+  [[nodiscard]] const std::vector<CwSegment>& committedSegments()
+      const noexcept {
+    return committed_segments_;
+  }
+  [[nodiscard]] double segmentationScore() const noexcept {
+    return segmenter_ != nullptr ? segmenter_->segmentationScore() : 0.0;
+  }
+  // Whether a segmenter decides this decoder's runs. Cadence and the event
+  // lattice read run boundaries from a different place in each case, so the
+  // caller has to know which.
+  [[nodiscard]] bool usesSegmenter() const noexcept {
+    return segmenter_ != nullptr;
+  }
 
  private:
+  // The shipped per-frame path. It is no longer driven by the live frame
+  // clock: the segmenter decides where runs begin and end, and this replays
+  // its decisions at their own timestamps, so element classification, speed
+  // adaptation, the event lattice and everything downstream of them run
+  // exactly as before -- on runs that are no longer a threshold's opinion.
+  CwDecoderUpdate processFrame(std::uint64_t timestamp_ns, float snr_db);
+  bool replayCommittedSegments(CwDecoderUpdate* update);
+  [[nodiscard]] float snrForSegment(const CwSegment& segment) const noexcept;
   void finishElement(double duration_ms);
   void finishCharacter();
   void promoteProvisional();
@@ -113,6 +147,17 @@ class CwTimingDecoder {
   [[nodiscard]] CwDecoderUpdate snapshot(bool changed) const;
 
   CwDecoderConfig config_;
+  // Null for AdaptiveThreshold, which keeps its own per-frame path. Held by
+  // pointer so a model that is not selected costs nothing: the duration
+  // model's search windows come to roughly a megabyte per track across the
+  // nine speed anchors.
+  std::unique_ptr<CwKeyingSegmenter> segmenter_;
+  std::vector<CwSegment> committed_segments_;
+  // Measured rather than assumed, so a committed run is replayed on the same
+  // grid it was observed on whatever rate the front end delivers.
+  double anchor_dot_ms_{60.0};
+  double input_frame_ms_{2.0};
+  std::uint64_t last_input_timestamp_ns_{0};
   std::string stable_text_;
   std::string provisional_text_;
   std::string elements_;
@@ -181,6 +226,10 @@ class CwMultiSpeedDecoder {
   [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
   [[nodiscard]] std::size_t hypothesisCount() const noexcept;
   [[nodiscard]] std::size_t stateBytes() const noexcept;
+  // Rebuilds every speed hypothesis around a different keying technique. The
+  // partial state of one technique means nothing to another, so this restarts
+  // decoding; it is a no-op when the model is already the one in use.
+  void setKeyingModel(CwKeyingModel model);
   // Every hypothesis shares one evidence configuration, so the calibration is
   // common to all of them and a detector need encode its ratio only once.
   [[nodiscard]] float evidenceForLogLikelihoodRatio(
@@ -200,6 +249,7 @@ class CwMultiSpeedDecoder {
   [[nodiscard]] CwDecoderUpdate snapshot(bool changed) const;
   void considerLock(float margin);
   void resetHypotheses();
+  void observeLeaderEvidence(std::uint64_t timestamp_ns);
   void observeCadence(bool key_down, std::uint64_t timestamp_ns);
   void recomputeCadenceEstimate();
   void observeLattice(bool key_down, float key_down_probability,
@@ -237,6 +287,13 @@ class CwMultiSpeedDecoder {
   double cadence_dot_ms_{0.0};
   float cadence_confidence_{0.0F};
   bool cadence_initialized_{false};
+  // The nine speed anchors segment independently, so they do not all reach the
+  // same instant at the same time and the presentation leader can change to one
+  // that is further behind. Cadence and the lattice would then be handed a run
+  // that starts before the one they last saw, which reads as time running
+  // backwards and throws away the estimate. Observations are taken strictly
+  // forwards instead: a new leader resumes where the stream had reached.
+  std::uint64_t last_observed_segment_ns_{0};
   bool cadence_key_down_{false};
   bool locked_{false};
   bool initialized_{false};

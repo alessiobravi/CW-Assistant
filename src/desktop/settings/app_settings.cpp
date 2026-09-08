@@ -614,6 +614,9 @@ int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
 bool AppSettings::callsignDatabaseCorrectionEnabled() const noexcept {
   return callsign_database_correction_enabled_;
 }
+const QString& AppSettings::keyingModel() const noexcept {
+  return keying_model_;
+}
 
 bool AppSettings::localDecoderEnabled() const noexcept {
   return local_decoder_enabled_;
@@ -719,6 +722,7 @@ CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
 CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
            callsign_database_correction_enabled_, bool)
+CWA_SETTER(setKeyingModel, keying_model_, const QString&)
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
@@ -1149,6 +1153,8 @@ bool AppSettings::apply() {
   settings.setValue(
       storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
       callsign_database_correction_enabled_);
+  settings.setValue(storageKey(QStringLiteral("decoder/keyingModel")),
+                    keying_model_);
   settings.setValue(storageKey(QStringLiteral("decoder/localModelPath")),
                     local_decoder_model_path_);
   settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
@@ -1273,6 +1279,10 @@ void AppSettings::load() {
       .value(storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
              false)
       .toBool();
+  keying_model_ = settings
+      .value(storageKey(QStringLiteral("decoder/keyingModel")),
+             QStringLiteral("adaptive-threshold"))
+      .toString();
   local_decoder_model_path_ = settings
       .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
   local_decoder_metadata_path_ = settings
@@ -1465,6 +1475,7 @@ void AppSettings::resetInMemorySettings() {
   decoded_signal_timeout_seconds_ = 30;
   local_decoder_enabled_ = false;
   callsign_database_correction_enabled_ = false;
+  keying_model_ = QStringLiteral("adaptive-threshold");
   local_decoder_model_path_.clear();
   local_decoder_metadata_path_.clear();
   local_callsign_database_enabled_ = false;

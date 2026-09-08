@@ -82,6 +82,21 @@ CwTimingDecoder::CwTimingDecoder(CwDecoderConfig config) : config_(config) {
       config_.stable_gap_dots, config_.character_gap_dots + 0.2, 4.5);
   config_.word_gap_dots =
       std::clamp(config_.word_gap_dots, config_.stable_gap_dots + 0.5, 9.0);
+  anchor_dot_ms_ = 1'200.0 / config_.initial_wpm;
+  // Each speed hypothesis segments at its own element length, so each sizes
+  // its own search window: this is what keeps nine anchors per track from
+  // costing nine times the slowest one. A model that is not selected is never
+  // constructed, so it costs nothing.
+  switch (config_.keying_model) {
+    case CwKeyingModel::SemiMarkov: {
+      CwSemiMarkovConfig segment_config;
+      segment_config.initial_wpm = config_.initial_wpm;
+      segmenter_ = std::make_unique<CwSemiMarkovSegmenter>(segment_config);
+      break;
+    }
+    case CwKeyingModel::AdaptiveThreshold:
+      break;
+  }
   reset();
 }
 
@@ -104,12 +119,101 @@ void CwTimingDecoder::reset() noexcept {
   characters_.clear();
   recent_cadence_quality_.clear();
   provisional_character_ = {};
+  if (segmenter_ != nullptr) {
+    segmenter_->reset();
+    segmenter_->setElementLengthMs(dot_ms_);
+  }
+  committed_segments_.clear();
   initialized_ = false; key_down_ = false; character_finished_ = false;
   word_space_emitted_ = false;
 }
 
+float CwTimingDecoder::snrForSegment(const CwSegment& segment) const noexcept {
+  const float midpoint =
+      0.5F * (config_.key_on_snr_db + config_.key_off_snr_db);
+  const float scale = std::max(
+      0.75F, 0.5F * (config_.key_on_snr_db - config_.key_off_snr_db));
+  // Honest evidence, with no floor under it. The key state is carried by the
+  // sign alone, so a run is never lost for being weak -- which frees this
+  // magnitude to say how weak it actually was. Flooring it instead, so that it
+  // also had to clear the old hysteresis band, told the verification gate that
+  // every run was a confident one: a duration-explicit search fits legal Morse
+  // to noise perfectly well, and confidence in the evidence is the thing that
+  // separates a signal from a channel that merely has structure imposed on it.
+  const float magnitude = static_cast<float>(
+      std::clamp(std::abs(segment.element_evidence_nats), 0.05, 3.0));
+  return midpoint + (isMarkSegment(segment.kind) ? magnitude : -magnitude) *
+                        scale;
+}
+
 CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
                                          const float snr_db) {
+  // The threshold model has no segmenter in front of it: the frame goes
+  // straight into the per-frame path, exactly as it always has.
+  if (segmenter_ == nullptr) return processFrame(timestamp_ns, snr_db);
+  last_snr_db_ = snr_db;
+  // Bounded to the neighbourhood of this hypothesis's own anchor. The
+  // downstream speed estimate is derived from this segmentation, so feeding it
+  // back unbounded closes a loop on itself: one long run biases the estimate
+  // slow, a slower model then prefers longer runs still, and the hypothesis
+  // walks away from the signal and stops segmenting it at all. Measured, that
+  // cost an entire transmission on one seed in five -- 132 key transitions
+  // became 18. The bank already covers speed with nine anchors; each one only
+  // has to cover the ground between itself and its neighbours.
+  segmenter_->setElementLengthMs(
+      std::clamp(dot_ms_, anchor_dot_ms_ * 0.80, anchor_dot_ms_ * 1.25));
+  const float midpoint =
+      0.5F * (config_.key_on_snr_db + config_.key_off_snr_db);
+  const float scale = std::max(
+      0.75F, 0.5F * (config_.key_on_snr_db - config_.key_off_snr_db));
+  // Exact inverse of probabilityForSnr: the channel bank already encoded a
+  // calibrated log-likelihood ratio into this figure, and the segmenter wants
+  // it back in nats rather than a second squash of an already shaped ramp.
+  const double log_likelihood_nats =
+      static_cast<double>((snr_db - midpoint) / scale);
+  CwDecoderUpdate update = snapshot(false);
+  bool changed = false;
+  if (last_input_timestamp_ns_ != 0 &&
+      timestamp_ns > last_input_timestamp_ns_) {
+    const double interval_ms =
+        milliseconds(timestamp_ns - last_input_timestamp_ns_);
+    if (interval_ms > 0.0 && interval_ms < 200.0) {
+      input_frame_ms_ = input_frame_ms_ <= 0.0
+          ? interval_ms
+          : input_frame_ms_ + 0.05 * (interval_ms - input_frame_ms_);
+    }
+  }
+  last_input_timestamp_ns_ = timestamp_ns;
+  committed_segments_ = segmenter_->process(timestamp_ns,
+                                            log_likelihood_nats);
+  changed = replayCommittedSegments(&update);
+  update.changed = changed;
+  return update;
+}
+
+bool CwTimingDecoder::replayCommittedSegments(CwDecoderUpdate* update) {
+  // Replayed at the rate the frames arrived on. Handing a run over as a single
+  // step would leave every measure that integrates across it -- the mark
+  // confidence the verification gate reads above all -- accumulating once at
+  // the instant the state had already moved on to the next run. The end of a
+  // transmission goes through here too: the last character of a call is the
+  // one an operator most needs, and it is the one a shortcut here loses.
+  const auto step_ns = static_cast<std::uint64_t>(
+      std::max(1.0, input_frame_ms_ * 1.0e6));
+  bool changed = false;
+  for (const CwSegment& segment : committed_segments_) {
+    const float segment_snr_db = snrForSegment(segment);
+    for (std::uint64_t at = segment.started_ns; at < segment.ended_ns;
+         at += step_ns) {
+      *update = processFrame(at, segment_snr_db);
+      changed = changed || update->changed;
+    }
+  }
+  return changed;
+}
+
+CwDecoderUpdate CwTimingDecoder::processFrame(const std::uint64_t timestamp_ns,
+                                              const float snr_db) {
   last_snr_db_ = snr_db;
   const float instantaneous_probability = probabilityForSnr(snr_db);
   if (!initialized_) {
@@ -140,8 +244,21 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   // a 60 WPM dit resolvable.
   const double evidence_time_constant_ms = std::clamp(
       dot_ms_ / 4.0, 2.0, config_.evidence_time_constant_ms * 2.0);
-  const float smoothing = static_cast<float>(std::clamp(
-      elapsed_ms / evidence_time_constant_ms, 0.0, 1.0));
+  // Nothing undecided reaches here any more. The segmenter has already
+  // integrated this run's evidence over its whole length, so re-applying an
+  // evidence smoother would only re-introduce the lag it exists to fight --
+  // and on a run near the minimum length it would delay the crossing past the
+  // end of the run and lose it, which is precisely the weak-signal failure
+  // this decoder replaced.
+  // A segmenter has already weighed this run's evidence over its whole length,
+  // so re-applying an evidence smoother would only re-introduce the lag it
+  // exists to fight, and on a run near the minimum length would delay the
+  // crossing past the end of the run and lose it. Undecided input still needs
+  // it.
+  const float smoothing = segmenter_ != nullptr
+      ? 1.0F
+      : static_cast<float>(std::clamp(
+            elapsed_ms / evidence_time_constant_ms, 0.0, 1.0));
   key_down_probability_ +=
       smoothing * (instantaneous_probability - key_down_probability_);
   if (key_down_ && elapsed_ms > 0.0) {
@@ -151,9 +268,14 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   }
   last_timestamp_ns_ = timestamp_ns;
 
-  const bool observed_down =
-      key_down_ ? key_down_probability_ >= config_.key_off_probability
-                : key_down_probability_ >= config_.key_on_probability;
+  // The segmenter decided this, having weighed the whole run; the sign is that
+  // decision. A hysteresis band re-applied here would only be a second, worse
+  // decision taken on one frame at a time -- and it is exactly what used to
+  // drop weak marks.
+  const bool observed_down = segmenter_ != nullptr
+      ? snr_db >= 0.5F * (config_.key_on_snr_db + config_.key_off_snr_db)
+      : (key_down_ ? key_down_probability_ >= config_.key_off_probability
+                   : key_down_probability_ >= config_.key_on_probability);
   // The smoothed probability crosses its threshold roughly one time constant
   // after the signal actually changed. Both edges of a completed run shift by
   // the same amount, so measured run lengths are already correct and must not
@@ -161,7 +283,10 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   // ends with two different delays would feed the estimate back into itself.
   // Only a still-open gap is affected, because it is timed against the wall
   // clock while its start edge was detected late.
-  const double detection_delay_ms = 1.1 * evidence_time_constant_ms;
+  // With no smoother in front of the decision there is no crossing delay to
+  // compensate for; a gap still open is timed exactly from where it began.
+  const double detection_delay_ms =
+      segmenter_ != nullptr ? 0.0 : 1.1 * evidence_time_constant_ms;
   bool changed = false;
   if (observed_down != key_down_) {
     const double duration_ms = milliseconds(timestamp_ns - state_started_ns_);
@@ -271,7 +396,12 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
 }
 
 CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
-  auto result = process(timestamp_ns, -100.0F);
+  if (segmenter_ != nullptr) {
+    committed_segments_ = segmenter_->flush();
+    CwDecoderUpdate replayed = snapshot(false);
+    static_cast<void>(replayCommittedSegments(&replayed));
+  }
+  auto result = processFrame(timestamp_ns, -100.0F);
   if (key_down_) {
     // Flush is an explicit end-of-input boundary, so it must release a keyed
     // state even when called only one evidence interval after the last update
@@ -297,7 +427,9 @@ CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
 }
 
 std::size_t CwTimingDecoder::stateBytes() const noexcept {
-  return sizeof(*this) + stable_text_.capacity() +
+  return sizeof(*this) +
+         (segmenter_ != nullptr ? segmenter_->stateBytes() : 0) +
+         stable_text_.capacity() +
          provisional_text_.capacity() + elements_.capacity() +
          characterEvidenceBytes(characters_) +
          recent_cadence_quality_.capacity() * sizeof(float) +
@@ -391,13 +523,19 @@ namespace {
 
 float evidenceForRatio(const CwDecoderConfig& config,
                        const float log_likelihood_ratio) noexcept {
+  const float bound = cwEvidenceBoundNats(config.keying_model);
   const float midpoint = 0.5F * (config.key_on_snr_db + config.key_off_snr_db);
   const float scale = std::max(
       0.75F, 0.5F * (config.key_on_snr_db - config.key_off_snr_db));
-  // Saturate symmetrically about the midpoint. Beyond this the posterior is
-  // already within a few percent of certain, and letting it run further only
-  // lets one confident sample dominate the evidence average.
-  const float bounded = std::clamp(log_likelihood_ratio, -3.0F, 3.0F);
+  // Saturate symmetrically about the midpoint, but far enough out to leave a
+  // strong sample its strength. The old bound sat at three nats, where a
+  // per-frame posterior is already within a few percent of certain, because a
+  // decoder thresholding one frame at a time gains nothing past that and is
+  // only made unstable by it. A decoder that integrates evidence across a
+  // whole run does gain: the difference between a frame that is merely
+  // probably keyed and one that certainly is, is most of what tells a real
+  // element from a noise excursion once thirty of them are added up.
+  const float bounded = std::clamp(log_likelihood_ratio, -bound, bound);
   return midpoint + scale * bounded;
 }
 
@@ -513,6 +651,12 @@ CwMultiSpeedDecoder::CwMultiSpeedDecoder(
   reset();
 }
 
+void CwMultiSpeedDecoder::setKeyingModel(const CwKeyingModel model) {
+  if (decoder_config_.keying_model == model) return;
+  decoder_config_.keying_model = model;
+  reset();
+}
+
 void CwMultiSpeedDecoder::reset() {
   committed_prefix_.clear();
   refined_text_.clear();
@@ -543,6 +687,7 @@ void CwMultiSpeedDecoder::resetHypotheses() {
   cadence_dot_ms_ = 0.0;
   cadence_confidence_ = 0.0F;
   cadence_initialized_ = false;
+  last_observed_segment_ns_ = 0;
   cadence_key_down_ = false;
 }
 
@@ -566,11 +711,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     // so their key decisions genuinely differ. Cadence and lattice evidence
     // must follow the current presentation leader rather than the first
     // seeded hypothesis, which is the slowest one in the bank.
-    observeCadence(hypotheses_[leader_index_].update.key_down,
-                   timestamp_ns);
-    observeLattice(hypotheses_[leader_index_].update.key_down,
-                   hypotheses_[leader_index_].update.key_down_probability,
-                   timestamp_ns);
+    observeLeaderEvidence(timestamp_ns);
     const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
     const double silence_ms = signal_seen_ &&
@@ -607,11 +748,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
   // so their key decisions genuinely differ. Cadence and lattice evidence
   // must follow the current presentation leader rather than the first
   // seeded hypothesis, which is the slowest one in the bank.
-  observeCadence(hypotheses_[leader_index_].update.key_down,
-                 timestamp_ns);
-  observeLattice(hypotheses_[leader_index_].update.key_down,
-                 hypotheses_[leader_index_].update.key_down_probability,
-                 timestamp_ns);
+  observeLeaderEvidence(timestamp_ns);
   const std::size_t previous_leader = leader_index_;
   float margin = 0.0F;
   leader_index_ = selectLeader(&margin);
@@ -682,9 +819,65 @@ float CwMultiSpeedDecoder::score(
   // timing_quality's separation (see BACKLOG.md CW-001) was made only to
   // stop it duplicating mean_character_confidence for the verification
   // gate, not to change which WPM hypothesis wins here.
+  // Both terms below exist only because a duration-explicit model can be
+  // confidently wrong about speed in a way a threshold cannot, so they are
+  // applied only to a hypothesis that uses one. Adding them to the threshold
+  // model perturbs a speed acquisition that was already correct.
+  float segmentation_evidence = 0.0F;
+  if (hypothesis.decoder.usesSegmenter()) {
+    // What it cost this hypothesis to describe the signal at its own element
+    // length. Text plausibility cannot separate speed hypotheses when each
+    // segments explicitly -- every one of them yields legal Morse -- so the
+    // likelihood of the segmentation itself is evidence about the speed.
+    const float duration_fit = static_cast<float>(
+        std::clamp(hypothesis.decoder.segmentationScore(), -12.0, 0.0));
+    // Morse timing is self-similar at a factor of three: read three times too
+    // fast, every dash becomes a dot and every character gap becomes a gap
+    // between elements. The result is legal, entirely composed of known
+    // symbols, and fits its own duration model perfectly, so neither the text
+    // nor the fit can reject it -- a hypothesis three times too fast produced
+    // "E ?TMT MMTM MTMT" from a clean CQ and was preferred to the truth. What
+    // gives it away is that every element became a character of its own. Real
+    // Morse averages around three elements per character, and no natural text
+    // approaches one.
+    const float elements_per_symbol =
+        0.5F * static_cast<float>(update.key_transitions) /
+        static_cast<float>(
+            std::max<std::uint32_t>(update.decoded_symbols, 1U));
+    const float fragmentation =
+        std::clamp(2.2F - elements_per_symbol, 0.0F, 2.0F);
+    segmentation_evidence = duration_fit - 0.60F * fragmentation;
+  }
   return 2.5F * update.mean_character_confidence + 0.4F * known_fraction -
          0.15F * (1.0F - update.confidence) -
-         0.20F * prior_distance;
+         0.20F * prior_distance + segmentation_evidence;
+}
+
+void CwMultiSpeedDecoder::observeLeaderEvidence(
+    const std::uint64_t timestamp_ns) {
+  const auto& leader = hypotheses_[leader_index_];
+  if (!leader.decoder.usesSegmenter()) {
+    // The threshold model publishes its key state per frame and nothing else,
+    // so cadence and the lattice read it the way they always have.
+    observeCadence(leader.update.key_down, timestamp_ns);
+    observeLattice(leader.update.key_down, leader.update.key_down_probability,
+                   timestamp_ns);
+    return;
+  }
+  // A segmenter dates each run to when it happened rather than when it was
+  // noticed, and may commit several at once. Sampling its key state once per
+  // incoming frame would mis-time every run and drop all but the last. The
+  // nine anchors also do not reach the same instant together, so a change of
+  // leader can offer a run older than the one already seen: observations are
+  // taken strictly forwards, and a new leader resumes where the stream had
+  // reached.
+  for (const CwSegment& segment : leader.decoder.committedSegments()) {
+    if (segment.started_ns <= last_observed_segment_ns_) continue;
+    last_observed_segment_ns_ = segment.started_ns;
+    const bool keyed = isMarkSegment(segment.kind);
+    observeCadence(keyed, segment.started_ns);
+    observeLattice(keyed, segment.confidence, segment.started_ns);
+  }
 }
 
 void CwMultiSpeedDecoder::observeCadence(const bool key_down,

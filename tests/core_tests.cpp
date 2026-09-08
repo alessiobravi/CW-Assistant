@@ -136,6 +136,52 @@ void test_cw_timing_decoder() {
   expect(result.key_down_probability < 0.1F,
          "soft key evidence returns near zero after a completed signal");
 
+  // The same keying, decoded by the duration model instead. It needs a longer
+  // trailing gap than the threshold does before it will commit the last
+  // character, which is the latency the two techniques genuinely differ by.
+  CwTimingDecoder semi_markov(
+      {.keying_model = cwassistant::core::CwKeyingModel::SemiMarkov,
+       .initial_wpm = 20.0});
+  std::uint64_t semi_now = 0;
+  const auto feed_semi = [&](const bool down, const int milliseconds) {
+    const int steps = milliseconds / 2;
+    for (int i = 0; i < steps; ++i) {
+      semi_now += 2'000'000;
+      static_cast<void>(
+          semi_markov.process(semi_now, down ? 12.0F : 0.0F));
+    }
+  };
+  feed_semi(false, 300);
+  feed_semi(true, 60); feed_semi(false, 60); feed_semi(true, 60);
+  feed_semi(false, 200);
+  feed_semi(true, 60); feed_semi(false, 60); feed_semi(true, 60);
+  feed_semi(false, 60); feed_semi(true, 60); feed_semi(false, 600);
+  const auto semi_result = semi_markov.flush(semi_now + 500'000'000);
+  expect(semi_result.text.find("IS") != std::string::npos,
+         "the duration model decodes the same keying as the threshold");
+  expect(semi_result.wpm > 17.0 && semi_result.wpm < 23.0,
+         "the duration model reports the keyed speed");
+
+  // Selecting a model must be the only thing that changes. A decoder left on
+  // the default must behave exactly as it did before the choice existed, which
+  // is what lets the threshold stay the shipped default while another
+  // technique is offered beside it.
+  expect(CwTimingDecoder({.initial_wpm = 20.0}).usesSegmenter() == false &&
+             semi_markov.usesSegmenter(),
+         "only a segmenting model builds a segmenter");
+  using cwassistant::core::CwKeyingModel;
+  expect(cwassistant::core::cwKeyingModelFromName(
+             cwassistant::core::cwKeyingModelName(
+                 CwKeyingModel::SemiMarkov)) == CwKeyingModel::SemiMarkov &&
+             cwassistant::core::cwKeyingModelFromName(
+                 cwassistant::core::cwKeyingModelName(
+                     CwKeyingModel::AdaptiveThreshold)) ==
+                 CwKeyingModel::AdaptiveThreshold,
+         "keying model names round-trip");
+  expect(cwassistant::core::cwKeyingModelFromName("no-such-model") ==
+             CwKeyingModel::AdaptiveThreshold,
+         "an unknown stored model falls back to the shipped default");
+
   CwTimingDecoder immediate_flush({.initial_wpm = 20.0});
   static_cast<void>(immediate_flush.process(0, 12.0F));
   const auto forced_up = immediate_flush.flush(2'000'000);

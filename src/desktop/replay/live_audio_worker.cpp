@@ -497,6 +497,11 @@ void LiveAudioDspWorker::configure(
   if (signal_path_changed) decoder_.reset();
 }
 
+void LiveAudioDspWorker::setKeyingModel(const QString& model) {
+  decoder_.setKeyingModel(cwassistant::core::cwKeyingModelFromName(
+      model.toStdString()));
+}
+
 void LiveAudioDspWorker::setOwnCallsign(const QString& callsign) {
   decoder_.setOwnCallsign(callsign.trimmed().toStdString());
 }

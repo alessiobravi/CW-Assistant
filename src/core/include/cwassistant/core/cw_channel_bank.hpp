@@ -245,6 +245,15 @@ class CwChannelBank {
   // configuration, so a caller that later adjusts one unrelated field would
   // otherwise silently clear this.
   void setOwnCallsign(std::string callsign);
+  // Switches the keying model on every live track without disturbing anything
+  // else about them. Their decoders restart -- a different technique cannot
+  // inherit another's partial state -- but track identity, frequency and the
+  // callsign evidence gathered so far all survive, so an operator can compare
+  // two models on the same station without losing it.
+  void setKeyingModel(CwKeyingModel model) noexcept;
+  [[nodiscard]] CwKeyingModel keyingModel() const noexcept {
+    return keying_model_;
+  }
   void reset() noexcept;
   // Re-centers every current track by a known audio-domain frequency shift
   // (for example, the shift implied by an operator retuning the linked
@@ -414,6 +423,13 @@ class CwChannelBank {
                                   std::span<const float> bins_dbfs,
                                   float noise_dbfs) const;
   void sanitizeConfig() noexcept;
+  void applyKeyingModel() noexcept;
+  // Deliberately not part of CwChannelBankConfig. configure() replaces the
+  // whole config, and callers legitimately build one with a single designated
+  // initialiser to change one unrelated setting -- the decoded-track retention
+  // does exactly that. A keying model living in there would revert to the
+  // default every time an unrelated slider moved, silently and only sometimes.
+  CwKeyingModel keying_model_{CwKeyingModel::AdaptiveThreshold};
   void resetFilter(Track& track) noexcept;
   void updateVerification(Track& track, std::uint64_t timestamp_ns);
   void recoverRejectedDecoder(Track& track);

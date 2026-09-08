@@ -8,6 +8,45 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- The decoder's keying technique is selectable, and a second one is offered
+  beside the shipped default. Settings -> Decoder now names the two: **Adaptive
+  threshold**, which decides key-up and key-down from the envelope moment by
+  moment and classifies elements afterwards by duration ratio, and **Semi-Markov
+  (HSMM)**, which weighs each mark and gap against the lengths Morse expects,
+  scoring whole runs rather than single frames. The default is unchanged, and a
+  decoder left on it behaves exactly as before -- measured, not assumed: the
+  synthetic accuracy surface reproduces 0.2884 mean character error to the
+  digit, capture recovery stays at eight of nine callsigns, and no false
+  callsign appears on any of the four recordings that contain no CW.
+
+  Neither technique is better everywhere, which is why this is a choice rather
+  than a replacement. Against the keying-style bench the duration model is
+  better when the sender is systematically off the textbook ratios -- 0.058
+  against 0.133 on heavy weighting, 0.075 against 0.100 on Farnsworth spacing --
+  and worse when their timing wanders, 0.283 against 0.075 at ten per cent
+  jitter and 0.458 against 0.267 at twenty. Hand and bug sending produce exactly
+  that wander, so the threshold remains the default; a machine-sent or heavily
+  weighted signal is where the other is worth reaching for. Switching models
+  restarts the decoders but keeps every track, so two techniques can be compared
+  on the same station while it is still sending.
+
+  The choice is stored by name rather than by position, so it survives another
+  technique being added or the list being reordered, and an unrecognised stored
+  value falls back to the default rather than to whatever happens to be first.
+
+- Morse timing is self-similar at a factor of three, and a decoder that models
+  durations explicitly has to be told so. Read three times too fast, every dash
+  becomes a dot and every character gap becomes a gap between elements: the
+  result is legal Morse, composed entirely of known symbols, fitting its own
+  duration model perfectly. A hypothesis at 44 WPM produced "E ?TMT MMTM MTMT"
+  from a clean CQ at 16 WPM and was preferred to the truth. What separates them
+  is that a real dash is longer than the longest mark such a hypothesis can
+  describe, so it must break solid marks apart to make the interval tile at all
+  and pays for every invented gap. Speed hypotheses are scored on that fit,
+  which took the affected cells from 0.283 to 0.092. The threshold decoder is
+  unaffected -- at the wrong speed it emits unknown symbols, which already lose
+  -- so the term applies only to a technique that needs it.
+
 - The verification timing-quality threshold is a plain constant again. It had
   been left parameterised by a build-time define after an experiment, so a build
   that happened to set that name would have silently changed which signals the
