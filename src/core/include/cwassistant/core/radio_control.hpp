@@ -145,6 +145,8 @@ enum class RadioCommandValidation {
 [[nodiscard]] bool radio_tx_mode_target_is_valid(RadioMode mode) noexcept;
 [[nodiscard]] bool radio_mode_target_is_confirmed(
     const RadioModeState& observation, RadioMode target) noexcept;
+[[nodiscard]] bool radio_tx_frequency_sync_is_available(
+    const RadioState& state) noexcept;
 [[nodiscard]] bool radio_state_is_valid(const RadioState& state) noexcept;
 [[nodiscard]] bool radio_has_capability(
     const RadioCapabilities& capabilities,

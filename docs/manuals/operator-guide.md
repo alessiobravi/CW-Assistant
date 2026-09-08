@@ -763,7 +763,9 @@ never changes the rig merely to make the faceplate complete.
 Use **SYNC** to copy the checked VFO A/RX actual-RF frequency into VFO B/TX.
 The same provider-neutral route performs independent transverter-offset
 conversion and enables split when the backend advertises both operations. SYNC
-changes frequency only: it never copies the RX mode into the CW/CW-R TX target.
+is disabled when RX state is unknown or either required capability is absent.
+It changes frequency only: it never copies the RX mode into the CW/CW-R TX
+target.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic

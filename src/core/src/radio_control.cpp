@@ -139,6 +139,18 @@ bool radio_mode_target_is_confirmed(
          observation.mode == target;
 }
 
+bool radio_tx_frequency_sync_is_available(const RadioState& state) noexcept {
+  if (!radio_state_is_valid(state) ||
+      state.availability != RadioObservation::Known ||
+      state.rx_frequency.observation != RadioObservation::Known ||
+      !radio_has_capability(state.capabilities,
+                            RadioCapability::SetTxFrequency)) {
+    return false;
+  }
+  return state.split.split == RadioSplit::Enabled ||
+         radio_has_capability(state.capabilities, RadioCapability::SetSplit);
+}
+
 bool radio_vfo_identifier_is_valid(const std::string& identifier) noexcept {
   return !identifier.empty() &&
          identifier.size() <= kMaximumRadioVfoIdentifierLength &&

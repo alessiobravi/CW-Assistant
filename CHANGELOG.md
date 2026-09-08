@@ -19,7 +19,8 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 - A provider-neutral **SYNC** control copies the checked VFO A/RX actual-RF
   frequency to VFO B/TX through advertised TX-frequency and split
-  capabilities. It deliberately does not copy RX mode into the CW/CW-R TX
+  capabilities. Its core availability check fails closed on invalid or unknown
+  provider state. It deliberately does not copy RX mode into the CW/CW-R TX
   target.
 
 - The secure remote-operation specification now defines mutually authenticated

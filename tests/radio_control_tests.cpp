@@ -86,6 +86,31 @@ void test_tx_mode_target_is_separate_from_provider_observation() {
          "only matching known provider readback confirms an operator target");
 }
 
+void test_frequency_sync_requires_observed_rx_and_provider_capability() {
+  using namespace cwassistant::core;
+  auto state = writable_radio();
+  expect(radio_tx_frequency_sync_is_available(state),
+         "split radio with observed RX and writable TX can synchronize");
+
+  state.split = {RadioObservation::Known, RadioSplit::Disabled};
+  expect(radio_tx_frequency_sync_is_available(state),
+         "simplex radio can synchronize when it can enable split");
+  state.capabilities.bits &=
+      ~radio_capability_bit(RadioCapability::SetSplit);
+  expect(!radio_tx_frequency_sync_is_available(state),
+         "simplex radio cannot synchronize without split control");
+
+  state = writable_radio();
+  state.rx_frequency = {RadioObservation::Unknown, 0U};
+  expect(!radio_tx_frequency_sync_is_available(state),
+         "unknown RX frequency cannot become a TX sync command");
+  state = writable_radio();
+  state.capabilities.bits &=
+      ~radio_capability_bit(RadioCapability::SetTxFrequency);
+  expect(!radio_tx_frequency_sync_is_available(state),
+         "provider without TX-frequency capability cannot synchronize");
+}
+
 void test_unknown_and_unavailable_are_not_fabricated() {
   using namespace cwassistant::core;
   RadioState state;
@@ -223,6 +248,7 @@ int main() {
   test_complete_state_and_capabilities();
   test_mode_tokens_are_provider_neutral();
   test_tx_mode_target_is_separate_from_provider_observation();
+  test_frequency_sync_requires_observed_rx_and_provider_capability();
   test_unknown_and_unavailable_are_not_fabricated();
   test_invalid_state_combinations();
   test_every_command_and_capability();

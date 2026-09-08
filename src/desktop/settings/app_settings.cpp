@@ -427,9 +427,8 @@ bool AppSettings::radioTxFrequencyWritable() const noexcept {
       cwassistant::core::RadioCapability::SetTxFrequency);
 }
 bool AppSettings::radioTxFrequencySyncAvailable() const noexcept {
-  return controlledRxRfHz().has_value() && radioTxFrequencyWritable() &&
-         (radio_state_.split.split == cwassistant::core::RadioSplit::Enabled ||
-          radioSplitWritable());
+  return controlledRxRfHz().has_value() &&
+         cwassistant::core::radio_tx_frequency_sync_is_available(radio_state_);
 }
 bool AppSettings::radioRxModeWritable() const noexcept {
   return cwassistant::core::radio_has_capability(
