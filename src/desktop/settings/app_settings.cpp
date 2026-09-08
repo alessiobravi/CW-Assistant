@@ -617,6 +617,12 @@ bool AppSettings::callsignDatabaseCorrectionEnabled() const noexcept {
 const QString& AppSettings::keyingModel() const noexcept {
   return keying_model_;
 }
+int AppSettings::debugCaptureMaximumSeconds() const noexcept {
+  return debug_capture_maximum_seconds_;
+}
+const QString& AppSettings::operatorRole() const noexcept {
+  return operator_role_;
+}
 
 bool AppSettings::localDecoderEnabled() const noexcept {
   return local_decoder_enabled_;
@@ -723,6 +729,8 @@ CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
 CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
            callsign_database_correction_enabled_, bool)
 CWA_SETTER(setKeyingModel, keying_model_, const QString&)
+CWA_SETTER(setDebugCaptureMaximumSeconds, debug_capture_maximum_seconds_, int)
+CWA_SETTER(setOperatorRole, operator_role_, const QString&)
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
@@ -1155,6 +1163,11 @@ bool AppSettings::apply() {
       callsign_database_correction_enabled_);
   settings.setValue(storageKey(QStringLiteral("decoder/keyingModel")),
                     keying_model_);
+  settings.setValue(
+      storageKey(QStringLiteral("diagnostics/debugCaptureMaximumSeconds")),
+      debug_capture_maximum_seconds_);
+  settings.setValue(storageKey(QStringLiteral("station/operatorRole")),
+                    operator_role_);
   settings.setValue(storageKey(QStringLiteral("decoder/localModelPath")),
                     local_decoder_model_path_);
   settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
@@ -1282,6 +1295,17 @@ void AppSettings::load() {
   keying_model_ = settings
       .value(storageKey(QStringLiteral("decoder/keyingModel")),
              QStringLiteral("adaptive-threshold"))
+      .toString();
+  debug_capture_maximum_seconds_ = std::clamp(
+      settings
+          .value(storageKey(
+                     QStringLiteral("diagnostics/debugCaptureMaximumSeconds")),
+                 300)
+          .toInt(),
+      30, 1'800);
+  operator_role_ = settings
+      .value(storageKey(QStringLiteral("station/operatorRole")),
+             QStringLiteral("monitor"))
       .toString();
   local_decoder_model_path_ = settings
       .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
@@ -1476,6 +1500,8 @@ void AppSettings::resetInMemorySettings() {
   local_decoder_enabled_ = false;
   callsign_database_correction_enabled_ = false;
   keying_model_ = QStringLiteral("adaptive-threshold");
+  debug_capture_maximum_seconds_ = 300;
+  operator_role_ = QStringLiteral("monitor");
   local_decoder_model_path_.clear();
   local_decoder_metadata_path_.clear();
   local_callsign_database_enabled_ = false;

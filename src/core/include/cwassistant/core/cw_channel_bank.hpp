@@ -6,8 +6,10 @@
 #include <cstdint>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
+#include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/sample_block.hpp"
 
@@ -40,6 +42,22 @@ inline constexpr std::size_t kCwVerificationReasonCount =
     static_cast<std::size_t>(CwVerificationReason::SignalLost) + 1U;
 
 [[nodiscard]] const char* cwTrackStateName(CwTrackState state) noexcept;
+// Whether decoded text contains a token distinctive enough that its presence is
+// itself strong evidence the channel is carrying real Morse, independent of any
+// timing or confidence measure.
+//
+// Motivated by a real capture: a contest station whose decoded text plainly
+// read TEST never verified, because its timing quality sat under the threshold
+// for the track's entire life. Nothing else about the track was in doubt -- it
+// had a carrier, keyed edges, cadence and coherence -- so a legible contest
+// token was better evidence than the proxy that rejected it.
+//
+// The list is deliberately short and skewed to tokens noise is unlikely to
+// spell by chance. Short, common ones a random keying pattern lands on
+// regularly -- K, DE, R, single letters -- are excluded however useful they
+// are to a human reader, because the point is evidence, not readability.
+[[nodiscard]] bool cwTextContainsDistinctiveToken(std::string_view text) noexcept;
+
 [[nodiscard]] const char* cwVerificationReasonName(
     CwVerificationReason reason) noexcept;
 
@@ -146,6 +164,11 @@ struct CwVerificationDiagnostics {
   std::uint64_t verified_transitions{0};
   std::uint64_t expired_unverified_tracks{0};
   std::uint64_t decoder_reacquisitions{0};
+  // Tracks currently verified whose character-quality gates were satisfied by a
+  // recognised token rather than by the timing measures. Zero means the path
+  // has never been needed; a non-zero count on air is the evidence that it is
+  // worth keeping.
+  std::size_t pattern_verified_tracks{0};
   std::uint32_t maximum_decoded_symbols{0};
   std::uint32_t maximum_key_transitions{0};
   float best_timing_quality{0.0F};
@@ -251,6 +274,12 @@ class CwChannelBank {
   // callsign evidence gathered so far all survive, so an operator can compare
   // two models on the same station without losing it.
   void setKeyingModel(CwKeyingModel model) noexcept;
+  // What the operator is doing. It decides whose callsign a monitored stream is
+  // expected to carry, which exchange context alone cannot always settle.
+  void setOperatorRole(CwOperatorRole role) noexcept { operator_role_ = role; }
+  [[nodiscard]] CwOperatorRole operatorRole() const noexcept {
+    return operator_role_;
+  }
   [[nodiscard]] CwKeyingModel keyingModel() const noexcept {
     return keying_model_;
   }
@@ -331,6 +360,10 @@ class CwChannelBank {
     std::uint16_t decoder_rejection_samples{0};
     bool ever_verified{false};
     bool ever_morse_likely{false};
+    // Sticky for the life of the track: having once said CQ, a station does not
+    // stop being a station when the word scrolls out of the recent window.
+    bool distinctive_token_seen{false};
+    std::size_t distinctive_token_scanned_length{0};
     std::uint64_t character_refinement_timestamp_ns{0};
     float keying_snr_db{0.0F};
     // Two-component keying level model held in LINEAR power relative to the
@@ -430,6 +463,10 @@ class CwChannelBank {
   // does exactly that. A keying model living in there would revert to the
   // default every time an unrelated slider moved, silently and only sometimes.
   CwKeyingModel keying_model_{CwKeyingModel::AdaptiveThreshold};
+  // Kept out of the config for the same reason as the keying model: configure()
+  // replaces the whole config, and a caller changing one unrelated setting with
+  // a designated initialiser would silently reset this.
+  CwOperatorRole operator_role_{CwOperatorRole::Monitor};
   void resetFilter(Track& track) noexcept;
   void updateVerification(Track& track, std::uint64_t timestamp_ns);
   void recoverRejectedDecoder(Track& track);

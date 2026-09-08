@@ -94,6 +94,8 @@ class LiveAudioDspWorker final : public QObject {
                  double upper_frequency_hz);
   void setOwnCallsign(const QString& callsign);
   void setKeyingModel(const QString& model);
+  void setDebugCaptureMaximumSeconds(double seconds);
+  void setOperatorRole(const QString& role);
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setLocalCharacterFrontendEnabled(bool enabled);
   void acceptCharacterRefinement(qulonglong channel_id,
@@ -158,7 +160,12 @@ signals:
   qulonglong radio_tx_rf_hz_{0};
   bool radio_split_active_{false};
   QVariantMap presentation_diagnostics_;
-  static constexpr double kMaximumCaptureSeconds = 300.0;
+  // How long a debug capture runs before stopping itself. Configurable because
+  // a signal that only misbehaves occasionally cannot be caught inside a fixed
+  // five minutes, while a quick reproduction should not leave the operator with
+  // a needlessly large audio file to review before sharing it.
+  static constexpr double kDefaultMaximumCaptureSeconds = 300.0;
+  double maximum_capture_seconds_{kDefaultMaximumCaptureSeconds};
   static constexpr double kSnapshotIntervalSeconds = 1.0;
 };
 

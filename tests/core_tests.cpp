@@ -182,6 +182,71 @@ void test_cw_timing_decoder() {
              CwKeyingModel::AdaptiveThreshold,
          "an unknown stored model falls back to the shipped default");
 
+  using cwassistant::core::CallsignPolicy;
+  using cwassistant::core::CwOperatorRole;
+  // A split runner signs and sends UP; the station named after TU is the one it
+  // has just worked. Context alone scores TU as highly as UP, so the worked
+  // station wins and the run is labelled with the wrong call. Knowing the
+  // operator is hunting says the monitored stream is the runner. (The trailing
+  // K matters: a call is only complete once a following word confirms it, so a
+  // fixture whose last token is the callsign never labels anything.)
+  {
+    const std::string_view exchange = "5NN TU DL1NKB OK5OO UP K";
+    const auto neutral = CallsignPolicy::best_complete_in_text(exchange);
+    const auto hunting = CallsignPolicy::best_complete_in_text(
+        exchange, CwOperatorRole::SearchAndPounce, "");
+    expect(neutral.has_value() && *neutral == "DL1NKB",
+           "without a role the station just worked outranks the runner");
+    expect(hunting.has_value() && *hunting == "OK5OO",
+           "searching and pouncing labels the runner, not the station it "
+           "just worked");
+  }
+  // Running, the monitored stream is somebody answering. Context already
+  // resolves this one, so the role must leave it alone rather than improve it.
+  {
+    const std::string_view exchange = "CQ OK5OO DL1NKB DL1NKB K";
+    const auto neutral = CallsignPolicy::best_complete_in_text(exchange);
+    const auto running = CallsignPolicy::best_complete_in_text(
+        exchange, CwOperatorRole::Runner, "");
+    expect(neutral.has_value() && *neutral == "DL1NKB" &&
+               running.has_value() && *running == "DL1NKB",
+           "running keeps labelling the station answering");
+  }
+  // The operator's own call identifies the operator. Whoever else is on the
+  // frequency, it is never the name of somebody else's stream.
+  {
+    const auto labelled = CallsignPolicy::best_complete_in_text(
+        "CQ TEST DE IU0LFQ IU0LFQ K", CwOperatorRole::SearchAndPounce,
+        "IU0LFQ");
+    expect(!labelled.has_value(),
+           "a stream is never labelled with the operator's own callsign");
+    const auto other = CallsignPolicy::best_complete_in_text(
+        "CQ TEST DE OK5OO OK5OO K", CwOperatorRole::SearchAndPounce,
+        "IU0LFQ");
+    expect(other.has_value() && *other == "OK5OO",
+           "excluding the operator's own call leaves other stations labelled");
+  }
+
+  using cwassistant::core::cwTextContainsDistinctiveToken;
+  expect(cwTextContainsDistinctiveToken("CQ TEST DE OK5OO") &&
+             cwTextContainsDistinctiveToken("R 5NN TU") &&
+             cwTextContainsDistinctiveToken("UP") &&
+             cwTextContainsDistinctiveToken("599"),
+         "distinctive contest and calling tokens are recognised");
+  // Short, common tokens are excluded on purpose: noise spells them often
+  // enough that accepting them would hand the verification gate back the
+  // problem its plausibility check closed.
+  expect(!cwTextContainsDistinctiveToken("K DE R E T") &&
+             !cwTextContainsDistinctiveToken("") &&
+             !cwTextContainsDistinctiveToken("     "),
+         "short common tokens are not treated as evidence");
+  // Whole tokens only. A CQ inside a longer run is far more likely to be three
+  // noise elements that landed together than a station calling.
+  expect(!cwTextContainsDistinctiveToken("XCQY") &&
+             !cwTextContainsDistinctiveToken("ACQ") &&
+             !cwTextContainsDistinctiveToken("TESTING"),
+         "a token embedded in a longer run is not evidence");
+
   CwTimingDecoder immediate_flush({.initial_wpm = 20.0});
   static_cast<void>(immediate_flush.process(0, 12.0F));
   const auto forced_up = immediate_flush.flush(2'000'000);

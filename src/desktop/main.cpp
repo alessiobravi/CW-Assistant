@@ -91,6 +91,13 @@ int main(int argc, char* argv[]) {
   const auto apply_keying_model = [&settings, &replay_controller] {
     replay_controller.setKeyingModel(settings.keyingModel());
   };
+  const auto apply_operator_role = [&settings, &replay_controller] {
+    replay_controller.setOperatorRole(settings.operatorRole());
+  };
+  const auto apply_debug_capture_limit = [&settings, &replay_controller] {
+    replay_controller.setDebugCaptureMaximumSeconds(
+        settings.debugCaptureMaximumSeconds());
+  };
   const auto apply_offline_callsign_database =
       [&settings, &replay_controller, &callsign_database_updater] {
     if (callsign_database_updater.managedEnabled()) {
@@ -110,6 +117,8 @@ int main(int argc, char* argv[]) {
   apply_local_character_decoder();
   apply_callsign_database_correction();
   apply_keying_model();
+  apply_operator_role();
+  apply_debug_capture_limit();
   apply_own_callsign();
   apply_offline_callsign_database();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
@@ -129,6 +138,12 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_keying_model);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_debug_capture_limit);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_operator_role);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_own_callsign);

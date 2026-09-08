@@ -146,6 +146,13 @@ std::optional<std::string> CallsignPolicy::latest_complete_in_text(
 
 std::optional<std::string> CallsignPolicy::best_complete_in_text(
     const std::string_view stable_text) {
+  return best_complete_in_text(stable_text, CwOperatorRole::Monitor,
+                               std::string_view{});
+}
+
+std::optional<std::string> CallsignPolicy::best_complete_in_text(
+    const std::string_view stable_text, const CwOperatorRole role,
+    const std::string_view own_callsign) {
   const auto completed_end = stable_text.find_last_of(" \t\r\n");
   if (completed_end == std::string_view::npos) return std::nullopt;
   std::vector<std::string> words;
@@ -203,7 +210,13 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
     // still useful for a caller sending only its own call. These weights rank
     // decoded alternatives; they never create or correct decoded characters.
     if (index > 0 && words[index - 1] == "DE") candidate.score += 8;
-    if (index > 0 && words[index - 1] == "TU") candidate.score += 6;
+    // TU is genuinely ambiguous: it precedes a runner identifying itself and
+    // equally the station it has just worked. Where the operator's role says
+    // which of the two the monitored stream is, the unambiguous contexts are
+    // allowed to outrank it rather than tie with it.
+    if (index > 0 && words[index - 1] == "TU") {
+      candidate.score += role == CwOperatorRole::Monitor ? 6 : 4;
+    }
     if (index > 0 && words[index - 1] == "CQ") candidate.score += 5;
     if (index > 1 && words[index - 2] == "CQ") candidate.score += 4;
     if (index > 2 && words[index - 3] == "CQ") candidate.score += 3;
@@ -222,6 +235,31 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
       candidate.score += 4;
     }
     if (candidate.occurrences > 1) candidate.score += 4;
+    // Searching and pouncing, the stream being listened to is a runner, so the
+    // call introduced as the sender's own outranks one merely mentioned.
+    // Running, it is a station answering, which sends its call bare and
+    // repeats it rather than introducing it.
+    if (role == CwOperatorRole::SearchAndPounce) {
+      const bool runner_context =
+          (index > 0 && (words[index - 1] == "CQ" || words[index - 1] == "DE")) ||
+          (index > 1 && words[index - 2] == "CQ") ||
+          (index + 1 < words.size() && words[index + 1] == "UP");
+      if (runner_context) candidate.score += 3;
+    } else if (role == CwOperatorRole::Runner) {
+      if (candidate.occurrences > 1) candidate.score += 3;
+      // A caller answering does not call CQ; a CQ in the monitored stream
+      // belongs to somebody else's transmission bleeding into the same slice.
+      if (index > 0 && words[index - 1] == "CQ") candidate.score -= 3;
+    }
+  }
+
+  // Whatever the role, a call the operator's own station sends cannot be the
+  // label for another station's stream. Own-call detection elsewhere alerts the
+  // operator that they were called; that is a different question from whose
+  // transmission this is.
+  if (!own_callsign.empty()) {
+    const auto own = normalize(own_callsign);
+    if (own) evidence.erase(*own);
   }
 
   std::optional<std::string> result;

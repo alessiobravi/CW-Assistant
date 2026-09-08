@@ -305,6 +305,20 @@ int main() {
       !contains(settings_qml,
                 "appSettings.keyingModel = \"adaptive-threshold\"") ||
       !contains(settings_qml, "appSettings.keyingModel = \"semi-markov\"") ||
+      !contains(settings_qml,
+                "objectName: \"operatorRoleSearchAndPounceRadio\"") ||
+      !contains(settings_qml, "objectName: \"operatorRoleRunnerRadio\"") ||
+      !contains(settings_qml,
+                "appSettings.operatorRole = \"search-and-pounce\"") ||
+      !contains(settings_qml,
+                "objectName: \"settingsDebugCaptureButton\"") ||
+      !contains(settings_qml,
+                "objectName: \"settingsDebugCaptureFolderButton\"") ||
+      !contains(settings_qml, "replayController.openDebugCaptureFolder()") ||
+      !contains(settings_qml,
+                "objectName: \"debugCaptureMaximumSecondsSpin\"") ||
+      !contains(settings_qml,
+                "appSettings.debugCaptureMaximumSeconds = value") ||
       !contains(settings_qml, "objectName: \"localDecoderEnabledCheck\"") ||
       !contains(settings_qml, "appSettings.localDecoderBackendAvailable") ||
       !contains(settings_qml, "objectName: \"localDecoderModelDialog\"") ||

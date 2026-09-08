@@ -8,6 +8,57 @@ All notable changes to CW Assistant are recorded here. The format follows
 
 ### Added
 
+- A recognised calling or contest token is now evidence that a channel carries
+  real Morse. A station whose decoded text plainly reads `TEST` was being
+  discarded because one timing measure sat under its threshold for the track's
+  whole life -- nothing else about it was in doubt, it had a carrier, keyed
+  edges, cadence and coherence. Such a token may now satisfy the three gates
+  that judge how good the decoded characters are. It deliberately cannot satisfy
+  the requirement to have decoded enough of them, and cannot be reached at all
+  before the acoustic gates have passed, so it can never verify a silent
+  channel. The list is short and skewed to tokens noise is unlikely to spell by
+  chance -- `CQ`, `TEST`, `599`, `5NN`, `QRZ`, `TU`, `UP` -- matched as whole
+  words only; `K`, `DE` and single letters are excluded however useful they are
+  to a human reader, because the point is evidence rather than readability.
+
+  Measured across all twenty-two captures: callsign recovery unchanged at eight
+  of nine, no false callsign on the four recordings containing none, and
+  published tracks identical on every capture but one, where a garbage fragment
+  merged into a real station's identity instead of standing as its own track.
+  The original failure no longer reproduces on this corpus, so the path stands
+  as a safety net rather than a fix, and the verification diagnostics now count
+  how often it is actually needed.
+
+- The operator's role is configurable, and it decides whose callsign a stream is
+  expected to carry. Exchange context alone cannot always tell: `TU` precedes a
+  runner identifying itself and equally the station it has just worked, and both
+  score the same, so a run could be labelled with the station that was worked
+  rather than the one being listened to. Settings -> Station now offers
+  Monitoring (the default, which assumes nothing), Search and pounce, and
+  Running. Hunting, the stream is a runner, so an unambiguous runner context
+  outranks `TU`; running, the stream is somebody answering, so a repeated bare
+  call outranks one introduced by a `CQ` belonging to another transmission.
+  Measured on exactly the ambiguous case: `5NN TU DL1NKB OK5OO UP K` labels
+  DL1NKB, the station just worked, with no role, and OK5OO, the split runner,
+  when hunting.
+
+  In every role the operator's own callsign is now removed from candidate
+  scoring rather than only blanked afterwards, so a transmission that mentions
+  it still gets labelled with the station actually being heard instead of losing
+  its label entirely.
+
+### Changed
+
+- Debug capture is reachable from Settings -> Decoder, not only from the decoder
+  panel header, with a button that opens the capture folder in the file manager.
+  A capture is only useful once it has been found and reviewed, and a path shown
+  as text still had to be copied out by hand. Its auto-stop is now a persisted
+  setting between 30 and 1800 seconds instead of a fixed five minutes: a signal
+  that misbehaves only occasionally cannot be caught inside five minutes, while
+  a quick reproduction should not leave a needlessly large recording to review
+  before sharing. The decoder-panel status line reports the configured limit
+  rather than advertising 300 seconds.
+
 - The decoder's keying technique is selectable, and a second one is offered
   beside the shipped default. Settings -> Decoder now names the two: **Adaptive
   threshold**, which decides key-up and key-down from the envelope moment by

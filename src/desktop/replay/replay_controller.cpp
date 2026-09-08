@@ -8,7 +8,9 @@
 #include <QHash>
 #include <QMetaObject>
 #include <QPermissions>
+#include <QDesktopServices>
 #include <QStandardPaths>
+#include <QUrl>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -512,6 +514,11 @@ class ReplayWorker final : public QObject {
         cwassistant::core::cwKeyingModelFromName(model.toStdString()));
   }
 
+  void setOperatorRole(const QString& role) {
+    decoder_.setOperatorRole(
+        cwassistant::core::cwOperatorRoleFromName(role.toStdString()));
+  }
+
   void setDecodedSignalTimeoutSeconds(const int seconds) {
     decoder_.configure({.decoded_track_retention_seconds =
                             static_cast<double>(std::clamp(seconds, 5, 120))});
@@ -694,6 +701,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::setOwnCallsign);
   connect(this, &ReplayController::keyingModelRequested, worker,
           &ReplayWorker::setKeyingModel);
+  connect(this, &ReplayController::operatorRoleRequested, worker,
+          &ReplayWorker::setOperatorRole);
   connect(this, &ReplayController::replayCharacterFrontendEnabledRequested,
           worker, &ReplayWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::replayCharacterRefinementRequested,
@@ -780,6 +789,10 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::setOwnCallsign);
   connect(this, &ReplayController::liveKeyingModelRequested, dsp_worker,
           &LiveAudioDspWorker::setKeyingModel);
+  connect(this, &ReplayController::liveDebugCaptureMaximumSecondsRequested,
+          dsp_worker, &LiveAudioDspWorker::setDebugCaptureMaximumSeconds);
+  connect(this, &ReplayController::liveOperatorRoleRequested, dsp_worker,
+          &LiveAudioDspWorker::setOperatorRole);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::liveCharacterRefinementRequested,
@@ -1436,6 +1449,29 @@ void ReplayController::setSourceMode(const int value) {
 void ReplayController::setDecodedSignalTimeoutSeconds(const int seconds) {
   emit decodedSignalTimeoutRequested(seconds);
   emit liveDecodedSignalTimeoutRequested(seconds);
+}
+
+void ReplayController::openDebugCaptureFolder() {
+  if (debug_capture_path_.isEmpty()) return;
+  const QFileInfo info(debug_capture_path_);
+  // The recorded path may name the folder itself or a file inside it,
+  // depending on how far the capture got; either way the operator wants the
+  // folder, so that a capture stopped early still opens somewhere useful.
+  const QString folder = info.isDir() ? info.absoluteFilePath()
+                                      : info.absolutePath();
+  if (folder.isEmpty() || !QFileInfo::exists(folder)) return;
+  static_cast<void>(
+      QDesktopServices::openUrl(QUrl::fromLocalFile(folder)));
+}
+
+void ReplayController::setDebugCaptureMaximumSeconds(const int seconds) {
+  emit liveDebugCaptureMaximumSecondsRequested(
+      static_cast<double>(std::clamp(seconds, 30, 1'800)));
+}
+
+void ReplayController::setOperatorRole(const QString& role) {
+  emit operatorRoleRequested(role);
+  emit liveOperatorRoleRequested(role);
 }
 
 void ReplayController::setKeyingModel(const QString& model) {

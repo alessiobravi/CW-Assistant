@@ -92,6 +92,8 @@ class AppSettings final : public QObject {
   // Stored by name rather than by position so the preference survives another
   // technique being added to the list or the list being reordered.
   Q_PROPERTY(QString keyingModel READ keyingModel WRITE setKeyingModel NOTIFY settingsChanged)
+  Q_PROPERTY(int debugCaptureMaximumSeconds READ debugCaptureMaximumSeconds WRITE setDebugCaptureMaximumSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(QString operatorRole READ operatorRole WRITE setOperatorRole NOTIFY settingsChanged)
   Q_PROPERTY(QString localDecoderModelPath READ localDecoderModelPath NOTIFY settingsChanged)
   Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath NOTIFY settingsChanged)
   Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable CONSTANT)
@@ -180,6 +182,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool localDecoderEnabled() const noexcept;
   [[nodiscard]] bool callsignDatabaseCorrectionEnabled() const noexcept;
   [[nodiscard]] const QString& keyingModel() const noexcept;
+  [[nodiscard]] int debugCaptureMaximumSeconds() const noexcept;
+  [[nodiscard]] const QString& operatorRole() const noexcept;
   [[nodiscard]] const QString& localDecoderModelPath() const noexcept;
   [[nodiscard]] const QString& localDecoderMetadataPath() const noexcept;
   [[nodiscard]] bool localDecoderBackendAvailable() const noexcept;
@@ -241,6 +245,8 @@ class AppSettings final : public QObject {
   void setLocalDecoderEnabled(bool value);
   void setCallsignDatabaseCorrectionEnabled(bool value);
   void setKeyingModel(const QString& value);
+  void setDebugCaptureMaximumSeconds(int value);
+  void setOperatorRole(const QString& value);
   void setLocalCallsignDatabaseEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
@@ -376,6 +382,8 @@ class AppSettings final : public QObject {
   // correction can name a station that was never heard; the operator opts in.
   bool callsign_database_correction_enabled_{false};
   QString keying_model_{QStringLiteral("adaptive-threshold")};
+  int debug_capture_maximum_seconds_{300};
+  QString operator_role_{QStringLiteral("monitor")};
   QString local_decoder_model_path_;
   QString local_decoder_metadata_path_;
   bool local_callsign_database_enabled_{false};

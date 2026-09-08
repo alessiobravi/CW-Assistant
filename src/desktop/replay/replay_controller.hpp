@@ -166,6 +166,7 @@ class ReplayController final : public QObject {
   void setDecodedSignalTimeoutSeconds(int seconds);
   void setOwnCallsign(const QString& callsign);
   Q_INVOKABLE void setKeyingModel(const QString& model);
+  Q_INVOKABLE void setOperatorRole(const QString& role);
   [[nodiscard]] const QString& keyingModel() const noexcept;
   void configureLocalCharacterDecoder(bool enabled, const QString& model_path,
                                       const QString& metadata_path);
@@ -191,6 +192,11 @@ class ReplayController final : public QObject {
   // while live audio is running; writes raw audio plus periodic per-track
   // private diagnostic snapshots to a timestamped folder under the app's
   // standard data location, capped at 5 minutes.
+  // Opens the folder a capture was written to in the operator's file manager.
+  // A capture is only useful once it has been found, reviewed and attached to a
+  // report, and a path shown as text still has to be copied out by hand.
+  Q_INVOKABLE void openDebugCaptureFolder();
+  Q_INVOKABLE void setDebugCaptureMaximumSeconds(int seconds);
   Q_INVOKABLE void startDebugCapture();
   Q_INVOKABLE void stopDebugCapture();
 
@@ -227,6 +233,9 @@ class ReplayController final : public QObject {
   void ownCallsignRequested(const QString& callsign);
   void liveOwnCallsignRequested(const QString& callsign);
   void keyingModelRequested(const QString& model);
+  void liveDebugCaptureMaximumSecondsRequested(double seconds);
+  void operatorRoleRequested(const QString& role);
+  void liveOperatorRoleRequested(const QString& role);
   void liveKeyingModelRequested(const QString& model);
   void keyingModelChanged();
   void liveDecodedSignalTimeoutRequested(int seconds);

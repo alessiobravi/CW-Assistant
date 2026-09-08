@@ -930,7 +930,7 @@ ApplicationWindow {
                                    : replayController.startDebugCapture()
                         ToolTip.visible: hovered
                         ToolTip.delay: 300
-                        ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Capped at 5 minutes. Review the saved files before sharing them — the audio is whatever the selected input picked up."
+                        ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Stops itself after the limit set in Settings → Decoder. Review the saved files before sharing them — the audio is whatever the selected input picked up."
                     }
                 }
                 ColumnLayout {
@@ -1202,7 +1202,7 @@ ApplicationWindow {
                 Label {
                     visible: replayController.debugCaptureActive || replayController.debugCapturePath.length > 0
                     text: replayController.debugCaptureActive
-                          ? "Capturing… " + replayController.debugCaptureElapsedSeconds.toFixed(0) + "s / 300s max — " + replayController.debugCapturePath
+                          ? "Capturing… " + replayController.debugCaptureElapsedSeconds.toFixed(0) + "s / " + appSettings.debugCaptureMaximumSeconds + "s max — " + replayController.debugCapturePath
                           : "Last capture: " + replayController.debugCaptureNote + " — " + replayController.debugCapturePath
                     color: replayController.debugCaptureActive ? "#f3bd55" : "#6c7c8e"
                     font.pixelSize: 10

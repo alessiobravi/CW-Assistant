@@ -497,6 +497,15 @@ void LiveAudioDspWorker::configure(
   if (signal_path_changed) decoder_.reset();
 }
 
+void LiveAudioDspWorker::setDebugCaptureMaximumSeconds(const double seconds) {
+  maximum_capture_seconds_ = std::clamp(seconds, 30.0, 1'800.0);
+}
+
+void LiveAudioDspWorker::setOperatorRole(const QString& role) {
+  decoder_.setOperatorRole(
+      cwassistant::core::cwOperatorRoleFromName(role.toStdString()));
+}
+
 void LiveAudioDspWorker::setKeyingModel(const QString& model) {
   decoder_.setKeyingModel(cwassistant::core::cwKeyingModelFromName(
       model.toStdString()));
@@ -597,9 +606,10 @@ void LiveAudioDspWorker::drain() {
         const double elapsed_seconds =
             static_cast<double>(block.timestamp_ns - capture_start_ns_) /
             1'000'000'000.0;
-        if (elapsed_seconds >= kMaximumCaptureSeconds) {
+        if (elapsed_seconds >= maximum_capture_seconds_) {
           finishDebugCapture(
-              QStringLiteral("Reached the 5-minute capture limit"));
+              QStringLiteral("Reached the %1-minute capture limit")
+                  .arg(maximum_capture_seconds_ / 60.0, 0, 'g', 2));
         } else if (static_cast<double>(block.timestamp_ns -
                                        capture_last_snapshot_ns_) /
                        1'000'000'000.0 >=

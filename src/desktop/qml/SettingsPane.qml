@@ -257,6 +257,66 @@ Pane {
                                : (appSettings.localDecoderBackendAvailable
                                   ? "#43c6ac" : "#f3bd55")
                     }
+                    Label { text: "Debug capture" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "Records raw live audio and per-track decoder internals to a timestamped folder, for troubleshooting a signal that will not decode. Review the files before sharing them: the audio is whatever the selected input picked up."
+                        }
+                        RowLayout {
+                            spacing: 8
+                            Button {
+                                objectName: "settingsDebugCaptureButton"
+                                text: replayController.debugCaptureActive
+                                      ? "Stop capture" : "Start capture"
+                                enabled: replayController.debugCaptureActive
+                                         || replayController.liveCapturing
+                                onClicked: replayController.debugCaptureActive
+                                           ? replayController.stopDebugCapture()
+                                           : replayController.startDebugCapture()
+                            }
+                            Button {
+                                objectName: "settingsDebugCaptureFolderButton"
+                                text: "Open capture folder"
+                                // Nothing has been written yet before the first
+                                // capture, so there is no folder to open.
+                                enabled: replayController.debugCapturePath.length > 0
+                                onClicked: replayController.openDebugCaptureFolder()
+                            }
+                        }
+                        RowLayout {
+                            spacing: 8
+                            Label { text: "Stop automatically after" }
+                            SpinBox {
+                                objectName: "debugCaptureMaximumSecondsSpin"
+                                from: 30
+                                to: 1800
+                                stepSize: 30
+                                editable: true
+                                value: appSettings.debugCaptureMaximumSeconds
+                                onValueModified: appSettings.debugCaptureMaximumSeconds = value
+                            }
+                            Label { text: "seconds"; color: "#91a0b1" }
+                        }
+                        Label {
+                            objectName: "settingsDebugCaptureStatusLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            visible: replayController.debugCaptureActive
+                                     || replayController.debugCapturePath.length > 0
+                            text: replayController.debugCaptureActive
+                                  ? "Capturing... " + replayController.debugCaptureElapsedSeconds.toFixed(0)
+                                    + "s / " + appSettings.debugCaptureMaximumSeconds + "s - "
+                                    + replayController.debugCapturePath
+                                  : "Last capture: " + replayController.debugCaptureNote
+                                    + " - " + replayController.debugCapturePath
+                            color: replayController.debugCaptureActive ? "#f3bd55" : "#6c7c8e"
+                        }
+                    }
                     Rectangle {
                         Layout.columnSpan: 2
                         Layout.fillWidth: true
@@ -645,6 +705,37 @@ Pane {
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
                         text: "Saved per station profile. An exact stable decode highlights your callsign and flashes its open decoder card. The value also populates station logging fields; any future closing macro remains separately guarded."
+                    }
+                    Label { text: "Operating role"; font.weight: Font.DemiBold }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        RadioButton {
+                            objectName: "operatorRoleMonitorRadio"
+                            text: "Monitoring"
+                            checked: appSettings.operatorRole !== "search-and-pounce"
+                                     && appSettings.operatorRole !== "runner"
+                            onToggled: if (checked) appSettings.operatorRole = "monitor"
+                        }
+                        RadioButton {
+                            objectName: "operatorRoleSearchAndPounceRadio"
+                            text: "Search and pounce"
+                            checked: appSettings.operatorRole === "search-and-pounce"
+                            onToggled: if (checked) appSettings.operatorRole = "search-and-pounce"
+                        }
+                        RadioButton {
+                            objectName: "operatorRoleRunnerRadio"
+                            text: "Running"
+                            checked: appSettings.operatorRole === "runner"
+                            onToggled: if (checked) appSettings.operatorRole = "runner"
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 4
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "Which station a stream is expected to carry. Exchange context alone cannot always tell: TU precedes a runner identifying itself and equally the station it has just worked. Hunting, the stream you are listening to is a runner, so its own call is the label; running, it is somebody answering you. Monitoring makes no assumption. Your own callsign never labels another station's stream in any of them."
+                        }
                     }
                     Label {
                         Layout.fillWidth: true

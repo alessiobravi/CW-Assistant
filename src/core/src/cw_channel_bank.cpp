@@ -50,6 +50,28 @@ const char* cwTrackStateName(const CwTrackState state) noexcept {
   return "candidate";
 }
 
+bool cwTextContainsDistinctiveToken(const std::string_view text) noexcept {
+  // Whole tokens only. A CQ found inside a longer run of letters is far more
+  // likely to be three noise elements that happened to land together than a
+  // station calling, and this evidence is only worth having while it stays
+  // harder to counterfeit than the gates it stands in for.
+  static constexpr std::string_view kDistinctive[]{
+      "CQ", "TEST", "599", "5NN", "QRZ", "TU", "UP"};
+  std::size_t begin = 0;
+  while (begin <= text.size()) {
+    const std::size_t end = std::min(text.find(' ', begin), text.size());
+    const std::string_view token = text.substr(begin, end - begin);
+    if (!token.empty()) {
+      for (const std::string_view candidate : kDistinctive) {
+        if (token == candidate) return true;
+      }
+    }
+    if (end == text.size()) break;
+    begin = end + 1;
+  }
+  return false;
+}
+
 const char* cwVerificationReasonName(
     const CwVerificationReason reason) noexcept {
   switch (reason) {
@@ -1292,6 +1314,12 @@ CwVerificationDiagnostics CwChannelBank::verificationDiagnostics() const {
         result.best_timing_quality, track.update.timing_quality);
     result.best_cadence_quality = std::max(
         result.best_cadence_quality, track.update.cadence_quality);
+    if (track.verification_state == CwTrackState::Verified &&
+        track.distinctive_token_seen &&
+        track.update.timing_quality <
+            config_.minimum_verification_timing_quality) {
+      ++result.pattern_verified_tracks;
+    }
     result.best_narrowband_coherence = std::max(
         result.best_narrowband_coherence, track.narrowband_coherence);
   }
@@ -1447,12 +1475,28 @@ void CwChannelBank::updateVerification(Track& track,
           ? track.update.recent_cadence_observations
           : track.update.cadence_observations;
   const auto known = symbols - unknown;
+  if (track.update.text.size() != track.distinctive_token_scanned_length) {
+    track.distinctive_token_scanned_length = track.update.text.size();
+    if (!track.distinctive_token_seen)
+      track.distinctive_token_seen = cwTextContainsDistinctiveToken(recent_text);
+  }
   const bool character_refinement_current =
       track.character_refinement_timestamp_ns != 0U &&
       timestamp_ns >= track.character_refinement_timestamp_ns &&
       static_cast<double>(timestamp_ns -
                           track.character_refinement_timestamp_ns) /
               1'000'000'000.0 <= kCharacterRefinementEvidenceSeconds;
+  // A recognised token is evidence about whether this is Morse that does not
+  // come from the timing measures themselves, so it may stand in for the three
+  // gates that judge how good the decoded characters are. It deliberately does
+  // not stand in for the requirement to have decoded enough of them: a token
+  // says the content is genuine, not that there is enough of it, and a track
+  // that stops producing symbols must still be able to fall out of
+  // verification. Neither this nor a character model can be reached without the
+  // carrier, keyed-edge, cadence and coherence gates having already passed, so
+  // neither can verify a channel carrying no signal.
+  const bool independent_morse_evidence =
+      character_refinement_current || track.distinctive_token_seen;
   const float unknown_fraction = symbols == 0
       ? 1.0F
       : static_cast<float>(unknown) / static_cast<float>(symbols);
@@ -1501,13 +1545,13 @@ void CwChannelBank::updateVerification(Track& track,
     if (!character_refinement_current &&
         known < config_.minimum_verification_symbols) {
       failure_reason = CwVerificationReason::NeedsDecodedSymbols;
-    } else if (!character_refinement_current && unknown_fraction >
+    } else if (!independent_morse_evidence && unknown_fraction >
                config_.maximum_verification_unknown_fraction) {
       failure_reason = CwVerificationReason::TooManyUnknownSymbols;
-    } else if (!character_refinement_current && track.update.timing_quality <
+    } else if (!independent_morse_evidence && track.update.timing_quality <
                config_.minimum_verification_timing_quality) {
       failure_reason = CwVerificationReason::LowTimingQuality;
-    } else if (!character_refinement_current &&
+    } else if (!independent_morse_evidence &&
                track.update.mean_character_confidence <
                config_.minimum_character_confidence) {
       failure_reason = CwVerificationReason::LowCharacterConfidence;
@@ -2023,11 +2067,14 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
     // average later fell below its own verification threshold. Prefer a
     // complete, context-supported refined call; otherwise retain the literal
     // decoder's separately gated result.
-    callsign = CallsignPolicy::best_complete_in_text(track.update.refined_text)
+    callsign = CallsignPolicy::best_complete_in_text(
+                   track.update.refined_text, operator_role_,
+                   config_.own_callsign)
                    .value_or(std::string{});
     if (track.update.timing_quality >=
             config_.minimum_verification_timing_quality && callsign.empty()) {
-      callsign = CallsignPolicy::best_complete_in_text(track.update.text)
+      callsign = CallsignPolicy::best_complete_in_text(
+                     track.update.text, operator_role_, config_.own_callsign)
                      .value_or(std::string{});
     }
     // Never label a stream with the operator's own callsign. It appears in
