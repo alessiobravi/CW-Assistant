@@ -71,8 +71,9 @@ int main() {
       !contains(transcript, "decodedTextArea.selectionEnd") ||
       !contains(transcript, "function applyDecodedText(nextText)") ||
       contains(qml, "Acoustic correction:") ||
+      !contains(qml, "modelData.contextualText.length > 0") ||
+      !contains(qml, "? modelData.contextualText") ||
       !contains(qml, "modelData.refinedText.length > 0") ||
-      !contains(qml, "? modelData.refinedText : rawDecodedText") ||
       !contains(transcript, "onDisplayedDecodedTextChanged()") ||
       !contains(transcript, "select(Math.min(oldSelectionStart") ||
       !contains(transcript, "if (!followTail)") ||
@@ -104,6 +105,9 @@ int main() {
       !contains(qml, "modelData.qsoParticipants.length >= 2") ||
       !contains(qml, "modelData.qsoParticipants[0]") ||
       !contains(qml, "modelData.qsoParticipants[1]") ||
+      !contains(qml, "objectName: \"currentSenderLabel\"") ||
+      !contains(qml, "modelData.currentSenderCallsign") ||
+      !contains(qml, "modelData.currentSenderWpm") ||
       !contains(qml, "text: \"TX \" + modelData.callsign") ||
       !contains(qml, "Advisory acoustic consensus") ||
       !contains(qml, "sessionCard.localModelCallsign") ||
@@ -217,6 +221,10 @@ int main() {
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       !contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
       !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
+      !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
+      !contains(manual, "LEFT: open stream") ||
+      !contains(manual, "RIGHT: manual probe") ||
+      !contains(manual, "CTRL: TX VFO unavailable") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
       !contains(tune_down, "appSettings.radioFrequencyWritable") ||
       !contains(tune_down, "z: 8") ||
@@ -276,8 +284,17 @@ int main() {
       contains(vfo_editor, "Keys.onReturnPressed:") ||
       contains(vfo_editor, "Keys.onEnterPressed:") ||
       !contains(vfo_editor, "font.family: \"monospace\"") ||
-      !contains(vfo_editor, "color: \"#06130e\"") ||
+      !contains(vfo_editor, "color: \"#080c10\"") ||
       !contains(vfo_editor, "Accessible.name: \"Edit RX frequency\"") ||
+      !contains(qml, "function formatRigFrequency(hz)") ||
+      !contains(qml, "objectName: \"vfoRxModeBadge\"") ||
+      !contains(qml, "objectName: \"onAirIndicator\"") ||
+      !contains(qml, "objectName: \"vfoTxLabel\"") ||
+      !contains(qml, "appSettings.cwToneSidebandIndex === 0") ||
+      !contains(qml, "text: replayController.radioSplitActive") ||
+      !contains(qml, "? \"SPLIT\" : \"SIMPLEX\"") ||
+      !contains(qml, "Component.onCompleted: {") ||
+      !contains(qml, "showMaximized()") ||
       !contains(qml, "objectName: \"vfoRxEditErrorLabel\"") ||
       // Cards are reordered by dragging. A keyboard path is kept on the same
       // control so the ordering is reachable without a pointer.

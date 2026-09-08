@@ -16,6 +16,16 @@ target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE
 add_test(NAME cwa_decoder_transcript_qml_test
   COMMAND cwa_decoder_transcript_qml_test)
 
+add_executable(cwa_action_tooltip_qml_test
+  desktop/action_tooltip_qml_test.cpp)
+target_compile_definitions(cwa_action_tooltip_qml_test PRIVATE
+  CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml"
+  CWA_SETTINGS_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SettingsPane.qml"
+  CWA_SETUP_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SetupWizard.qml"
+  CWA_PROFILE_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/ProfileChooser.qml")
+add_test(NAME cwa_action_tooltip_qml_test
+  COMMAND cwa_action_tooltip_qml_test)
+
 add_executable(cwa_decoder_display_separation_test
   desktop/decoder_display_separation_test.cpp)
 target_compile_definitions(cwa_decoder_display_separation_test PRIVATE

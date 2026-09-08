@@ -174,6 +174,43 @@ std::vector<std::string> CallsignPolicy::qso_participants_in_text(
   return latest_pair;
 }
 
+std::optional<std::string> CallsignPolicy::strong_sender_in_text(
+    const std::string_view stable_text) {
+  const auto completed_end = stable_text.find_last_of(" \t\r\n");
+  if (completed_end == std::string_view::npos) return std::nullopt;
+  std::vector<std::string> words;
+  std::string token;
+  for (const unsigned char character :
+       stable_text.substr(0, completed_end + 1)) {
+    if (std::isalnum(character) != 0 || character == '/') {
+      token.push_back(static_cast<char>(std::toupper(character)));
+    } else if (!token.empty()) {
+      words.push_back(std::move(token));
+      token.clear();
+    }
+  }
+
+  std::optional<std::string> sender;
+  for (std::size_t index = 1; index + 1 < words.size(); ++index) {
+    if (words[index] != "DE") continue;
+    const auto candidate = normalize(words[index + 1]);
+    if (!candidate || !isPlausibleDecodedCallsign(*candidate)) continue;
+
+    // A decoded callsign immediately before DE is the clearest two-party
+    // handover. CQ/QRZ before DE is also explicit self-identification, but an
+    // isolated "DE CALL" without either side is intentionally not enough:
+    // weak text can manufacture DE surprisingly often.
+    const auto addressed = normalize(words[index - 1]);
+    const bool addressed_call = addressed &&
+        isPlausibleDecodedCallsign(*addressed) && *addressed != *candidate;
+    const bool calling_context = words[index - 1] == "CQ" ||
+                                 words[index - 1] == "QRZ" ||
+                                 (index > 1 && words[index - 2] == "CQ");
+    if (addressed_call || calling_context) sender = *candidate;
+  }
+  return sender;
+}
+
 std::optional<std::string> CallsignPolicy::best_complete_in_text(
     const std::string_view stable_text) {
   return best_complete_in_text(stable_text, CwOperatorRole::Monitor,

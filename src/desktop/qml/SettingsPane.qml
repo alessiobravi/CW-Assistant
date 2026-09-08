@@ -20,7 +20,11 @@ Pane {
             Label { text: "Settings"; font.pixelSize: 22; font.weight: Font.DemiBold }
             Label { text: "Profile: " + appSettings.profileName; color: "#8290a0" }
             Item { Layout.fillWidth: true }
-            ToolButton { text: "Close"; onClicked: root.done() }
+            ToolButton {
+                text: "Close"; onClicked: root.done()
+                ToolTip.visible: hovered
+                ToolTip.text: "Close Settings; unapplied edits remain unsaved"
+            }
         }
 
         TabBar {
@@ -91,6 +95,8 @@ Pane {
                             appSettings.refreshAudioInputs()
                             appSettings.refreshAudioOutputs()
                         }
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Rescan operating-system audio input and monitor-output devices"
                     }
                     Label { text: "DC rejection" }
                     CheckBox {
@@ -230,11 +236,15 @@ Pane {
                             objectName: "browseLocalDecoderModelButton"
                             text: "Browse…"
                             onClicked: localDecoderModelDialog.open()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Choose a compatible local ONNX model file"
                         }
                         Button {
                             text: "Clear"
                             enabled: appSettings.localDecoderModelPath.length > 0
                             onClicked: appSettings.clearLocalDecoderModel()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Remove the selected local model from this profile"
                         }
                     }
                     Label { text: "Metadata file" }
@@ -253,11 +263,15 @@ Pane {
                             objectName: "browseLocalDecoderMetadataButton"
                             text: "Browse…"
                             onClicked: localDecoderMetadataDialog.open()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Choose the JSON metadata describing the selected model"
                         }
                         Button {
                             text: "Clear"
                             enabled: appSettings.localDecoderMetadataPath.length > 0
                             onClicked: appSettings.clearLocalDecoderMetadata()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Remove the selected model metadata from this profile"
                         }
                     }
                     Label { text: "Status" }
@@ -294,6 +308,10 @@ Pane {
                                 onClicked: replayController.debugCaptureActive
                                            ? replayController.stopDebugCapture()
                                            : replayController.startDebugCapture()
+                                ToolTip.visible: hovered
+                                ToolTip.text: replayController.debugCaptureActive
+                                    ? "Stop and finalize the current diagnostic capture"
+                                    : "Record bounded raw audio and decoder evidence for troubleshooting"
                             }
                             Button {
                                 objectName: "settingsDebugCaptureFolderButton"
@@ -302,6 +320,10 @@ Pane {
                                 // capture, so there is no folder to open.
                                 enabled: replayController.debugCapturePath.length > 0
                                 onClicked: replayController.openDebugCaptureFolder()
+                                ToolTip.visible: hovered
+                                ToolTip.text: enabled
+                                    ? "Open the latest capture folder in the file manager"
+                                    : "Create a diagnostic capture first"
                             }
                         }
                         RowLayout {
@@ -379,6 +401,10 @@ Pane {
                                 onClicked: callsignDatabaseUpdater.updateAvailable
                                            ? callsignDatabaseUpdater.updateDatabase()
                                            : callsignDatabaseUpdater.checkForUpdates()
+                                ToolTip.visible: hovered
+                                ToolTip.text: callsignDatabaseUpdater.updateAvailable
+                                    ? "Download, validate, and atomically replace the managed offline list"
+                                    : "Check the managed callsign-list provider for a newer release"
                             }
                             Label {
                                 Layout.fillWidth: true
@@ -425,12 +451,16 @@ Pane {
                             text: "Browse…"
                             enabled: !callsignDatabaseUpdater.managedEnabled
                             onClicked: localCallsignDatabaseDialog.open()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Choose an operator-supplied master.scp or Call History file"
                         }
                         Button {
                             text: "Clear"
                             enabled: !callsignDatabaseUpdater.managedEnabled
                                      && appSettings.localCallsignDatabasePath.length > 0
                             onClicked: appSettings.clearLocalCallsignDatabase()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Remove the operator-supplied callsign list from this profile"
                         }
                     }
                     Label { text: "Correct near misses" }
@@ -478,6 +508,10 @@ Pane {
                                      && !callsignDatabaseUpdater.managedEnabled
                                      && appSettings.localCallsignDatabasePath.length > 0
                             onClicked: appSettings.reloadLocalCallsignDatabase()
+                            ToolTip.visible: hovered
+                            ToolTip.text: enabled
+                                ? "Reload and validate the selected local callsign file"
+                                : "Enable and select an operator-supplied file first"
                         }
                     }
                 }
@@ -509,7 +543,11 @@ Pane {
                             displayText: count > 0 ? currentText : "None detected"
                             onActivated: appSettings.selectDetectedRadio(currentIndex)
                         }
-                        Button { text: "Refresh"; onClicked: appSettings.refreshDetectedRadios() }
+                        Button {
+                            text: "Refresh"; onClicked: appSettings.refreshDetectedRadios()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Refresh positively identified radios from configured integrations"
+                        }
                     }
                     Label { text: "Manual radio template" }
                     ComboBox {
@@ -552,10 +590,29 @@ Pane {
                         Label { text: appSettings.cat4omState; color: "#91a0b1"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         Label { text: appSettings.cat4omFrequencySummary; color: "#43c6ac" }
                         RowLayout {
-                            Button { text: "Test read-only"; onClicked: appSettings.testCat4omConnection() }
-                            Button { text: "Connect control"; onClicked: appSettings.connectCat4omControl() }
-                            Button { text: "Request ownership"; enabled: !appSettings.cat4omCanWrite; onClicked: appSettings.requestCat4omOwnership() }
-                            Button { text: "Disconnect"; onClicked: appSettings.disconnectCat4om() }
+                            Button {
+                                text: "Test read-only"; onClicked: appSettings.testCat4omConnection()
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Connect as an observer without requesting radio-control ownership"
+                            }
+                            Button {
+                                text: "Connect control"; onClicked: appSettings.connectCat4omControl()
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Connect and negotiate the configured control capability"
+                            }
+                            Button {
+                                text: "Request ownership"; enabled: !appSettings.cat4omCanWrite
+                                onClicked: appSettings.requestCat4omOwnership()
+                                ToolTip.visible: hovered
+                                ToolTip.text: enabled
+                                    ? "Request the service's exclusive radio-control lease"
+                                    : "This connection already has write capability"
+                            }
+                            Button {
+                                text: "Disconnect"; onClicked: appSettings.disconnectCat4om()
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Close the CAT4OM connection and release its control state"
+                            }
                         }
                     }
                     Label { text: "CAT port" }
@@ -597,9 +654,24 @@ Pane {
                     }
                     Label { text: "" }
                     RowLayout {
-                        Button { text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts() }
-                        Button { text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable; onClicked: appSettings.showOmniRigConfiguration() }
-                        Button { text: "Restore radio defaults"; onClicked: appSettings.resetToReferenceDefaults() }
+                        Button {
+                            text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Rescan serial-port names without opening or probing them"
+                        }
+                        Button {
+                            text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable
+                            onClicked: appSettings.showOmniRigConfiguration()
+                            ToolTip.visible: hovered
+                            ToolTip.text: enabled
+                                ? "Open the native OmniRig configuration dialog"
+                                : "OmniRig is not available on this system"
+                        }
+                        Button {
+                            text: "Restore radio defaults"; onClicked: appSettings.resetToReferenceDefaults()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Restore the selected reference rig's editable CAT defaults"
+                        }
                     }
                     Label { text: "" }
                     Label {
@@ -759,7 +831,11 @@ Pane {
                         color: "#91a0b1"
                         text: "Open Profiles from the main toolbar to create or select another station. For dedicated shortcuts or services, launch with --profile \"name\". Separate processes can use separate profiles and radios."
                     }
-                    Button { text: "Run setup helper again"; onClicked: root.setupRequested() }
+                    Button {
+                        text: "Run setup helper again"; onClicked: root.setupRequested()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Open the guided station-profile setup without transmitting"
+                    }
                 }
             }
 
@@ -790,6 +866,8 @@ Pane {
                             text: updateChecker.checking ? "Checking…" : "Check for updates"
                             enabled: !updateChecker.checking
                             onClicked: updateChecker.checkForUpdates()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Check the published release manifest for a newer application version"
                         }
                         Label {
                             text: "Last checked: " + updateChecker.lastCheckedText
@@ -816,12 +894,16 @@ Pane {
                                   : "Download update"
                             enabled: !updateChecker.downloading
                             onClicked: updateChecker.downloadUpdate()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Download this platform package and verify its SHA-256 checksum"
                         }
                         Button {
                             objectName: "openUpdateButton"
                             visible: updateChecker.verifiedDownloadActionsVisible
                             text: "Open Installer"
                             onClicked: updateChecker.openDownloadedFile()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Open the verified package with the operating-system installer"
                         }
                         Button {
                             objectName: "revealUpdateButton"
@@ -832,6 +914,8 @@ Pane {
                                     : "Show in Folder"
                             flat: true
                             onClicked: updateChecker.revealDownloadFolder()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Show the verified package in the file manager"
                         }
                     }
                     Label {
@@ -850,6 +934,8 @@ Pane {
                         text: "https://iu0lfq.it/"
                         flat: true
                         onClicked: Qt.openUrlExternally("https://iu0lfq.it/")
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Open the author website in your default browser"
                     }
                     Label { text: "License"; color: "#8290a0" }
                     Label { text: "GNU General Public License v3.0 or later"; wrapMode: Text.WordWrap; Layout.fillWidth: true }
@@ -869,7 +955,11 @@ Pane {
             Layout.fillWidth: true
             Layout.margins: 16
             Label { text: appSettings.statusMessage; color: "#91a0b1"; Layout.fillWidth: true; elide: Text.ElideRight }
-            Button { text: "Apply"; highlighted: true; onClicked: appSettings.apply() }
+            Button {
+                text: "Apply"; highlighted: true; onClicked: appSettings.apply()
+                ToolTip.visible: hovered
+                ToolTip.text: "Validate and save all settings in this profile"
+            }
         }
     }
 

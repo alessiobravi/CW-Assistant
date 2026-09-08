@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cwassistant/core/cw_event_lattice.hpp"
@@ -31,6 +32,23 @@ struct CwAcousticAlternative {
   float evidence_confidence{0.0F};
   std::uint64_t first_observation_id{0};
   std::uint64_t last_observation_id{0};
+};
+
+struct CwTransmissionTurn {
+  std::uint64_t sequence{0};
+  std::string text;
+  // Empty unless explicit handover words identify the sender. A repeated or
+  // merely call-shaped token is intentionally insufficient.
+  std::string sender_callsign;
+  double wpm{0.0};
+  float cadence_confidence{0.0F};
+};
+
+struct CwSenderCadence {
+  std::string callsign;
+  double wpm{0.0};
+  float confidence{0.0F};
+  std::uint32_t observed_turns{0};
 };
 
 struct CwDecoderConfig {
@@ -94,6 +112,17 @@ struct CwDecoderUpdate {
   // prediction and not necessarily the currently selected decoder speed.
   double acoustic_wpm{0.0};
   float acoustic_cadence_confidence{0.0F};
+  // Bounded semantic records made only at sustained-silence or explicit
+  // flush boundaries. They keep alternating operators on one RF carrier
+  // separate without inventing extra frequency tracks.
+  std::vector<CwTransmissionTurn> transmissions;
+  std::vector<CwSenderCadence> sender_cadences;
+  std::uint64_t active_transmission_sequence{0};
+  std::string current_sender_callsign;
+  double current_sender_wpm{0.0};
+  // Presentation transcript with only conservative word-boundary repair.
+  // `text` and `refined_text` above remain the immutable acoustic records.
+  std::string contextual_text;
 };
 
 class CwTimingDecoder {
@@ -223,6 +252,12 @@ class CwMultiSpeedDecoder {
   void reset();
   [[nodiscard]] CwDecoderUpdate process(std::uint64_t timestamp_ns,
                                         float snr_db);
+  // Drains a disappearing channel once without asserting that an operator
+  // turn ended. A spectrum association can vanish during an ordinary slow
+  // word gap, so semantic completion is deferred until resume proves that
+  // the configured sustained-silence interval elapsed.
+  [[nodiscard]] CwDecoderUpdate suspendInput(std::uint64_t timestamp_ns);
+  [[nodiscard]] CwDecoderUpdate resumeInput(std::uint64_t timestamp_ns);
   [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
   [[nodiscard]] std::size_t hypothesisCount() const noexcept;
   [[nodiscard]] std::size_t stateBytes() const noexcept;
@@ -256,6 +291,14 @@ class CwMultiSpeedDecoder {
                       std::uint64_t timestamp_ns);
   void refreshLattice(CwLatticeDecodeMode mode);
   void resetLatticeSegment() noexcept;
+  void updateCurrentSender();
+  void commitCompletedTransmission(std::size_t final_leader);
+  void beginNextTransmissionWithoutAcousticReset();
+  void completeTransmission(std::size_t final_leader);
+  void rememberSenderCadence(std::string_view sender, double wpm,
+                             float confidence);
+  [[nodiscard]] const CwSenderCadence* senderCadence(
+      std::string_view sender) const noexcept;
 
   CwDecoderConfig decoder_config_;
   CwMultiSpeedConfig config_;
@@ -268,6 +311,18 @@ class CwMultiSpeedDecoder {
   CwEventLattice event_lattice_;
   std::string refined_text_;
   std::vector<CwAcousticAlternative> acoustic_alternatives_;
+  std::string contextual_lattice_text_;
+  static constexpr std::size_t kMaximumTransmissionTurns = 16;
+  static constexpr std::size_t kMaximumSenderCadences = 8;
+  std::vector<CwTransmissionTurn> transmissions_;
+  std::vector<CwSenderCadence> sender_cadences_;
+  std::uint64_t next_transmission_sequence_{1};
+  std::uint64_t active_transmission_sequence_{1};
+  std::array<std::size_t, 9> transmission_primary_starts_{};
+  std::size_t transmission_refined_start_{0};
+  std::string current_sender_callsign_;
+  double current_sender_wpm_{0.0};
+  bool active_transmission_completed_{false};
   std::uint64_t lattice_state_started_ns_{0};
   std::uint64_t lattice_last_timestamp_ns_{0};
   std::uint64_t lattice_last_decode_ns_{0};

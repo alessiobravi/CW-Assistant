@@ -223,6 +223,12 @@ struct CwChannelSnapshot {
   std::vector<CwAcousticAlternative> acoustic_alternatives;
   std::string provisional_text;
   std::string pending_elements;
+  std::vector<CwTransmissionTurn> transmissions;
+  std::vector<CwSenderCadence> sender_cadences;
+  std::uint64_t active_transmission_sequence{0};
+  std::string current_sender_callsign;
+  double current_sender_wpm{0.0};
+  std::string contextual_text;
   std::string callsign;
   // High-confidence CALL1 DE CALL2 participants heard on one carrier. A
   // simplex QSO is one frequency observation containing alternating senders,

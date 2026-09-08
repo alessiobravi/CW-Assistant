@@ -147,14 +147,23 @@ decoding hints rather than sharing one assumed contest sequence.
 - Treat alternating operators on one simplex carrier as one frequency session,
   not two artificial signal tracks. A completed `CALL1 DE CALL2` handover may
   attach both distinct, structurally plausible participants to that session;
-  current-sender attribution requires separate unambiguous turn evidence.
+  segment bounded transmission turns only after sustained silence or explicit
+  end-of-input. A shorter channel-association loss must not split a slow word
+  gap. Current-sender attribution requires explicit, unambiguous final handover
+  evidence; separate sender cadence state may influence only an already
+  acoustically compatible timing estimate.
+- Contextual presentation may separate completed turns and reconstruct bounded
+  word gaps only among acoustically competitive alternatives with identical
+  non-whitespace characters. It must not alter raw/consensus text, confirmed
+  callsigns, verification, or transmission decisions.
 - Follow appended decoder text unless the operator is selecting earlier text,
   emphasize a confirmed remote callsign, and raise a bounded visual alert when
   stable text contains an exact complete-token match for the active profile's
   own callsign. This receive alert must not initiate or arm transmission.
 - Card dismissal and card reordering must use independent pointer targets;
   closing a session leaves its channel DSP active and the marker available for
-  reopening.
+  reopening. Action buttons expose contextual hover help, and spectrum hover
+  explains the distinct left/right/Ctrl pointer actions.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking an identified stream opens its decoder card. Right-clicking an

@@ -7,10 +7,10 @@ import CWBuddy 1.0
 
 ApplicationWindow {
     id: window
-    width: 1440
-    height: 900
-    minimumWidth: 1080
-    minimumHeight: 680
+    width: 1720
+    height: 1040
+    minimumWidth: 1180
+    minimumHeight: 720
     visible: true
     title: "CW Buddy — " + appSettings.profileName
     color: "#0d1117"
@@ -33,6 +33,17 @@ ApplicationWindow {
         if (Math.abs(hz) >= 30000000)
             return (hz / 1000000).toFixed(5) + " MHz"
         return (hz / 1000).toFixed(2) + " kHz"
+    }
+
+    function formatRigFrequency(hz) {
+        var digits = Math.max(0, Math.round(hz)).toString()
+        var grouped = []
+        while (digits.length > 3) {
+            grouped.unshift(digits.slice(-3))
+            digits = digits.slice(0, -3)
+        }
+        grouped.unshift(digits)
+        return grouped.join(".")
     }
 
     function formatVfoInput(hz, unitHz) {
@@ -124,8 +135,18 @@ ApplicationWindow {
                     font.weight: Font.Bold
                 }
             }
-            ToolButton { text: "Profiles"; onClicked: profileChooser.open() }
-            ToolButton { text: "Settings"; onClicked: settingsDrawer.open() }
+            ToolButton {
+                text: "Profiles"
+                onClicked: profileChooser.open()
+                ToolTip.visible: hovered
+                ToolTip.text: "Create or switch station profiles"
+            }
+            ToolButton {
+                text: "Settings"
+                onClicked: settingsDrawer.open()
+                ToolTip.visible: hovered
+                ToolTip.text: "Configure audio, decoder, radio, display, and station identity"
+            }
         }
     }
 
@@ -155,6 +176,12 @@ ApplicationWindow {
                             if (modelData === "QSO")
                                 txDrawer.open()
                         }
+                        ToolTip.visible: hovered
+                        ToolTip.text: modelData === "RX"
+                            ? "Current receiver workspace"
+                            : modelData === "QSO"
+                              ? "Open guarded transmit and QSO controls"
+                              : modelData + " workspace is not available yet"
                     }
                 }
             }
@@ -175,6 +202,8 @@ ApplicationWindow {
                     model: ["Live audio", "WAV replay"]
                     currentIndex: replayController.sourceMode
                     onActivated: replayController.sourceMode = currentIndex
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Choose live receiver audio or a recorded WAV replay"
                 }
                 Rectangle { width: 1; height: 28; color: "#303a46" }
                 Label { text: "Monitor"; color: "#91a0b1"; font.pixelSize: 11 }
@@ -184,6 +213,8 @@ ApplicationWindow {
                     checkable: true
                     checked: replayController.monitorMode === 0
                     onClicked: replayController.setMonitorMode(0)
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Mute receiver monitoring"
                 }
                 ToolButton {
                     objectName: "monitorReceiverButton"
@@ -232,21 +263,46 @@ ApplicationWindow {
                     visible: replayController.sourceMode === 0
                     enabled: !replayController.liveCapturing
                     onClicked: replayController.startLiveAudio()
+                    ToolTip.visible: hovered
+                    ToolTip.text: enabled
+                        ? "Start spectrum analysis and CW decoding from the selected audio input"
+                        : "Live receiver processing is already running"
                 }
                 Button {
                     text: "Stop live RX"
                     visible: replayController.sourceMode === 0
                     enabled: replayController.liveCapturing
                     onClicked: replayController.stopLiveAudio()
+                    ToolTip.visible: hovered
+                    ToolTip.text: enabled
+                        ? "Stop live audio processing"
+                        : "Live receiver processing is not running"
                 }
-                Button { text: "Open WAV"; visible: replayController.sourceMode === 1; onClicked: wavDialog.open() }
+                Button {
+                    text: "Open WAV"
+                    visible: replayController.sourceMode === 1
+                    onClicked: wavDialog.open()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Choose a PCM or 32-bit float receiver recording"
+                }
                 Button {
                     text: replayController.playing ? "Pause" : "Play"
                     visible: replayController.sourceMode === 1
                     enabled: replayController.sourceLoaded
                     onClicked: replayController.playing ? replayController.pause() : replayController.play()
+                    ToolTip.visible: hovered
+                    ToolTip.text: replayController.playing
+                        ? "Pause replay at the current position"
+                        : "Continue decoding the selected recording"
                 }
-                Button { text: "Stop"; visible: replayController.sourceMode === 1; enabled: replayController.sourceLoaded; onClicked: replayController.stop() }
+                Button {
+                    text: "Stop"
+                    visible: replayController.sourceMode === 1
+                    enabled: replayController.sourceLoaded
+                    onClicked: replayController.stop()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Stop replay and return to its beginning"
+                }
             }
 
             Rectangle {
@@ -442,12 +498,43 @@ ApplicationWindow {
                         replayController.openManualDecoderSession(frequencyHz)
                     }
                     ToolTip.visible: containsMouse
-                    ToolTip.delay: 650
-                        ToolTip.text: hoveredStreamId !== 0
-                                  ? (replayController.monitorMode === 2
-                                     ? "Left-click to open and monitor this decoded stream"
-                                     : "Left-click to open this decoded stream")
-                                  : "Right-click an unmarked signal to open a manual decoding slice"
+                    ToolTip.delay: 350
+                    ToolTip.text: hoveredStreamId !== 0
+                        ? (replayController.monitorMode === 2
+                           ? "Left click: open and monitor this decoded stream\n"
+                           : "Left click: open this decoded stream\n")
+                          + "Right click: move the guide and start a manual decoder probe\n"
+                          + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
+                        : "Left click: no decoded stream at this position\n"
+                          + "Right click: move the guide and start a manual decoder probe\n"
+                          + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
+                }
+                Rectangle {
+                    objectName: "spectrumPointerHelp"
+                    visible: manualSliceHitArea.containsMouse
+                    z: 9
+                    anchors.left: spectrumDisplay.left
+                    anchors.bottom: spectrumDisplay.bottom
+                    anchors.leftMargin: 12
+                    anchors.bottomMargin: 12
+                    width: Math.min(pointerHelpText.implicitWidth + 22,
+                                    spectrumDisplay.width - 24)
+                    height: pointerHelpText.implicitHeight + 14
+                    radius: 5
+                    color: "#dd111720"
+                    border.color: "#526172"
+                    border.width: 1
+                    Label {
+                        id: pointerHelpText
+                        anchors.centerIn: parent
+                        text: manualSliceHitArea.hoveredStreamId !== 0
+                              ? "LEFT: open stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
+                              : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
+                        color: "#d4dbe4"
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                    }
                 }
                 ToolButton {
                     id: tuneRxDownButton
@@ -679,6 +766,10 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                         text: replayController.sourceMode === 0 ? "Start live RX" : "Choose WAV recording"
                         onClicked: replayController.sourceMode === 0 ? replayController.startLiveAudio() : wavDialog.open()
+                        ToolTip.visible: hovered
+                        ToolTip.text: replayController.sourceMode === 0
+                            ? "Start spectrum analysis and CW decoding"
+                            : "Choose a receiver WAV recording"
                     }
                 }
             }
@@ -720,7 +811,12 @@ ApplicationWindow {
                             TabButton { text: "Display" }
                         }
                         Item { Layout.fillWidth: true }
-                        Button { text: "Save profile"; onClicked: appSettings.apply() }
+                        Button {
+                            text: "Save profile"
+                            onClicked: appSettings.apply()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Save the current live spectrum controls in this profile"
+                        }
                         ToolButton {
                             objectName: "pinLiveControlsButton"
                             text: liveControlsFrame.pinned ? "Unpin" : "Pin"
@@ -950,7 +1046,8 @@ ApplicationWindow {
         }
 
         Rectangle {
-            Layout.preferredWidth: 390
+            Layout.preferredWidth: 470
+            Layout.minimumWidth: 430
             Layout.fillHeight: true
             color: "#111720"
             border.color: "#263241"
@@ -967,6 +1064,10 @@ ApplicationWindow {
                         text: checked ? "Hide diagnostics" : "Diagnostics"
                         checkable: true
                         font.pixelSize: 10
+                        ToolTip.visible: hovered
+                        ToolTip.text: checked
+                            ? "Hide decoder verification diagnostics"
+                            : "Show why tracks are accepted or rejected"
                     }
                     ToolButton {
                         objectName: "debugCaptureButton"
@@ -981,7 +1082,7 @@ ApplicationWindow {
                         ToolTip.text: "Records raw live audio and per-track decoder internals to disk for troubleshooting a signal that will not decode. Stops itself after the limit set in Settings → Decoder. Review the saved files before sharing them — the audio is whatever the selected input picked up."
                     }
                 }
-                ColumnLayout {
+                Rectangle {
                     id: vfoDisplay
                     objectName: "vfoDisplay"
                     // The VFO readout only means anything with a live,
@@ -991,195 +1092,17 @@ ApplicationWindow {
                     visible: replayController.radioFrequencyAvailable
                              && replayController.sourceMode === 0
                     Layout.fillWidth: true
-                    spacing: 2
-                    Item {
-                        id: vfoRxEditor
-                        objectName: "vfoRxEditor"
-                        property bool editing: false
-                        property bool invalidEntry: false
-                        property int inputUnitHz: 1000
-                        property string inputUnitLabel: inputUnitHz === 1000000
-                                                        ? "MHz" : "kHz"
-                        Layout.fillWidth: true
-                        Layout.preferredWidth: Math.max(
-                                                   vfoRxLabel.implicitWidth + 24,
-                                                   vfoRxEditRow.implicitWidth + 20)
-                        Layout.preferredHeight: Math.max(
-                                                    vfoRxLabel.implicitHeight + 12,
-                                                    vfoRxEditRow.implicitHeight + 10)
-                        function beginEdit() {
-                            if (!appSettings.radioFrequencyWritable)
-                                return
-                            inputUnitHz = replayController.radioRxFrequencyHz
-                                          >= 30000000 ? 1000000 : 1000
-                            vfoRxFrequencyField.text = window.formatVfoInput(
-                                        replayController.radioRxFrequencyHz,
-                                        inputUnitHz)
-                            invalidEntry = false
-                            editing = true
-                            vfoRxFrequencyField.forceActiveFocus()
-                            vfoRxFrequencyField.selectAll()
-                        }
-                        function dismissEdit() {
-                            invalidEntry = false
-                            editing = false
-                        }
-                        function cancelEdit() {
-                            dismissEdit()
-                            window.contentItem.forceActiveFocus()
-                        }
-                        function acceptEdit() {
-                            if (appSettings.setControlledRxFrequency(
-                                        vfoRxFrequencyField.text,
-                                        inputUnitHz)) {
-                                invalidEntry = false
-                                editing = false
-                                window.contentItem.forceActiveFocus()
-                            } else {
-                                invalidEntry = true
-                                vfoRxFrequencyField.forceActiveFocus()
-                                vfoRxFrequencyField.selectAll()
-                            }
-                        }
-                        Rectangle {
-                            anchors.fill: parent
-                            radius: 5
-                            color: "#06130e"
-                            border.color: vfoRxEditor.invalidEntry
-                                          ? "#ff7b84" : "#2dd4a7"
-                            border.width: vfoRxEditor.editing ? 2 : 1
-                        }
-                        Label {
-                            id: vfoRxLabel
-                            objectName: "vfoRxLabel"
-                            anchors.left: parent.left
-                            anchors.leftMargin: 12
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: !vfoRxEditor.editing
-                            text: "RX  " + window.formatVfoFrequency(
-                                               replayController.radioRxFrequencyHz)
-                            color: "#62ffa2"
-                            font.family: "monospace"
-                            font.pixelSize: 28
-                            font.weight: Font.Bold
-                            font.letterSpacing: 2
-                        }
-                        MouseArea {
-                            id: vfoRxEditHitArea
-                            objectName: "vfoRxEditHitArea"
-                            anchors.fill: parent
-                            visible: !vfoRxEditor.editing
-                            enabled: appSettings.radioFrequencyWritable
-                            hoverEnabled: true
-                            activeFocusOnTab: enabled
-                            cursorShape: enabled ? Qt.IBeamCursor
-                                                 : Qt.ArrowCursor
-                            Accessible.role: Accessible.Button
-                            Accessible.name: "Edit RX frequency"
-                            Accessible.description: "Enter an exact receive frequency"
-                            Keys.onPressed: function(event) {
-                                if (event.key === Qt.Key_Return
-                                        || event.key === Qt.Key_Enter
-                                        || event.key === Qt.Key_Space) {
-                                    vfoRxEditor.beginEdit()
-                                    event.accepted = true
-                                }
-                            }
-                            onClicked: {
-                                forceActiveFocus()
-                                vfoRxEditor.beginEdit()
-                            }
-                        }
-                        RowLayout {
-                            id: vfoRxEditRow
-                            anchors.left: parent.left
-                            anchors.leftMargin: 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: vfoRxEditor.editing
-                            spacing: 6
-                            Label {
-                                text: "RX"
-                                color: "#4dff88"
-                                font.family: "monospace"
-                                font.pixelSize: 22
-                                font.weight: Font.Bold
-                                font.letterSpacing: 2
-                            }
-                            TextField {
-                                id: vfoRxFrequencyField
-                                objectName: "vfoRxFrequencyField"
-                                Layout.preferredWidth: 190
-                                selectByMouse: true
-                                color: vfoRxEditor.invalidEntry
-                                       ? "#ff7b84" : "#62ffa2"
-                                selectionColor: "#2dd4a7"
-                                selectedTextColor: "#03100b"
-                                font.family: "monospace"
-                                font.pixelSize: 22
-                                font.weight: Font.Bold
-                                font.letterSpacing: 2
-                                background: Rectangle {
-                                    radius: 3
-                                    color: "#020a07"
-                                    border.color: vfoRxEditor.invalidEntry
-                                                  ? "#ff7b84" : "#226b55"
-                                    border.width: 1
-                                }
-                                Keys.onPressed: function(event) {
-                                    if (event.key === Qt.Key_Escape) {
-                                        vfoRxEditor.cancelEdit()
-                                        event.accepted = true
-                                    } else if (event.key === Qt.Key_Return
-                                               || event.key === Qt.Key_Enter) {
-                                        vfoRxEditor.acceptEdit()
-                                        event.accepted = true
-                                    }
-                                }
-                                onActiveFocusChanged: {
-                                    if (!activeFocus && vfoRxEditor.editing)
-                                        vfoRxEditor.dismissEdit()
-                                }
-                            }
-                            Label {
-                                text: vfoRxEditor.inputUnitLabel
-                                color: "#83d9bc"
-                                font.family: "monospace"
-                                font.pixelSize: 16
-                            }
-                        }
-                        ToolTip.visible: vfoRxEditHitArea.containsMouse
-                        ToolTip.delay: 300
-                        ToolTip.text: "Click to enter an exact RX frequency"
-                        Connections {
-                            target: appSettings
-                            function onRadioFrequencyControlChanged() {
-                                if (!appSettings.radioFrequencyWritable) {
-                                    vfoRxEditor.invalidEntry = false
-                                    vfoRxEditor.editing = false
-                                }
-                            }
-                        }
-                    }
+                    Layout.preferredHeight: 126
+                    radius: 5
+                    color: "#20262e"
+                    border.color: "#59636f"
+                    border.width: 1
+                    clip: true
+
                     RowLayout {
-                        spacing: 10
-                        Rectangle {
-                            objectName: "vfoSplitBadge"
-                            visible: replayController.radioSplitActive
-                            radius: 4
-                            color: "#3a2f10"
-                            border.color: "#ffe14d"
-                            border.width: 1
-                            implicitWidth: splitBadgeLabel.implicitWidth + 12
-                            implicitHeight: splitBadgeLabel.implicitHeight + 6
-                            Label {
-                                id: splitBadgeLabel
-                                anchors.centerIn: parent
-                                text: "SPLIT"
-                                color: "#ffe14d"
-                                font.pixelSize: 12
-                                font.weight: Font.Bold
-                            }
-                        }
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        spacing: 6
                         Rectangle {
                             id: onAirIndicator
                             objectName: "onAirIndicator"
@@ -1189,19 +1112,19 @@ ApplicationWindow {
                             // It remains dim until the tested hardware adapter
                             // is implemented and the guard reports KEY down.
                             property bool active: transmitController.onAir
-                            radius: 6
-                            implicitWidth: 54
-                            implicitHeight: 48
-                            color: active ? "#4d0d0d" : "#1c2229"
+                            Layout.preferredWidth: 68
+                            Layout.fillHeight: true
+                            radius: 4
+                            color: active ? "#4d0d18" : "#252b33"
                             border.color: active ? "#ff3b30" : "#3a4552"
                             border.width: 1
                             Image {
                                 anchors.centerIn: parent
                                 source: "qrc:/icons/on-air-active.png"
-                                width: 42
-                                height: 42
+                                width: 58
+                                height: 58
                                 fillMode: Image.PreserveAspectFit
-                                opacity: onAirIndicator.active ? 1.0 : 0.18
+                                opacity: onAirIndicator.active ? 1.0 : 0.24
                             }
                             ToolTip.visible: onAirMouse.containsMouse
                             ToolTip.delay: 300
@@ -1214,25 +1137,281 @@ ApplicationWindow {
                                 hoverEnabled: true
                             }
                         }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            spacing: 5
+
+                            Item {
+                                id: vfoRxEditor
+                                objectName: "vfoRxEditor"
+                                property bool editing: false
+                                property bool invalidEntry: false
+                                property int inputUnitHz: 1000
+                                property string inputUnitLabel: inputUnitHz === 1000000
+                                                                ? "MHz" : "kHz"
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                function beginEdit() {
+                                    if (!appSettings.radioFrequencyWritable)
+                                        return
+                                    inputUnitHz = replayController.radioRxFrequencyHz
+                                                  >= 30000000 ? 1000000 : 1000
+                                    vfoRxFrequencyField.text = window.formatVfoInput(
+                                                replayController.radioRxFrequencyHz,
+                                                inputUnitHz)
+                                    invalidEntry = false
+                                    editing = true
+                                    vfoRxFrequencyField.forceActiveFocus()
+                                    vfoRxFrequencyField.selectAll()
+                                }
+                                function dismissEdit() {
+                                    invalidEntry = false
+                                    editing = false
+                                }
+                                function cancelEdit() {
+                                    dismissEdit()
+                                    window.contentItem.forceActiveFocus()
+                                }
+                                function acceptEdit() {
+                                    if (appSettings.setControlledRxFrequency(
+                                                vfoRxFrequencyField.text,
+                                                inputUnitHz)) {
+                                        invalidEntry = false
+                                        editing = false
+                                        window.contentItem.forceActiveFocus()
+                                    } else {
+                                        invalidEntry = true
+                                        vfoRxFrequencyField.forceActiveFocus()
+                                        vfoRxFrequencyField.selectAll()
+                                    }
+                                }
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 3
+                                    color: "#080c10"
+                                    border.color: vfoRxEditor.invalidEntry
+                                                  ? "#ff7b84" : "#46515e"
+                                    border.width: vfoRxEditor.editing ? 2 : 1
+                                }
+                                Label {
+                                    id: vfoRxLabel
+                                    objectName: "vfoRxLabel"
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 12
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 8
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: !vfoRxEditor.editing
+                                    text: window.formatRigFrequency(
+                                              replayController.radioRxFrequencyHz)
+                                    color: "#f5f8fb"
+                                    font.family: "monospace"
+                                    font.pixelSize: 34
+                                    font.weight: Font.Bold
+                                    font.letterSpacing: 2
+                                    horizontalAlignment: Text.AlignRight
+                                    elide: Text.ElideLeft
+                                }
+                                Label {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.top: parent.top
+                                    anchors.topMargin: 6
+                                    visible: !vfoRxEditor.editing
+                                    text: "RX"
+                                    color: "#64dff0"
+                                    font.pixelSize: 11
+                                    font.weight: Font.Bold
+                                }
+                                MouseArea {
+                                    id: vfoRxEditHitArea
+                                    objectName: "vfoRxEditHitArea"
+                                    anchors.fill: parent
+                                    visible: !vfoRxEditor.editing
+                                    enabled: appSettings.radioFrequencyWritable
+                                    hoverEnabled: true
+                                    activeFocusOnTab: enabled
+                                    cursorShape: enabled ? Qt.IBeamCursor
+                                                         : Qt.ArrowCursor
+                                    Accessible.role: Accessible.Button
+                                    Accessible.name: "Edit RX frequency"
+                                    Accessible.description: "Enter an exact receive frequency"
+                                    Keys.onPressed: function(event) {
+                                        if (event.key === Qt.Key_Return
+                                                || event.key === Qt.Key_Enter
+                                                || event.key === Qt.Key_Space) {
+                                            vfoRxEditor.beginEdit()
+                                            event.accepted = true
+                                        }
+                                    }
+                                    onClicked: {
+                                        forceActiveFocus()
+                                        vfoRxEditor.beginEdit()
+                                    }
+                                }
+                                RowLayout {
+                                    id: vfoRxEditRow
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10
+                                    anchors.rightMargin: 8
+                                    visible: vfoRxEditor.editing
+                                    spacing: 6
+                                    Label {
+                                        text: "RX"
+                                        color: "#64dff0"
+                                        font.family: "monospace"
+                                        font.pixelSize: 18
+                                        font.weight: Font.Bold
+                                    }
+                                    TextField {
+                                        id: vfoRxFrequencyField
+                                        objectName: "vfoRxFrequencyField"
+                                        Layout.fillWidth: true
+                                        selectByMouse: true
+                                        color: vfoRxEditor.invalidEntry
+                                               ? "#ff7b84" : "#f5f8fb"
+                                        selectionColor: "#2dd4a7"
+                                        selectedTextColor: "#03100b"
+                                        font.family: "monospace"
+                                        font.pixelSize: 22
+                                        font.weight: Font.Bold
+                                        font.letterSpacing: 2
+                                        background: Rectangle {
+                                            radius: 3
+                                            color: "#02070a"
+                                            border.color: vfoRxEditor.invalidEntry
+                                                          ? "#ff7b84" : "#647180"
+                                            border.width: 1
+                                        }
+                                        Keys.onPressed: function(event) {
+                                            if (event.key === Qt.Key_Escape) {
+                                                vfoRxEditor.cancelEdit()
+                                                event.accepted = true
+                                            } else if (event.key === Qt.Key_Return
+                                                       || event.key === Qt.Key_Enter) {
+                                                vfoRxEditor.acceptEdit()
+                                                event.accepted = true
+                                            }
+                                        }
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus && vfoRxEditor.editing)
+                                                vfoRxEditor.dismissEdit()
+                                        }
+                                    }
+                                    Label {
+                                        text: vfoRxEditor.inputUnitLabel
+                                        color: "#91a0b1"
+                                        font.family: "monospace"
+                                        font.pixelSize: 13
+                                    }
+                                }
+                                ToolTip.visible: vfoRxEditHitArea.containsMouse
+                                ToolTip.delay: 300
+                                ToolTip.text: appSettings.radioFrequencyWritable
+                                    ? "Click to enter an exact RX frequency"
+                                    : "The linked provider reports frequency read-only"
+                                Connections {
+                                    target: appSettings
+                                    function onRadioFrequencyControlChanged() {
+                                        if (!appSettings.radioFrequencyWritable) {
+                                            vfoRxEditor.invalidEntry = false
+                                            vfoRxEditor.editing = false
+                                        }
+                                    }
+                                }
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 38
+                                spacing: 5
+                                Rectangle {
+                                    objectName: "vfoSplitBadge"
+                                    Layout.preferredWidth: 68
+                                    Layout.fillHeight: true
+                                    radius: 2
+                                    color: replayController.radioSplitActive
+                                           ? "#f0f21c" : "#353b43"
+                                    Label {
+                                        id: splitBadgeLabel
+                                        anchors.centerIn: parent
+                                        text: replayController.radioSplitActive
+                                              ? "SPLIT" : "SIMPLEX"
+                                        color: replayController.radioSplitActive
+                                               ? "#111318" : "#7b8794"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Bold
+                                    }
+                                }
+                                Rectangle {
+                                    objectName: "vfoRxModeBadge"
+                                    Layout.preferredWidth: 58
+                                    Layout.fillHeight: true
+                                    radius: 2
+                                    color: "#f0f21c"
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: appSettings.cwToneSidebandIndex === 0
+                                              ? "CW" : "CW-R"
+                                        color: "#111318"
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+                                    ToolTip.visible: rxModeMouse.containsMouse
+                                    ToolTip.text: "Mode display; provider-neutral mode control is not available yet"
+                                    MouseArea {
+                                        id: rxModeMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    radius: 2
+                                    color: "#15110c"
+                                    Label {
+                                        objectName: "vfoTxLabel"
+                                        anchors.left: parent.left
+                                        anchors.leftMargin: 8
+                                        anchors.right: parent.right
+                                        anchors.rightMargin: 8
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "TX  " + window.formatRigFrequency(
+                                                  replayController.radioTxFrequencyHz > 0
+                                                  ? replayController.radioTxFrequencyHz
+                                                  : replayController.radioRxFrequencyHz)
+                                        color: replayController.radioSplitActive
+                                               ? "#ff6a24" : "#9b694e"
+                                        font.family: "monospace"
+                                        font.pixelSize: 18
+                                        font.weight: Font.Bold
+                                        font.letterSpacing: 1
+                                        horizontalAlignment: Text.AlignRight
+                                        elide: Text.ElideLeft
+                                    }
+                                    ToolTip.visible: txFrequencyMouse.containsMouse
+                                    ToolTip.text: "TX frequency display; provider-neutral TX editing follows in the radio-control slice"
+                                    MouseArea {
+                                        id: txFrequencyMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                    }
+                                }
+                            }
+                        }
                     }
-                    Label {
-                        objectName: "vfoRxEditErrorLabel"
-                        visible: vfoRxEditor.invalidEntry
-                        text: appSettings.statusMessage
-                        color: "#ff7b84"
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                    Label {
-                        objectName: "vfoTxLabel"
-                        visible: replayController.radioSplitActive
-                        text: "TX  " + window.formatVfoFrequency(replayController.radioTxFrequencyHz)
-                        color: "#ffe14d"
-                        font.pixelSize: 28
-                        font.weight: Font.Bold
-                        font.letterSpacing: 1
-                    }
+                }
+                Label {
+                    objectName: "vfoRxEditErrorLabel"
+                    visible: vfoDisplay.visible && vfoRxEditor.invalidEntry
+                    text: appSettings.statusMessage
+                    color: "#ff7b84"
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
                 Label {
                     visible: replayController.debugCaptureActive || replayController.debugCapturePath.length > 0
@@ -1329,15 +1508,18 @@ ApplicationWindow {
                                   : (!modelData.verifiedCw
                                      ? "Analyzing the selected frequency…"
                                      : "Listening…")))
-                        // Prefer the append-only phase/timing consensus once
-                        // it has produced text. The literal greedy stream is a
-                        // useful acquisition fallback, but is less readable
-                        // for hand-sent spacing and noisy edges.
+                        // Prefer the turn-aware presentation. It changes only
+                        // conservative word boundaries and separates completed
+                        // transmissions; raw and phase-consensus evidence stay
+                        // available to diagnostics without modification.
                         property string displayedDecodedText:
-                            modelData.refinedText.length > 0
-                            ? modelData.refinedText : rawDecodedText
+                            modelData.contextualText.length > 0
+                            ? modelData.contextualText
+                            : (modelData.refinedText.length > 0
+                               ? modelData.refinedText : rawDecodedText)
                         property string callsignEvidenceText:
                             rawDecodedText + " " + modelData.refinedText
+                            + " " + modelData.contextualText
                         property string ownCallEvidenceText:
                             callsignEvidenceText + " " + localModelStableText
                         property string localModelState:
@@ -1587,7 +1769,27 @@ ApplicationWindow {
                                     Accessible.name: "Close decoded session"
                                     onPressed: replayController.closeDecoderSession(
                                                    modelData.id)
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: "Close this card; decoding continues in the background"
                                 }
+                            }
+                            Label {
+                                objectName: "currentSenderLabel"
+                                Layout.fillWidth: true
+                                visible: modelData.currentSenderCallsign.length > 0
+                                text: "CURRENT SENDER  "
+                                      + modelData.currentSenderCallsign
+                                      + (modelData.currentSenderWpm > 0
+                                         ? "  •  "
+                                           + modelData.currentSenderWpm.toFixed(0)
+                                           + " WPM"
+                                         : "")
+                                color: "#64dff0"
+                                font.pixelSize: 12
+                                font.weight: Font.Bold
+                                ToolTip.visible: senderHelp.hovered
+                                ToolTip.text: "Attributed only from an explicit decoded CALL1 DE CALL2 or CQ DE CALL handover"
+                                HoverHandler { id: senderHelp }
                             }
                             ScrollView {
                                 id: transcriptScroll
@@ -1691,6 +1893,12 @@ ApplicationWindow {
                                         border.color: "#263241"
                                         border.width: 1
                                     }
+                                    ToolTip.visible: transcriptHover.hovered
+                                    ToolTip.delay: 500
+                                    ToolTip.text: modelData.transmissions.length > 0
+                                        ? "Completed transmissions are separated by |. Only conservative word gaps are repaired; decoded characters are unchanged."
+                                        : "Live decoded text; select and scroll to pause automatic tail following"
+                                    HoverHandler { id: transcriptHover }
                                     function applyDecodedText(nextText) {
                                         var oldSelectionStart = selectionStart
                                         var oldSelectionEnd = selectionEnd
@@ -1960,6 +2168,10 @@ ApplicationWindow {
                         onClicked: transmitController.armed
                                    ? transmitController.disarm()
                                    : transmitController.arm()
+                        ToolTip.visible: hovered
+                        ToolTip.text: transmitController.armed
+                            ? "Disarm transmission and clear pending actions"
+                            : "Enter the guarded TX workflow; this does not key hardware"
                     }
                     CheckBox {
                         objectName: "autoQsoModeCheck"
@@ -1967,12 +2179,18 @@ ApplicationWindow {
                         checked: transmitController.autoQsoEnabled
                         enabled: transmitController.armed
                         onToggled: transmitController.autoQsoEnabled = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Suggest context-matched replies; every message still requires exact confirmation"
+                            : "Arm TX before enabling reply suggestions"
                     }
                     Item { Layout.fillWidth: true }
                     Button {
                         text: "EMERGENCY RELEASE"
                         highlighted: true
                         onClicked: transmitController.emergencyRelease()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Immediately release KEY/PTT and latch a fault"
                     }
                     Button {
                         objectName: "txTuneButton"
@@ -1994,7 +2212,12 @@ ApplicationWindow {
                 RowLayout {
                     Layout.fillWidth: true
                     visible: transmitController.state === "fault"
-                    Button { text: "Reset fault (stays disarmed)"; onClicked: transmitController.resetFault() }
+                    Button {
+                        text: "Reset fault (stays disarmed)"
+                        onClicked: transmitController.resetFault()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Clear the latched fault without arming transmission"
+                    }
                 }
                 Label {
                     text: transmitController.targetCallsign.length > 0
@@ -2019,14 +2242,31 @@ ApplicationWindow {
                         text: "Confirm station"
                         onClicked: transmitController.confirmTarget(
                                        txCallConfirmation.text)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Accept only an exact retype of the selected decoded callsign"
                     }
                 }
                 RowLayout {
                     Layout.fillWidth: true
                     visible: transmitController.qsoConfirmed
-                    Button { text: "Send my call"; onClicked: transmitController.prepareOwnCall() }
-                    Button { text: "Send report " + transmitController.report; onClicked: transmitController.prepareReport() }
-                    Button { text: "End QSO"; onClicked: transmitController.endQso() }
+                    Button {
+                        text: "Send my call"
+                        onClicked: transmitController.prepareOwnCall()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare your configured callsign for exact preview confirmation"
+                    }
+                    Button {
+                        text: "Send report " + transmitController.report
+                        onClicked: transmitController.prepareReport()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare the displayed signal report for exact preview confirmation"
+                    }
+                    Button {
+                        text: "End QSO"
+                        onClicked: transmitController.endQso()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Clear the selected station and pending exchange"
+                    }
                 }
                 Button {
                     objectName: "anchorPileupRunnerButton"
@@ -2054,7 +2294,12 @@ ApplicationWindow {
                               + transmitController.proposedMessage
                         color: "#ffd54f"
                     }
-                    Button { text: "Prepare"; onClicked: transmitController.acceptProposal() }
+                    Button {
+                        text: "Prepare"
+                        onClicked: transmitController.acceptProposal()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Move this suggestion into the exact confirmation preview"
+                    }
                 }
                 Label { text: "Free text"; font.weight: Font.Bold }
                 TextArea {
@@ -2073,6 +2318,10 @@ ApplicationWindow {
                         text: "Prepare free text"
                         enabled: transmitController.qsoConfirmed
                         onClicked: transmitController.prepareFreeText(txFreeText.text)
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Normalize this operator-authored text and open exact preview confirmation"
+                            : "Confirm the selected station first"
                     }
                     Label { text: "WPM" }
                     Slider {
@@ -2082,6 +2331,8 @@ ApplicationWindow {
                         value: transmitController.wordsPerMinute
                         onMoved: transmitController.wordsPerMinute = Math.round(value)
                         Layout.fillWidth: true
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Transmit speed " + Math.round(value) + " WPM"
                     }
                     Label { text: transmitController.wordsPerMinute }
                 }
@@ -2125,6 +2376,8 @@ ApplicationWindow {
                                 enabled: !transmitController.messageConfirmed
                                 onClicked: transmitController.confirmPreview(
                                                txPreviewConfirmation.text)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Accept only an exact retype of the normalized message"
                             }
                         }
                     }
@@ -2138,6 +2391,10 @@ ApplicationWindow {
                     enabled: transmitController.messageConfirmed
                              && transmitController.hardwareAvailable
                     onClicked: transmitController.transmitPrepared()
+                    ToolTip.visible: hovered
+                    ToolTip.text: transmitController.hardwareAvailable
+                        ? "Transmit the exactly confirmed message through the guarded adapter"
+                        : "No tested KEY/PTT hardware adapter is available in this build"
                 }
             }
         }
@@ -2224,12 +2481,16 @@ ApplicationWindow {
                             updateNotice.appDownloadStarted = true
                             updateChecker.downloadUpdate()
                         }
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Download this platform package and verify its SHA-256 checksum"
                     }
                     Button {
                         objectName: "updateNoticeOpenAppButton"
                         visible: updateChecker.verifiedDownloadActionsVisible
                         text: "Open Installer"
                         onClicked: updateChecker.openDownloadedFile()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Open the verified package with the operating-system installer"
                     }
                     Button {
                         objectName: "updateNoticeRevealAppButton"
@@ -2240,6 +2501,8 @@ ApplicationWindow {
                                 : "Show in Folder"
                         flat: true
                         onClicked: updateChecker.revealDownloadFolder()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Show the verified package in the file manager"
                     }
                     Item { Layout.fillWidth: true }
                 }
@@ -2270,6 +2533,8 @@ ApplicationWindow {
                     text: callsignDatabaseUpdater.downloading ? "Updating" : "Update"
                     enabled: !callsignDatabaseUpdater.downloading
                     onClicked: callsignDatabaseUpdater.updateDatabase()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Download and atomically verify the newer offline callsign list"
                 }
             }
         }
@@ -2294,6 +2559,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        showMaximized()
         if (appSettings.profileSelectionRequired)
             profileChooser.open()
         else if (!appSettings.setupComplete)

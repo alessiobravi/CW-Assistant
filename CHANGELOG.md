@@ -35,6 +35,23 @@ All notable changes to CW Buddy are recorded here. The format follows
   rule requires two complete, distinct, structurally plausible callsigns and
   does not guess which participant is currently sending.
 
+- Decoder tracks now retain bounded transmission turns after sustained silence
+  or an explicit end-of-input boundary. Explicit `CALL1 DE CALL2` and
+  `CQ ... DE CALL` evidence can identify the current sender, while bare calls,
+  incomplete `DE CALL` fragments, and conflicting final paths deliberately
+  leave it unknown. Up to eight identified senders retain independent cadence
+  summaries; a well-supported earlier cadence may only nudge a later timing
+  candidate from the same sender when the live acoustic estimate already
+  agrees with it.
+
+- Completed turns receive a separate contextual presentation that can choose
+  only among acoustically competitive alternatives with the same decoded
+  characters. It repairs a bounded set of missing word gaps around common CW
+  exchange forms and separates turns with `|`; raw and phase-consensus text,
+  character evidence, callsign confirmation, and verification remain
+  unchanged. Debug capture now includes the retained turns and explicit sender
+  evidence.
+
 - A recognised calling or contest token is now evidence that a channel carries
   real Morse. A station whose decoded text plainly reads `TEST` was being
   discarded because one timing measure sat under its threshold for the track's
@@ -75,6 +92,14 @@ All notable changes to CW Buddy are recorded here. The format follows
   its label entirely.
 
 ### Changed
+
+- The decoder pane now uses a compact radio-style VFO faceplate with grouped
+  whole-hertz RX/TX digits, ON AIR state, and explicit SIMPLEX/SPLIT and CW/CW-R
+  status. RX entry retains its capability-checked route; TX frequency and mode
+  are visibly read-only until their provider-neutral controls exist. The main
+  window opens maximized, the decoder pane has more room, spectrum hover shows
+  the left/right/Ctrl pointer actions, and every push button in the main,
+  settings, setup, and profile views has contextual hover help.
 
 - Live decode workers no longer rebuild the complete, deeply nested decoder
   snapshot for each character-model window. A bounded lightweight refinement

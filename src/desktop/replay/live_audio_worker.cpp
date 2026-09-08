@@ -431,6 +431,27 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     item.insert(QStringLiteral("presentedCallsign"),
                 QString::fromStdString(presented_callsign));
     item.insert(QStringLiteral("presentedCallsignSource"), callsign_source);
+    QJsonArray transmissions;
+    if (published != published_channels.end()) {
+      item.insert(QStringLiteral("currentSenderCallsign"),
+                  QString::fromStdString(published->current_sender_callsign));
+      item.insert(QStringLiteral("currentSenderWpm"),
+                  published->current_sender_wpm);
+      for (const auto& turn : published->transmissions) {
+        QJsonObject value;
+        value.insert(QStringLiteral("sequence"),
+                     static_cast<qint64>(turn.sequence));
+        value.insert(QStringLiteral("text"),
+                     QString::fromStdString(turn.text));
+        value.insert(QStringLiteral("sender"),
+                     QString::fromStdString(turn.sender_callsign));
+        value.insert(QStringLiteral("wpm"), turn.wpm);
+        value.insert(QStringLiteral("cadenceConfidence"),
+                     turn.cadence_confidence);
+        transmissions.push_back(value);
+      }
+    }
+    item.insert(QStringLiteral("transmissions"), transmissions);
     QJsonArray alternatives;
     for (const auto& alternative : track.acoustic_alternatives) {
       QJsonObject candidate;

@@ -7,6 +7,9 @@
 #include <string>
 #include <string_view>
 
+#include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_context_rescorer.hpp"
+
 namespace cwassistant::core {
 namespace {
 
@@ -51,6 +54,8 @@ std::size_t updateDynamicBytes(const CwDecoderUpdate& update) noexcept {
                        update.provisional_text.capacity() +
                        update.pending_elements.capacity() +
                        update.refined_text.capacity() +
+                       update.current_sender_callsign.capacity() +
+                       update.contextual_text.capacity() +
                        characterEvidenceBytes(update.characters) +
                        update.acoustic_alternatives.capacity() *
                            sizeof(CwAcousticAlternative);
@@ -58,6 +63,13 @@ std::size_t updateDynamicBytes(const CwDecoderUpdate& update) noexcept {
     result += alternative.text.capacity() +
               alternative.provisional_elements.capacity();
   }
+  result += update.transmissions.capacity() * sizeof(CwTransmissionTurn);
+  for (const auto& transmission : update.transmissions)
+    result += transmission.text.capacity() +
+              transmission.sender_callsign.capacity();
+  result += update.sender_cadences.capacity() * sizeof(CwSenderCadence);
+  for (const auto& cadence : update.sender_cadences)
+    result += cadence.callsign.capacity();
   return result;
 }
 
@@ -613,7 +625,15 @@ CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
               static_cast<std::uint32_t>(character_count),
           .recent_unknown_symbols = recent_unknown,
           .recent_cadence_observations = static_cast<std::uint32_t>(
-              recent_cadence_quality_.size())};
+              recent_cadence_quality_.size()),
+          .acoustic_wpm = 0.0,
+          .acoustic_cadence_confidence = 0.0F,
+          .transmissions = {},
+          .sender_cadences = {},
+          .active_transmission_sequence = 0,
+          .current_sender_callsign = {},
+          .current_sender_wpm = 0.0,
+          .contextual_text = {}};
 }
 
 CwMultiSpeedDecoder::Hypothesis::Hypothesis(
@@ -660,6 +680,15 @@ void CwMultiSpeedDecoder::setKeyingModel(const CwKeyingModel model) {
 void CwMultiSpeedDecoder::reset() {
   committed_prefix_.clear();
   refined_text_.clear();
+  transmissions_.clear();
+  sender_cadences_.clear();
+  next_transmission_sequence_ = 1;
+  active_transmission_sequence_ = 1;
+  transmission_primary_starts_.fill(0U);
+  transmission_refined_start_ = 0;
+  current_sender_callsign_.clear();
+  current_sender_wpm_ = 0.0;
+  active_transmission_completed_ = false;
   lattice_committed_observation_id_ = 0;
   resetLatticeSegment();
   resetHypotheses();
@@ -689,6 +718,10 @@ void CwMultiSpeedDecoder::resetHypotheses() {
   cadence_initialized_ = false;
   last_observed_segment_ns_ = 0;
   cadence_key_down_ = false;
+  transmission_primary_starts_.fill(0U);
+  current_sender_callsign_.clear();
+  current_sender_wpm_ = 0.0;
+  active_transmission_completed_ = false;
 }
 
 CwDecoderUpdate CwMultiSpeedDecoder::process(
@@ -714,6 +747,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
     observeLeaderEvidence(timestamp_ns);
     const auto& selected = hypotheses_[locked_index_];
     leader_index_ = locked_index_;
+    if (changed) updateCurrentSender();
     const double silence_ms = signal_seen_ &&
             timestamp_ns >= last_signal_timestamp_ns_
         ? milliseconds(timestamp_ns - last_signal_timestamp_ns_)
@@ -724,16 +758,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
       // selection. At a safe segment boundary, commit the best complete
       // hypothesis rather than making the early WPM choice irreversible.
       const std::size_t final_leader = selectLeader();
-      committed_prefix_ += hypotheses_[final_leader].update.text;
-      if (!committed_prefix_.empty() && committed_prefix_.back() != ' ')
-        committed_prefix_.push_back(' ');
-      if (committed_prefix_.size() > 4'096)
-        committed_prefix_.erase(0, committed_prefix_.size() - 4'096);
       refreshLattice(CwLatticeDecodeMode::Flush);
-      if (!refined_text_.empty() && refined_text_.back() != ' ')
-        refined_text_.push_back(' ');
-      resetLatticeSegment();
-      resetHypotheses();
+      commitCompletedTransmission(final_leader);
       return snapshot(true);
     }
     return snapshot(changed);
@@ -752,6 +778,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
   const std::size_t previous_leader = leader_index_;
   float margin = 0.0F;
   leader_index_ = selectLeader(&margin);
+  if (changed || leader_index_ != previous_leader) updateCurrentSender();
   changed = changed || leader_index_ != previous_leader;
   const double observed_ms = timestamp_ns >= first_timestamp_ns_
       ? milliseconds(timestamp_ns - first_timestamp_ns_)
@@ -760,7 +787,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
   return snapshot(changed || locked_);
 }
 
-CwDecoderUpdate CwMultiSpeedDecoder::flush(
+CwDecoderUpdate CwMultiSpeedDecoder::suspendInput(
     const std::uint64_t timestamp_ns) {
   for (auto& hypothesis : hypotheses_)
     hypothesis.update = hypothesis.decoder.flush(timestamp_ns);
@@ -774,6 +801,36 @@ CwDecoderUpdate CwMultiSpeedDecoder::flush(
   // complete even when no following mark arrived to classify the final gap.
   if (!refined_text_.empty() && refined_text_.back() != ' ')
     refined_text_.push_back(' ');
+  updateCurrentSender();
+  return snapshot(true);
+}
+
+CwDecoderUpdate CwMultiSpeedDecoder::resumeInput(
+    const std::uint64_t timestamp_ns) {
+  const double silence_ms = signal_seen_ &&
+          timestamp_ns >= last_signal_timestamp_ns_
+      ? milliseconds(timestamp_ns - last_signal_timestamp_ns_)
+      : 0.0;
+  const std::size_t final_leader = selectLeader();
+  if (signal_seen_ &&
+      hypotheses_[final_leader].update.decoded_symbols > 0U &&
+      silence_ms >= config_.reacquire_after_silence_ms) {
+    // The acoustic state was already drained when association disappeared.
+    // Only the independently measured sustained absence makes it a semantic
+    // operator-turn boundary.
+    completeTransmission(final_leader);
+    beginNextTransmissionWithoutAcousticReset();
+    return snapshot(true);
+  }
+  updateCurrentSender();
+  return snapshot(false);
+}
+
+CwDecoderUpdate CwMultiSpeedDecoder::flush(
+    const std::uint64_t timestamp_ns) {
+  static_cast<void>(suspendInput(timestamp_ns));
+  const std::size_t final_leader = selectLeader();
+  completeTransmission(final_leader);
   return snapshot(true);
 }
 
@@ -785,12 +842,21 @@ std::size_t CwMultiSpeedDecoder::stateBytes() const noexcept {
   std::size_t result = sizeof(*this) +
       hypotheses_.capacity() * sizeof(Hypothesis) +
       committed_prefix_.capacity() + refined_text_.capacity() +
+      current_sender_callsign_.capacity() +
+      contextual_lattice_text_.capacity() +
       acoustic_alternatives_.capacity() * sizeof(CwAcousticAlternative) +
+      transmissions_.capacity() * sizeof(CwTransmissionTurn) +
+      sender_cadences_.capacity() * sizeof(CwSenderCadence) +
       event_lattice_.stateBytes() - sizeof(CwEventLattice);
   for (const auto& alternative : acoustic_alternatives_) {
     result += alternative.text.capacity() +
               alternative.provisional_elements.capacity();
   }
+  for (const auto& transmission : transmissions_)
+    result += transmission.text.capacity() +
+              transmission.sender_callsign.capacity();
+  for (const auto& cadence : sender_cadences_)
+    result += cadence.callsign.capacity();
   for (const auto& hypothesis : hypotheses_) {
     result += hypothesis.decoder.stateBytes() - sizeof(CwTimingDecoder);
     result += updateDynamicBytes(hypothesis.update);
@@ -1029,6 +1095,28 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
       cadence_dot_ms_ > 0.0 && cadence_confidence_ >= kMinimumCadenceConfidence
           ? 1'200.0 / cadence_dot_ms_ : 0.0;
   result.acoustic_cadence_confidence = cadence_confidence_;
+  result.transmissions = transmissions_;
+  result.sender_cadences = sender_cadences_;
+  result.active_transmission_sequence = active_transmission_sequence_;
+  result.current_sender_callsign = current_sender_callsign_;
+  result.current_sender_wpm = current_sender_wpm_;
+  for (const auto& transmission : transmissions_) {
+    if (!result.contextual_text.empty()) result.contextual_text += "  |  ";
+    result.contextual_text += transmission.text;
+  }
+  if (!active_transmission_completed_ && !hypotheses_.empty()) {
+    const auto& primary = hypotheses_[leader_index_].update.text;
+    const std::size_t primary_start = std::min(
+        transmission_primary_starts_[leader_index_], primary.size());
+    std::string active = transmission_refined_start_ < refined_text_.size()
+        ? refined_text_.substr(transmission_refined_start_)
+        : primary.substr(primary_start);
+    active = reconstructCwWordGaps(active);
+    if (!active.empty()) {
+      if (!result.contextual_text.empty()) result.contextual_text += "  |  ";
+      result.contextual_text += active;
+    }
+  }
   result.refined_text = refined_text_;
   result.acoustic_alternatives = acoustic_alternatives_;
   if (!locked_) {
@@ -1038,6 +1126,189 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
     result.text = committed_prefix_ + result.text;
   }
   return result;
+}
+
+const CwSenderCadence* CwMultiSpeedDecoder::senderCadence(
+    const std::string_view sender) const noexcept {
+  const auto found = std::find_if(
+      sender_cadences_.begin(), sender_cadences_.end(),
+      [sender](const CwSenderCadence& cadence) {
+        return cadence.callsign == sender;
+      });
+  return found == sender_cadences_.end() ? nullptr : &*found;
+}
+
+void CwMultiSpeedDecoder::rememberSenderCadence(
+    const std::string_view sender, const double wpm, const float confidence) {
+  if (sender.empty() || !std::isfinite(wpm) || wpm < 5.0 || wpm > 80.0 ||
+      confidence < 0.35F) {
+    return;
+  }
+  auto found = std::find_if(
+      sender_cadences_.begin(), sender_cadences_.end(),
+      [sender](const CwSenderCadence& cadence) {
+        return cadence.callsign == sender;
+      });
+  if (found == sender_cadences_.end()) {
+    if (sender_cadences_.size() >= kMaximumSenderCadences)
+      sender_cadences_.erase(sender_cadences_.begin());
+    sender_cadences_.push_back({.callsign = std::string(sender),
+                                .wpm = wpm,
+                                .confidence = confidence,
+                                .observed_turns = 1});
+    return;
+  }
+  const double retained_weight = std::min(found->observed_turns, 4U) *
+                                 std::max(0.35F, found->confidence);
+  const double new_weight = std::max(0.35F, confidence);
+  found->wpm = (found->wpm * retained_weight + wpm * new_weight) /
+               (retained_weight + new_weight);
+  found->confidence = static_cast<float>(std::clamp(
+      (found->confidence * retained_weight + confidence * new_weight) /
+          (retained_weight + new_weight),
+      0.0, 1.0));
+  if (found->observed_turns < std::numeric_limits<std::uint32_t>::max())
+    ++found->observed_turns;
+}
+
+void CwMultiSpeedDecoder::updateCurrentSender() {
+  if (hypotheses_.empty()) return;
+  // Stable decoder text already carries a trailing delimiter when a word is
+  // complete. Never manufacture one here: doing so could promote a partial
+  // callsign and leave stale provisional attribution latched.
+  const auto& evidence = hypotheses_[leader_index_].update.text;
+  const std::size_t start = std::min(
+      transmission_primary_starts_[leader_index_], evidence.size());
+  const auto sender = CallsignPolicy::strong_sender_in_text(
+      std::string_view(evidence).substr(start));
+  current_sender_callsign_ = sender.value_or(std::string{});
+
+  current_sender_wpm_ = 0.0;
+  if (current_sender_callsign_.empty()) return;
+  if (cadence_dot_ms_ > 0.0 && cadence_confidence_ >= 0.45F) {
+    current_sender_wpm_ = 1'200.0 / cadence_dot_ms_;
+  } else if (const auto* remembered = senderCadence(
+                 current_sender_callsign_)) {
+    current_sender_wpm_ = remembered->wpm;
+  }
+}
+
+void CwMultiSpeedDecoder::commitCompletedTransmission(
+    const std::size_t final_leader) {
+  completeTransmission(final_leader);
+  committed_prefix_ += hypotheses_[final_leader].update.text;
+  if (!committed_prefix_.empty() && committed_prefix_.back() != ' ')
+    committed_prefix_.push_back(' ');
+  if (committed_prefix_.size() > 4'096)
+    committed_prefix_.erase(0, committed_prefix_.size() - 4'096);
+  if (!refined_text_.empty() && refined_text_.back() != ' ')
+    refined_text_.push_back(' ');
+  transmission_refined_start_ = refined_text_.size();
+  resetLatticeSegment();
+  resetHypotheses();
+}
+
+void CwMultiSpeedDecoder::beginNextTransmissionWithoutAcousticReset() {
+  for (std::size_t index = 0; index < hypotheses_.size() &&
+       index < transmission_primary_starts_.size(); ++index) {
+    transmission_primary_starts_[index] =
+        hypotheses_[index].update.text.size();
+  }
+  transmission_refined_start_ = refined_text_.size();
+  contextual_lattice_text_.clear();
+  current_sender_callsign_.clear();
+  current_sender_wpm_ = 0.0;
+  active_transmission_completed_ = false;
+
+  // A semantic sender turn gets a fresh cadence observation window without
+  // rewriting the continuously accumulated acoustic transcript or timing
+  // hypotheses. This preserves evidence while preventing one operator's
+  // manual weighting from becoming the next operator's measured cadence.
+  recent_mark_count_ = 0;
+  recent_gap_count_ = 0;
+  recent_mark_index_ = 0;
+  recent_gap_index_ = 0;
+  cadence_state_started_ns_ = 0;
+  cadence_dot_ms_ = 0.0;
+  cadence_confidence_ = 0.0F;
+  cadence_initialized_ = false;
+  last_observed_segment_ns_ = 0;
+  cadence_key_down_ = false;
+}
+
+void CwMultiSpeedDecoder::completeTransmission(
+    const std::size_t final_leader) {
+  if (active_transmission_completed_ || final_leader >= hypotheses_.size())
+    return;
+  const auto& complete_primary = hypotheses_[final_leader].update.text;
+  const std::size_t primary_start = std::min(
+      transmission_primary_starts_[final_leader], complete_primary.size());
+  std::string primary = complete_primary.substr(primary_start);
+  std::string refined = transmission_refined_start_ < refined_text_.size()
+      ? refined_text_.substr(transmission_refined_start_)
+      : std::string{};
+  const auto trim = [](std::string value) {
+    const auto first = value.find_first_not_of(" \t\r\n");
+    if (first == std::string::npos) return std::string{};
+    const auto last = value.find_last_not_of(" \t\r\n");
+    return value.substr(first, last - first + 1U);
+  };
+  primary = trim(std::move(primary));
+  refined = trim(std::move(refined));
+  const std::string acoustic_text = !refined.empty() ? refined : primary;
+  if (acoustic_text.empty()) return;
+  const auto same_decoded_characters = [](const std::string_view left,
+                                           const std::string_view right) {
+    const auto compact = [](const std::string_view value) {
+      std::string result;
+      result.reserve(value.size());
+      for (const unsigned char character : value) {
+        if (std::isspace(character) == 0)
+          result.push_back(static_cast<char>(character));
+      }
+      return result;
+    };
+    return compact(left) == compact(right);
+  };
+  std::string text = !contextual_lattice_text_.empty() &&
+          same_decoded_characters(contextual_lattice_text_, acoustic_text)
+      ? contextual_lattice_text_ : reconstructCwWordGaps(acoustic_text);
+
+  const auto completed_sender = [](std::string text) {
+    if (text.empty() || text.back() != ' ') text.push_back(' ');
+    return CallsignPolicy::strong_sender_in_text(text);
+  };
+  const auto primary_sender = completed_sender(primary);
+  const auto refined_sender = completed_sender(refined);
+  // Completion recomputes attribution from the final selected evidence.
+  // Conflicting final paths are uncertainty, never permission to retain a
+  // provisional sender seen earlier in the turn.
+  std::string sender;
+  if (primary_sender && refined_sender &&
+      *primary_sender != *refined_sender) {
+    sender.clear();
+  } else if (refined_sender) {
+    sender = *refined_sender;
+  } else if (primary_sender) {
+    sender = *primary_sender;
+  }
+  const auto& update = hypotheses_[final_leader].update;
+  const bool cadence_supported = cadence_dot_ms_ > 0.0 &&
+                                 cadence_confidence_ >= 0.45F;
+  const double turn_wpm = cadence_supported
+      ? 1'200.0 / cadence_dot_ms_ : update.wpm;
+  const float turn_confidence = cadence_supported ? cadence_confidence_ : 0.0F;
+  if (!sender.empty() && cadence_supported)
+    rememberSenderCadence(sender, turn_wpm, turn_confidence);
+  if (transmissions_.size() >= kMaximumTransmissionTurns)
+    transmissions_.erase(transmissions_.begin());
+  transmissions_.push_back({.sequence = active_transmission_sequence_,
+                            .text = std::move(text),
+                            .sender_callsign = sender,
+                            .wpm = turn_wpm,
+                            .cadence_confidence = turn_confidence});
+  active_transmission_completed_ = true;
+  active_transmission_sequence_ = ++next_transmission_sequence_;
 }
 
 void CwMultiSpeedDecoder::observeLattice(
@@ -1127,9 +1398,36 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
       cadence_ratio >= 0.75 && cadence_ratio <= 1.35) {
     candidate_wpm = cadence_wpm;
   }
+  // Once explicit handover text identifies this operator, a cadence learned
+  // from that same operator's earlier completed turn is a bounded prior. It
+  // may refine only a timing-bank neighborhood that already agrees; it cannot
+  // pull an unrelated or ambiguous turn to a memorized speed.
+  if (!current_sender_callsign_.empty()) {
+    if (const auto* remembered = senderCadence(current_sender_callsign_);
+        remembered != nullptr && remembered->confidence >= 0.55F &&
+        candidate_wpm > 0.0) {
+      const double ratio = remembered->wpm / candidate_wpm;
+      if (ratio >= 0.75 && ratio <= 1.35)
+        candidate_wpm = 0.70 * candidate_wpm + 0.30 * remembered->wpm;
+    }
+  }
   if (!std::isfinite(candidate_wpm) || candidate_wpm <= 0.0) return;
 
-  const auto decoded = event_lattice_.decode(1'200.0 / candidate_wpm, mode);
+  auto decoded = event_lattice_.decode(1'200.0 / candidate_wpm, mode);
+  if (mode == CwLatticeDecodeMode::Flush &&
+      decoded.alternatives.size() > 1U) {
+    std::vector<CwContextAlternative> contextual;
+    contextual.reserve(decoded.alternatives.size());
+    for (const auto& alternative : decoded.alternatives) {
+      contextual.push_back({.text = alternative.text(),
+                            .acoustic_cost = alternative.acoustic_cost});
+    }
+    const auto selected = selectCwContextAlternative(
+        contextual, config_.lattice_competitive_cost_margin);
+    if (selected.index < decoded.alternatives.size())
+      contextual_lattice_text_ = reconstructCwWordGaps(
+          decoded.alternatives[selected.index].text());
+  }
   acoustic_alternatives_.clear();
   if (decoded.alternatives.empty()) return;
   acoustic_alternatives_.reserve(decoded.alternatives.size());
@@ -1233,6 +1531,7 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
 void CwMultiSpeedDecoder::resetLatticeSegment() noexcept {
   event_lattice_.reset();
   acoustic_alternatives_.clear();
+  contextual_lattice_text_.clear();
   lattice_state_started_ns_ = 0;
   lattice_last_timestamp_ns_ = 0;
   lattice_last_decode_ns_ = 0;

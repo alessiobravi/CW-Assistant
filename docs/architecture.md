@@ -193,9 +193,11 @@ spectrum gap extrapolates at most 250 ms of drift and then damps the stale
 estimate, preventing ordinary key-up from walking a tracker away from its
 identity anchor. A 750 ms association hold bridges word gaps for both
 presentation and decoder input. When it expires, an unmatched track receives
-one forced key-up/flush and its timing state is frozen until a real candidate
-match resumes; filter-skirt energy from an independently tracked neighbor
-therefore cannot keep extending an absent track's text. The separate six-second
+one acoustic drain and its timing state is frozen until a real candidate match
+resumes; filter-skirt energy from an independently tracked neighbor therefore
+cannot keep extending an absent track's text. Association loss is not itself a
+semantic boundary: reacquisition must also prove the decoder's longer
+sustained-silence interval, preserving slow-CW word gaps. The separate six-second
 verification-exit hysteresis absorbs transient contest fades and timing errors. A
 saturated bank admits a stronger new carrier by evicting only the weakest
 unmatched unverified track; verified tracks are protected. Established tracks
@@ -229,8 +231,23 @@ invents characters.
 An ordinary simplex conversation remains one carrier observation even though
 two operators alternate. A completed `CALL1 DE CALL2` token sequence can add
 both distinct, structurally valid participants to the retained presentation;
-it does not duplicate the channel or infer the active sender. Sender turns and
-per-turn timing adaptation require explicit transmission-boundary evidence.
+it does not duplicate the channel. Sustained silence or explicit end-of-input
+creates a bounded `CwTransmissionTurn`. Sender attribution requires an explicit
+two-call handover or calling-station self-identification and abstains when final
+paths conflict. Up to eight `CwSenderCadence` summaries retain independent WPM
+evidence. A supported prior may nudge only an already compatible live timing
+candidate by 30 percent; it cannot pull an unrelated or ambiguous turn to a
+memorized speed. Operator confirmation, richer provenance, and independent
+per-turn decoder state remain future work.
+
+`CwContextRescorer` is a post-acoustic presentation boundary applied only when
+a turn completes. It may select an alternative inside the lattice's competitive
+cost margin only when its non-whitespace character sequence exactly matches the
+acoustic best path, then reconstructs a small set of missing exchange-word
+gaps. Its bonus is bounded and cannot rescue a rejected path. Raw `text`,
+append-only `refined_text`, per-character evidence, callsign confirmation, and
+verification remain immutable and receive no language, provider, QSO, or TX
+input.
 
 The presentation model is separate from the decoder bank. All tracks continue
 processing, while an ordered list of operator-opened IDs controls the session
@@ -247,7 +264,10 @@ source text is evaluated for new callsign evidence, never the composed
 presentation text. Concurrent identities own distinct colors, while a later
 reacquisition may reuse an unoccupied retained color lease. This does not
 rewrite decoder state. Closing or reordering a card cannot mutate DSP state.
-Callsign tokens and frequency labels are derived views of each stable track ID.
+The presentation snapshot additionally carries contextual turn text,
+strong-evidence current-sender fields, and bounded turn/cadence diagnostics;
+those same fields can flow to an operator-started debug capture. Callsign tokens
+and frequency labels are derived views of each stable track ID.
 
 Actual-RF presentation is evidence-gated. A profile must explicitly associate
 its selected live input with the configured radio, and a supported provider

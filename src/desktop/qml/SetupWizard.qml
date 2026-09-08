@@ -39,12 +39,25 @@ Dialog {
             anchors.fill: parent
             anchors.margins: 12
             Label { text: appSettings.statusMessage; color: "#91a0b1"; Layout.fillWidth: true; elide: Text.ElideRight }
-            Button { text: "Cancel"; visible: appSettings.setupComplete; onClicked: { root.step = 0; root.close() } }
-            Button { text: "Back"; enabled: root.step > 0; onClicked: root.goBack() }
+            Button {
+                text: "Cancel"; visible: appSettings.setupComplete
+                onClicked: { root.step = 0; root.close() }
+                ToolTip.visible: hovered
+                ToolTip.text: "Close setup without applying these edits"
+            }
+            Button {
+                text: "Back"; enabled: root.step > 0; onClicked: root.goBack()
+                ToolTip.visible: hovered
+                ToolTip.text: "Return to the previous setup page"
+            }
             Button {
                 objectName: "setupNextButton"
                 text: root.step < 5 ? "Next" : "Finish"
                 highlighted: true
+                ToolTip.visible: hovered
+                ToolTip.text: root.step < 5
+                    ? "Continue to the next setup page"
+                    : "Validate and save this station profile"
                 onClicked: {
                     if (root.step < 5)
                         root.goForward()
@@ -122,11 +135,19 @@ Dialog {
                     }
                 }
                 RowLayout {
-                    Button { text: "Refresh detection"; onClicked: appSettings.refreshDetectedRadios() }
+                    Button {
+                        text: "Refresh detection"; onClicked: appSettings.refreshDetectedRadios()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Ask configured integrations for positively identified online radios"
+                    }
                     Button {
                         text: root.manualRadioSetup ? "Hide manual setup" : "Set up a radio manually"
                         checkable: true
                         checked: root.manualRadioSetup
+                        ToolTip.visible: hovered
+                        ToolTip.text: checked
+                            ? "Hide the manual radio template"
+                            : "Configure a radio without automatic identification"
                         onClicked: {
                             root.manualRadioSetup = checked
                             if (checked)
@@ -191,7 +212,11 @@ Dialog {
                     onToggled: appSettings.audioInputRadioLinked = checked
                 }
                 Label { text: "" }
-                Button { text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs() }
+                Button {
+                    text: "Refresh audio inputs"; onClicked: appSettings.refreshAudioInputs()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Rescan operating-system audio capture devices"
+                }
                 Label {
                     Layout.columnSpan: 2
                     Layout.fillWidth: true
@@ -240,8 +265,19 @@ Dialog {
                 }
                 Label { text: "" }
                 RowLayout {
-                    Button { text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts() }
-                    Button { text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable; onClicked: appSettings.showOmniRigConfiguration() }
+                    Button {
+                        text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Rescan serial-port names without opening or probing them"
+                    }
+                    Button {
+                        text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable
+                        onClicked: appSettings.showOmniRigConfiguration()
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Open the native OmniRig configuration dialog"
+                            : "OmniRig is not available on this system"
+                    }
                 }
             }
 

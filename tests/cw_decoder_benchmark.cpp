@@ -75,6 +75,8 @@ struct ReplayResult {
   float alternative_confidence{0.0F};
   std::size_t maximum_alternatives{0};
   bool refined_segment_terminated{false};
+  std::vector<cwassistant::core::CwTransmissionTurn> transmissions;
+  std::vector<cwassistant::core::CwSenderCadence> sender_cadences;
 };
 
 ReplayResult replayMessage(const std::string_view message, const double wpm,
@@ -193,6 +195,96 @@ ReplayResult replaySpeedChange() {
           .maximum_alternatives = latest.acoustic_alternatives.size(),
           .refined_segment_terminated = !latest.refined_text.empty() &&
                                         latest.refined_text.back() == ' '};
+}
+
+ReplayResult replayAlternatingQso() {
+  cwassistant::core::CwMultiSpeedDecoder decoder;
+  std::uint64_t now_ns = 0;
+  cwassistant::core::CwDecoderUpdate latest;
+  const auto advance = [&](const double requested_ms, const float snr_db) {
+    double remaining_ms = requested_ms;
+    while (remaining_ms > 0.0) {
+      const double step_ms = std::min(5.0, remaining_ms);
+      now_ns += static_cast<std::uint64_t>(std::llround(
+          step_ms * 1'000'000.0));
+      latest = decoder.process(now_ns, snr_db);
+      remaining_ms -= step_ms;
+    }
+  };
+  const auto send = [&](const std::string_view message, const double wpm) {
+    const double dot_ms = 1'200.0 / wpm;
+    for (std::size_t index = 0; index < message.size(); ++index) {
+      if (message[index] == ' ') continue;
+      const auto elements = elementsFor(message[index]);
+      for (std::size_t element = 0; element < elements.size(); ++element) {
+        advance((elements[element] == '-' ? 3.0 : 1.0) * dot_ms, 14.0F);
+        if (element + 1U < elements.size()) advance(dot_ms, 0.0F);
+      }
+      const bool word_ends = index + 1U < message.size() &&
+                             message[index + 1U] == ' ';
+      advance((word_ends ? 7.0 : 3.0) * dot_ms, 0.0F);
+    }
+  };
+
+  advance(300.0, 0.0F);
+  send("IK1WJQ DE IU8NMZ", 18.0);
+  advance(3'000.0, 0.0F);
+  send("IU8NMZ DE IK1WJQ", 30.0);
+  latest = decoder.flush(now_ns + 1'000'000'000);
+  return {.text = trimSpaces(latest.text),
+          .refined_text = trimSpaces(latest.refined_text),
+          .wpm = latest.wpm,
+          .state_bytes = decoder.stateBytes(),
+          .transmissions = latest.transmissions,
+          .sender_cadences = latest.sender_cadences};
+}
+
+bool replayAssociationSuspensionBoundaries() {
+  cwassistant::core::CwMultiSpeedDecoder decoder;
+  std::uint64_t now_ns = 0;
+  cwassistant::core::CwDecoderUpdate latest;
+  const auto advance = [&](const double requested_ms, const float snr_db) {
+    double remaining_ms = requested_ms;
+    while (remaining_ms > 0.0) {
+      const double step_ms = std::min(5.0, remaining_ms);
+      now_ns += static_cast<std::uint64_t>(std::llround(
+          step_ms * 1'000'000.0));
+      latest = decoder.process(now_ns, snr_db);
+      remaining_ms -= step_ms;
+    }
+  };
+  const auto send = [&](const std::string_view message, const double wpm) {
+    const double dot_ms = 1'200.0 / wpm;
+    for (std::size_t index = 0; index < message.size(); ++index) {
+      const auto elements = elementsFor(message[index]);
+      for (std::size_t element = 0; element < elements.size(); ++element) {
+        advance((elements[element] == '-' ? 3.0 : 1.0) * dot_ms, 14.0F);
+        if (element + 1U < elements.size()) advance(dot_ms, 0.0F);
+      }
+      advance(3.0 * dot_ms, 0.0F);
+    }
+    advance(4.0 * dot_ms, 0.0F);
+  };
+
+  advance(300.0, 0.0F);
+  send("CQ", 8.0);
+  latest = decoder.suspendInput(now_ns);
+  now_ns += 300'000'000ULL;
+  latest = decoder.resumeInput(now_ns);
+  const bool slow_word_gap_preserved = latest.transmissions.empty();
+
+  send("TEST", 8.0);
+  latest = decoder.suspendInput(now_ns);
+  now_ns += 3'000'000'000ULL;
+  latest = decoder.resumeInput(now_ns);
+  const bool sustained_absence_completed = latest.transmissions.size() == 1U;
+  const bool resumed_text_retained = sustained_absence_completed &&
+      latest.transmissions.front().text.find("CQ") != std::string::npos &&
+      latest.transmissions.front().text.find("TEST") != std::string::npos;
+  const bool completed_text_not_duplicated =
+      latest.contextual_text.find('|') == std::string::npos;
+  return slow_word_gap_preserved && sustained_absence_completed &&
+         resumed_text_retained && completed_text_not_duplicated;
 }
 
 }  // namespace
@@ -336,6 +428,36 @@ int main() {
             << speed_change.text << "\" refined=\""
             << speed_change.refined_text << "\"\n";
 
+  const ReplayResult alternating_qso = replayAlternatingQso();
+  const bool turns_segmented = alternating_qso.transmissions.size() == 2U;
+  const auto cadence_for = [&](const std::string_view callsign) {
+    return std::find_if(
+        alternating_qso.sender_cadences.begin(),
+        alternating_qso.sender_cadences.end(),
+        [callsign](const cwassistant::core::CwSenderCadence& cadence) {
+          return cadence.callsign == callsign;
+        });
+  };
+  const auto iu8nmz = cadence_for("IU8NMZ");
+  const auto ik1wjq = cadence_for("IK1WJQ");
+  const bool senders_attributed = turns_segmented &&
+      alternating_qso.transmissions[0].sender_callsign == "IU8NMZ" &&
+      alternating_qso.transmissions[1].sender_callsign == "IK1WJQ";
+  const bool sender_cadence_separated =
+      iu8nmz != alternating_qso.sender_cadences.end() &&
+      ik1wjq != alternating_qso.sender_cadences.end() &&
+      iu8nmz->wpm >= 15.0 && iu8nmz->wpm <= 22.0 &&
+      ik1wjq->wpm >= 25.0 && ik1wjq->wpm <= 35.0;
+  std::cout << "case=alternating-simplex-qso turns="
+            << alternating_qso.transmissions.size()
+            << " senders_attributed=" << senders_attributed
+            << " sender_cadence_separated=" << sender_cadence_separated
+            << '\n';
+
+  const bool suspension_boundaries = replayAssociationSuspensionBoundaries();
+  std::cout << "case=association-suspension semantic_boundaries="
+            << suspension_boundaries << '\n';
+
   cwassistant::core::CwMultiSpeedDecoder silence_decoder;
   std::uint64_t silence_time_ns = 0;
   cwassistant::core::CwDecoderUpdate silence;
@@ -394,6 +516,8 @@ int main() {
       speed_failures == 0 && false_characters == 0 &&
       false_refined_characters == 0 &&
       boundary_flush_committed &&
+      turns_segmented && senders_attributed && sender_cadence_separated &&
+      suspension_boundaries &&
       maximum_state_bytes <= maximum_decoder_state_bytes
       ? EXIT_SUCCESS : EXIT_FAILURE;
 }

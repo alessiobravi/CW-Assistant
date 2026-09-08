@@ -154,6 +154,52 @@ QVariantList decoderChannelModel(
                 expose_verified_content
                     ? QString::fromStdString(channel.pending_elements)
                     : QString{});
+    QVariantList transmissions;
+    QVariantList sender_cadences;
+    if (expose_verified_content) {
+      transmissions.reserve(static_cast<qsizetype>(
+          channel.transmissions.size()));
+      for (const auto& transmission : channel.transmissions) {
+        QVariantMap turn;
+        turn.insert(QStringLiteral("sequence"),
+                    QVariant::fromValue<qulonglong>(transmission.sequence));
+        turn.insert(QStringLiteral("text"),
+                    QString::fromStdString(transmission.text));
+        turn.insert(QStringLiteral("sender"),
+                    QString::fromStdString(transmission.sender_callsign));
+        turn.insert(QStringLiteral("wpm"), transmission.wpm);
+        turn.insert(QStringLiteral("cadenceConfidence"),
+                    transmission.cadence_confidence);
+        transmissions.push_back(turn);
+      }
+      sender_cadences.reserve(static_cast<qsizetype>(
+          channel.sender_cadences.size()));
+      for (const auto& cadence : channel.sender_cadences) {
+        QVariantMap item_cadence;
+        item_cadence.insert(QStringLiteral("callsign"),
+                            QString::fromStdString(cadence.callsign));
+        item_cadence.insert(QStringLiteral("wpm"), cadence.wpm);
+        item_cadence.insert(QStringLiteral("confidence"),
+                            cadence.confidence);
+        item_cadence.insert(QStringLiteral("turns"), cadence.observed_turns);
+        sender_cadences.push_back(item_cadence);
+      }
+    }
+    item.insert(QStringLiteral("transmissions"), transmissions);
+    item.insert(QStringLiteral("senderCadences"), sender_cadences);
+    item.insert(QStringLiteral("activeTransmissionSequence"),
+                QVariant::fromValue<qulonglong>(
+                    channel.active_transmission_sequence));
+    item.insert(QStringLiteral("currentSenderCallsign"),
+                expose_verified_content
+                    ? QString::fromStdString(channel.current_sender_callsign)
+                    : QString{});
+    item.insert(QStringLiteral("currentSenderWpm"),
+                expose_verified_content ? channel.current_sender_wpm : 0.0);
+    item.insert(QStringLiteral("contextualText"),
+                expose_verified_content
+                    ? QString::fromStdString(channel.contextual_text)
+                    : QString{});
     item.insert(QStringLiteral("callsign"),
                 expose_verified_content
                     ? QString::fromStdString(channel.callsign) : QString{});

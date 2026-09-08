@@ -20,6 +20,7 @@ ColumnLayout {
         font.pixelSize: 11
     }
     Slider {
+        id: slider
         Layout.fillWidth: true
         from: root.from
         to: root.to
@@ -27,5 +28,8 @@ ColumnLayout {
         stepSize: root.stepSize
         snapMode: Slider.SnapAlways
         onMoved: root.moved(value)
+        ToolTip.visible: hovered
+        ToolTip.text: root.caption + ": "
+                      + Number(value).toFixed(root.decimals)
     }
 }

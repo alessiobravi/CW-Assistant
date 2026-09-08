@@ -40,6 +40,8 @@ Dialog {
             Button {
                 text: "Create"
                 enabled: newProfileName.text.trim().length > 0
+                ToolTip.visible: hovered
+                ToolTip.text: "Create and switch to a new station profile"
                 onClicked: {
                     if (appSettings.createProfile(newProfileName.text)) {
                         newProfileName.clear()
@@ -55,6 +57,8 @@ Dialog {
                 text: "Use selected"
                 highlighted: true
                 enabled: profileList.currentIndex >= 0
+                ToolTip.visible: hovered
+                ToolTip.text: "Switch to the highlighted station profile"
                 onClicked: {
                     if (appSettings.selectProfile(appSettings.availableProfiles[profileList.currentIndex]))
                         root.close()

@@ -723,6 +723,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       nearest->decoder.setKeyingModel(keying_model_);
     }
     nearest->matched = true;
+    if (nearest->decoder_input_suspended)
+      nearest->update = nearest->decoder.resumeInput(timestamp_ns);
     nearest->decoder_input_suspended = false;
     creditMatchedEvidence(*nearest);
     const double elapsed_seconds = timestamp_ns > nearest->last_frequency_update_ns
@@ -775,6 +777,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         track, lower_frequency_hz, bin_width_hz, bins_dbfs, noise_dbfs);
     if (selected_snr < config_.retention_snr_db) continue;
     track.matched = true;
+    if (track.decoder_input_suspended)
+      track.update = track.decoder.resumeInput(timestamp_ns);
     track.decoder_input_suspended = false;
     creditMatchedEvidence(track);
     track.last_detected_ns = timestamp_ns;
@@ -1401,11 +1405,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                   1'000'000'000.0L <= kCandidateMatchHoldSeconds;
       if (!candidate_match_held) {
         if (!track.decoder_input_suspended) {
-          // End a possibly keyed segment once, then leave every decoder field
-          // untouched. In particular, energy from a distinct nearby carrier
-          // inside this track's filter cannot extend or invent transcript text
-          // while spectrum association says this identity is absent.
-          track.update = track.decoder.flush(timestamp_ns);
+          // Drain a possibly keyed acoustic segment once, but do not claim an
+          // operator turn ended: an ordinary slow-CW word gap can exceed this
+          // association hold. Reacquisition applies the decoder's longer
+          // sustained-silence rule before creating a semantic turn.
+          track.update = track.decoder.suspendInput(timestamp_ns);
           track.decoder_input_suspended = true;
         }
       } else if (!track.decoder_input_suspended) {
@@ -2234,6 +2238,12 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           .acoustic_alternatives = {},
           .provisional_text = {},
           .pending_elements = {},
+          .transmissions = {},
+          .sender_cadences = {},
+          .active_transmission_sequence = 0,
+          .current_sender_callsign = {},
+          .current_sender_wpm = 0.0,
+          .contextual_text = {},
           .callsign = {},
           .qso_participants = {},
       });
@@ -2312,6 +2322,13 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .acoustic_alternatives = track.update.acoustic_alternatives,
         .provisional_text = track.update.provisional_text,
         .pending_elements = track.update.pending_elements,
+        .transmissions = track.update.transmissions,
+        .sender_cadences = track.update.sender_cadences,
+        .active_transmission_sequence =
+            track.update.active_transmission_sequence,
+        .current_sender_callsign = track.update.current_sender_callsign,
+        .current_sender_wpm = track.update.current_sender_wpm,
+        .contextual_text = track.update.contextual_text,
         .callsign = callsign,
         .qso_participants = CallsignPolicy::qso_participants_in_text(
             track.update.text),

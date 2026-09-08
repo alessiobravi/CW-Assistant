@@ -92,6 +92,12 @@ Numeric visualization controls are labeled sliders with live value readouts.
 The receiver workspace arranges them over multiple responsive rows, and the
 Settings page uses the same controls for precise profile editing.
 
+Hovering the spectrum or waterfall displays the pointer contract: left-click
+opens a detected stream, right-click creates a neutral manual probe, and the
+Ctrl+click TX-VFO action is unavailable until a guarded provider route exists.
+Action buttons in the receiver, settings, setup, and profile views also expose
+contextual hover help, including why an action is disabled where applicable.
+
 **Waterfall history** selects a constant 5–30 second vertical time window. The
 default is 10 seconds. **Lines / second** changes temporal sampling density, not
 the displayed duration. Higher values request overlapping FFT hops, so the
@@ -195,8 +201,8 @@ to open only that decoded session in its larger scrollable/selectable wrapped te
 window. It follows appended text unless a selection is active, bolds the
 confirmed remote call, and highlights an exact own-callsign match while flashing
 the card five times. Close with **×** without stopping decode, reopen from the
-marker, and use the adjacent **↑**/**↓** controls to reorder open cards. Close
-and reorder act on press so decoder-model refresh cannot cancel the operation.
+marker, then drag a card's handle to reorder it. With the handle focused,
+Up/Down provides the keyboard equivalent.
 If the retained carrier is reacquired with
 a new internal ID, the open session follows the same frequency/color identity.
 The decoder pane preserves a bounded 2,048-character presentation transcript
@@ -206,6 +212,15 @@ requires a complete stable word, rejects noise-like separated digit runs while
 retaining contiguous multi-digit special-event calls, and
 requires decoded `DE`/`CQ`/`TU`/`UP` context or exact repetition before
 automatically naming a stream.
+At a sustained-silence or explicit end-of-input boundary, the decoder retains
+up to sixteen completed transmission turns and separates them with `|` in the
+presentation transcript. Context may select only an acoustically competitive
+path with the same non-whitespace characters and may repair only a bounded set
+of word gaps. Raw and phase-consensus text are unchanged. **CURRENT SENDER**
+and its cadence appear only after explicit two-call or calling-station handover
+evidence; ambiguous and conflicting evidence leave them blank. Up to eight
+identified senders retain independent cadence summaries, used only as a
+bounded prior when a later live timing estimate already agrees.
 Right-clicking an unmarked spectrum/waterfall position creates a neutral
 manual probe at that exact center and opens its card. It is not included in the
 detected count, exposes no decoded content before ordinary verification, reuses
@@ -269,7 +284,9 @@ header, together with a button that opens the capture folder in the file
 manager and a **Stop automatically after** value between 30 and 1800 seconds
 (default 300). Increase it for a signal that only misbehaves occasionally;
 reduce it for a quick reproduction, so there is less to review before sharing.
-See the operator guide's Debug capture section for what is recorded.
+The JSON lines include bounded completed turns plus explicit current-sender and
+supported sender-cadence fields. See the operator guide's Debug capture section
+for the complete recorded-field description.
 
 ### Local character model
 
@@ -428,6 +445,12 @@ reference profile does not guess a physical port.
 100 kHz (default 1 kHz). It controls the waterfall-edge `<` / `>` RX buttons;
 changing it does not tune the radio until one of those buttons is activated.
 Exact readout entry is not rounded to this step.
+
+When authoritative radio state is available, the decoder pane shows a compact
+faceplate with grouped whole-hertz RX/TX digits, ON AIR, SIMPLEX/SPLIT, and
+CW/CW-R status. RX remains the only editable route in this release. TX
+frequency, split, and mode are display-only until their provider-neutral,
+capability-gated write paths are implemented.
 
 ### Serial CAT values
 

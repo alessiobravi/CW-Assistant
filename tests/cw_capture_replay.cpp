@@ -67,6 +67,9 @@ int replay(const std::string& path) {
               << " frequency_hz=" << channel.frequency_hz
               << " timing_quality=" << channel.verification_timing_quality
               << " callsign=\"" << channel.callsign << "\""
+              << " turns=" << channel.transmissions.size()
+              << " sender=\"" << channel.current_sender_callsign << "\""
+              << " sender_wpm=" << channel.current_sender_wpm
               << " text=\"" << channel.text << "\""
               << " refined_text=\"" << channel.refined_text << "\""
               << " alternatives=" << channel.acoustic_alternatives.size();

@@ -16,6 +16,7 @@
 #include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include "cwassistant/core/cw_context_rescorer.hpp"
 #include "cwassistant/core/cw_transmit_encoder.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
@@ -2017,6 +2018,61 @@ void test_callsign_policy() {
              "REPORT DE 599 K ")
              .empty(),
          "ordinary DE text without two callsigns does not invent participants");
+  expect(CallsignPolicy::strong_sender_in_text(
+             "IK1WJQ DE IU8NMZ K ") ==
+             std::optional<std::string>("IU8NMZ"),
+         "an explicit CALL1 DE CALL2 handover attributes the sender");
+  expect(CallsignPolicy::strong_sender_in_text(
+             "CQ CQ DE SV7BIO K ") ==
+             std::optional<std::string>("SV7BIO"),
+         "CQ DE CALL explicitly attributes a calling station");
+  expect(!CallsignPolicy::strong_sender_in_text("SV7BIO SV7BIO K "),
+         "a repeated bare callsign does not guess the current sender");
+  expect(!CallsignPolicy::strong_sender_in_text("DE SV7BIO K "),
+         "an isolated DE fragment is insufficient sender evidence");
+}
+
+void test_cw_context_rescorer() {
+  using cwassistant::core::CwContextAlternative;
+  using cwassistant::core::selectCwContextAlternative;
+  const std::array alternatives{
+      CwContextAlternative{"CQDESV7BIO", 10.0},
+      CwContextAlternative{"CQ DE SV7BIO", 10.18},
+      CwContextAlternative{"CQ DE S?7BIO", 10.10},
+  };
+  const auto selected = selectCwContextAlternative(alternatives, 1.0);
+  expect(selected.index == 1,
+         "context resolves an acoustically competitive missing word gap");
+
+  const std::array rejected{
+      CwContextAlternative{"RAW", 2.0},
+      CwContextAlternative{"CQ DE SV7BIO", 3.1},
+  };
+  expect(selectCwContextAlternative(rejected, 1.0).index == 0,
+         "context cannot rescue a path outside the acoustic margin");
+  const std::array character_change{
+      CwContextAlternative{"CQ DE S?7BIO", 4.0},
+      CwContextAlternative{"CQ DE SV7BIO", 4.05},
+  };
+  expect(selectCwContextAlternative(character_change, 1.0).index == 0,
+         "context cannot change decoded characters inside the acoustic margin");
+  const std::array unsorted{
+      CwContextAlternative{"CQ DE SV7BIO", 5.15},
+      CwContextAlternative{"CQDESV7BIO", 5.0},
+      CwContextAlternative{"CQ DE SV7BIO",
+                           std::numeric_limits<double>::quiet_NaN()},
+  };
+  expect(selectCwContextAlternative(unsorted, 1.0).index == 0,
+         "context handles unsorted input and ignores a non-finite path");
+  expect(cwassistant::core::reconstructCwWordGaps(
+             "CQDESV7BIO PSEK") == "CQ DE SV7BIO PSE K",
+         "known exchange words are separated around a plausible callsign");
+  expect(cwassistant::core::reconstructCwWordGaps(
+             "CQ DE1ABC K") == "CQ DE1ABC K",
+         "word-gap repair does not split a genuine DE-prefixed call");
+  expect(cwassistant::core::reconstructCwWordGaps(
+             "RANDOMTEXT") == "RANDOMTEXT",
+         "word-gap repair leaves unconstrained text unchanged");
 }
 
 void test_spectrum_settings() {
@@ -2765,6 +2821,7 @@ int main() {
   test_soft_decision_keying_evidence();
   test_callsign_policy();
   test_callsign_policy_prosign_glue();
+  test_cw_context_rescorer();
   test_presented_speed_requires_evidence();
   test_spectrum_settings();
   test_wav_replay_source();

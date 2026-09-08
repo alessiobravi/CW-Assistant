@@ -48,7 +48,8 @@ flowchart TB
 
 The window is a toolbar above a workspace above a status line. The workspace
 holds the spectrum and waterfall on one side and the open decoder cards on the
-other. Every tracked signal appears as a marker on the spectrum carrying its
+other; the application opens maximized so both remain usable. Every tracked
+signal appears as a marker on the spectrum carrying its
 callsign once one is decoded; clicking a marker opens that stream as a decoder
 card, which is where the transcript, the callsign and its corroboration badge,
 the speed, the signal-to-noise ratio and the confidence are shown. The status
@@ -58,8 +59,10 @@ where one is connected, and whether a debug capture is running.
 Two operators in an ordinary simplex QSO normally alternate on the same
 carrier. When the stable text contains a complete `CALL1 DE CALL2` handover,
 the one decoder card is labelled **QSO CALL1 ↔ CALL2** and retains both
-participants. CW Buddy does not create a second frequency marker or claim
-which person is currently sending from frequency alone.
+participants. Sustained silence separates completed transmissions in the card
+with `|`. **CURRENT SENDER** appears only when an explicit two-call handover or
+`CQ ... DE CALL` identifies the sender; otherwise CW Buddy abstains. It does
+not create a second frequency marker or infer a sender from frequency alone.
 
 ## Receive live radio audio
 
@@ -73,6 +76,13 @@ which person is currently sending from frequency alone.
 4. Confirm the status line names the device and sample rate. Spectrum and
    waterfall frames now come from that device.
 5. Select **Stop live RX** before changing cables or audio routing.
+
+Hover over the spectrum or waterfall to see its pointer legend: left-click
+opens an already detected stream, right-click starts a neutral manual probe at
+that audio frequency, and the Ctrl+click TX-VFO action is marked unavailable
+until the linked provider supports guarded TX-frequency writes. Action buttons
+throughout the receiver, settings, setup, and profile views explain their
+effect and any disabled state when hovered.
 
 To listen through CW Buddy, choose a **Monitor output** under **Settings →
 Audio**, then use the receiver toolbar's **OFF / RX / SIGNAL** controls. **RX**
@@ -276,9 +286,9 @@ transcript is carried forward once rather than
 being appended repeatedly during live refreshes. Simultaneous nearby decoded
 signals keep separate cards and colors; only a later return after the previous
 track has ended inherits that track's retained identity. Closing a card with **×** does not
-stop its DSP; click the marker to reopen it. Use the **↑** and **↓** buttons
-beside the close button to set the operator's preferred order. These controls
-act on press so a live decoder refresh cannot cancel them. The card prefers
+stop its DSP; click the marker to reopen it. Drag the card's handle to set the
+preferred order, or focus the handle and press Up/Down for keyboard reordering.
+The card prefers
 the append-only phase/timing consensus once it has stable content and uses the
 literal greedy decoder only while that consensus is unavailable. This makes
 compressed manual character and word gaps easier to read. Stable text, amber
@@ -286,6 +296,13 @@ provisional text/elements, adaptive WPM, SNR, confidence, drift, and selected
 filter width update in place. Competitive acoustic timing paths remain
 available for callsign selection and debug capture; they are not appended as a
 second competing transcript.
+A completed turn may display conservatively reconstructed word boundaries, but
+only when an acoustically competitive path contains exactly the same decoded
+non-whitespace characters. Context never changes a letter, digit, punctuation
+mark, raw transcript, phase-consensus transcript, callsign confirmation, or CW
+verification decision. The current-sender label and its WPM appear only after
+strong handover evidence; bare or repeated calls and an isolated `DE CALL`
+fragment are intentionally insufficient.
 A keyed gap does not immediately discard a track; decoded tracks are retained
 for a configurable timeout (Settings → Display → **Decoded signal timeout**,
 default 30 seconds, configurable up to 300 seconds) so normal word and message
@@ -297,9 +314,11 @@ is hovered.
 Retention preserves identity and text only: without a current matched peak it
 cannot keep the area active or generate CW-symbol rows from residual noise.
 Spectrum association and decoder input bridge ordinary word gaps for 750 ms.
-After that unmatched interval, the decoder forces key-up, finishes its pending
+After that unmatched interval, the decoder forces key-up, drains its pending
 acoustic segment once, and stops accepting narrowband audio until a candidate
-at that carrier is matched again. This prevents residual energy or a nearby
+at that carrier is matched again. This alone is not a transmission boundary:
+on reacquisition, only the longer sustained-silence rule completes a turn, so
+a slow operator's ordinary word gap is preserved. This prevents residual energy or a nearby
 station inside the analysis-filter skirt from extending the retained
 transcript. The filled area clears at the same boundary. This hold is
 independent of the longer six-second verification-exit and configured
@@ -535,7 +554,9 @@ starts a bounded recording:
   phase-consensus/literal/retained provenance. Capture context states whether
   decoder tracks existed before recording began. Presentation diagnostics show
   local-model/offline-database state and each callsign suggestion or its
-  rejection reason. Each line also records the linked radio's RX/TX frequency
+  rejection reason. Completed transmission turns, explicit current-sender
+  evidence, and its supported cadence estimate are included as separate fields.
+  Each line also records the linked radio's RX/TX frequency
   and split state at that instant, so reviewing the
   file shows whether (and exactly when) the VFO moved during the capture —
   a common explanation for a signal that stops decoding partway through.
@@ -697,11 +718,11 @@ RX frequency; CAT4OM uses its pushed radio state. The RX transverter offset is
 applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
 unavailable frequency providers deliberately show **AF** rather than guessing.
 
-The **CW Decoder** panel shows the same resolved frequency as a large
-VFO-style readout above the signal list, sized to match the panel around
-it: RX in green, and — once split is active — TX in yellow alongside a
-SPLIT badge, both shown with the same decimal/centesimal precision a real
-rig's display has (for example `7016.45 kHz` on 40 m). It disappears
+The **CW Decoder** panel shows the resolved radio state as a compact faceplate
+above the signal list: grouped whole-hertz RX digits, a dim/red ON AIR area,
+explicit SIMPLEX/SPLIT and CW/CW-R status, and an orange TX frequency. TX falls
+back to the RX value when no independent authoritative TX value is available.
+It disappears
 entirely for receive-only SWL setups, WAV replay, and whenever no radio is
 currently linked, rather than showing a stale or meaningless value. Note
 that showing this readout at all requires **both** Settings → Radio
@@ -716,6 +737,10 @@ tune RX down or up by the profile's **RX tuning step**; the default is 1 kHz.
 Settings → Radio allows whole-kHz steps from 1 to 100 kHz. The controls are
 hidden for WAV/SWL operation and read-only, disconnected, non-master, or
 otherwise incapable providers.
+
+The TX frequency, split badge, and mode badge are status displays in this
+release. Clicking them does not write the radio; provider-neutral TX-frequency,
+split, and mode control remains a separate capability-gated implementation.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic

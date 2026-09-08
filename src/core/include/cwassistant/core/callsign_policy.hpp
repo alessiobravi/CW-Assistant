@@ -66,6 +66,12 @@ class CallsignPolicy {
   // this identifies participants but does not choose which one is transmitting.
   [[nodiscard]] static std::vector<std::string> qso_participants_in_text(
       std::string_view stable_text);
+  // Identifies who is sending only when the decoded words contain an
+  // explicit handover. In ordinary CW, "CALL1 DE CALL2" is transmitted by
+  // CALL2 to CALL1. A bare or repeated call is useful identification evidence
+  // but is not enough to attribute the current turn.
+  [[nodiscard]] static std::optional<std::string> strong_sender_in_text(
+      std::string_view stable_text);
   // Returns a completed, structurally plausible callsign only when decoded
   // word context or exact repetition makes a random call-shaped token
   // unlikely. Intended for automatic stream labels, not operator input.

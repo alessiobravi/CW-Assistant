@@ -224,6 +224,23 @@ length, mark/gap duration distributions, character and word spacing, and
 manual-keying variance. This gives a low-resource baseline that can explain why
 a character was selected and can abstain instead of inventing text.
 
+Sustained silence or an explicit end-of-input boundary now retains a bounded
+transmission-turn record. A shorter spectrum-association loss drains the
+acoustic state but does not complete a turn; reacquisition must still satisfy
+the decoder's longer silence rule, preserving slow-CW word gaps. An explicit
+`CALL1 DE CALL2` or calling-station self-identification may attribute the sender,
+while conflicting final paths abstain. Up to eight identified senders retain
+separate cadence summaries. A prior can nudge a later WPM candidate by 30
+percent only when independent cadence confidence is sufficient and the live
+acoustic estimate already lies within a 0.75–1.35 ratio.
+
+At turn completion, a separate context rescorer may choose only an alternative
+inside the acoustic competitive margin whose non-whitespace character sequence
+is identical to the acoustic best path. It can reconstruct a bounded set of
+missing exchange-word boundaries, never change a character or rescue a rejected
+path. This contextual text is presentation data; primary text, append-only
+consensus, callsign confirmation, and verification remain unchanged.
+
 The primary learned-likelihood path is deliberately limited to acoustic evidence: compare
 a causal depthwise temporal convolution network and compact causal recurrent
 models. Its inputs are physically scaled narrowband log energy,
@@ -373,9 +390,11 @@ creates, rewrites, or corrects decoded characters.
 
 ### Exchange-role inference
 
-Role inference operates on complete transmission segments and n-best decoded
-tokens; it must not concatenate every operator on a frequency into one asserted
-identity. It selects an explicit conversation profile rather than assuming all
+The first segmentation slice now retains completed transmission turns and can
+name a sender from explicit handover evidence. Broader role inference operates
+on those segments and n-best decoded tokens; it must not concatenate every
+operator on a frequency into one asserted identity. It selects an explicit
+conversation profile rather than assuming all
 traffic is a contest. Profiles cover ordinary directed QSOs, general CQ,
 DX/pileup, special-event operation, beacons, and contest-specific exchanges;
 an unknown/free-text profile supplies no language prior. The following is the
@@ -426,6 +445,11 @@ Decoder output has three distinct forms:
   uncertain in the UI;
 - **stable text:** is append-only once its confirmation delay and confidence
   criteria pass, except for an explicit operator correction.
+
+A fourth, derived **contextual presentation** separates completed turns and may
+repair only word boundaries while preserving the exact non-whitespace decoded
+character sequence. It is never fed back into raw/stable evidence, callsign
+confirmation, verification, or transmit control.
 
 Every character carries confidence, pass number, time interval, selected track,
 and acoustic-versus-context contribution. Low-confidence intervals produce a
