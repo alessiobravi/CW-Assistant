@@ -623,6 +623,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          upload_with_retry() {
+            local attempt=1
+            local maximum_attempts=5
+            local delay_seconds
+
+            while ! gh release upload continuous "$@" --clobber; do
+              if (( attempt >= maximum_attempts )); then
+                echo "Release asset upload failed after ${maximum_attempts} attempts." >&2
+                return 1
+              fi
+              delay_seconds=$((attempt * 5))
+              echo "Release asset replacement has not settled; retrying in ${delay_seconds}s." >&2
+              sleep "${delay_seconds}"
+              attempt=$((attempt + 1))
+            done
+          }
+
           if gh release view continuous >/dev/null 2>&1; then
             payloads=()
             for asset in release-assets/*; do
@@ -630,11 +647,11 @@ jobs:
                 payloads+=("${asset}")
               fi
             done
-            gh release upload continuous "${payloads[@]}" --clobber
+            upload_with_retry "${payloads[@]}"
             # Keep the previous manifest reachable while large platform
             # artifacts are replaced. The new manifest becomes the final,
             # pointer to the completed release set.
-            gh release upload continuous release-assets/latest.json --clobber
+            upload_with_retry release-assets/latest.json
             gh release edit continuous \
               --title "Continuous development builds" \
               --notes-file continuous-release-notes.md \

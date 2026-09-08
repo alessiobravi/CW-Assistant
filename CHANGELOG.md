@@ -8,6 +8,12 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Continuous-release replacement now retries GitHub asset uploads with bounded
+  backoff. This covers the short deletion-propagation window exposed when the
+  version manifest was replaced immediately after the platform payloads,
+  without advancing `latest.json` or the verified tag until publication is
+  complete.
+
 - The transmit-mode faceplate no longer renders an unobserved standby VFO as
   `?`. It now keeps the operator's persisted CW/CW-R target separate from
   provider readback and marks it **CONFIRMED** only after matching hardware

@@ -37,7 +37,10 @@ also been published; a failed run leaves the prior known-good downloads and
 marker untouched. When replacing an existing prerelease, binaries and
 `SHA256SUMS` are uploaded first and `latest.json` last, leaving the previous
 manifest reachable until the replacement set is complete. The in-app updater
-also retries transient publication/network failures three times.
+also retries transient publication/network failures three times. Release asset
+replacement itself uses bounded backoff because GitHub can briefly retain an
+old filename after accepting its deletion; an exhausted retry sequence leaves
+the verified tag unchanged and reports a publication failure.
 
 For private-repository automation that can push through Git SSH but cannot read
 the Actions API, each matrix leg publishes a temporary annotated
