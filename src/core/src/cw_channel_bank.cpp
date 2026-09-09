@@ -1155,8 +1155,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // too narrow to resolve its own dits.
       const double measured_wpm = std::max(
           track.update.wpm,
-          track.update.acoustic_cadence_confidence >= 0.45F
-              ? track.update.acoustic_wpm
+          track.decoder.timingControlCadenceConfidence() >= 0.45F
+              ? track.decoder.timingControlWpm()
               : 0.0);
       std::size_t preferred = 1;
       if (measured_wpm > 0.0) {
@@ -2102,7 +2102,7 @@ void CwChannelBank::recoverRejectedDecoder(Track& track) {
       track.verification_reason ==
           CwVerificationReason::ImplausibleCharacterDistribution &&
       track.update.recent_decoded_symbols >= 8U &&
-      track.update.acoustic_cadence_confidence >= 0.55F;
+      track.decoder.timingControlCadenceConfidence() >= 0.55F;
   if (!quality_rejection) {
     track.decoder_rejection_samples = 0;
     return;

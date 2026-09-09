@@ -129,9 +129,9 @@ class CwTimingDecoder {
  public:
   explicit CwTimingDecoder(CwDecoderConfig config = {});
   void reset() noexcept;
-  [[nodiscard]] CwDecoderUpdate process(std::uint64_t timestamp_ns,
-                                        float snr_db);
-  [[nodiscard]] CwDecoderUpdate flush(std::uint64_t timestamp_ns);
+  [[nodiscard]] const CwDecoderUpdate& process(std::uint64_t timestamp_ns,
+                                               float snr_db);
+  [[nodiscard]] const CwDecoderUpdate& flush(std::uint64_t timestamp_ns);
   [[nodiscard]] std::size_t stateBytes() const noexcept;
   // Exact inverse of the internal evidence-to-probability logistic. A detector
   // that can state its keying decision as a log-likelihood ratio encodes it
@@ -159,6 +159,9 @@ class CwTimingDecoder {
   [[nodiscard]] bool usesSegmenter() const noexcept {
     return segmenter_ != nullptr;
   }
+  [[nodiscard]] const CwDecoderUpdate& currentUpdate() const noexcept {
+    return cached_update_;
+  }
 
  private:
   // The shipped per-frame path. It is no longer driven by the live frame
@@ -166,14 +169,15 @@ class CwTimingDecoder {
   // its decisions at their own timestamps, so element classification, speed
   // adaptation, the event lattice and everything downstream of them run
   // exactly as before -- on runs that are no longer a threshold's opinion.
-  CwDecoderUpdate processFrame(std::uint64_t timestamp_ns, float snr_db);
-  bool replayCommittedSegments(CwDecoderUpdate* update);
+  const CwDecoderUpdate& processFrame(std::uint64_t timestamp_ns,
+                                      float snr_db);
+  bool replayCommittedSegments();
   [[nodiscard]] float snrForSegment(const CwSegment& segment) const noexcept;
   void finishElement(double duration_ms);
   void finishCharacter();
   void promoteProvisional();
   [[nodiscard]] float probabilityForSnr(float snr_db) const noexcept;
-  [[nodiscard]] CwDecoderUpdate snapshot(bool changed) const;
+  [[nodiscard]] const CwDecoderUpdate& snapshot(bool changed);
 
   CwDecoderConfig config_;
   // Null for AdaptiveThreshold, which keeps its own per-frame path. Held by
@@ -181,6 +185,11 @@ class CwTimingDecoder {
   // model's search windows come to roughly a megabyte per track across the
   // nine speed anchors.
   std::unique_ptr<CwKeyingSegmenter> segmenter_;
+  // Scalar evidence changes at the 500 Hz decoder cadence, while transcript
+  // strings and character vectors change only at Morse boundaries. Retaining
+  // one update object lets the multi-speed bank observe every scalar change
+  // without rebuilding all dynamic fields for every hypothesis and frame.
+  CwDecoderUpdate cached_update_{};
   std::vector<CwSegment> committed_segments_;
   // Measured rather than assumed, so a committed run is replayed on the same
   // grid it was observed on whatever rate the front end delivers.
@@ -243,6 +252,11 @@ struct CwMultiSpeedConfig {
   double lattice_checkpoint_ms{500.0};
   double lattice_competitive_cost_margin{1.0};
   float minimum_lattice_evidence_confidence{0.40F};
+  // Pair each mark with the gap immediately following it when fitting the
+  // independent acoustic cadence. Keying weight moves one edge between those
+  // two runs, so their sum retains the operator's underlying element length.
+  // The unpaired fit remains available for paired benchmark comparisons.
+  bool paired_cadence_fit{true};
 };
 
 class CwMultiSpeedDecoder {
@@ -269,6 +283,16 @@ class CwMultiSpeedDecoder {
   // common to all of them and a detector need encode its ratio only once.
   [[nodiscard]] float evidenceForLogLikelihoodRatio(
       float log_likelihood_ratio) const noexcept;
+  // Cadence used by filter/recovery control. Kept on the original independent
+  // mark/gap fit so the paired manual-keying measurement cannot silently
+  // perturb established decoding or publication behavior.
+  [[nodiscard]] double timingControlWpm() const noexcept {
+    return lattice_cadence_dot_ms_ > 0.0
+        ? 1'200.0 / lattice_cadence_dot_ms_ : 0.0;
+  }
+  [[nodiscard]] float timingControlCadenceConfidence() const noexcept {
+    return lattice_cadence_confidence_;
+  }
 
  private:
   struct Hypothesis {
@@ -276,7 +300,6 @@ class CwMultiSpeedDecoder {
 
     double seed_wpm;
     CwTimingDecoder decoder;
-    CwDecoderUpdate update;
   };
 
   [[nodiscard]] float score(const Hypothesis& hypothesis) const noexcept;
@@ -334,13 +357,24 @@ class CwMultiSpeedDecoder {
   static constexpr std::size_t kCadenceDurationWindow = 64;
   std::array<double, kCadenceDurationWindow> recent_mark_ms_{};
   std::array<double, kCadenceDurationWindow> recent_gap_ms_{};
+  std::array<double, kCadenceDurationWindow> recent_mark_gap_ms_{};
   std::size_t recent_mark_count_{0};
   std::size_t recent_gap_count_{0};
   std::size_t recent_mark_index_{0};
   std::size_t recent_gap_index_{0};
+  std::size_t recent_mark_gap_count_{0};
+  std::size_t recent_mark_gap_index_{0};
+  double pending_cadence_mark_ms_{0.0};
+  bool pending_cadence_mark_{false};
   std::uint64_t cadence_state_started_ns_{0};
   double cadence_dot_ms_{0.0};
   float cadence_confidence_{0.0F};
+  // The paired estimate above is used for operator/sender WPM. Decoder
+  // lattice selection retains the independently scored mark/gap estimate so
+  // adding manual-weight compensation cannot alter established text or
+  // callsign publication behavior without a separate measured change.
+  double lattice_cadence_dot_ms_{0.0};
+  float lattice_cadence_confidence_{0.0F};
   bool cadence_initialized_{false};
   // The nine speed anchors segment independently, so they do not all reach the
   // same instant at the same time and the presentation leader can change to one

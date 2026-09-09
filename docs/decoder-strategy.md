@@ -208,11 +208,15 @@ Alongside those character paths, a bounded decoder-independent cadence fit
 records recent key-down and key-up run lengths. It searches candidate dot
 durations from observed marks divided by 1/3 and gaps divided by 1/3/7, scores
 them with a clipped robust residual, and reports acoustic WPM plus fit
-confidence. It does not use decoded words and does not broadly override the
-selected character path. A sustained implausible-character rejection may reset
-an unverified timing decoder only when this independent fit confirms regular
-Morse cadence; carrier identity, noise tracking, and verified text remain
-untouched.
+confidence. A parallel score pairs each mark with its immediately following
+gap: ordinary hand-key weighting moves their shared edge but preserves their
+total. That paired estimate is used only for reported and per-sender cadence.
+The original independent mark/gap estimate continues to control filter width,
+rejection recovery, and lattice timing, so a display-quality improvement cannot
+silently change decoded text or callsign publication. Neither estimate uses
+decoded words. A sustained implausible-character rejection may reset an
+unverified timing decoder only when the control estimate confirms regular Morse
+cadence; carrier identity, noise tracking, and verified text remain untouched.
 
 The dependency-free event lattice now receives every immutable key-envelope
 mark/gap transition. At completed-gap checkpoints (bounded to at most once per
@@ -504,6 +508,19 @@ simultaneous original-sample tones through the channel bank, verify independent
 decodes and stable identity, and reject an adjacent non-tracked tone. The Qt
 pipeline regression verifies that the live DSP worker publishes both a spectrum
 frame and a raw-narrowband channel result.
+
+A second generated production-path gate (`cwa_decoder_quality_gate`) enforces
+normalized CER and WER, exact set-based callsign precision/recall, time to first
+provisional and stable text, verified-stream acquisition latency, and zero false
+stream or callsign publications during a one-minute no-carrier fixture. Its
+clean and moderately jittered messages are a deterministic regression floor,
+not receiver calibration: weak-SNR curves, revision rate, co-channel overlap,
+and annotated real-audio accuracy remain required.
+
+The timing hypotheses retain one update each. Scalar evidence remains current
+at the 500 Hz decoder cadence, while strings and character vectors refresh only
+at Morse boundaries. This removes nine unchanged deep copies per track; the
+outer presentation snapshot remains a bounded future optimization.
 
 Each experiment publishes:
 

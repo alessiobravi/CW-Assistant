@@ -454,7 +454,11 @@ surface, but it does not make every field transcript correct. The element
 length is measured from a mark together with the
 gap that follows it, whose combined length does not depend on how heavily the
 operator weights their sending, so bug and hand-key styles are no longer
-penalised the way they were. Weak signals below roughly 15 dB remain
+penalised the way they were. The separately displayed/per-sender acoustic WPM
+uses the same paired-duration principle, but filter width and decoded
+characters retain an independent mark/gap timing estimate. This prevents a
+better speed readout from silently changing text or publishing a different
+callsign. Weak signals below roughly 15 dB remain
 unreliable, very light machine weighting is slightly worse than heavy, and
 speeds near 50 WPM are currently limited by the narrowband filter width rather
 than by timing.

@@ -31,6 +31,25 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
+- A generated production-path decoder quality gate now enforces normalized
+  character and word error, exact callsign precision/recall, provisional and
+  stable decode latency, verified-stream acquisition latency, and zero false
+  stream or callsign publications during a deterministic no-CW minute.
+
+- The independent cadence estimator now pairs each mark with its immediately
+  following gap. Their total is insensitive to ordinary hand-key weighting,
+  reducing mean WPM error from 1.366 to 0.418 WPM across the weighted-keying
+  fixture while leaving its character error unchanged. This improved estimate
+  is limited to reported/per-sender cadence; established filter, recovery,
+  lattice, verification, and callsign decisions retain the separately measured
+  mark/gap control estimate.
+
+- Per-hypothesis decoder updates now retain stable dynamic transcript and
+  character storage between Morse boundaries instead of deep-copying it at the
+  500 Hz evidence cadence. This removes nine steady-state deep copies per track;
+  an isolated two-million-frame measurement reduced that inner operation by
+  70.7%, while the outer presentation snapshot remains unchanged.
+
 - A provider-neutral Hamlib rigctld adapter now reads and capability-gates
   independent RX/TX frequency, mode, VFO, and split state, and routes the same
   operating-panel commands as OmniRig and CAT4OM. It requires rigctld VFO mode,

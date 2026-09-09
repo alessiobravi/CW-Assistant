@@ -92,6 +92,25 @@ add_executable(cwa_decoder_benchmark cw_decoder_benchmark.cpp)
 target_link_libraries(cwa_decoder_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_decoder_benchmark COMMAND cwa_decoder_benchmark)
 
+add_executable(cwa_manual_cadence_tests cw_manual_cadence_tests.cpp)
+target_link_libraries(cwa_manual_cadence_tests PRIVATE cwa_core)
+add_test(NAME cwa_manual_cadence_tests COMMAND cwa_manual_cadence_tests)
+
+add_executable(cwa_decoder_snapshot_cache_tests
+  cw_decoder_snapshot_cache_tests.cpp)
+target_link_libraries(cwa_decoder_snapshot_cache_tests PRIVATE cwa_core)
+add_test(NAME cwa_decoder_snapshot_cache_tests
+  COMMAND cwa_decoder_snapshot_cache_tests)
+
+add_executable(cwa_decoder_evaluation_metrics_tests
+  decoder_evaluation_metrics_tests.cpp)
+add_test(NAME cwa_decoder_evaluation_metrics_tests
+  COMMAND cwa_decoder_evaluation_metrics_tests)
+
+add_executable(cwa_decoder_quality_gate cw_decoder_quality_gate.cpp)
+target_link_libraries(cwa_decoder_quality_gate PRIVATE cwa_core)
+add_test(NAME cwa_decoder_quality_gate COMMAND cwa_decoder_quality_gate)
+
 add_executable(cwa_verification_benchmark cw_verification_benchmark.cpp)
 target_link_libraries(cwa_verification_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_verification_benchmark COMMAND cwa_verification_benchmark)

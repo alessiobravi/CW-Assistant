@@ -136,6 +136,7 @@ void CwTimingDecoder::reset() noexcept {
     segmenter_->setElementLengthMs(dot_ms_);
   }
   committed_segments_.clear();
+  cached_update_ = {};
   initialized_ = false; key_down_ = false; character_finished_ = false;
   word_space_emitted_ = false;
 }
@@ -158,8 +159,8 @@ float CwTimingDecoder::snrForSegment(const CwSegment& segment) const noexcept {
                         scale;
 }
 
-CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
-                                         const float snr_db) {
+const CwDecoderUpdate& CwTimingDecoder::process(
+    const std::uint64_t timestamp_ns, const float snr_db) {
   // The threshold model has no segmenter in front of it: the frame goes
   // straight into the per-frame path, exactly as it always has.
   if (segmenter_ == nullptr) return processFrame(timestamp_ns, snr_db);
@@ -183,7 +184,6 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   // it back in nats rather than a second squash of an already shaped ramp.
   const double log_likelihood_nats =
       static_cast<double>((snr_db - midpoint) / scale);
-  CwDecoderUpdate update = snapshot(false);
   bool changed = false;
   if (last_input_timestamp_ns_ != 0 &&
       timestamp_ns > last_input_timestamp_ns_) {
@@ -198,12 +198,11 @@ CwDecoderUpdate CwTimingDecoder::process(const std::uint64_t timestamp_ns,
   last_input_timestamp_ns_ = timestamp_ns;
   committed_segments_ = segmenter_->process(timestamp_ns,
                                             log_likelihood_nats);
-  changed = replayCommittedSegments(&update);
-  update.changed = changed;
-  return update;
+  changed = replayCommittedSegments();
+  return snapshot(changed);
 }
 
-bool CwTimingDecoder::replayCommittedSegments(CwDecoderUpdate* update) {
+bool CwTimingDecoder::replayCommittedSegments() {
   // Replayed at the rate the frames arrived on. Handing a run over as a single
   // step would leave every measure that integrates across it -- the mark
   // confidence the verification gate reads above all -- accumulating once at
@@ -217,15 +216,15 @@ bool CwTimingDecoder::replayCommittedSegments(CwDecoderUpdate* update) {
     const float segment_snr_db = snrForSegment(segment);
     for (std::uint64_t at = segment.started_ns; at < segment.ended_ns;
          at += step_ns) {
-      *update = processFrame(at, segment_snr_db);
-      changed = changed || update->changed;
+      const auto& update = processFrame(at, segment_snr_db);
+      changed = changed || update.changed;
     }
   }
   return changed;
 }
 
-CwDecoderUpdate CwTimingDecoder::processFrame(const std::uint64_t timestamp_ns,
-                                              const float snr_db) {
+const CwDecoderUpdate& CwTimingDecoder::processFrame(
+    const std::uint64_t timestamp_ns, const float snr_db) {
   last_snr_db_ = snr_db;
   const float instantaneous_probability = probabilityForSnr(snr_db);
   if (!initialized_) {
@@ -407,13 +406,13 @@ CwDecoderUpdate CwTimingDecoder::processFrame(const std::uint64_t timestamp_ns,
   return snapshot(changed);
 }
 
-CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
+const CwDecoderUpdate& CwTimingDecoder::flush(
+    const std::uint64_t timestamp_ns) {
   if (segmenter_ != nullptr) {
     committed_segments_ = segmenter_->flush();
-    CwDecoderUpdate replayed = snapshot(false);
-    static_cast<void>(replayCommittedSegments(&replayed));
+    static_cast<void>(replayCommittedSegments());
   }
-  auto result = processFrame(timestamp_ns, -100.0F);
+  bool changed = processFrame(timestamp_ns, -100.0F).changed;
   if (key_down_) {
     // Flush is an explicit end-of-input boundary, so it must release a keyed
     // state even when called only one evidence interval after the last update
@@ -428,14 +427,14 @@ CwDecoderUpdate CwTimingDecoder::flush(const std::uint64_t timestamp_ns) {
     key_down_probability_ = 0.0F;
     state_started_ns_ = timestamp_ns;
     last_timestamp_ns_ = timestamp_ns;
-    result = snapshot(true);
+    changed = true;
   }
-  if (!elements_.empty()) { finishCharacter(); result = snapshot(true); }
+  if (!elements_.empty()) { finishCharacter(); changed = true; }
   if (!provisional_text_.empty()) {
     promoteProvisional();
-    result = snapshot(true);
+    changed = true;
   }
-  return result;
+  return snapshot(changed);
 }
 
 std::size_t CwTimingDecoder::stateBytes() const noexcept {
@@ -445,7 +444,8 @@ std::size_t CwTimingDecoder::stateBytes() const noexcept {
          provisional_text_.capacity() + elements_.capacity() +
          characterEvidenceBytes(characters_) +
          recent_cadence_quality_.capacity() * sizeof(float) +
-         provisional_character_.symbol.capacity();
+         provisional_character_.symbol.capacity() +
+         updateDynamicBytes(cached_update_);
 }
 
 void CwTimingDecoder::finishElement(const double duration_ms) {
@@ -573,7 +573,7 @@ float CwTimingDecoder::probabilityForSnr(const float snr_db) const noexcept {
   return 1.0F / (1.0F + std::exp(-normalized));
 }
 
-CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
+const CwDecoderUpdate& CwTimingDecoder::snapshot(const bool changed) {
   const std::size_t character_count = std::min(
       characters_.size(), kRecentCharacterWindow);
   const auto character_begin = characters_.end() -
@@ -607,33 +607,34 @@ CwDecoderUpdate CwTimingDecoder::snapshot(const bool changed) const {
       ? 0.0F
       : recent_cadence_sum /
             static_cast<float>(recent_cadence_quality_.size());
-  return {.changed = changed, .key_down = key_down_,
-          .key_down_probability = key_down_probability_,
-          .wpm = 1'200.0 / dot_ms_, .confidence = confidence_,
-          .text = stable_text_, .provisional_text = provisional_text_,
-          .pending_elements = elements_, .timing_quality = timing_quality,
-          .cadence_quality = cadence_quality,
-          .mean_character_confidence = mean_character_confidence,
-          .decoded_symbols = decoded_symbol_count_,
-          .unknown_symbols = unknown_symbol_count_,
-          .key_transitions = key_transition_count_,
-          .cadence_observations = cadence_observation_count_,
-          .characters = characters_,
-          .refined_text = {},
-          .acoustic_alternatives = {},
-          .recent_decoded_symbols =
-              static_cast<std::uint32_t>(character_count),
-          .recent_unknown_symbols = recent_unknown,
-          .recent_cadence_observations = static_cast<std::uint32_t>(
-              recent_cadence_quality_.size()),
-          .acoustic_wpm = 0.0,
-          .acoustic_cadence_confidence = 0.0F,
-          .transmissions = {},
-          .sender_cadences = {},
-          .active_transmission_sequence = 0,
-          .current_sender_callsign = {},
-          .current_sender_wpm = 0.0,
-          .contextual_text = {}};
+  cached_update_.changed = changed;
+  cached_update_.key_down = key_down_;
+  cached_update_.key_down_probability = key_down_probability_;
+  cached_update_.wpm = 1'200.0 / dot_ms_;
+  cached_update_.confidence = confidence_;
+  cached_update_.timing_quality = timing_quality;
+  cached_update_.cadence_quality = cadence_quality;
+  cached_update_.mean_character_confidence = mean_character_confidence;
+  cached_update_.decoded_symbols = decoded_symbol_count_;
+  cached_update_.unknown_symbols = unknown_symbol_count_;
+  cached_update_.key_transitions = key_transition_count_;
+  cached_update_.cadence_observations = cadence_observation_count_;
+  cached_update_.recent_decoded_symbols =
+      static_cast<std::uint32_t>(character_count);
+  cached_update_.recent_unknown_symbols = recent_unknown;
+  cached_update_.recent_cadence_observations =
+      static_cast<std::uint32_t>(recent_cadence_quality_.size());
+
+  // These fields can only change at a decoded element/character/gap boundary,
+  // all of which set `changed`. The common frame therefore updates only the
+  // scalar evidence above and performs no dynamic allocation or deep copy.
+  if (changed) {
+    cached_update_.text = stable_text_;
+    cached_update_.provisional_text = provisional_text_;
+    cached_update_.pending_elements = elements_;
+    cached_update_.characters = characters_;
+  }
+  return cached_update_;
 }
 
 CwMultiSpeedDecoder::Hypothesis::Hypothesis(
@@ -712,9 +713,15 @@ void CwMultiSpeedDecoder::resetHypotheses() {
   recent_gap_count_ = 0;
   recent_mark_index_ = 0;
   recent_gap_index_ = 0;
+  recent_mark_gap_count_ = 0;
+  recent_mark_gap_index_ = 0;
+  pending_cadence_mark_ms_ = 0.0;
+  pending_cadence_mark_ = false;
   cadence_state_started_ns_ = 0;
   cadence_dot_ms_ = 0.0;
   cadence_confidence_ = 0.0F;
+  lattice_cadence_dot_ms_ = 0.0;
+  lattice_cadence_confidence_ = 0.0F;
   cadence_initialized_ = false;
   last_observed_segment_ns_ = 0;
   cadence_key_down_ = false;
@@ -737,8 +744,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
   if (locked_) {
     bool changed = false;
     for (auto& hypothesis : hypotheses_) {
-      hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
-      changed = changed || hypothesis.update.changed;
+      const auto& update = hypothesis.decoder.process(timestamp_ns, snr_db);
+      changed = changed || update.changed;
     }
     // Each hypothesis now smooths evidence against its own element length,
     // so their key decisions genuinely differ. Cadence and lattice evidence
@@ -752,7 +759,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
             timestamp_ns >= last_signal_timestamp_ns_
         ? milliseconds(timestamp_ns - last_signal_timestamp_ns_)
         : 0.0;
-    if (!selected.update.key_down && selected.update.decoded_symbols > 0 &&
+    const auto& selected_update = selected.decoder.currentUpdate();
+    if (!selected_update.key_down && selected_update.decoded_symbols > 0 &&
         silence_ms >= config_.reacquire_after_silence_ms) {
       // All fixed speed anchors continue observing after the initial
       // selection. At a safe segment boundary, commit the best complete
@@ -767,8 +775,8 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
 
   bool changed = false;
   for (auto& hypothesis : hypotheses_) {
-    hypothesis.update = hypothesis.decoder.process(timestamp_ns, snr_db);
-    changed = changed || hypothesis.update.changed;
+    const auto& update = hypothesis.decoder.process(timestamp_ns, snr_db);
+    changed = changed || update.changed;
   }
   // Each hypothesis now smooths evidence against its own element length,
   // so their key decisions genuinely differ. Cadence and lattice evidence
@@ -790,7 +798,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::process(
 CwDecoderUpdate CwMultiSpeedDecoder::suspendInput(
     const std::uint64_t timestamp_ns) {
   for (auto& hypothesis : hypotheses_)
-    hypothesis.update = hypothesis.decoder.flush(timestamp_ns);
+    static_cast<void>(hypothesis.decoder.flush(timestamp_ns));
   leader_index_ = selectLeader();
   locked_index_ = leader_index_;
   locked_ = true;
@@ -813,7 +821,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::resumeInput(
       : 0.0;
   const std::size_t final_leader = selectLeader();
   if (signal_seen_ &&
-      hypotheses_[final_leader].update.decoded_symbols > 0U &&
+      hypotheses_[final_leader].decoder.currentUpdate().decoded_symbols > 0U &&
       silence_ms >= config_.reacquire_after_silence_ms) {
     // The acoustic state was already drained when association disappeared.
     // Only the independently measured sustained absence makes it a semantic
@@ -859,14 +867,13 @@ std::size_t CwMultiSpeedDecoder::stateBytes() const noexcept {
     result += cadence.callsign.capacity();
   for (const auto& hypothesis : hypotheses_) {
     result += hypothesis.decoder.stateBytes() - sizeof(CwTimingDecoder);
-    result += updateDynamicBytes(hypothesis.update);
   }
   return result;
 }
 
 float CwMultiSpeedDecoder::score(
     const Hypothesis& hypothesis) const noexcept {
-  const auto& update = hypothesis.update;
+  const auto& update = hypothesis.decoder.currentUpdate();
   const float prior_distance = static_cast<float>(std::abs(
       std::log2(hypothesis.seed_wpm / config_.preferred_wpm)));
   if (update.decoded_symbols == 0)
@@ -925,8 +932,9 @@ void CwMultiSpeedDecoder::observeLeaderEvidence(
   if (!leader.decoder.usesSegmenter()) {
     // The threshold model publishes its key state per frame and nothing else,
     // so cadence and the lattice read it the way they always have.
-    observeCadence(leader.update.key_down, timestamp_ns);
-    observeLattice(leader.update.key_down, leader.update.key_down_probability,
+    const auto& update = leader.decoder.currentUpdate();
+    observeCadence(update.key_down, timestamp_ns);
+    observeLattice(update.key_down, update.key_down_probability,
                    timestamp_ns);
     return;
   }
@@ -970,14 +978,30 @@ void CwMultiSpeedDecoder::observeCadence(const bool key_down,
           (recent_mark_index_ + 1U) % kCadenceDurationWindow;
       recent_mark_count_ = std::min(recent_mark_count_ + 1U,
                                     kCadenceDurationWindow);
+      pending_cadence_mark_ms_ = duration_ms;
+      pending_cadence_mark_ = true;
     } else {
       recent_gap_ms_[recent_gap_index_] = duration_ms;
       recent_gap_index_ =
           (recent_gap_index_ + 1U) % kCadenceDurationWindow;
       recent_gap_count_ = std::min(recent_gap_count_ + 1U,
                                    kCadenceDurationWindow);
+      if (config_.paired_cadence_fit && pending_cadence_mark_) {
+        recent_mark_gap_ms_[recent_mark_gap_index_] =
+            pending_cadence_mark_ms_ + duration_ms;
+        recent_mark_gap_index_ =
+            (recent_mark_gap_index_ + 1U) % kCadenceDurationWindow;
+        recent_mark_gap_count_ = std::min(recent_mark_gap_count_ + 1U,
+                                          kCadenceDurationWindow);
+      }
+      pending_cadence_mark_ = false;
     }
     recomputeCadenceEstimate();
+  } else {
+    // A dropped/implausibly long run breaks adjacency. Never let the next
+    // valid gap combine with a mark from the other side of that missing edge.
+    pending_cadence_mark_ms_ = 0.0;
+    pending_cadence_mark_ = false;
   }
   cadence_key_down_ = key_down;
   cadence_state_started_ns_ = timestamp_ns;
@@ -1023,9 +1047,25 @@ void CwMultiSpeedDecoder::recomputeCadenceEstimate() {
                      std::abs(ratio - 3.0) / 1.0,
                      std::abs(ratio - 7.0) / 2.2});
   };
+  const auto pair_residual = [](const double duration,
+                                const double dot) {
+    const double ratio = duration / dot;
+    // Unique totals for mark {1,3} followed by gap {1,3,7}. Tolerance grows
+    // mildly with duration because manual timing variance is proportional,
+    // while the clipped contribution keeps one long pause bounded.
+    static constexpr double totals[]{2.0, 4.0, 6.0, 8.0, 10.0};
+    double residual = std::numeric_limits<double>::max();
+    for (const double total : totals) {
+      residual = std::min(
+          residual, std::abs(ratio - total) / (0.35 + 0.12 * total));
+    }
+    return residual;
+  };
 
   double best_dot = candidates[0];
   double best_cost = std::numeric_limits<double>::max();
+  double best_individual_dot = candidates[0];
+  double best_individual_cost = std::numeric_limits<double>::max();
   for (std::size_t candidate = 0; candidate < candidate_count; ++candidate) {
     const double dot = candidates[candidate];
     double cost = 0.0;
@@ -1038,9 +1078,27 @@ void CwMultiSpeedDecoder::recomputeCadenceEstimate() {
     // Clipping every observation bounds the influence of key clicks and
     // missed edges without sorting inside the per-track real-time path.
     cost /= static_cast<double>(observation_count);
+    const double prior_cost = 0.015 * std::abs(std::log2(dot / 60.0));
+    const double individual_cost = cost + prior_cost;
+    if (individual_cost < best_individual_cost) {
+      best_individual_cost = individual_cost;
+      best_individual_dot = dot;
+    }
+    if (config_.paired_cadence_fit && recent_mark_gap_count_ >= 3U) {
+      double paired_cost = 0.0;
+      for (std::size_t index = 0; index < recent_mark_gap_count_; ++index) {
+        paired_cost += std::min(
+            pair_residual(recent_mark_gap_ms_[index], dot), 1.0);
+      }
+      paired_cost /= static_cast<double>(recent_mark_gap_count_);
+      // Keep independent mark/gap evidence dominant. Pair evidence corrects
+      // the known manual-weighting bias but cannot create a confident cadence
+      // when the individual runs do not resemble Morse at all.
+      cost = 0.65 * cost + 0.35 * paired_cost;
+    }
     // Only resolve otherwise-near ties toward the normal operating range.
     // The measured ratios, not this weak prior, remain decisive.
-    cost += 0.015 * std::abs(std::log2(dot / 60.0));
+    cost += prior_cost;
     if (cost < best_cost) {
       best_cost = cost;
       best_dot = dot;
@@ -1052,15 +1110,26 @@ void CwMultiSpeedDecoder::recomputeCadenceEstimate() {
   const float fit = static_cast<float>(std::clamp(1.0 - best_cost,
                                                   0.0, 1.0));
   const float confidence = coverage * fit;
-  if (cadence_dot_ms_ <= 0.0 || cadence_confidence_ < 0.25F) {
-    cadence_dot_ms_ = best_dot;
-  } else if (best_dot / cadence_dot_ms_ >= 0.55 &&
-             best_dot / cadence_dot_ms_ <= 1.8) {
-    cadence_dot_ms_ += 0.25 * (best_dot - cadence_dot_ms_);
-  } else if (confidence >= 0.75F) {
-    cadence_dot_ms_ = best_dot;
-  }
-  cadence_confidence_ = confidence;
+  const float individual_fit = static_cast<float>(std::clamp(
+      1.0 - best_individual_cost, 0.0, 1.0));
+  const float individual_confidence = coverage * individual_fit;
+  const auto update_estimate = [](const double measured_dot,
+                                  const float measured_confidence,
+                                  double* dot, float* confidence_value) {
+    if (*dot <= 0.0 || *confidence_value < 0.25F) {
+      *dot = measured_dot;
+    } else if (measured_dot / *dot >= 0.55 &&
+               measured_dot / *dot <= 1.8) {
+      *dot += 0.25 * (measured_dot - *dot);
+    } else if (measured_confidence >= 0.75F) {
+      *dot = measured_dot;
+    }
+    *confidence_value = measured_confidence;
+  };
+  update_estimate(best_dot, confidence, &cadence_dot_ms_,
+                  &cadence_confidence_);
+  update_estimate(best_individual_dot, individual_confidence,
+                  &lattice_cadence_dot_ms_, &lattice_cadence_confidence_);
 }
 
 std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
@@ -1082,7 +1151,7 @@ std::size_t CwMultiSpeedDecoder::selectLeader(float* margin) const {
 }
 
 CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
-  CwDecoderUpdate result = hypotheses_[leader_index_].update;
+  CwDecoderUpdate result = hypotheses_[leader_index_].decoder.currentUpdate();
   result.changed = changed;
   // The independent cadence estimate is withheld until its own confidence
   // supports it, for the same reason the timing bank's speed is: on thin
@@ -1105,7 +1174,7 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
     result.contextual_text += transmission.text;
   }
   if (!active_transmission_completed_ && !hypotheses_.empty()) {
-    const auto& primary = hypotheses_[leader_index_].update.text;
+    const auto& primary = hypotheses_[leader_index_].decoder.currentUpdate().text;
     const std::size_t primary_start = std::min(
         transmission_primary_starts_[leader_index_], primary.size());
     std::string active = transmission_refined_start_ < refined_text_.size()
@@ -1176,7 +1245,7 @@ void CwMultiSpeedDecoder::updateCurrentSender() {
   // Stable decoder text already carries a trailing delimiter when a word is
   // complete. Never manufacture one here: doing so could promote a partial
   // callsign and leave stale provisional attribution latched.
-  const auto& evidence = hypotheses_[leader_index_].update.text;
+  const auto& evidence = hypotheses_[leader_index_].decoder.currentUpdate().text;
   const std::size_t start = std::min(
       transmission_primary_starts_[leader_index_], evidence.size());
   const auto sender = CallsignPolicy::strong_sender_in_text(
@@ -1196,7 +1265,7 @@ void CwMultiSpeedDecoder::updateCurrentSender() {
 void CwMultiSpeedDecoder::commitCompletedTransmission(
     const std::size_t final_leader) {
   completeTransmission(final_leader);
-  committed_prefix_ += hypotheses_[final_leader].update.text;
+  committed_prefix_ += hypotheses_[final_leader].decoder.currentUpdate().text;
   if (!committed_prefix_.empty() && committed_prefix_.back() != ' ')
     committed_prefix_.push_back(' ');
   if (committed_prefix_.size() > 4'096)
@@ -1212,7 +1281,7 @@ void CwMultiSpeedDecoder::beginNextTransmissionWithoutAcousticReset() {
   for (std::size_t index = 0; index < hypotheses_.size() &&
        index < transmission_primary_starts_.size(); ++index) {
     transmission_primary_starts_[index] =
-        hypotheses_[index].update.text.size();
+        hypotheses_[index].decoder.currentUpdate().text.size();
   }
   transmission_refined_start_ = refined_text_.size();
   contextual_lattice_text_.clear();
@@ -1228,9 +1297,15 @@ void CwMultiSpeedDecoder::beginNextTransmissionWithoutAcousticReset() {
   recent_gap_count_ = 0;
   recent_mark_index_ = 0;
   recent_gap_index_ = 0;
+  recent_mark_gap_count_ = 0;
+  recent_mark_gap_index_ = 0;
+  pending_cadence_mark_ms_ = 0.0;
+  pending_cadence_mark_ = false;
   cadence_state_started_ns_ = 0;
   cadence_dot_ms_ = 0.0;
   cadence_confidence_ = 0.0F;
+  lattice_cadence_dot_ms_ = 0.0;
+  lattice_cadence_confidence_ = 0.0F;
   cadence_initialized_ = false;
   last_observed_segment_ns_ = 0;
   cadence_key_down_ = false;
@@ -1240,7 +1315,8 @@ void CwMultiSpeedDecoder::completeTransmission(
     const std::size_t final_leader) {
   if (active_transmission_completed_ || final_leader >= hypotheses_.size())
     return;
-  const auto& complete_primary = hypotheses_[final_leader].update.text;
+  const auto& complete_primary =
+      hypotheses_[final_leader].decoder.currentUpdate().text;
   const std::size_t primary_start = std::min(
       transmission_primary_starts_[final_leader], complete_primary.size());
   std::string primary = complete_primary.substr(primary_start);
@@ -1292,7 +1368,7 @@ void CwMultiSpeedDecoder::completeTransmission(
   } else if (primary_sender) {
     sender = *primary_sender;
   }
-  const auto& update = hypotheses_[final_leader].update;
+  const auto& update = hypotheses_[final_leader].decoder.currentUpdate();
   const bool cadence_supported = cadence_dot_ms_ > 0.0 &&
                                  cadence_confidence_ >= 0.45F;
   const double turn_wpm = cadence_supported
@@ -1385,16 +1461,17 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
   // so the refinement path can recover from an early cadence choice without
   // rewriting the primary transcript.
   const std::size_t lattice_leader = selectLeader();
-  double candidate_wpm = hypotheses_[lattice_leader].update.wpm;
-  const double cadence_wpm = cadence_dot_ms_ > 0.0
-      ? 1'200.0 / cadence_dot_ms_ : 0.0;
+  double candidate_wpm =
+      hypotheses_[lattice_leader].decoder.currentUpdate().wpm;
+  const double cadence_wpm = lattice_cadence_dot_ms_ > 0.0
+      ? 1'200.0 / lattice_cadence_dot_ms_ : 0.0;
   const double cadence_ratio = candidate_wpm > 0.0
       ? cadence_wpm / candidate_wpm : 0.0;
   // The independent estimator is deliberately a guard, not a broad override:
   // noisy pileups can produce a confident-looking harmonic fit at roughly
   // twice the selected speed. Use it only when strong evidence agrees with
   // the continuously evaluated timing bank's neighborhood.
-  if (cadence_confidence_ >= 0.65F && cadence_wpm > 0.0 &&
+  if (lattice_cadence_confidence_ >= 0.65F && cadence_wpm > 0.0 &&
       cadence_ratio >= 0.75 && cadence_ratio <= 1.35) {
     candidate_wpm = cadence_wpm;
   }
@@ -1542,7 +1619,7 @@ void CwMultiSpeedDecoder::resetLatticeSegment() noexcept {
 }
 
 void CwMultiSpeedDecoder::considerLock(const float margin) {
-  const auto& leader = hypotheses_[leader_index_].update;
+  const auto& leader = hypotheses_[leader_index_].decoder.currentUpdate();
   if (leader.decoded_symbols < config_.lock_after_symbols) return;
   if (margin < config_.lock_score_margin &&
       leader.decoded_symbols <
