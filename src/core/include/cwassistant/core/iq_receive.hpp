@@ -111,4 +111,55 @@ class IqToAudioChannelizer {
   bool stream_initialized_{false};
 };
 
+struct IqSubbandDecimatorConfig {
+  // Absolute RF at the centre of the decoder window.
+  double center_frequency_hz{0.0};
+  // The portion of the wide IQ passband admitted to detection/decoding.
+  double bandwidth_hz{24'000.0};
+  // Upper bound for the decoder branch. The input is never upsampled.
+  double maximum_output_sample_rate_hz{96'000.0};
+};
+
+// Creates one bounded, lower-rate complex-IQ branch while leaving the original
+// block untouched for the overview spectrum. A shared DDC is substantially
+// cheaper than running every CW track across the hardware sample rate.
+class IqSubbandDecimator {
+ public:
+  explicit IqSubbandDecimator(IqSubbandDecimatorConfig config = {},
+                              IqReceiveLimits limits = {});
+
+  [[nodiscard]] bool configure(IqSubbandDecimatorConfig config) noexcept;
+  void reset() noexcept;
+  [[nodiscard]] IqBlockStatus process(const RealtimeSampleBlock& input,
+                                      RealtimeSampleBlock& output) noexcept;
+  [[nodiscard]] const IqSubbandDecimatorConfig& config() const noexcept;
+  [[nodiscard]] double outputSampleRateHz() const noexcept;
+
+ private:
+  struct Biquad {
+    double b0{1.0};
+    double b1{0.0};
+    double b2{0.0};
+    double a1{0.0};
+    double a2{0.0};
+    std::complex<double> z1{};
+    std::complex<double> z2{};
+  };
+
+  void initializeForStream(const StreamDescriptor& stream) noexcept;
+  void resetSignalState() noexcept;
+
+  IqSubbandDecimatorConfig config_{};
+  IqReceiveValidator validator_{};
+  StreamDescriptor input_stream_{};
+  std::array<Biquad, 2> low_pass_{};
+  std::complex<double> tuning_oscillator_{1.0, 0.0};
+  std::complex<double> tuning_step_{1.0, 0.0};
+  double output_sample_rate_hz_{0.0};
+  double output_phase_{0.0};
+  std::uint64_t output_sequence_{0};
+  std::uint64_t oscillator_samples_{0};
+  bool stream_initialized_{false};
+};
+
 }  // namespace cwassistant::core

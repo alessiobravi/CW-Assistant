@@ -226,6 +226,10 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
 
 void LiveAudioDspWorker::start() {
   analyzer_.reset();
+  decoder_analyzer_.reset();
+  sdr_decoder_channelizer_.reset();
+  sdr_decoder_pending_ = {};
+  sdr_decoder_pending_sequence_ = 0;
   decoder_.reset();
   character_frontends_.reset();
   monitor_resample_phase_ = 0.0;
@@ -241,6 +245,10 @@ void LiveAudioDspWorker::start() {
 void LiveAudioDspWorker::stop() {
   timer_.stop();
   analyzer_.reset();
+  decoder_analyzer_.reset();
+  sdr_decoder_channelizer_.reset();
+  sdr_decoder_pending_ = {};
+  sdr_decoder_pending_sequence_ = 0;
   decoder_.reset();
   character_frontends_.reset();
   monitor_resample_phase_ = 0.0;
@@ -635,6 +643,24 @@ void LiveAudioDspWorker::setMonitor(const int mode,
   decoder_.setMonitorTracks(selected_mode, ids, reference_tone_hz);
 }
 
+void LiveAudioDspWorker::setSdrDecoderWindow(
+    const double center_frequency_hz, const double bandwidth_hz) {
+  const double output_rate_hz =
+      std::clamp(bandwidth_hz * 2.5, 48'000.0, 192'000.0);
+  if (!sdr_decoder_channelizer_.configure(
+      {.center_frequency_hz = center_frequency_hz,
+       .bandwidth_hz = bandwidth_hz,
+       .maximum_output_sample_rate_hz = output_rate_hz}))
+    return;
+  sdr_decoder_center_frequency_hz_ = center_frequency_hz;
+  sdr_decoder_bandwidth_hz_ = bandwidth_hz;
+  sdr_decoder_pending_ = {};
+  sdr_decoder_pending_sequence_ = 0;
+  decoder_analyzer_.reset();
+  decoder_.reset();
+  character_frontends_.reset();
+}
+
 void LiveAudioDspWorker::acceptCharacterRefinement(
     const qulonglong channel_id, const QString& stable_text,
     const qulonglong evidence_timestamp_ns) {
@@ -658,10 +684,47 @@ void LiveAudioDspWorker::setRadioFrequencyContext(
   radio_split_active_ = split_active;
 }
 
+void LiveAudioDspWorker::captureBlock(
+    const cwassistant::core::RealtimeSampleBlock& block) {
+  if (capture_active_ && capture_writer_pending_) {
+    if (capture_writer_.open(capture_wav_path_.toStdString(),
+                             block.stream.sample_rate_hz)) {
+      capture_writer_pending_ = false;
+    } else {
+      finishDebugCapture(QStringLiteral("Could not open capture audio file"));
+    }
+  }
+  if (!capture_active_ || capture_writer_pending_) return;
+  if (!capture_have_start_) {
+    capture_start_ns_ = block.timestamp_ns;
+    capture_last_snapshot_ns_ = block.timestamp_ns;
+    capture_have_start_ = true;
+  }
+  if (!capture_writer_.writeBlock(block)) {
+    finishDebugCapture(QStringLiteral("Capture reached its maximum size"));
+    return;
+  }
+  const double elapsed_seconds =
+      static_cast<double>(block.timestamp_ns - capture_start_ns_) /
+      1'000'000'000.0;
+  if (elapsed_seconds >= maximum_capture_seconds_) {
+    finishDebugCapture(QStringLiteral("Reached the %1-minute capture limit")
+                           .arg(maximum_capture_seconds_ / 60.0, 0, 'g', 2));
+  } else if (static_cast<double>(block.timestamp_ns -
+                                 capture_last_snapshot_ns_) /
+                     1'000'000'000.0 >=
+             kSnapshotIntervalSeconds) {
+    capture_last_snapshot_ns_ = block.timestamp_ns;
+    writeDebugCaptureSnapshot();
+    emit debugCaptureStateChanged(true, capture_base_path_, elapsed_seconds,
+                                  QStringLiteral("Recording"));
+  }
+}
+
 void LiveAudioDspWorker::drain() {
   cwassistant::core::RealtimeSampleBlock block;
   int drained = 0;
-  while (drained < 8 && pipe_->blocks.try_pop(block)) {
+  while (drained < 32 && pipe_->blocks.try_pop(block)) {
     ++drained;
     const std::size_t wanted_fft_size =
         block.stream.kind == cwassistant::core::StreamKind::ComplexIq
@@ -673,41 +736,174 @@ void LiveAudioDspWorker::drain() {
       static_cast<void>(analyzer_.configure(config));
     }
     auto snapshots = analyzer_.process(block);
-    for (const auto& snapshot : snapshots) {
+    captureBlock(block);
+    cwassistant::core::RealtimeSampleBlock decoder_block;
+    cwassistant::core::RealtimeSampleBlock decoder_carry;
+    const cwassistant::core::RealtimeSampleBlock* processing_block = &block;
+    std::vector<cwassistant::core::SpectrumSnapshot> decoder_snapshots;
+    if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq) {
+      const auto status = sdr_decoder_channelizer_.process(block,
+                                                           decoder_block);
+      if (status != cwassistant::core::IqBlockStatus::Accepted &&
+          status != cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity) {
+        // The wide overview remains live even if the configured decoder slice
+        // is temporarily outside the acquired hardware passband.
+        for (auto& snapshot : snapshots) {
+          QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
+          std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
+                    bins.begin());
+          QVector<float> instantaneous_bins(
+              static_cast<qsizetype>(snapshot.instantaneous_bins_dbfs.size()));
+          std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
+                    snapshot.instantaneous_bins_dbfs.cend(),
+                    instantaneous_bins.begin());
+          emit frameProduced(SpectrumFrame{
+              .bins_dbfs = std::move(bins),
+              .sequence = snapshot.sequence,
+              .timestamp_ns = snapshot.timestamp_ns,
+              .lower_frequency_hz = snapshot.lower_frequency_hz,
+              .upper_frequency_hz = snapshot.upper_frequency_hz,
+              .instantaneous_bins_dbfs = std::move(instantaneous_bins),
+          });
+        }
+        continue;
+      }
+      if (status == cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity)
+        sdr_decoder_pending_ = {};
+      if (decoder_block.sample_count > 0) {
+        if (sdr_decoder_pending_.sample_count > 0 &&
+            (sdr_decoder_pending_.stream.sample_rate_hz !=
+                 decoder_block.stream.sample_rate_hz ||
+             sdr_decoder_pending_.stream.center_frequency_hz !=
+                 decoder_block.stream.center_frequency_hz)) {
+          sdr_decoder_pending_ = {};
+        }
+        if (sdr_decoder_pending_.sample_count == 0) {
+          sdr_decoder_pending_.stream = decoder_block.stream;
+          sdr_decoder_pending_.timestamp_ns = decoder_block.timestamp_ns;
+          sdr_decoder_pending_.sequence = sdr_decoder_pending_sequence_++;
+        }
+        const std::size_t available = sdr_decoder_pending_.samples.size() -
+                                      sdr_decoder_pending_.sample_count;
+        const std::size_t copied =
+            std::min(available, decoder_block.sample_count);
+        std::copy_n(decoder_block.samples.cbegin(), copied,
+                    sdr_decoder_pending_.samples.begin() +
+                        static_cast<std::ptrdiff_t>(
+                            sdr_decoder_pending_.sample_count));
+        sdr_decoder_pending_.sample_count += copied;
+        if (copied < decoder_block.sample_count) {
+          decoder_carry.stream = decoder_block.stream;
+          decoder_carry.timestamp_ns =
+              decoder_block.timestamp_ns + static_cast<std::uint64_t>(
+                  static_cast<long double>(copied) * 1'000'000'000.0L /
+                  decoder_block.stream.sample_rate_hz);
+          decoder_carry.sequence = sdr_decoder_pending_sequence_++;
+          decoder_carry.sample_count = decoder_block.sample_count - copied;
+          std::copy_n(decoder_block.samples.cbegin() +
+                          static_cast<std::ptrdiff_t>(copied),
+                      decoder_carry.sample_count,
+                      decoder_carry.samples.begin());
+        }
+      }
+      // Multi-MHz devices can yield only a few dozen decimated samples per
+      // hardware block. Batch them so the decoder, card model, and monitor do
+      // not receive thousands of tiny queued updates per second.
+      if (sdr_decoder_pending_.sample_count < 512) {
+        for (auto& snapshot : snapshots) {
+          QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
+          std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
+                    bins.begin());
+          QVector<float> instantaneous_bins(
+              static_cast<qsizetype>(snapshot.instantaneous_bins_dbfs.size()));
+          std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
+                    snapshot.instantaneous_bins_dbfs.cend(),
+                    instantaneous_bins.begin());
+          emit frameProduced(SpectrumFrame{
+              .bins_dbfs = std::move(bins),
+              .sequence = snapshot.sequence,
+              .timestamp_ns = snapshot.timestamp_ns,
+              .lower_frequency_hz = snapshot.lower_frequency_hz,
+              .upper_frequency_hz = snapshot.upper_frequency_hz,
+              .instantaneous_bins_dbfs = std::move(instantaneous_bins),
+          });
+        }
+        continue;
+      }
+      processing_block = &sdr_decoder_pending_;
+      decoder_snapshots = decoder_analyzer_.process(*processing_block);
+    } else {
+      decoder_snapshots = snapshots;
+    }
+    for (const auto& snapshot : decoder_snapshots) {
       // Detection consumes the unaveraged bins and applies its own fixed-time
       // smoothing, so the operator's display averaging cannot change which
       // signals are discovered or how quickly they qualify.
+      if (block.stream.kind != cwassistant::core::StreamKind::ComplexIq) {
+        static_cast<void>(decoder_.updateSpectrum(
+            snapshot.timestamp_ns, snapshot.lower_frequency_hz,
+            snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
+            false));
+        continue;
+      }
+      const double bin_width_hz = snapshot.bin_width_hz;
+      const double requested_lower_hz = sdr_decoder_center_frequency_hz_ -
+          sdr_decoder_bandwidth_hz_ * 0.5;
+      const double requested_upper_hz = sdr_decoder_center_frequency_hz_ +
+          sdr_decoder_bandwidth_hz_ * 0.5;
+      const auto first_bin = static_cast<std::size_t>(std::clamp(
+          std::ceil((requested_lower_hz - snapshot.lower_frequency_hz) /
+                    bin_width_hz),
+          0.0,
+          static_cast<double>(snapshot.instantaneous_bins_dbfs.size() - 1U)));
+      const auto last_bin = static_cast<std::size_t>(std::clamp(
+          std::floor((requested_upper_hz - snapshot.lower_frequency_hz) /
+                     bin_width_hz),
+          static_cast<double>(first_bin),
+          static_cast<double>(snapshot.instantaneous_bins_dbfs.size() - 1U)));
+      const double detector_lower_hz = snapshot.lower_frequency_hz +
+          static_cast<double>(first_bin) * bin_width_hz;
+      const auto detector_bins = std::span<const float>(
+          snapshot.instantaneous_bins_dbfs.data() + first_bin,
+          last_bin - first_bin + 1U);
       static_cast<void>(decoder_.updateSpectrum(
-          snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-          snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
-          false));
+          snapshot.timestamp_ns, detector_lower_hz,
+          detector_lower_hz +
+              static_cast<double>(detector_bins.size()) * bin_width_hz,
+          detector_bins, false));
     }
-    const auto& decoder_channels = decoder_.processSamples(block);
+    const auto& decoder_channels = decoder_.processSamples(*processing_block);
     const auto& raw_monitor_audio = decoder_.monitorAudio();
     if (!raw_monitor_audio.empty() &&
-        block.stream.kind == cwassistant::core::StreamKind::ComplexIq) {
+        processing_block->stream.kind ==
+            cwassistant::core::StreamKind::ComplexIq) {
       // A raw IQ passband is not meaningful loudspeaker audio. Selected-track
       // monitoring is already narrow-filtered and re-pitched by the channel
       // bank; downsample only that result to a widely supported audio rate.
       if (monitor_mode_ == 2) {
         const double monitor_output_rate_hz =
-            std::min(48'000.0, block.stream.sample_rate_hz);
-        if (monitor_resample_input_rate_hz_ != block.stream.sample_rate_hz) {
+            std::min(48'000.0, processing_block->stream.sample_rate_hz);
+        if (monitor_resample_input_rate_hz_ !=
+            processing_block->stream.sample_rate_hz) {
           monitor_resample_phase_ = 0.0;
           monitor_resample_sum_ = 0.0F;
           monitor_resample_count_ = 0;
-          monitor_resample_input_rate_hz_ = block.stream.sample_rate_hz;
+          monitor_resample_input_rate_hz_ =
+              processing_block->stream.sample_rate_hz;
         }
         std::vector<float> resampled;
         resampled.reserve(static_cast<std::size_t>(
             std::ceil(static_cast<double>(raw_monitor_audio.size()) *
-                      monitor_output_rate_hz / block.stream.sample_rate_hz)));
+                      monitor_output_rate_hz /
+                      processing_block->stream.sample_rate_hz)));
         for (const float sample : raw_monitor_audio) {
           monitor_resample_sum_ += sample;
           ++monitor_resample_count_;
           monitor_resample_phase_ += monitor_output_rate_hz;
-          if (monitor_resample_phase_ >= block.stream.sample_rate_hz) {
-            monitor_resample_phase_ -= block.stream.sample_rate_hz;
+          if (monitor_resample_phase_ >=
+              processing_block->stream.sample_rate_hz) {
+            monitor_resample_phase_ -=
+                processing_block->stream.sample_rate_hz;
             resampled.push_back(monitor_resample_sum_ /
                                 static_cast<float>(monitor_resample_count_));
             monitor_resample_sum_ = 0.0F;
@@ -721,10 +917,12 @@ void LiveAudioDspWorker::drain() {
     } else {
       const QByteArray monitor_audio = monitor_bytes(raw_monitor_audio);
       if (!monitor_audio.isEmpty())
-        emit monitorAudioProduced(monitor_audio, block.stream.sample_rate_hz);
+        emit monitorAudioProduced(monitor_audio,
+                                  processing_block->stream.sample_rate_hz);
     }
     const auto& character_tracks = decoder_.characterRefinementTracks();
-    for (auto& window : character_frontends_.process(block, character_tracks))
+    for (auto& window :
+         character_frontends_.process(*processing_block, character_tracks))
       emit characterWindowProduced(0, std::move(window));
     for (auto& snapshot : snapshots) {
       QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
@@ -744,44 +942,12 @@ void LiveAudioDspWorker::drain() {
           .instantaneous_bins_dbfs = std::move(instantaneous_bins),
       });
     }
-    emit decoderProduced(decoderChannelModel(decoder_channels));
+    if (block.stream.kind != cwassistant::core::StreamKind::ComplexIq ||
+        !decoder_snapshots.empty())
+      emit decoderProduced(decoderChannelModel(decoder_channels));
+    if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq)
+      sdr_decoder_pending_ = std::move(decoder_carry);
 
-    if (capture_active_ && capture_writer_pending_) {
-      if (capture_writer_.open(capture_wav_path_.toStdString(),
-                               block.stream.sample_rate_hz)) {
-        capture_writer_pending_ = false;
-      } else {
-        finishDebugCapture(QStringLiteral("Could not open capture audio file"));
-      }
-    }
-    if (capture_active_ && !capture_writer_pending_) {
-      if (!capture_have_start_) {
-        capture_start_ns_ = block.timestamp_ns;
-        capture_last_snapshot_ns_ = block.timestamp_ns;
-        capture_have_start_ = true;
-      }
-      if (!capture_writer_.writeBlock(block)) {
-        finishDebugCapture(QStringLiteral("Capture reached its maximum size"));
-      } else {
-        const double elapsed_seconds =
-            static_cast<double>(block.timestamp_ns - capture_start_ns_) /
-            1'000'000'000.0;
-        if (elapsed_seconds >= maximum_capture_seconds_) {
-          finishDebugCapture(
-              QStringLiteral("Reached the %1-minute capture limit")
-                  .arg(maximum_capture_seconds_ / 60.0, 0, 'g', 2));
-        } else if (static_cast<double>(block.timestamp_ns -
-                                       capture_last_snapshot_ns_) /
-                       1'000'000'000.0 >=
-                   kSnapshotIntervalSeconds) {
-          capture_last_snapshot_ns_ = block.timestamp_ns;
-          writeDebugCaptureSnapshot();
-          emit debugCaptureStateChanged(true, capture_base_path_,
-                                        elapsed_seconds,
-                                        QStringLiteral("Recording"));
-        }
-      }
-    }
   }
   if (drained > 0) {
     emit diagnosticsProduced(

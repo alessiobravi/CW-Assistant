@@ -108,7 +108,7 @@ int main() {
       !contains(qml, "objectName: \"currentSenderLabel\"") ||
       !contains(qml, "modelData.currentSenderCallsign") ||
       !contains(qml, "modelData.currentSenderWpm") ||
-      !contains(qml, "text: \"TX \" + modelData.callsign") ||
+      !contains(qml, "? \"TX \" + modelData.callsign : \"TX\"") ||
       !contains(qml, "Advisory acoustic consensus") ||
       !contains(qml, "sessionCard.localModelCallsign") ||
       !contains(qml, "function applyStableText(nextText)") ||
@@ -178,7 +178,7 @@ int main() {
       !contains(transcript, "ScrollBar.horizontal: ScrollBar") ||
       !contains(transcript, "policy: ScrollBar.AlwaysOff") ||
       !contains(transcript, "ScrollBar.vertical: ScrollBar") ||
-      !contains(transcript, "policy: ScrollBar.AlwaysOn") ||
+      !contains(transcript, "policy: ScrollBar.AsNeeded") ||
       !contains(session_header,
                 "height: Math.ceil(sessionCardLayout.implicitHeight + 20)") ||
       !contains(session_header, "id: sessionCardLayout") ||
@@ -378,7 +378,7 @@ int main() {
       !contains(qml, "replayController.moveDecoderSession(") ||
       !contains(qml, "objectName: \"decoderSessionMonitorButton\"") ||
       !contains(qml, "replayController.toggleMonitorChannel(") ||
-      !contains(qml, "replayController.monitoredChannelIds.indexOf(") ||
+      !contains(qml, "replayController.isMonitorChannelEnabled(") ||
       contains(qml, "objectName: \"monitorSignalButton\"") ||
       contains(qml, "text: \"STREAM\"") ||
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||

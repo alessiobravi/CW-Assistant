@@ -1184,11 +1184,16 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
   result.active_transmission_sequence = active_transmission_sequence_;
   result.current_sender_callsign = current_sender_callsign_;
   result.current_sender_wpm = current_sender_wpm_;
+  bool active_text_present = false;
   for (const auto& transmission : transmissions_) {
-    if (!result.contextual_text.empty()) result.contextual_text += "  |  ";
+    if (!result.contextual_text.empty()) result.contextual_text += '\n';
     result.contextual_text += transmission.text;
   }
-  if (!active_transmission_completed_ && !hypotheses_.empty()) {
+  // Before lock, provisional_text owns the leader's complete uncommitted
+  // candidate. Publishing that same candidate here as contextual stable text
+  // would make a two-stage presentation append it twice. Once locked, only
+  // the genuinely stable active prefix belongs in contextual_text.
+  if (locked_ && !active_transmission_completed_ && !hypotheses_.empty()) {
     const auto& primary = hypotheses_[leader_index_].decoder.currentUpdate().text;
     const std::size_t primary_start = std::min(
         transmission_primary_starts_[leader_index_], primary.size());
@@ -1197,8 +1202,9 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
         : primary.substr(primary_start);
     active = reconstructCwWordGaps(active);
     if (!active.empty()) {
-      if (!result.contextual_text.empty()) result.contextual_text += "  |  ";
+      if (!result.contextual_text.empty()) result.contextual_text += '\n';
       result.contextual_text += active;
+      active_text_present = true;
     }
   }
   result.refined_text = refined_text_;
@@ -1208,6 +1214,16 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
     result.text = committed_prefix_;
   } else {
     result.text = committed_prefix_ + result.text;
+  }
+  // A newly keyed turn first exists only in provisional_text. Reserve its
+  // line at that same snapshot so a presentation can append the provisional
+  // suffix without momentarily joining it to the preceding transmission.
+  // Once the character becomes stable, the active text replaces this empty
+  // line with the same visible content instead of forcing a corrective reflow.
+  if (!active_transmission_completed_ && !active_text_present &&
+      !transmissions_.empty() && !result.provisional_text.empty() &&
+      !result.contextual_text.empty() && result.contextual_text.back() != '\n') {
+    result.contextual_text.push_back('\n');
   }
   return result;
 }

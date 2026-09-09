@@ -289,4 +289,153 @@ IqChannelizerTelemetry IqToAudioChannelizer::telemetry() const noexcept {
           .output_samples = output_samples_};
 }
 
+IqSubbandDecimator::IqSubbandDecimator(
+    const IqSubbandDecimatorConfig config, const IqReceiveLimits limits)
+    : validator_(limits) {
+  static_cast<void>(configure(config));
+}
+
+bool IqSubbandDecimator::configure(
+    const IqSubbandDecimatorConfig config) noexcept {
+  if (!finite(config.center_frequency_hz) ||
+      !finite(config.bandwidth_hz) ||
+      !finite(config.maximum_output_sample_rate_hz) ||
+      config.center_frequency_hz < 0.0 ||
+      config.center_frequency_hz > 99'000'000'000.0 ||
+      config.bandwidth_hz < 2'000.0 || config.bandwidth_hz > 192'000.0 ||
+      config.maximum_output_sample_rate_hz < 8'000.0 ||
+      config.maximum_output_sample_rate_hz > 192'000.0 ||
+      config.bandwidth_hz >= config.maximum_output_sample_rate_hz * 0.8) {
+    return false;
+  }
+  config_ = config;
+  reset();
+  return true;
+}
+
+void IqSubbandDecimator::resetSignalState() noexcept {
+  tuning_oscillator_ = {1.0, 0.0};
+  output_phase_ = 0.0;
+  oscillator_samples_ = 0;
+  for (auto& stage : low_pass_) {
+    stage.z1 = {};
+    stage.z2 = {};
+  }
+}
+
+void IqSubbandDecimator::reset() noexcept {
+  validator_.reset();
+  input_stream_ = {};
+  output_sample_rate_hz_ = 0.0;
+  output_sequence_ = 0;
+  stream_initialized_ = false;
+  resetSignalState();
+}
+
+void IqSubbandDecimator::initializeForStream(
+    const StreamDescriptor& stream) noexcept {
+  input_stream_ = stream;
+  output_sample_rate_hz_ =
+      std::min(stream.sample_rate_hz, config_.maximum_output_sample_rate_hz);
+  const double offset_hz =
+      config_.center_frequency_hz - stream.center_frequency_hz;
+  const double angle =
+      -2.0 * std::numbers::pi * offset_hz / stream.sample_rate_hz;
+  tuning_step_ = {std::cos(angle), std::sin(angle)};
+
+  // A fourth-order Butterworth response gives a flat CW decoding window and
+  // meaningful rejection before the lower-rate Nyquist boundary. The two Q
+  // values are the conjugate pole pairs of a normalized fourth-order filter.
+  const double cutoff_hz = std::min(
+      output_sample_rate_hz_ * 0.44, config_.bandwidth_hz * 0.45);
+  constexpr std::array<double, 2> q_values{0.541196100146197,
+                                           1.306562964876377};
+  const double omega =
+      2.0 * std::numbers::pi * cutoff_hz / stream.sample_rate_hz;
+  const double cosine = std::cos(omega);
+  const double sine = std::sin(omega);
+  for (std::size_t index = 0; index < low_pass_.size(); ++index) {
+    const double alpha = sine / (2.0 * q_values[index]);
+    const double a0 = 1.0 + alpha;
+    auto& stage = low_pass_[index];
+    stage.b0 = ((1.0 - cosine) * 0.5) / a0;
+    stage.b1 = (1.0 - cosine) / a0;
+    stage.b2 = stage.b0;
+    stage.a1 = (-2.0 * cosine) / a0;
+    stage.a2 = (1.0 - alpha) / a0;
+  }
+  resetSignalState();
+  stream_initialized_ = true;
+}
+
+IqBlockStatus IqSubbandDecimator::process(
+    const RealtimeSampleBlock& input,
+    RealtimeSampleBlock& output) noexcept {
+  output = {};
+  const IqBlockStatus status = validator_.validate(input);
+  if (status != IqBlockStatus::Accepted &&
+      status != IqBlockStatus::AcceptedAfterDiscontinuity) {
+    return status;
+  }
+  const double offset_hz =
+      config_.center_frequency_hz - input.stream.center_frequency_hz;
+  if (std::abs(offset_hz) + config_.bandwidth_hz * 0.5 >=
+      input.stream.sample_rate_hz * 0.5) {
+    return IqBlockStatus::RejectedDescriptor;
+  }
+
+  const bool changed_stream = !stream_initialized_ ||
+      !sameStream(input_stream_, input.stream);
+  if (changed_stream) {
+    initializeForStream(input.stream);
+  } else if (status == IqBlockStatus::AcceptedAfterDiscontinuity) {
+    resetSignalState();
+  }
+
+  output.stream = {.kind = StreamKind::ComplexIq,
+                   .sample_rate_hz = output_sample_rate_hz_,
+                   .center_frequency_hz = config_.center_frequency_hz,
+                   .channel_count = 1};
+  bool have_timestamp = false;
+  for (std::size_t index = 0; index < input.sample_count; ++index) {
+    std::complex<double> filtered =
+        static_cast<std::complex<double>>(input.samples[index]) *
+        tuning_oscillator_;
+    tuning_oscillator_ *= tuning_step_;
+    ++oscillator_samples_;
+    if ((oscillator_samples_ & 1'023U) == 0U) normalize(tuning_oscillator_);
+
+    for (auto& stage : low_pass_) {
+      const std::complex<double> next = stage.b0 * filtered + stage.z1;
+      stage.z1 = stage.b1 * filtered - stage.a1 * next + stage.z2;
+      stage.z2 = stage.b2 * filtered - stage.a2 * next;
+      filtered = next;
+    }
+
+    output_phase_ += output_sample_rate_hz_;
+    if (output_phase_ + 1.0e-9 < input.stream.sample_rate_hz) continue;
+    output_phase_ -= input.stream.sample_rate_hz;
+    if (output.sample_count >= output.samples.size()) break;
+    if (!have_timestamp) {
+      output.timestamp_ns = input.timestamp_ns + static_cast<std::uint64_t>(
+          static_cast<long double>(index) * 1'000'000'000.0L /
+          input.stream.sample_rate_hz);
+      have_timestamp = true;
+    }
+    output.samples[output.sample_count++] = {
+        static_cast<float>(filtered.real()),
+        static_cast<float>(filtered.imag())};
+  }
+  if (output.sample_count > 0) output.sequence = output_sequence_++;
+  return status;
+}
+
+const IqSubbandDecimatorConfig& IqSubbandDecimator::config() const noexcept {
+  return config_;
+}
+
+double IqSubbandDecimator::outputSampleRateHz() const noexcept {
+  return output_sample_rate_hz_;
+}
+
 }  // namespace cwassistant::core

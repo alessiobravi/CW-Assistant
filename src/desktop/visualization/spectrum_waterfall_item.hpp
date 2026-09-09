@@ -30,6 +30,9 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(double effectiveUpperBoundDb READ effectiveUpperBoundDb NOTIFY rangeChanged)
   Q_PROPERTY(double lowerFrequencyHz READ lowerFrequencyHz NOTIFY frequencyRangeChanged)
   Q_PROPERTY(double upperFrequencyHz READ upperFrequencyHz NOTIFY frequencyRangeChanged)
+  Q_PROPERTY(double sourceLowerFrequencyHz READ sourceLowerFrequencyHz NOTIFY frequencyRangeChanged)
+  Q_PROPERTY(double sourceUpperFrequencyHz READ sourceUpperFrequencyHz NOTIFY frequencyRangeChanged)
+  Q_PROPERTY(bool zoomed READ zoomed NOTIFY frequencyRangeChanged)
   Q_PROPERTY(qulonglong droppedRows READ droppedRows NOTIFY droppedRowsChanged)
   Q_PROPERTY(double estimatedNoiseFloorDb READ estimatedNoiseFloorDb NOTIFY noiseFloorChanged)
 
@@ -66,11 +69,17 @@ class SpectrumWaterfallItem : public QQuickItem {
   [[nodiscard]] double effectiveUpperBoundDb() const noexcept;
   [[nodiscard]] double lowerFrequencyHz() const noexcept;
   [[nodiscard]] double upperFrequencyHz() const noexcept;
+  [[nodiscard]] double sourceLowerFrequencyHz() const noexcept;
+  [[nodiscard]] double sourceUpperFrequencyHz() const noexcept;
+  [[nodiscard]] bool zoomed() const noexcept;
   [[nodiscard]] qulonglong droppedRows() const noexcept;
   [[nodiscard]] double estimatedNoiseFloorDb() const noexcept;
 
  public slots:
   void acceptFrame(const cwassistant::desktop::SpectrumFrame& frame);
+  void zoomAt(double frequency_hz, double factor);
+  void panBy(double frequency_delta_hz);
+  void resetZoom();
 
  signals:
   void sourceChanged();
@@ -108,6 +117,9 @@ class SpectrumWaterfallItem : public QQuickItem {
   double estimated_noise_floor_db_{-120.0};
   double lower_frequency_hz_{0.0};
   double upper_frequency_hz_{0.0};
+  double source_lower_frequency_hz_{0.0};
+  double source_upper_frequency_hz_{0.0};
+  bool view_initialized_{false};
   bool automatic_range_{true};
   bool automatic_range_initialized_{false};
   bool noise_suppression_{true};

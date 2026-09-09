@@ -8,6 +8,37 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Direct-SDR reception now separates the complete acquired RF overview from a
+  bounded CW decoder window. The wide spectrum and waterfall remain visible,
+  while one shared tuned, anti-aliased and decimated IQ branch limits the
+  sample rate presented to carrier detection and per-stream decoding.
+
+- Settings > SDR now derives sample-rate, hardware RF-bandwidth, antenna/input,
+  gain-mode, and gain limits from the selected receiver when its driver exposes
+  them. Effective low SDRplay sample rates use the driver's supported
+  decimation; RSPduo selector entries are identified as operating modes rather
+  than separate physical receivers.
+
+- The direct-SDR spectrum and waterfall support pointer-centred wheel zoom,
+  middle-button panning, double-click/full-span reset, and a visible overlay for
+  the bounded decoder window. Right-clicking an SDR frequency moves that window
+  before starting the normal manual CW probe.
+
+- A profile can keep the SDR and decoder window aligned with authoritative RX
+  VFO readback from any radio-control provider. An optional signed SDR LO
+  offset accommodates independently tuned receiver hardware; the offset is
+  bounded so the decoder window remains inside the acquired passband.
+
+- Decoder-card TX and speaker actions now occupy a stable lower action row.
+  They remain clickable while live text refreshes, and the speaker remains the
+  sole per-stream monitor control; opening a card still never starts audio.
+
+- Live transcripts use a slightly smaller reading font, reserve a scrollbar
+  only when needed, append provisional characters immediately, and start a
+  clean new line after a sustained transmission pause. Later acoustic
+  refinement can still correct the provisional tail without rebuilding the
+  card on every character.
+
 - Opening Settings > SDR now performs one receive-only device discovery after
   the page renders. Application and profile startup still never probe hardware,
   and **Refresh devices** remains available for reconnect and hot-plug scans.
@@ -19,6 +50,20 @@ All notable changes to CW Buddy are recorded here. The format follows
   sole control for enabling or disabling one or more filtered CW streams.
 
 ### Fixed
+
+- High-rate SDR input no longer drives the overview FFT or every CW channel at
+  the full hardware sample rate. Overview frame production is rate-limited and
+  the decoder consumes only the configured down-converted window, preventing
+  multi-megasample receivers from flooding the UI and building decode latency.
+
+- Decoder-card commands no longer depend on a transient delegate instance
+  surviving from mouse press through release. This removes the apparent
+  status-dependent speaker control and prevents text updates from swallowing a
+  monitor request.
+
+- A newly keyed transmission no longer appears briefly attached to the end of
+  the preceding transmission, and unlocked provisional text is no longer
+  duplicated when the timing hypothesis settles.
 
 - Packaged SDR module discovery now resolves application-relative directories
   before retaining operator-provided SoapySDR paths. Moving a portable install

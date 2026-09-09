@@ -64,6 +64,22 @@ int main() {
       !contains(header, "Q_INVOKABLE void selectSdrDevice(int index)")) {
     return 5;
   }
+
+  // Wide acquisition and bounded decoding are separate operator controls.
+  // Standard capability-driven settings remain provider-neutral, and the
+  // radio-follow route consumes authoritative readback rather than UI intent.
+  if (!contains(qml, "objectName: \"sdrBandwidthCombo\"") ||
+      !contains(qml, "objectName: \"sdrAntennaCombo\"") ||
+      !contains(qml, "objectName: \"sdrDecoderBandwidthCombo\"") ||
+      !contains(qml, "objectName: \"sdrFollowRadioVfoCheck\"") ||
+      !contains(qml, "RSPduo entries are operating modes") ||
+      !contains(main_qml, "objectName: \"sdrDecoderWindowOverlay\"") ||
+      !contains(main_qml, "spectrumDisplay.zoomAt(") ||
+      !contains(main_qml, "spectrumDisplay.panBy(") ||
+      !contains(controller_header, "liveSdrDecoderWindowRequested") ||
+      !contains(header, "sdrFollowRadioVfo")) {
+    return 10;
+  }
   // Opening the SDR page requests discovery once, after the page can render.
   // Application/profile construction must still never probe hardware.
   if (!contains(qml, "property bool sdrDiscoveryRequested: false") ||

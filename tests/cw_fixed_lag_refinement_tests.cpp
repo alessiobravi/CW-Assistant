@@ -103,6 +103,40 @@ struct DecoderFixture {
   }
 };
 
+void testImmediateProvisionalPresentationContract() {
+  // During acquisition the leader may still change, so none of its text is
+  // stable at the multi-speed boundary. The complete visible candidate must
+  // nevertheless be available immediately through provisional_text.
+  cwassistant::core::CwMultiSpeedDecoder acquiring{
+      {.initial_wpm = 20.0},
+      {.preferred_wpm = 20.0,
+       .minimum_acquisition_ms = 5'000.0,
+       .lock_after_symbols = 8,
+       .lock_score_margin = 1.0F}};
+  std::uint64_t acquiring_now = 0;
+  cwassistant::core::CwDecoderUpdate acquiring_update;
+  const auto acquiring_advance = [&](const int milliseconds,
+                                     const float evidence) {
+    for (int elapsed = 0; elapsed < milliseconds; elapsed += 10) {
+      acquiring_now += 10'000'000U;
+      acquiring_update = acquiring.process(acquiring_now, evidence);
+    }
+  };
+  acquiring_advance(100, 0.0F);
+  acquiring_advance(60, 12.0F);
+  acquiring_advance(180, 0.0F);
+  expect(acquiring_update.text.empty() &&
+             acquiring_update.provisional_text == "E",
+         "an unlocked decoder exposes its first completed character "
+         "immediately as the whole provisional candidate");
+  acquiring_advance(60, 0.0F);
+  expect(acquiring_update.text.empty() &&
+             acquiring_update.provisional_text == "E" &&
+             acquiring_update.contextual_text.empty(),
+         "an unlocked decoder keeps leader-stable text provisional until "
+         "the speed hypothesis locks");
+}
+
 void testSuspensionDefersButBoundaryFinalizes() {
   DecoderFixture brief;
   static_cast<void>(brief.advance(100, 0.0F));
@@ -135,12 +169,27 @@ void testSuspensionDefersButBoundaryFinalizes() {
          "sustained silence finalizes the bounded acoustic turn");
   const std::string first_turn_refined = boundary.refined_text;
   ended.now_ns += 3'000'000'000U;
-  static_cast<void>(ended.sendE());
+  const auto second_turn_pending = ended.sendE();
+  expect(second_turn_pending.transmissions.size() == 1U &&
+             second_turn_pending.contextual_text ==
+                 second_turn_pending.transmissions.front().text + "\n" &&
+             !second_turn_pending.provisional_text.empty(),
+         "the next provisional transmission reserves its newline before "
+         "stable text arrives");
   const auto second_turn = ended.decoder.flush(ended.now_ns + 1'000'000U);
   expect(second_turn.refined_text.starts_with(first_turn_refined) &&
              second_turn.refined_text.size() > first_turn_refined.size(),
          "a new segment resets only its observation watermark and appends the "
          "second turn");
+  const auto newline = second_turn.contextual_text.find('\n');
+  expect(second_turn.transmissions.size() == 2U &&
+             newline != std::string::npos &&
+             newline == second_turn.contextual_text.rfind('\n') &&
+             newline > 0U && newline + 1U < second_turn.contextual_text.size() &&
+             second_turn.contextual_text[newline - 1U] != ' ' &&
+             second_turn.contextual_text[newline + 1U] != ' ' &&
+             second_turn.contextual_text.find('|') == std::string::npos,
+         "a sustained pause separates transmissions with one clean newline");
 
   DecoderFixture flushed;
   static_cast<void>(flushed.advance(100, 0.0F));
@@ -175,6 +224,7 @@ void testCompletedTurnOwnsAlignedPhysicalTiming() {
 int main() {
   testCommitLimitUsesTimeAndLaterRuns();
   testLaterSpacingResolvesRecentWordGap();
+  testImmediateProvisionalPresentationContract();
   testSuspensionDefersButBoundaryFinalizes();
   testCompletedTurnOwnsAlignedPhysicalTiming();
   std::cout << "cw_fixed_lag_refinement_tests: PASS\n";

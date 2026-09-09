@@ -25,13 +25,14 @@ class SdrCaptureWorker final : public QObject {
 
  public slots:
   void start(const QString& device_id, double center_frequency_hz,
-             double sample_rate_hz, bool automatic_gain, double gain_db);
+             double sample_rate_hz, double bandwidth_hz,
+             const QString& antenna, bool automatic_gain, double gain_db);
   void stop();
 
  signals:
   void started(const QString& device_id, double actual_center_frequency_hz,
-               double actual_sample_rate_hz, bool actual_automatic_gain,
-               double actual_gain_db);
+               double actual_sample_rate_hz, double actual_bandwidth_hz,
+               bool actual_automatic_gain, double actual_gain_db);
   void stopped();
   void failed(const QString& message);
   void diagnosticsChanged(qulonglong source_overruns,

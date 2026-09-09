@@ -9,6 +9,7 @@
 #include <SoapySDR/Version.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -38,6 +39,24 @@ std::string device_id(const SoapySDR::Kwargs& values, const std::size_t index) {
 double nearest_supported_rate(SoapySDR::Device& device,
                               const double requested) {
   const auto ranges = device.getSampleRateRange(SOAPY_SDR_RX, kRxChannel);
+  if (ranges.empty()) return requested;
+  double best = ranges.front().minimum();
+  double distance = std::abs(best - requested);
+  for (const auto& range : ranges) {
+    const double candidate = std::clamp(requested, range.minimum(),
+                                        range.maximum());
+    const double candidate_distance = std::abs(candidate - requested);
+    if (candidate_distance < distance) {
+      best = candidate;
+      distance = candidate_distance;
+    }
+  }
+  return best;
+}
+
+double nearest_supported_bandwidth(SoapySDR::Device& device,
+                                   const double requested) {
+  const auto ranges = device.getBandwidthRange(SOAPY_SDR_RX, kRxChannel);
   if (ranges.empty()) return requested;
   double best = ranges.front().minimum();
   double distance = std::abs(best - requested);
@@ -117,6 +136,80 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
     return report;
   }
 
+  SdrDeviceCapabilities probe(const std::string& selected_id) override {
+    SdrDeviceCapabilities capabilities;
+    try {
+      if (known_devices_.find(selected_id) == known_devices_.end())
+        (void)discover();
+      const auto found = known_devices_.find(selected_id);
+      if (found == known_devices_.end()) {
+        capabilities.diagnostic =
+            "The selected SDR is no longer available. Refresh devices.";
+        return capabilities;
+      }
+      SoapySDR::Device* probe_device = SoapySDR::Device::make(found->second);
+      if (probe_device == nullptr) {
+        capabilities.diagnostic =
+            "The selected SDR could not be opened for capability probing.";
+        return capabilities;
+      }
+      const auto release = [&probe_device] {
+        if (probe_device != nullptr) SoapySDR::Device::unmake(probe_device);
+        probe_device = nullptr;
+      };
+      try {
+        const auto append_ranges = [](const SoapySDR::RangeList& ranges,
+                                      std::vector<double>& values) {
+          constexpr std::array<double, 13> common{
+              62'500.0, 96'000.0, 125'000.0, 192'000.0, 250'000.0,
+              384'000.0, 500'000.0, 768'000.0, 1'000'000.0,
+              2'000'000.0, 2'400'000.0, 8'000'000.0, 10'000'000.0};
+          for (const auto& range : ranges) {
+            values.push_back(range.minimum());
+            for (const double candidate : common) {
+              if (candidate >= range.minimum() &&
+                  candidate <= range.maximum())
+                values.push_back(candidate);
+            }
+            values.push_back(range.maximum());
+          }
+          std::ranges::sort(values);
+          values.erase(std::unique(values.begin(), values.end(),
+                                   [](const double left, const double right) {
+                                     return std::abs(left - right) < 0.5;
+                                   }),
+                       values.end());
+        };
+        append_ranges(
+            probe_device->getSampleRateRange(SOAPY_SDR_RX, kRxChannel),
+            capabilities.sample_rates_hz);
+        append_ranges(
+            probe_device->getBandwidthRange(SOAPY_SDR_RX, kRxChannel),
+            capabilities.bandwidths_hz);
+        capabilities.antennas =
+            probe_device->listAntennas(SOAPY_SDR_RX, kRxChannel);
+        capabilities.automatic_gain_available =
+            probe_device->hasGainMode(SOAPY_SDR_RX, kRxChannel);
+        const auto gain =
+            probe_device->getGainRange(SOAPY_SDR_RX, kRxChannel);
+        capabilities.minimum_gain_db = gain.minimum();
+        capabilities.maximum_gain_db = gain.maximum();
+        capabilities.gain_step_db = gain.step();
+        capabilities.available = true;
+        capabilities.diagnostic =
+            "Device capabilities loaded; reception remains stopped.";
+      } catch (...) {
+        release();
+        throw;
+      }
+      release();
+    } catch (const std::exception& exception) {
+      capabilities.diagnostic =
+          std::string("SDR capability probe failed: ") + exception.what();
+    }
+    return capabilities;
+  }
+
   bool open(const SdrReceiveConfiguration& configuration,
             SdrActualConfiguration& actual, std::string& error) override {
     close();
@@ -139,8 +232,26 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
       const double rate = nearest_supported_rate(*device_,
                                                   configuration.sample_rate_hz);
       device_->setSampleRate(SOAPY_SDR_RX, kRxChannel, rate);
+      if (configuration.bandwidth_hz > 0.0) {
+        device_->setBandwidth(
+            SOAPY_SDR_RX, kRxChannel,
+            nearest_supported_bandwidth(*device_,
+                                        configuration.bandwidth_hz));
+      }
       device_->setFrequency(SOAPY_SDR_RX, kRxChannel,
                             configuration.center_frequency_hz);
+      if (!configuration.antenna.empty()) {
+        const auto antennas =
+            device_->listAntennas(SOAPY_SDR_RX, kRxChannel);
+        if (std::ranges::find(antennas, configuration.antenna) ==
+            antennas.end()) {
+          error = "The selected SDR antenna is no longer available.";
+          close();
+          return false;
+        }
+        device_->setAntenna(SOAPY_SDR_RX, kRxChannel,
+                            configuration.antenna);
+      }
       if (device_->hasGainMode(SOAPY_SDR_RX, kRxChannel)) {
         device_->setGainMode(SOAPY_SDR_RX, kRxChannel,
                              configuration.automatic_gain);
@@ -157,6 +268,8 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
                     device_->getFrequency(SOAPY_SDR_RX, kRxChannel),
                 .sample_rate_hz =
                     device_->getSampleRate(SOAPY_SDR_RX, kRxChannel),
+                .bandwidth_hz =
+                    device_->getBandwidth(SOAPY_SDR_RX, kRxChannel),
                 .automatic_gain =
                     device_->hasGainMode(SOAPY_SDR_RX, kRxChannel) &&
                     device_->getGainMode(SOAPY_SDR_RX, kRxChannel),

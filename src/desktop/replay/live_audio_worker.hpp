@@ -16,6 +16,7 @@
 
 #include "cwassistant/core/sample_block.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include "cwassistant/core/iq_receive.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_writer.hpp"
 #include "live_audio_pipe.hpp"
@@ -95,6 +96,7 @@ class LiveAudioDspWorker final : public QObject {
   void setLocalCharacterFrontendEnabled(bool enabled);
   void setMonitor(int mode, const QVariantList& channel_ids,
                   double reference_tone_hz);
+  void setSdrDecoderWindow(double center_frequency_hz, double bandwidth_hz);
   void acceptCharacterRefinement(qulonglong channel_id,
                                  const QString& stable_text,
                                  qulonglong evidence_timestamp_ns);
@@ -134,12 +136,20 @@ signals:
   void drain();
 
  private:
+  void captureBlock(const cwassistant::core::RealtimeSampleBlock& block);
   void writeDebugCaptureSnapshot();
   void finishDebugCapture(const QString& note);
 
   std::shared_ptr<LiveAudioPipe> pipe_;
   QTimer timer_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
+  cwassistant::core::SpectrumAnalyzer decoder_analyzer_{
+      {.fft_size = 8'192, .averaging_frames = 3, .frame_rate_hz = 60}};
+  cwassistant::core::IqSubbandDecimator sdr_decoder_channelizer_;
+  cwassistant::core::RealtimeSampleBlock sdr_decoder_pending_;
+  std::uint64_t sdr_decoder_pending_sequence_{0};
+  double sdr_decoder_center_frequency_hz_{14'050'000.0};
+  double sdr_decoder_bandwidth_hz_{24'000.0};
   cwassistant::core::CwChannelBank decoder_;
   LocalCharacterFrontendBank character_frontends_;
 

@@ -92,7 +92,11 @@ controlled only by the speaker button in each decoder card.
 Each enabled card passes through its own carrier-following narrow filter and is
 moved to the configured CW reference tone. Enable several card speakers to mix
 several isolated streams; disable the last speaker to return monitoring to
-**OFF**. Opening or closing an ordinary decoder card does not start listening.
+**OFF**. The speaker and guarded **TX call** action stay in the card's lower
+action row while text and activity state update; they do not become conditional
+on the carrier currently being keyed. A card without a confirmed callsign does
+not invent a placeholder callsign or expose a callsign TX action. Opening or
+closing an ordinary decoder card does not start listening.
 The adjacent slider
 sets local playback level. Monitoring does not change decoder evidence. Output
 is intentionally bounded; if the sound device cannot keep up, old audio is
@@ -139,15 +143,33 @@ device.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
    found.
-3. Enter the RF center frequency in whole hertz. Start conservatively at
-   250000 samples/s; the device may select its nearest supported rate. Enable
-   hardware AGC only when that receiver provides it, otherwise select a manual
-   gain.
-4. In the Receiver workspace select **Live SDR**, then **Start SDR RX**. The
+3. Select a supported effective IQ sample rate, hardware RF bandwidth, and
+   antenna/input where the device exposes them. Start conservatively at 250000
+   samples/s. For an RSPduo, the entries are modes of the same receiver: choose
+   **Single Tuner** for the current one-channel path; **Dual Tuner** and
+   **Master** are advanced coordinated modes and do not create extra CW Buddy
+   panes. SDRplay's lower effective rates use driver-managed decimation.
+   Enable hardware AGC only when that receiver provides it, otherwise select a
+   manual gain.
+4. Set the **Decoder window center** and choose a 6–96 kHz decoder bandwidth.
+   CW Buddy will continue to draw the complete acquired passband, but only this
+   bounded, down-converted and decimated window reaches CW detection and the
+   stream decoder bank. The 24 kHz default is a practical starting point.
+   Optionally enable **Follow authoritative RX VFO readback**. The configured
+   radio-control provider then moves the decoder window with VFO A/RX. Use the
+   signed **SDR LO offset** only when the SDR centre must differ from the radio
+   frequency; it is bounded to keep the decode window in view.
+5. In the Receiver workspace select **Live SDR**, then **Start SDR RX**. The
    spectrum and waterfall use absolute RF coordinates across the captured IQ
-   passband and all qualifying CW carriers enter the same independent decoder
-   bank used by audio reception.
-5. Global **RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
+   passband. A translucent region shows which part is currently eligible for
+   CW detection and decoding.
+6. Place the pointer over the SDR spectrum or waterfall and use the wheel to
+   zoom around it. Middle-button drag pans the visible view. Double-click or
+   select **Full span** to return to the complete acquired passband. Right-click
+   moves the decoder window to that RF and starts a normal manual probe; a
+   qualified probe promotes through the same verification path as an
+   automatically found stream.
+7. Global **RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
    are not loudspeaker audio. Open a decoder card and enable its speaker to hear
    that carrier through the narrow, carrier-following CW filter. Several card
    speakers may still be mixed.
@@ -160,6 +182,9 @@ the backend is ready but no receiver appears, check the USB connection,
 platform device access, and the device-specific module/vendor driver. Linux
 users may need to reconnect the receiver after installing device-access rules;
 the portable archive cannot supply kernel drivers or grant USB permissions.
+If the display becomes sluggish, reduce the effective IQ sample rate and/or the
+decoder bandwidth. Zoom changes only the visible viewport; it does not discard
+the wide acquisition or silently enlarge the decoder workload.
 
 If a stationary peak fills the far-left edge, open **Settings → Audio** and
 leave **Remove input DC offset** enabled. This is normally sound-card DC bias,
@@ -353,13 +378,18 @@ again to release. It cannot be restarted to extend the interval and releases
 automatically at the independent 15-second hardware deadline. The Radio
 Control and QSO controls invoke the same guarded action. Decoder output and
 Auto-QSO suggestions have no route to TUNE or direct keying.
-New characters are appended to the existing text rather than replacing it, so
-the view stays where it is instead of shifting as each one arrives, and when
-the transcript is following the tail it stays pinned to the bottom in the same
-frame the text grows. The transcript remains plain text so incoming characters
+New provisional characters are appended immediately and later refinement may
+correct only the unsettled tail. The existing text document is not rebuilt for
+ordinary appends, so the view stays where it is instead of shifting as each
+character arrives. When the transcript is following the tail it stays pinned
+to the bottom in the same frame the text grows; scrolling upward suspends that
+automatic following. A sustained inter-transmission pause starts one clean new
+line, while spaces inside a transmission are inserted only when supported by
+cadence evidence. The transcript remains plain text so incoming characters
 cannot cause styled text or scrollbar-driven line reflow. Short content fills the complete
 transcript viewport instead of leaving a differently sized inner box; longer
-content grows vertically inside the same scroller. A confirmed remote callsign
+content grows vertically inside the same scroller and its scrollbar appears
+only when needed. A confirmed remote callsign
 is bold and shown in the card header using the stream color. A completed
 two-callsign handover shows both participants in that header. The guarded TX
 button includes the exact callsign it will select, so a two-party card never

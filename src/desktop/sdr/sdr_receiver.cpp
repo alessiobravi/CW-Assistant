@@ -27,6 +27,12 @@ bool valid_configuration(const SdrReceiveConfiguration& configuration,
     error = "The SDR sample rate must be between 8 kS/s and 64 MS/s.";
     return false;
   }
+  if (!std::isfinite(configuration.bandwidth_hz) ||
+      configuration.bandwidth_hz < 0.0 ||
+      configuration.bandwidth_hz > 64'000'000.0) {
+    error = "The SDR RF bandwidth must be automatic or at most 64 MHz.";
+    return false;
+  }
   if (!configuration.automatic_gain &&
       !std::isfinite(configuration.gain_db)) {
     error = "The manual SDR gain must be a finite value.";
@@ -43,6 +49,10 @@ class UnavailableSdrBackend final : public SdrReceiveBackend {
                 "SoapySDR support is not present in this CW Buddy build. "
                 "Install SoapySDR and the module for the receiver, then use a "
                 "CW Buddy build configured with CWA_ENABLE_SOAPY_SDR=ON."};
+  }
+
+  SdrDeviceCapabilities probe(const std::string&) override {
+    return {.diagnostic = discover().diagnostic};
   }
 
   bool open(const SdrReceiveConfiguration&, SdrActualConfiguration&,
@@ -72,6 +82,13 @@ SdrDiscoveryReport SdrReceiver::discover() {
   return backend_->discover();
 }
 
+SdrDeviceCapabilities SdrReceiver::probe(const std::string& device_id) {
+  if (!backend_) {
+    return {.diagnostic = "No SDR receive backend is configured."};
+  }
+  return backend_->probe(device_id);
+}
+
 bool SdrReceiver::start(const SdrReceiveConfiguration& configuration,
                         std::string& error) {
   stop();
@@ -99,6 +116,8 @@ bool SdrReceiver::start(const SdrReceiveConfiguration& configuration,
       !std::isfinite(actual_.sample_rate_hz) ||
       actual_.sample_rate_hz < 8'000.0 ||
       actual_.sample_rate_hz > 64'000'000.0 ||
+      !std::isfinite(actual_.bandwidth_hz) || actual_.bandwidth_hz < 0.0 ||
+      actual_.bandwidth_hz > 64'000'000.0 ||
       !std::isfinite(actual_.gain_db)) {
     backend_->close();
     error = "The SDR returned frequency, sample-rate, or gain settings outside the supported receive bounds.";

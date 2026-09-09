@@ -31,10 +31,25 @@ struct SdrDiscoveryReport {
   std::string diagnostic;
 };
 
+struct SdrDeviceCapabilities {
+  bool available{false};
+  std::vector<double> sample_rates_hz;
+  std::vector<double> bandwidths_hz;
+  std::vector<std::string> antennas;
+  bool automatic_gain_available{false};
+  double minimum_gain_db{0.0};
+  double maximum_gain_db{0.0};
+  double gain_step_db{0.0};
+  std::string diagnostic;
+};
+
 struct SdrReceiveConfiguration {
   std::string device_id;
   double center_frequency_hz{0.0};
   double sample_rate_hz{250'000.0};
+  // Zero asks the provider to retain its automatic/default RF filter width.
+  double bandwidth_hz{0.0};
+  std::string antenna;
   bool automatic_gain{true};
   double gain_db{0.0};
 };
@@ -42,6 +57,7 @@ struct SdrReceiveConfiguration {
 struct SdrActualConfiguration {
   double center_frequency_hz{0.0};
   double sample_rate_hz{0.0};
+  double bandwidth_hz{0.0};
   bool automatic_gain{false};
   double gain_db{0.0};
 };
@@ -62,6 +78,8 @@ class SdrReceiveBackend {
   virtual ~SdrReceiveBackend() = default;
 
   [[nodiscard]] virtual SdrDiscoveryReport discover() = 0;
+  [[nodiscard]] virtual SdrDeviceCapabilities probe(
+      const std::string& device_id) = 0;
   [[nodiscard]] virtual bool open(const SdrReceiveConfiguration& configuration,
                                   SdrActualConfiguration& actual,
                                   std::string& error) = 0;
@@ -93,6 +111,7 @@ class SdrReceiver final {
   SdrReceiver& operator=(const SdrReceiver&) = delete;
 
   [[nodiscard]] SdrDiscoveryReport discover();
+  [[nodiscard]] SdrDeviceCapabilities probe(const std::string& device_id);
   [[nodiscard]] bool start(const SdrReceiveConfiguration& configuration,
                            std::string& error);
   void stop() noexcept;

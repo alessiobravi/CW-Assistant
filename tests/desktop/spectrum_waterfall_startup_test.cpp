@@ -459,6 +459,49 @@ int main(int argc, char* argv[]) {
       controller.offlineCallsignDatabaseEntries() != 2) {
     return 31;
   }
+
+  // Rapid decoder updates must not destroy and recreate a card delegate. In
+  // particular, a low-level tracker reacquisition at the same reserved colour
+  // and frequency is still the same operator-visible session; resetting the
+  // list in the middle of a pointer gesture used to lose monitor clicks.
+  cwassistant::desktop::DecoderSessionListModel session_model;
+  int session_model_resets = 0;
+  int session_model_updates = 0;
+  QObject::connect(&session_model, &QAbstractItemModel::modelReset,
+                   &session_model,
+                   [&session_model_resets] { ++session_model_resets; });
+  QObject::connect(
+      &session_model, &QAbstractItemModel::dataChanged, &session_model,
+      [&session_model_updates](const QModelIndex&, const QModelIndex&,
+                               const QList<int>&) {
+        ++session_model_updates;
+      });
+  QVariantMap stable_session{
+      {QStringLiteral("id"), QVariant::fromValue<qulonglong>(700)},
+      {QStringLiteral("color"), QStringLiteral("#4dd0e1")},
+      {QStringLiteral("presentationFrequencyHz"), 702.0},
+      {QStringLiteral("callsign"), QStringLiteral("AM42SDC")}};
+  session_model.replace(QVariantList{stable_session});
+  if (session_model_resets != 1 || session_model.rowCount() != 1) return 43;
+  stable_session.insert(QStringLiteral("active"), true);
+  session_model.replace(QVariantList{stable_session});
+  stable_session.insert(QStringLiteral("id"),
+                        QVariant::fromValue<qulonglong>(701));
+  stable_session.insert(QStringLiteral("presentationFrequencyHz"), 718.0);
+  session_model.replace(QVariantList{stable_session});
+  if (session_model_resets != 1 || session_model_updates != 2 ||
+      session_model.data(session_model.index(0, 0), Qt::DisplayRole)
+              .toMap()
+              .value(QStringLiteral("id"))
+              .toULongLong() != 701) {
+    return 44;
+  }
+  stable_session.insert(QStringLiteral("id"),
+                        QVariant::fromValue<qulonglong>(702));
+  stable_session.insert(QStringLiteral("color"), QStringLiteral("#ffb74d"));
+  session_model.replace(QVariantList{stable_session});
+  if (session_model_resets != 2) return 45;
+
   controller.configureOfflineCallsignDatabase(false, QString{});
   if (controller.offlineCallsignDatabaseState() !=
           QStringLiteral("disabled") ||

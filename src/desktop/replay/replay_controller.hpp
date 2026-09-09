@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QAbstractListModel>
 #include <QObject>
 #include <QByteArray>
 #include <QList>
@@ -23,6 +24,25 @@ class QAudioSink;
 class QIODevice;
 
 namespace cwassistant::desktop {
+
+// Keeps QML decoder-card delegates alive while rapidly changing transcript,
+// level, and key-state roles are updated. A QVariantList model resets every
+// delegate on each assignment, which can destroy a button between pointer
+// press and release.
+class DecoderSessionListModel final : public QAbstractListModel {
+ public:
+  explicit DecoderSessionListModel(QObject* parent = nullptr);
+  [[nodiscard]] int rowCount(
+      const QModelIndex& parent = QModelIndex{}) const override;
+  [[nodiscard]] QVariant data(const QModelIndex& index,
+                              int role = Qt::DisplayRole) const override;
+  [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
+  void replace(const QVariantList& sessions);
+
+ private:
+  static constexpr int kModelDataRole = Qt::UserRole + 1;
+  QVariantList sessions_;
+};
 
 // Keeps an operator-opened decoder card attached to the retained visual
 // stream when the low-level tracker reacquires that same color/frequency with
@@ -92,6 +112,8 @@ class ReplayController final : public QObject {
                  NOTIFY decoderChanged)
   Q_PROPERTY(QVariantList decoderSessions READ decoderSessions
                  NOTIFY decoderChanged)
+  Q_PROPERTY(QAbstractItemModel* decoderSessionModel READ decoderSessionModel
+                 CONSTANT)
   Q_PROPERTY(int decoderSessionCount READ decoderSessionCount
                  NOTIFY decoderChanged)
   Q_PROPERTY(QVariantMap verificationDiagnostics READ verificationDiagnostics
@@ -151,6 +173,7 @@ class ReplayController final : public QObject {
   [[nodiscard]] const QVariantList& decoderChannels() const noexcept;
   [[nodiscard]] int decoderChannelCount() const noexcept;
   [[nodiscard]] const QVariantList& decoderSessions() const noexcept;
+  [[nodiscard]] QAbstractItemModel* decoderSessionModel() noexcept;
   [[nodiscard]] int decoderSessionCount() const noexcept;
   [[nodiscard]] const QVariantMap& verificationDiagnostics() const noexcept;
   [[nodiscard]] const QString& localCharacterState() const noexcept;
@@ -193,14 +216,19 @@ class ReplayController final : public QObject {
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setSdrInputSelection(QString device_id, QString display_name,
                             qulonglong center_frequency_hz,
-                            int sample_rate_hz, bool automatic_gain,
-                            double gain_db);
+                            int sample_rate_hz, int bandwidth_hz,
+                            QString antenna,
+                            bool automatic_gain,
+                            double gain_db, qulonglong decoder_center_frequency_hz,
+                            int decoder_bandwidth_hz);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active,
                                 int sideband_index,
                                 double reference_tone_hz);
   Q_INVOKABLE void setMonitorMode(int mode);
   Q_INVOKABLE void setMonitorLevel(double level);
+  Q_INVOKABLE bool isMonitorChannelEnabled(
+      qulonglong channel_id) const noexcept;
   Q_INVOKABLE void toggleMonitorChannel(qulonglong channel_id);
   void setMonitorOutputSelection(QString encoded_device_id);
 
@@ -250,7 +278,9 @@ class ReplayController final : public QObject {
   void liveStopRequested();
   void sdrStartRequested(const QString& device_id,
                          double center_frequency_hz,
-                         double sample_rate_hz, bool automatic_gain,
+                         double sample_rate_hz, double bandwidth_hz,
+                         const QString& antenna,
+                         bool automatic_gain,
                          double gain_db);
   void sdrStopRequested();
   void liveDspStartRequested();
@@ -293,6 +323,8 @@ class ReplayController final : public QObject {
   void liveMonitorConfigureRequested(int mode,
                                      const QVariantList& channel_ids,
                                      double reference_tone_hz);
+  void liveSdrDecoderWindowRequested(double center_frequency_hz,
+                                     double bandwidth_hz);
   void replayCharacterRefinementRequested(qulonglong channel_id,
                                           const QString& stable_text,
                                           qulonglong evidence_timestamp_ns);
@@ -337,6 +369,10 @@ class ReplayController final : public QObject {
   QString sdr_device_name_{QStringLiteral("No SDR selected")};
   qulonglong sdr_center_frequency_hz_{14'050'000ULL};
   int sdr_sample_rate_hz_{250'000};
+  int sdr_bandwidth_hz_{0};
+  QString sdr_antenna_;
+  qulonglong sdr_decoder_center_frequency_hz_{14'050'000ULL};
+  int sdr_decoder_bandwidth_hz_{24'000};
   bool sdr_automatic_gain_{true};
   double sdr_gain_db_{30.0};
   double sample_rate_{0.0};
@@ -355,6 +391,7 @@ class ReplayController final : public QObject {
   QVariantList decoder_channels_;
   QVariantList raw_decoder_channels_;
   QVariantList decoder_sessions_;
+  DecoderSessionListModel decoder_session_model_;
   QList<qulonglong> decoder_session_order_;
   QVariantMap verification_diagnostics_;
   std::unordered_map<std::uint64_t,

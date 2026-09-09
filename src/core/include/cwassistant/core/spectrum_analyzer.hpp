@@ -60,6 +60,7 @@ class SpectrumAnalyzer {
   std::uint64_t frame_timestamp_ns_{0};
   std::uint64_t expected_input_timestamp_ns_{0};
   std::uint64_t output_sequence_{0};
+  std::size_t samples_to_skip_{0};
   float applied_audio_gain_db_{0.0F};
   bool stream_initialized_{false};
   bool average_initialized_{false};

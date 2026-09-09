@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <complex>
 #include <cstddef>
@@ -96,6 +97,144 @@ void testWideSpectrumCoordinates() {
                        spectra.front().bins_dbfs.end())));
   expect(peak == fft_size / 2 + shifted_bin,
          "wide-spectrum FFT retains the selected carrier's RF offset");
+}
+
+void testBoundedDecoderSubband() {
+  using namespace cwassistant::core;
+  constexpr double input_rate = 240'000.0;
+  constexpr double input_center = 14'100'000.0;
+  constexpr double decoder_center = 14'125'000.0;
+  constexpr double wanted_offset = 2'000.0;
+  constexpr double rejected_offset = -70'000.0;
+  IqSubbandDecimator channelizer({.center_frequency_hz = decoder_center,
+                                  .bandwidth_hz = 24'000.0,
+                                  .maximum_output_sample_rate_hz = 48'000.0});
+  SpectrumAnalyzer analyzer({.fft_size = 2'048,
+                             .averaging_frames = 1,
+                             .frame_rate_hz = 30});
+  std::vector<SpectrumSnapshot> spectra;
+  std::uint64_t sample_offset = 0;
+  for (std::uint64_t block_index = 0; block_index < 32; ++block_index) {
+    RealtimeSampleBlock input;
+    input.stream = {.kind = StreamKind::ComplexIq,
+                    .sample_rate_hz = input_rate,
+                    .center_frequency_hz = input_center,
+                    .channel_count = 1};
+    input.sequence = block_index;
+    input.timestamp_ns = static_cast<std::uint64_t>(
+        static_cast<long double>(sample_offset) * 1'000'000'000.0L /
+        input_rate);
+    input.sample_count = input.samples.size();
+    for (std::size_t index = 0; index < input.sample_count; ++index) {
+      const double time = static_cast<double>(sample_offset + index) /
+                          input_rate;
+      const double wanted_phase = 2.0 * std::numbers::pi *
+          ((decoder_center - input_center) + wanted_offset) * time;
+      const double rejected_phase = 2.0 * std::numbers::pi *
+          rejected_offset * time;
+      input.samples[index] = {
+          static_cast<float>(std::cos(wanted_phase) +
+                             0.8 * std::cos(rejected_phase)),
+          static_cast<float>(std::sin(wanted_phase) +
+                             0.8 * std::sin(rejected_phase))};
+    }
+    sample_offset += input.sample_count;
+    RealtimeSampleBlock decoded;
+    expect(channelizer.process(input, decoded) == IqBlockStatus::Accepted,
+           "wide IQ is accepted by the decoder subband");
+    expect(decoded.sample_count < input.sample_count,
+           "decoder subband is decimated before per-track processing");
+    expect(decoded.stream.center_frequency_hz == decoder_center &&
+               decoded.stream.sample_rate_hz == 48'000.0,
+           "decoder branch reports its absolute RF center and bounded rate");
+    auto block_spectra = analyzer.process(decoded);
+    spectra.insert(spectra.end(), block_spectra.begin(), block_spectra.end());
+  }
+  expect(!spectra.empty(), "decimated decoder branch produces spectra");
+  if (!spectra.empty()) {
+    const auto& bins = spectra.back().bins_dbfs;
+    const auto peak = static_cast<std::size_t>(std::distance(
+        bins.begin(), std::max_element(bins.begin(), bins.end())));
+    const double peak_hz = spectra.back().lower_frequency_hz +
+        static_cast<double>(peak) * spectra.back().bin_width_hz;
+    expect(std::abs(peak_hz - (decoder_center + wanted_offset)) < 50.0,
+           "digital tuning preserves absolute RF coordinates in the decoder window");
+    const auto bin_at = [&spectra](const double frequency_hz) {
+      return static_cast<std::size_t>(std::llround(
+          (frequency_hz - spectra.back().lower_frequency_hz) /
+          spectra.back().bin_width_hz));
+    };
+    const auto wanted_bin = bin_at(decoder_center + wanted_offset);
+    // -95 kHz after tuning aliases to +1 kHz at the 48 kHz output rate. It
+    // must be removed before decimation, rather than becoming a false carrier
+    // inside the decoder window.
+    const auto aliased_rejected_bin = bin_at(decoder_center + 1'000.0);
+    expect(wanted_bin < bins.size() && aliased_rejected_bin < bins.size() &&
+               bins[wanted_bin] > bins[aliased_rejected_bin] + 45.0F,
+           "anti-alias filtering rejects a strong carrier before downsampling");
+  }
+
+  IqSubbandDecimator high_rate_channelizer(
+      {.center_frequency_hz = 14'100'000.0,
+       .bandwidth_hz = 24'000.0,
+       .maximum_output_sample_rate_hz = 60'000.0});
+  constexpr double high_input_rate = 8'000'000.0;
+  const std::array<std::size_t, 5> input_sizes{127, 4'096, 300, 4'096,
+                                                1'381};
+  std::uint64_t high_input_offset = 0;
+  std::size_t output_samples = 0;
+  std::uint64_t previous_output_timestamp = 0;
+  std::size_t previous_output_count = 0;
+  bool have_previous_output = false;
+  for (std::size_t block_index = 0; block_index < input_sizes.size();
+       ++block_index) {
+    RealtimeSampleBlock input;
+    input.stream = {.kind = StreamKind::ComplexIq,
+                    .sample_rate_hz = high_input_rate,
+                    .center_frequency_hz = 14'100'000.0,
+                    .channel_count = 1};
+    input.sequence = block_index;
+    input.timestamp_ns = static_cast<std::uint64_t>(
+        static_cast<long double>(high_input_offset) * 1'000'000'000.0L /
+        high_input_rate);
+    input.sample_count = input_sizes[block_index];
+    std::fill_n(input.samples.begin(), input.sample_count,
+                std::complex<float>{1.0F, 0.0F});
+    high_input_offset += input.sample_count;
+    RealtimeSampleBlock output;
+    expect(high_rate_channelizer.process(input, output) ==
+               IqBlockStatus::Accepted,
+           "multi-MHz decoder channelizer accepts uneven contiguous blocks");
+    if (output.sample_count > 0 && have_previous_output) {
+      const auto expected_timestamp = previous_output_timestamp +
+          static_cast<std::uint64_t>(
+              static_cast<long double>(previous_output_count) *
+              1'000'000'000.0L / 60'000.0);
+      const auto difference = output.timestamp_ns > expected_timestamp
+          ? output.timestamp_ns - expected_timestamp
+          : expected_timestamp - output.timestamp_ns;
+      expect(difference <= 126,
+             "decimated timestamps remain continuous across uneven source blocks");
+    }
+    if (output.sample_count > 0) {
+      previous_output_timestamp = output.timestamp_ns;
+      previous_output_count = output.sample_count;
+      have_previous_output = true;
+    }
+    output_samples += output.sample_count;
+  }
+  expect(output_samples == static_cast<std::size_t>(
+                               std::floor(high_input_offset * 60'000.0 /
+                                          high_input_rate)),
+         "rational downsampling neither loses nor duplicates samples across blocks");
+
+  RealtimeSampleBlock outside = iqBlock(0, 0);
+  outside.stream.sample_rate_hz = 48'000.0;
+  outside.stream.center_frequency_hz = input_center;
+  RealtimeSampleBlock ignored;
+  expect(channelizer.process(outside, ignored) ==
+             IqBlockStatus::RejectedDescriptor,
+         "a decoder window outside the acquired passband fails closed");
 }
 
 void testWideIqAcrossBlocksAndDiscovery() {
@@ -263,6 +402,7 @@ void testConfigurationBounds() {
 int main() {
   testValidationAndTelemetry();
   testWideSpectrumCoordinates();
+  testBoundedDecoderSubband();
   testWideIqAcrossBlocksAndDiscovery();
   testChannelizerBridge();
   testConfigurationBounds();

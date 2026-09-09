@@ -85,6 +85,7 @@ void SpectrumAnalyzer::reset() noexcept {
   output_sequence_ = 0;
   frame_timestamp_ns_ = 0;
   expected_input_timestamp_ns_ = 0;
+  samples_to_skip_ = 0;
   stream_initialized_ = false;
   average_initialized_ = false;
   audio_gain_initialized_ = false;
@@ -120,12 +121,19 @@ std::vector<SpectrumSnapshot> SpectrumAnalyzer::process(
         std::ceil(2.0 * 1'000'000'000.0 / block.stream.sample_rate_hz));
     if (difference > tolerance_ns) {
       accumulator_.clear();
+      averaged_power_.clear();
+      samples_to_skip_ = 0;
       frame_timestamp_ns_ = block.timestamp_ns;
+      average_initialized_ = false;
     }
   }
 
   accumulator_.reserve(config_.fft_size);
   for (std::size_t index = 0; index < block.sample_count; ++index) {
+    if (samples_to_skip_ > 0) {
+      --samples_to_skip_;
+      continue;
+    }
     if (accumulator_.empty()) {
       frame_timestamp_ns_ = block.timestamp_ns + static_cast<std::uint64_t>(
           static_cast<long double>(index) * 1'000'000'000.0L /
@@ -137,6 +145,7 @@ std::vector<SpectrumSnapshot> SpectrumAnalyzer::process(
       const std::size_t hop = hopSize();
       if (hop >= accumulator_.size()) {
         accumulator_.clear();
+        samples_to_skip_ = hop - config_.fft_size;
       } else {
         accumulator_.erase(
             accumulator_.begin(),
@@ -163,7 +172,7 @@ std::size_t SpectrumAnalyzer::hopSize() const noexcept {
   const auto requested = static_cast<std::size_t>(std::max<long long>(
       1, std::llround(stream_.sample_rate_hz /
                       static_cast<double>(config_.frame_rate_hz))));
-  return std::min(requested, config_.fft_size);
+  return requested;
 }
 
 void SpectrumAnalyzer::rebuild() {

@@ -61,7 +61,81 @@ QByteArray monitorBytes(const std::vector<float>& samples) {
                     static_cast<qsizetype>(samples.size() * sizeof(float)));
 }
 
+bool sameDecoderSessionIdentity(const QVariantMap& previous,
+                                const QVariantMap& current) {
+  const auto previous_id =
+      previous.value(QStringLiteral("id")).toULongLong();
+  const auto current_id = current.value(QStringLiteral("id")).toULongLong();
+  if (previous_id != 0U && previous_id == current_id) return true;
+
+  // A retained visual stream can be reacquired under a new low-level tracker
+  // ID. Keep the existing QML delegate alive in that case: destroying it can
+  // swallow a pointer press on one of the card controls. Colour reservations
+  // are frequency-stable, and the controller uses this same 35 Hz tolerance
+  // when it reconciles an open session with a reacquired stream.
+  if (previous.value(QStringLiteral("color")).toString().isEmpty() ||
+      previous.value(QStringLiteral("color")) !=
+          current.value(QStringLiteral("color"))) {
+    return false;
+  }
+  const auto identity_frequency = [](const QVariantMap& item) {
+    const QVariant presentation =
+        item.value(QStringLiteral("presentationFrequencyHz"));
+    return presentation.isValid()
+        ? presentation.toDouble()
+        : item.value(QStringLiteral("audioFrequencyHz")).toDouble();
+  };
+  return std::abs(identity_frequency(previous) - identity_frequency(current)) <=
+         35.0;
+}
+
 }  // namespace
+
+DecoderSessionListModel::DecoderSessionListModel(QObject* parent)
+    : QAbstractListModel(parent) {}
+
+int DecoderSessionListModel::rowCount(const QModelIndex& parent) const {
+  return parent.isValid() ? 0 : static_cast<int>(sessions_.size());
+}
+
+QVariant DecoderSessionListModel::data(const QModelIndex& index,
+                                       const int role) const {
+  if (!index.isValid() || index.row() < 0 ||
+      index.row() >= sessions_.size() ||
+      (role != kModelDataRole && role != Qt::DisplayRole)) {
+    return {};
+  }
+  return sessions_.at(index.row());
+}
+
+QHash<int, QByteArray> DecoderSessionListModel::roleNames() const {
+  return {{kModelDataRole, QByteArrayLiteral("modelData")}};
+}
+
+void DecoderSessionListModel::replace(const QVariantList& sessions) {
+  bool same_identity_order = sessions_.size() == sessions.size();
+  if (same_identity_order) {
+    for (qsizetype row = 0; row < sessions.size(); ++row) {
+      if (!sameDecoderSessionIdentity(sessions_.at(row).toMap(),
+                                      sessions.at(row).toMap())) {
+        same_identity_order = false;
+        break;
+      }
+    }
+  }
+  if (!same_identity_order) {
+    beginResetModel();
+    sessions_ = sessions;
+    endResetModel();
+    return;
+  }
+  for (qsizetype row = 0; row < sessions.size(); ++row) {
+    if (sessions_.at(row) == sessions.at(row)) continue;
+    sessions_[row] = sessions.at(row);
+    const QModelIndex changed = index(static_cast<int>(row), 0);
+    emit dataChanged(changed, changed, {kModelDataRole});
+  }
+}
 
 QList<qulonglong> reconcileDecoderSessionOrder(
     const QList<qulonglong>& requested_order,
@@ -859,6 +933,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::setOperatorRole);
   connect(this, &ReplayController::liveMonitorConfigureRequested, dsp_worker,
           &LiveAudioDspWorker::setMonitor);
+  connect(this, &ReplayController::liveSdrDecoderWindowRequested, dsp_worker,
+          &LiveAudioDspWorker::setSdrDecoderWindow);
   connect(this, &ReplayController::liveCharacterFrontendEnabledRequested,
           dsp_worker, &LiveAudioDspWorker::setLocalCharacterFrontendEnabled);
   connect(this, &ReplayController::liveCharacterRefinementRequested,
@@ -930,8 +1006,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           });
   connect(sdr_worker, &SdrCaptureWorker::started, this,
           [this](const QString&, const double center_frequency_hz,
-                 const double sample_rate_hz, const bool automatic_gain,
-                 const double gain_db) {
+                 const double sample_rate_hz, const double bandwidth_hz,
+                 const bool automatic_gain, const double gain_db) {
             source_name_ = sdr_device_name_;
             sample_rate_ = sample_rate_hz;
             duration_seconds_ = 0.0;
@@ -940,10 +1016,11 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             live_capturing_ = true;
             rebuildDecoderModels();
             status_text_ = QStringLiteral(
-                "Live SDR: %1 • center %2 Hz • %3 S/s • %4")
+                "Live SDR: %1 • center %2 Hz • %3 S/s • %4 Hz RF • %5")
                 .arg(source_name_)
                 .arg(center_frequency_hz, 0, 'f', 0)
                 .arg(sample_rate_hz, 0, 'f', 0)
+                .arg(bandwidth_hz, 0, 'f', 0)
                 .arg(automatic_gain
                          ? QStringLiteral("AGC")
                          : QStringLiteral("%1 dB gain").arg(gain_db, 0, 'f', 1));
@@ -1064,6 +1141,9 @@ int ReplayController::decoderChannelCount() const noexcept {
 }
 const QVariantList& ReplayController::decoderSessions() const noexcept {
   return decoder_sessions_;
+}
+QAbstractItemModel* ReplayController::decoderSessionModel() noexcept {
+  return &decoder_session_model_;
 }
 int ReplayController::decoderSessionCount() const noexcept {
   return static_cast<int>(decoder_sessions_.size());
@@ -1440,6 +1520,7 @@ void ReplayController::rebuildDecoderModels() {
     item.insert(QStringLiteral("sessionOpen"), true);
     decoder_sessions_.push_back(item);
   }
+  decoder_session_model_.replace(decoder_sessions_);
   if (monitor_mode_ == 2 && !monitored_channel_ids_.isEmpty()) {
     const QList<qulonglong> reconciled_monitor = reconcileDecoderSessionOrder(
         monitored_channel_ids_, previous_sessions, decoder_channels_);
@@ -1572,6 +1653,12 @@ void ReplayController::setMonitorMode(const int mode) {
   }
   publishMonitorConfiguration();
   emit monitorChanged();
+}
+
+bool ReplayController::isMonitorChannelEnabled(
+    const qulonglong channel_id) const noexcept {
+  return monitor_mode_ == 2 && channel_id != 0U &&
+         monitored_channel_ids_.contains(channel_id);
 }
 
 void ReplayController::toggleMonitorChannel(const qulonglong channel_id) {
@@ -1747,6 +1834,7 @@ void ReplayController::resetDecoder() {
   raw_decoder_channels_.clear();
   decoder_channels_.clear();
   decoder_sessions_.clear();
+  decoder_session_model_.replace(decoder_sessions_);
   decoder_session_order_.clear();
   verification_diagnostics_.clear();
   local_character_consensus_.clear();
@@ -1834,18 +1922,35 @@ void ReplayController::setAudioInputSelection(QString encoded_id,
 void ReplayController::setSdrInputSelection(
     QString device_id, QString display_name,
     const qulonglong center_frequency_hz, const int sample_rate_hz,
-    const bool automatic_gain, const double gain_db) {
+    const int bandwidth_hz, QString antenna, const bool automatic_gain,
+    const double gain_db,
+    const qulonglong decoder_center_frequency_hz,
+    const int decoder_bandwidth_hz) {
   const bool restart = live_capturing_ && source_mode_ == 2 &&
       (sdr_device_id_ != device_id ||
        sdr_center_frequency_hz_ != center_frequency_hz ||
        sdr_sample_rate_hz_ != sample_rate_hz ||
+       sdr_bandwidth_hz_ != bandwidth_hz ||
+       sdr_antenna_ != antenna ||
        sdr_automatic_gain_ != automatic_gain || sdr_gain_db_ != gain_db);
   sdr_device_id_ = std::move(device_id);
   sdr_device_name_ = std::move(display_name);
   sdr_center_frequency_hz_ = center_frequency_hz;
   sdr_sample_rate_hz_ = sample_rate_hz;
+  sdr_bandwidth_hz_ = bandwidth_hz;
+  sdr_antenna_ = std::move(antenna);
   sdr_automatic_gain_ = automatic_gain;
   sdr_gain_db_ = gain_db;
+  const bool decoder_window_changed =
+      sdr_decoder_center_frequency_hz_ != decoder_center_frequency_hz ||
+      sdr_decoder_bandwidth_hz_ != decoder_bandwidth_hz;
+  sdr_decoder_center_frequency_hz_ = decoder_center_frequency_hz;
+  sdr_decoder_bandwidth_hz_ = decoder_bandwidth_hz;
+  if (decoder_window_changed || !live_capturing_) {
+    emit liveSdrDecoderWindowRequested(
+        static_cast<double>(sdr_decoder_center_frequency_hz_),
+        static_cast<double>(sdr_decoder_bandwidth_hz_));
+  }
   if (restart) beginLiveSdrCapture();
 }
 
@@ -1933,6 +2038,8 @@ void ReplayController::beginLiveSdrCapture() {
   emit sdrStartRequested(sdr_device_id_,
                          static_cast<double>(sdr_center_frequency_hz_),
                          static_cast<double>(sdr_sample_rate_hz_),
+                         static_cast<double>(sdr_bandwidth_hz_),
+                         sdr_antenna_,
                          sdr_automatic_gain_, sdr_gain_db_);
 }
 

@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
+#include <QVariantList>
 
 #include <memory>
 #include <array>
@@ -46,8 +47,20 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QString sdrDiagnostic READ sdrDiagnostic NOTIFY sdrSettingsChanged)
   Q_PROPERTY(qulonglong sdrCenterFrequencyHz READ sdrCenterFrequencyHz WRITE setSdrCenterFrequencyHz NOTIFY sdrSettingsChanged)
   Q_PROPERTY(int sdrSampleRateHz READ sdrSampleRateHz WRITE setSdrSampleRateHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrBandwidthHz READ sdrBandwidthHz WRITE setSdrBandwidthHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QVariantList sdrSampleRateOptions READ sdrSampleRateOptions NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QVariantList sdrBandwidthOptions READ sdrBandwidthOptions NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QStringList sdrAntennaNames READ sdrAntennaNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrAntennaIndex READ sdrAntennaIndex NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(qulonglong sdrDecoderCenterFrequencyHz READ sdrDecoderCenterFrequencyHz WRITE setSdrDecoderCenterFrequencyHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrDecoderBandwidthHz READ sdrDecoderBandwidthHz WRITE setSdrDecoderBandwidthHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrFollowRadioVfo READ sdrFollowRadioVfo WRITE setSdrFollowRadioVfo NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(qint64 sdrRadioLoOffsetHz READ sdrRadioLoOffsetHz WRITE setSdrRadioLoOffsetHz NOTIFY sdrSettingsChanged)
   Q_PROPERTY(bool sdrAutomaticGain READ sdrAutomaticGain WRITE setSdrAutomaticGain NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrAutomaticGainAvailable READ sdrAutomaticGainAvailable NOTIFY sdrSettingsChanged)
   Q_PROPERTY(double sdrGainDb READ sdrGainDb WRITE setSdrGainDb NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(double sdrMinimumGainDb READ sdrMinimumGainDb NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(double sdrMaximumGainDb READ sdrMaximumGainDb NOTIFY sdrSettingsChanged)
   Q_PROPERTY(QString sdrWidePassbandSummary READ sdrWidePassbandSummary NOTIFY sdrSettingsChanged)
   Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE setAudioDcRejection NOTIFY settingsChanged)
   Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE setAudioAutomaticGain NOTIFY settingsChanged)
@@ -184,8 +197,21 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& sdrDiagnostic() const noexcept;
   [[nodiscard]] qulonglong sdrCenterFrequencyHz() const noexcept;
   [[nodiscard]] int sdrSampleRateHz() const noexcept;
+  [[nodiscard]] int sdrBandwidthHz() const noexcept;
+  [[nodiscard]] const QVariantList& sdrSampleRateOptions() const noexcept;
+  [[nodiscard]] const QVariantList& sdrBandwidthOptions() const noexcept;
+  [[nodiscard]] const QStringList& sdrAntennaNames() const noexcept;
+  [[nodiscard]] int sdrAntennaIndex() const noexcept;
+  [[nodiscard]] const QString& sdrAntenna() const noexcept;
+  [[nodiscard]] qulonglong sdrDecoderCenterFrequencyHz() const noexcept;
+  [[nodiscard]] int sdrDecoderBandwidthHz() const noexcept;
+  [[nodiscard]] bool sdrFollowRadioVfo() const noexcept;
+  [[nodiscard]] qint64 sdrRadioLoOffsetHz() const noexcept;
   [[nodiscard]] bool sdrAutomaticGain() const noexcept;
+  [[nodiscard]] bool sdrAutomaticGainAvailable() const noexcept;
   [[nodiscard]] double sdrGainDb() const noexcept;
+  [[nodiscard]] double sdrMinimumGainDb() const noexcept;
+  [[nodiscard]] double sdrMaximumGainDb() const noexcept;
   [[nodiscard]] QString sdrWidePassbandSummary() const;
   [[nodiscard]] bool audioDcRejection() const noexcept;
   [[nodiscard]] bool audioAutomaticGain() const noexcept;
@@ -295,6 +321,11 @@ class AppSettings final : public QObject {
   void setReceiverInputTypeIndex(int value);
   void setSdrCenterFrequencyHz(qulonglong value);
   void setSdrSampleRateHz(int value);
+  void setSdrBandwidthHz(int value);
+  void setSdrDecoderCenterFrequencyHz(qulonglong value);
+  void setSdrDecoderBandwidthHz(int value);
+  void setSdrFollowRadioVfo(bool value);
+  void setSdrRadioLoOffsetHz(qint64 value);
   void setSdrAutomaticGain(bool value);
   void setSdrGainDb(double value);
   void setRadioTuningStepHz(int value);
@@ -373,6 +404,7 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void selectAudioOutput(int index);
   Q_INVOKABLE void refreshSdrDevices();
   Q_INVOKABLE void selectSdrDevice(int index);
+  Q_INVOKABLE void selectSdrAntenna(int index);
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
@@ -436,6 +468,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] static QString normalizeProfileKey(const QString& name);
   void refreshProfiles();
   void resetInMemorySettings();
+  void refreshSelectedSdrCapabilities();
   void refreshControlledFrequency();
   void reconcilePendingRxFrequency();
   void rememberPendingRxFrequency(std::uint64_t frequency_hz);
@@ -480,8 +513,20 @@ class AppSettings final : public QObject {
       "SDR discovery has not run. Open the SDR settings page or press Refresh devices; live audio remains available.")};
   qulonglong sdr_center_frequency_hz_{14'050'000ULL};
   int sdr_sample_rate_hz_{250'000};
+  int sdr_bandwidth_hz_{0};
+  QVariantList sdr_sample_rate_options_;
+  QVariantList sdr_bandwidth_options_;
+  QStringList sdr_antenna_names_;
+  QString sdr_antenna_;
+  qulonglong sdr_decoder_center_frequency_hz_{14'050'000ULL};
+  int sdr_decoder_bandwidth_hz_{24'000};
+  bool sdr_follow_radio_vfo_{false};
+  qint64 sdr_radio_lo_offset_hz_{0};
   bool sdr_automatic_gain_{true};
+  bool sdr_automatic_gain_available_{true};
   double sdr_gain_db_{30.0};
+  double sdr_minimum_gain_db_{-100.0};
+  double sdr_maximum_gain_db_{100.0};
   bool audio_dc_rejection_{true};
   bool audio_automatic_gain_{false};
   double audio_gain_db_{0.0};

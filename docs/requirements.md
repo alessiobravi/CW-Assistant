@@ -164,6 +164,10 @@ decoding hints rather than sharing one assumed contest sequence.
   closing a session leaves its channel DSP active and the marker available for
   reopening. Action buttons expose contextual hover help, and spectrum hover
   explains the distinct left/right/Ctrl pointer actions.
+- Keep per-card monitor and guarded-TX actions in a stable action row and
+  operable during transcript, signal-activity, and model refreshes. Opening a
+  card must not enable monitoring; a missing callsign must not be represented
+  by placeholder text or exposed as a callsign TX target.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking an identified stream opens its decoder card. Right-clicking an
@@ -386,7 +390,18 @@ decoding hints rather than sharing one assumed contest sequence.
   module. Keep proprietary vendor drivers out of CW Buddy packages, preserve
   their system discovery paths, and show actionable installation diagnostics.
 - Keep the adapter receive-only: device discovery, center frequency, sample
-  rate, RX gain and CF32 stream reads must not expose SDR transmit, PTT, or KEY.
+  rate, hardware RF bandwidth, antenna/input, RX gain and CF32 stream reads must
+  not expose SDR transmit, PTT, or KEY.
+- Preserve the complete acquired passband for an operator overview while a
+  separately tunable, anti-aliased and decimated 6–96 kHz window bounds carrier
+  detection and per-stream decoding. Overview frame production must remain
+  bounded at multi-megasample input rates.
+- Support zoom and pan as presentation-only viewport operations. Display zoom
+  must not silently change acquisition bandwidth or decoder workload; the
+  selected decoder window remains visibly identified.
+- Allow optional decoder-window following from authoritative RX-VFO readback
+  through the common radio-provider boundary, with a bounded signed SDR LO
+  offset. Unknown or stale radio state must not cause a speculative SDR retune.
 - Validate fixed IQ blocks, preserve absolute RF, report device overflow and
   pipeline overrun separately, and stop safely on malformed/non-finite input.
 - Never route raw IQ to an audio output. Full-passband listening applies only

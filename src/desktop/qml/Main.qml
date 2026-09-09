@@ -375,6 +375,47 @@ ApplicationWindow {
                     showGrid: appSettings.showGrid
                 }
 
+                Rectangle {
+                    id: sdrDecoderWindowOverlay
+                    objectName: "sdrDecoderWindowOverlay"
+                    visible: replayController.sourceMode === 2
+                             && spectrumDisplay.upperFrequencyHz
+                                > spectrumDisplay.lowerFrequencyHz
+                             && upperHz >= spectrumDisplay.lowerFrequencyHz
+                             && lowerHz <= spectrumDisplay.upperFrequencyHz
+                    property real lowerHz:
+                        appSettings.sdrDecoderCenterFrequencyHz
+                        - appSettings.sdrDecoderBandwidthHz / 2
+                    property real upperHz:
+                        appSettings.sdrDecoderCenterFrequencyHz
+                        + appSettings.sdrDecoderBandwidthHz / 2
+                    x: Math.max(spectrumDisplay.x,
+                                Math.min(spectrumDisplay.x
+                                         + spectrumDisplay.width,
+                                         window.hzToX(lowerHz)))
+                    y: spectrumDisplay.y
+                    width: Math.max(1, Math.min(spectrumDisplay.x
+                                                + spectrumDisplay.width,
+                                                window.hzToX(upperHz)) - x)
+                    height: spectrumDisplay.height
+                    color: "#1625c9b0"
+                    border.color: "#43c6ac"
+                    border.width: 1
+                    opacity: 0.34
+                    z: 4
+                    Label {
+                        anchors.top: parent.top
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.topMargin: 8
+                        text: "CW decode  "
+                              + (appSettings.sdrDecoderBandwidthHz / 1000)
+                              + " kHz"
+                        color: "#7fffe7"
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                    }
+                }
+
                 Label {
                     anchors.left: parent.left
                     anchors.top: parent.top
@@ -481,6 +522,8 @@ ApplicationWindow {
                     enabled: replayController.activeSource
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                     | Qt.MiddleButton
+                    property real panLastX: 0
                     function frequencyAtX(positionX) {
                         var fraction = Math.max(0, Math.min(1,
                                                            positionX / width))
@@ -523,6 +566,31 @@ ApplicationWindow {
                                                   ? streamIdAtX(mouseX) : 0
                     cursorShape: hoveredStreamId !== 0
                                  ? Qt.PointingHandCursor : Qt.CrossCursor
+                    onPressed: function(mouse) {
+                        if (mouse.button === Qt.MiddleButton)
+                            panLastX = mouse.x
+                    }
+                    onPositionChanged: function(mouse) {
+                        if ((mouse.buttons & Qt.MiddleButton) === 0
+                                || width <= 0) return
+                        var deltaPixels = mouse.x - panLastX
+                        panLastX = mouse.x
+                        spectrumDisplay.panBy(
+                            -deltaPixels / width
+                            * (spectrumDisplay.upperFrequencyHz
+                               - spectrumDisplay.lowerFrequencyHz))
+                    }
+                    onWheel: function(wheel) {
+                        if (!replayController.activeSource) return
+                        spectrumDisplay.zoomAt(
+                            frequencyAtX(wheel.x),
+                            wheel.angleDelta.y > 0 ? 0.72 : 1.38)
+                        wheel.accepted = true
+                    }
+                    onDoubleClicked: function(mouse) {
+                        if (mouse.button === Qt.LeftButton)
+                            spectrumDisplay.resetZoom()
+                    }
                     onClicked: function(mouse) {
                         if (!replayController.activeSource || width <= 0
                                 || spectrumDisplay.upperFrequencyHz
@@ -535,18 +603,37 @@ ApplicationWindow {
                                 replayController.openDecoderSession(streamId)
                             return
                         }
+                        if (mouse.button !== Qt.RightButton)
+                            return
                         var frequencyHz = frequencyAtX(mouse.x)
+                        if (replayController.sourceMode === 2)
+                            appSettings.sdrDecoderCenterFrequencyHz =
+                                Math.round(frequencyHz)
                         replayController.openManualDecoderSession(frequencyHz)
                     }
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 350
                     ToolTip.text: hoveredStreamId !== 0
                         ? "Left click: open this stream's decoder card\n"
-                          + "Right click: start a manual decoder probe at this frequency\n"
+                          + "Right click: center the SDR decoder window and start a manual probe\n"
+                          + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
                           + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
                         : "Left click: no decoded stream at this position\n"
-                          + "Right click: start a manual decoder probe at this frequency\n"
+                          + "Right click: center the SDR decoder window and start a manual probe\n"
+                          + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
                           + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
+                }
+                ToolButton {
+                    objectName: "resetSpectrumZoomButton"
+                    visible: spectrumDisplay.zoomed
+                    anchors.right: spectrumDisplay.right
+                    anchors.bottom: spectrumDisplay.bottom
+                    anchors.margins: 12
+                    z: 10
+                    text: "Full span"
+                    onClicked: spectrumDisplay.resetZoom()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Reset spectrum and waterfall zoom"
                 }
                 Rectangle {
                     objectName: "spectrumPointerHelp"
@@ -1844,7 +1931,7 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     spacing: 8
-                    model: replayController.decoderSessions
+                    model: replayController.decoderSessionModel
                     delegate: Rectangle {
                         id: sessionCard
                         required property var modelData
@@ -1860,7 +1947,9 @@ ApplicationWindow {
                         height: Math.ceil(sessionCardLayout.implicitHeight + 20)
                         radius: 7
                         color: "#151d27"
-                        border.width: modelData.keyDown ? 2 : 1
+                        // Key-down is represented by the activity LED. Do not
+                        // resize/repaint the card border at Morse cadence.
+                        border.width: 1
                         border.color: modelData.color
                         clip: true
                         z: sessionDragHandler.active ? 10 : 1
@@ -1877,11 +1966,27 @@ ApplicationWindow {
                         // conservative word boundaries and separates completed
                         // transmissions; raw and phase-consensus evidence stay
                         // available to diagnostics without modification.
-                        property string displayedDecodedText:
+                        property string correctedDecodedText:
                             modelData.contextualText.length > 0
                             ? modelData.contextualText
                             : (modelData.refinedText.length > 0
-                               ? modelData.refinedText : rawDecodedText)
+                               ? modelData.refinedText : modelData.text)
+                        // Show the current acoustic character immediately,
+                        // then let stable/contextual output replace it in
+                        // place. Depending on decoder lock, provisionalText
+                        // is either the whole raw prefix or only its suffix.
+                        property string displayedDecodedText: {
+                            var corrected = correctedDecodedText
+                            var pending = modelData.provisionalText
+                            if (pending.length === 0)
+                                return corrected.length > 0
+                                    ? corrected : rawDecodedText
+                            var stableRaw = modelData.text
+                            var suffix = pending.indexOf(stableRaw) === 0
+                                ? pending.substring(stableRaw.length)
+                                : pending
+                            return corrected + suffix
+                        }
                         property string callsignEvidenceText:
                             rawDecodedText + " " + modelData.refinedText
                             + " " + modelData.contextualText
@@ -1899,8 +2004,8 @@ ApplicationWindow {
                             modelData.callsignSuggestion
                         property bool streamMonitored:
                             replayController.monitorMode === 2
-                            && replayController.monitoredChannelIds.indexOf(
-                                modelData.id) >= 0
+                            && replayController.isMonitorChannelEnabled(
+                                modelData.id)
                         property string callsignSuggestionSource:
                             modelData.callsignSuggestionSource
                         property bool localModelHasText:
@@ -1950,10 +2055,19 @@ ApplicationWindow {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Rectangle {
-                                    width: 10
-                                    height: 10
-                                    radius: 5
-                                    color: modelData.color
+                                    width: 12
+                                    height: 12
+                                    radius: 6
+                                    color: modelData.active
+                                           ? modelData.color : "#354352"
+                                    border.width: modelData.active ? 2 : 1
+                                    border.color: modelData.active
+                                                  ? "#dffeff" : "#566576"
+                                    ToolTip.visible: activityHover.hovered
+                                    ToolTip.text: modelData.active
+                                        ? "Signal active; listening and decoding"
+                                        : "Signal retained; waiting for activity"
+                                    HoverHandler { id: activityHover }
                                 }
                                 Label {
                                     Layout.fillWidth: true
@@ -1963,8 +2077,6 @@ ApplicationWindow {
                                                 + modelData.qsoParticipants[0]
                                                 + " ↔ "
                                                 + modelData.qsoParticipants[1]
-                                                + "  •  "
-                                                + modelData.frequencyLabel
                                         }
                                         var station = modelData.callsign
                                         if (station.length === 0) {
@@ -1975,52 +2087,14 @@ ApplicationWindow {
                                             station = "≈ " + sessionCard.advisoryCallsignSuggestion
                                         }
                                         return station.length > 0
-                                            ? station + "  •  "
-                                                + modelData.frequencyLabel
-                                            : modelData.frequencyLabel
+                                            ? station : "Identifying…"
                                     }
                                     color: modelData.color
                                     font.weight: Font.Bold
                                     font.pixelSize: 16
-                                    elide: Text.ElideRight
-                                }
-                                ToolButton {
-                                    objectName: "decoderSessionMonitorButton"
-                                    text: sessionCard.streamMonitored ? "🔊" : "🔈"
-                                    flat: true
-                                    font.pixelSize: 17
-                                    Accessible.name: sessionCard.streamMonitored
-                                        ? "Stop monitoring this CW stream"
-                                        : "Monitor this CW stream"
-                                    Accessible.description:
-                                        "Several decoder-card streams can be monitored together"
-                                    onClicked: replayController.toggleMonitorChannel(
-                                                   modelData.id)
-                                    ToolTip.visible: hovered
-                                    ToolTip.delay: 350
-                                    ToolTip.text: sessionCard.streamMonitored
-                                        ? "Stop listening to this stream"
-                                        : "Listen to this filtered stream; other enabled stream speakers remain active"
-                                }
-                                Button {
-                                    objectName: "decoderSessionTxButton"
-                                    text: "TX " + modelData.callsign
-                                    visible: modelData.callsign.length > 0
-                                    enabled: transmitController.armed
-                                    onClicked: {
-                                        transmitController.selectTarget(
-                                            modelData.id, modelData.callsign,
-                                            modelData.frequencyKind === "RF"
-                                            ? modelData.displayFrequencyHz : 0,
-                                            modelData.currentSenderWpm > 0
-                                            ? modelData.currentSenderWpm
-                                            : modelData.wpm)
-                                        txDrawer.open()
-                                    }
-                                    ToolTip.visible: hovered
-                                    ToolTip.text: transmitController.armed
-                                        ? "Select this exactly decoded station for guarded TX"
-                                        : "Open QSO and arm TX first"
+                                    minimumPixelSize: 12
+                                    fontSizeMode: Text.Fit
+                                    elide: Text.ElideNone
                                 }
                                 Label {
                                     objectName: "callsignDatabaseBadge"
@@ -2093,10 +2167,9 @@ ApplicationWindow {
                                     font.weight: Font.Bold
                                 }
                                 Label {
-                                    text: !modelData.verifiedCw
-                                          ? "MANUAL"
-                                          : (modelData.active ? "ACTIVE" : "HOLD")
-                                    color: modelData.active ? modelData.color : "#718091"
+                                    visible: !modelData.verifiedCw
+                                    text: "MANUAL"
+                                    color: "#718091"
                                     font.pixelSize: 10
                                 }
                                 ToolButton {
@@ -2164,6 +2237,15 @@ ApplicationWindow {
                                 }
                             }
                             Label {
+                                objectName: "decoderSessionFrequencyLabel"
+                                Layout.fillWidth: true
+                                text: modelData.frequencyLabel
+                                color: "#91a0b1"
+                                font.pixelSize: 11
+                                font.family: "monospace"
+                                elide: Text.ElideRight
+                            }
+                            Label {
                                 objectName: "currentSenderLabel"
                                 Layout.fillWidth: true
                                 visible: modelData.currentSenderCallsign.length > 0
@@ -2229,7 +2311,7 @@ ApplicationWindow {
                                 }
                                 ScrollBar.vertical: ScrollBar {
                                     id: transcriptVerticalBar
-                                    policy: ScrollBar.AlwaysOn
+                                    policy: ScrollBar.AsNeeded
                                     onPressedChanged: {
                                         if (!pressed)
                                             transcriptScroll.followTail =
@@ -2273,7 +2355,7 @@ ApplicationWindow {
                                            : (modelData.provisionalText.length > 0
                                               || modelData.elements.length > 0
                                               ? "#e3ad55" : "#8290a0")
-                                    font.pixelSize: 18
+                                    font.pixelSize: 16
                                     font.italic: modelData.text.length === 0
                                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
                                     padding: 8
@@ -2286,7 +2368,7 @@ ApplicationWindow {
                                     ToolTip.visible: transcriptHover.hovered
                                     ToolTip.delay: 500
                                     ToolTip.text: modelData.transmissions.length > 0
-                                        ? "Completed transmissions are separated by |. Only conservative word gaps are repaired; decoded characters are unchanged."
+                                        ? "A sustained pause starts a new line. Only cadence-supported word gaps are repaired; decoded characters remain visible while later corrections settle."
                                         : "Live decoded text; select and scroll to pause automatic tail following"
                                     HoverHandler { id: transcriptHover }
                                     function applyDecodedText(nextText) {
@@ -2517,6 +2599,61 @@ ApplicationWindow {
                                 color: "#c8d4e0"
                                 font.pixelSize: 13
                                 wrapMode: Text.WordWrap
+                            }
+                            RowLayout {
+                                objectName: "decoderSessionActionRow"
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Item { Layout.fillWidth: true }
+                                Button {
+                                    objectName: "decoderSessionTxButton"
+                                    Layout.minimumWidth: 112
+                                    text: modelData.callsign.length > 0
+                                          ? "TX " + modelData.callsign : "TX"
+                                    enabled: transmitController.armed
+                                             && modelData.callsign.length > 0
+                                    onClicked: {
+                                        transmitController.selectTarget(
+                                            modelData.id, modelData.callsign,
+                                            modelData.frequencyKind === "RF"
+                                            ? modelData.displayFrequencyHz : 0,
+                                            modelData.currentSenderWpm > 0
+                                            ? modelData.currentSenderWpm
+                                            : modelData.wpm)
+                                        txDrawer.open()
+                                    }
+                                    ToolTip.visible: hovered
+                                    ToolTip.text: modelData.callsign.length === 0
+                                        ? "TX waits for an exactly decoded callsign"
+                                        : (transmitController.armed
+                                           ? "Select this exactly decoded station for guarded TX"
+                                           : "Open QSO and arm TX first")
+                                }
+                                ToolButton {
+                                    objectName: "decoderSessionMonitorButton"
+                                    Layout.preferredWidth: 46
+                                    Layout.preferredHeight: 38
+                                    text: sessionCard.streamMonitored ? "🔊" : "🔈"
+                                    flat: false
+                                    highlighted: sessionCard.streamMonitored
+                                    font.pixelSize: 19
+                                    Accessible.name: sessionCard.streamMonitored
+                                        ? "Stop monitoring this CW stream"
+                                        : "Monitor this CW stream"
+                                    Accessible.description:
+                                        "Several decoder-card streams can be monitored together"
+                                    // Decoder delegates refresh while text is
+                                    // arriving. Commit on press so a model
+                                    // refresh between press and release cannot
+                                    // swallow the operator's monitor action.
+                                    onPressed: replayController.toggleMonitorChannel(
+                                                   modelData.id)
+                                    ToolTip.visible: hovered
+                                    ToolTip.delay: 350
+                                    ToolTip.text: sessionCard.streamMonitored
+                                        ? "Stop listening to this stream"
+                                        : "Listen to this filtered stream; other enabled stream speakers remain active"
+                                }
                             }
                         }
                     }

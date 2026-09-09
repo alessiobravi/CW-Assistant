@@ -46,6 +46,19 @@ class FakeBackend final : public cwassistant::desktop::SdrReceiveBackend {
     return report;
   }
 
+  cwassistant::desktop::SdrDeviceCapabilities probe(
+      const std::string& device_id) override {
+    return {.available = device_id == "fake:01:0",
+            .sample_rates_hz = {96'000.0, 250'000.0},
+            .bandwidths_hz = {200'000.0, 300'000.0},
+            .antennas = {"RX"},
+            .automatic_gain_available = true,
+            .minimum_gain_db = -10.0,
+            .maximum_gain_db = 50.0,
+            .gain_step_db = 1.0,
+            .diagnostic = "Fake capabilities ready."};
+  }
+
   bool open(const cwassistant::desktop::SdrReceiveConfiguration&,
             cwassistant::desktop::SdrActualConfiguration& output,
             std::string& error) override {
@@ -97,6 +110,10 @@ int main() {
   expect(report.backend_available && report.devices.size() == 1 &&
              report.loaded_drivers == std::vector<std::string>{"fake"},
          "fake discovery crosses backend-neutral contract");
+  const auto capabilities = receiver.probe("fake:01:0");
+  expect(capabilities.available && capabilities.sample_rates_hz.size() == 2 &&
+             capabilities.antennas == std::vector<std::string>{"RX"},
+         "device capabilities cross the backend-neutral contract");
 
   std::string error;
   expect(!receiver.start({}, error) && error.find("device") != std::string::npos,

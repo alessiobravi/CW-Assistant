@@ -24,6 +24,8 @@ SdrCaptureWorker::~SdrCaptureWorker() { stop(); }
 void SdrCaptureWorker::start(const QString& device_id,
                              const double center_frequency_hz,
                              const double sample_rate_hz,
+                             const double bandwidth_hz,
+                             const QString& antenna,
                              const bool automatic_gain, const double gain_db) {
   stop();
   if (!pipe_) {
@@ -43,6 +45,8 @@ void SdrCaptureWorker::start(const QString& device_id,
   if (!receiver_.start({.device_id = device_id.toStdString(),
                         .center_frequency_hz = center_frequency_hz,
                         .sample_rate_hz = sample_rate_hz,
+                        .bandwidth_hz = bandwidth_hz,
+                        .antenna = antenna.toStdString(),
                         .automatic_gain = automatic_gain,
                         .gain_db = gain_db},
                        error)) {
@@ -52,7 +56,7 @@ void SdrCaptureWorker::start(const QString& device_id,
   running_ = true;
   const auto& actual = receiver_.actualConfiguration();
   emit started(device_id, actual.center_frequency_hz, actual.sample_rate_hz,
-               actual.automatic_gain, actual.gain_db);
+               actual.bandwidth_hz, actual.automatic_gain, actual.gain_db);
   pump_timer_.start();
 }
 

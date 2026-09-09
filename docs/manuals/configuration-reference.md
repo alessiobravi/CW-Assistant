@@ -42,9 +42,28 @@ guessed RF frequency.
   99 GHz subject to the selected hardware.
 - **IQ sample rate** requests 25 kS/s through 64 MS/s. The adapter selects the
   nearest rate advertised by the receiver and reports the actual value after
-  start. The default is 250 kS/s to preserve narrow CW bin resolution and
-  bounded CPU use; increase it only when the wider view is worth the added DSP
-  load.
+  start. The selector is populated from the selected device when possible.
+  This is the effective IQ output rate: drivers such as SDRplay may use a
+  higher internal converter rate and their supported hardware decimation to
+  supply it. The default is 250 kS/s; increase it only when the wider overview
+  is operationally useful.
+- **Hardware RF bandwidth** requests the receiver's analogue or baseband
+  filter width independently of the IQ sample rate. **Automatic** leaves that
+  choice to the driver. Unsupported values are mapped to the nearest advertised
+  width and actual hardware readback remains authoritative.
+- **Antenna / tuner input** lists the inputs exposed by the selected receiver
+  operating mode. A disabled selector means the driver exposes no choice.
+- **Decoder window center** and **Decoder bandwidth** select the bounded RF
+  region sent to CW detection and the independent stream decoders. The full
+  acquired passband remains visible. The default window is 24 kHz and choices
+  range from 6 to 96 kHz; use the narrowest width that contains the stations of
+  interest to reduce CPU use and decoding latency.
+- **Follow authoritative RX VFO readback** keeps the SDR decoder window centred
+  on the RX frequency reported by the configured radio-control provider. The
+  route is provider-neutral and never infers a value from operator intent.
+  **SDR LO offset** adds a signed offset to the SDR hardware centre for
+  transverter or independently tuned receiver arrangements. CW Buddy bounds it
+  so the decoder window stays inside the acquired passband.
 - **Automatic gain** requests the receiver's hardware gain mode. A receiver
   without that capability fails explicitly until manual gain is selected.
   **Manual gain** is requested in dB and the actual readback remains
@@ -62,9 +81,17 @@ CW Buddy does not probe SDR hardware during application or profile startup.
 Opening Settings > SDR requests one scan after the page renders; use **Refresh
 devices** to repeat it after a hot-plug or reconnect.
 
-The status bar exposes bounded-queue input overruns. Advanced channel,
-sample-rate, buffer-size, calibration, and level-meter controls remain under
-implementation.
+An RSPduo can appear several times because its driver advertises alternative
+operating modes, not because several physical receivers were discovered.
+Choose **Single Tuner** for CW Buddy's current one-channel receive path. **Dual
+Tuner** and **Master** entries are advanced coordinated modes; only channel 0 is
+currently consumed, so they do not yet provide two CW Buddy receiver panes.
+Close SDRUno, SDRconnect, or any other owner before probing or starting the RSP.
+
+The status bar exposes bounded-queue input overruns. Standard device
+sample-rate, RF-bandwidth, antenna/input and gain controls are available when
+advertised. Driver-specific options, additional channels, buffer-size,
+calibration, and level-meter controls remain under implementation.
 
 ### Audio conditioning and bandwidth
 

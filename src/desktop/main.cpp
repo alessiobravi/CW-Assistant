@@ -13,6 +13,7 @@
 #include <qqml.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string_view>
@@ -183,11 +184,55 @@ int main(int argc, char* argv[]) {
         settings.radioTxModeTarget(), settings.radioTxModeConfirmed(),
         settings.radioSplitKnown(), settings.controlledSplitActive());
   };
+  const auto follow_sdr_to_radio_vfo = [&settings] {
+    if (!settings.sdrFollowRadioVfo()) return;
+    const auto rx_rf_hz = settings.controlledRxRfHz();
+    if (!rx_rf_hz.has_value()) return;
+    const qint64 available_offset = std::max<qint64>(
+        0, static_cast<qint64>(settings.sdrSampleRateHz() / 2) -
+               static_cast<qint64>(settings.sdrDecoderBandwidthHz() / 2) -
+               1'000);
+    const qint64 offset = std::clamp(settings.sdrRadioLoOffsetHz(),
+                                     -available_offset, available_offset);
+    const auto decoder_center = std::clamp<std::uint64_t>(
+        *rx_rf_hz, 1ULL, 99'000'000'000ULL);
+    const qint64 requested_center =
+        static_cast<qint64>(decoder_center) + offset;
+    settings.setSdrCenterFrequencyHz(static_cast<qulonglong>(
+        std::clamp<qint64>(requested_center, 1LL, 99'000'000'000LL)));
+    settings.setSdrDecoderCenterFrequencyHz(
+        static_cast<qulonglong>(decoder_center));
+  };
   const auto apply_sdr_input = [&settings, &replay_controller] {
+    const qint64 sample_rate_hz = settings.sdrSampleRateHz();
+    const qint64 decoder_bandwidth_hz = std::clamp<qint64>(
+        settings.sdrDecoderBandwidthHz(), 2'000,
+        std::max<qint64>(2'000, sample_rate_hz - 2'000));
+    const qint64 acquisition_center_hz =
+        static_cast<qint64>(settings.sdrCenterFrequencyHz());
+    const qint64 edge_margin_hz = decoder_bandwidth_hz / 2 + 1'000;
+    const qint64 lowest_decoder_center =
+        acquisition_center_hz - sample_rate_hz / 2 + edge_margin_hz;
+    const qint64 highest_decoder_center =
+        acquisition_center_hz + sample_rate_hz / 2 - edge_margin_hz;
+    const qint64 decoder_center_hz = std::clamp<qint64>(
+        static_cast<qint64>(settings.sdrDecoderCenterFrequencyHz()),
+        lowest_decoder_center, highest_decoder_center);
+    if (settings.sdrDecoderBandwidthHz() != decoder_bandwidth_hz)
+      settings.setSdrDecoderBandwidthHz(
+          static_cast<int>(decoder_bandwidth_hz));
+    if (static_cast<qint64>(settings.sdrDecoderCenterFrequencyHz()) !=
+        decoder_center_hz)
+      settings.setSdrDecoderCenterFrequencyHz(
+          static_cast<qulonglong>(decoder_center_hz));
     replay_controller.setSdrInputSelection(
         settings.sdrDeviceId(), settings.sdrDeviceDisplayName(),
         settings.sdrCenterFrequencyHz(), settings.sdrSampleRateHz(),
-        settings.sdrAutomaticGain(), settings.sdrGainDb());
+        settings.sdrBandwidthHz(), settings.sdrAntenna(),
+        settings.sdrAutomaticGain(),
+        settings.sdrGainDb(),
+        static_cast<qulonglong>(decoder_center_hz),
+        static_cast<int>(decoder_bandwidth_hz));
   };
   const auto apply_offline_callsign_database =
       [&settings, &replay_controller, &callsign_database_updater] {
@@ -215,6 +260,7 @@ int main(int argc, char* argv[]) {
   apply_transmit_hardware();
   apply_transmit_speed();
   apply_transmit_radio_safety();
+  follow_sdr_to_radio_vfo();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   apply_sdr_input();
@@ -281,6 +327,15 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::radioFrequencyChanged,
       &replay_controller, apply_radio_frequency);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::radioFrequencyChanged,
+      &settings, follow_sdr_to_radio_vfo);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
+      &settings, follow_sdr_to_radio_vfo);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &settings, follow_sdr_to_radio_vfo);
   QObject::connect(
       &settings,
       &cwassistant::desktop::AppSettings::localCallsignDatabaseConfigurationCommitted,

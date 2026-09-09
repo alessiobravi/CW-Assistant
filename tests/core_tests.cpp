@@ -2354,6 +2354,69 @@ void test_spectrum_analyzer() {
   expect(after_gap.size() == 1 &&
              after_gap.front().timestamp_ns == overlap_block.timestamp_ns,
          "analysis resets overlap at a capture gap so waterfall time is not compressed");
+
+  SpectrumAnalyzer wide_rate_limited(
+      {.fft_size = 1'024, .averaging_frames = 1, .frame_rate_hz = 60});
+  RealtimeSampleBlock wide_block;
+  wide_block.stream = {.kind = StreamKind::ComplexIq,
+                       .sample_rate_hz = 240'000.0,
+                       .center_frequency_hz = 14'050'000.0,
+                       .channel_count = 2};
+  wide_block.sample_count = wide_block.samples.size();
+  for (std::size_t index = 0; index < wide_block.sample_count; ++index) {
+    const float phase = 2.0F * std::numbers::pi_v<float> *
+                        2'000.0F * static_cast<float>(index) / 240'000.0F;
+    wide_block.samples[index] = {std::cos(phase), std::sin(phase)};
+  }
+  const auto limited_snapshots = wide_rate_limited.process(wide_block);
+  expect(limited_snapshots.size() == 1,
+         "wide-IQ FFT skips complete input intervals to honor its configured frame rate");
+  expect(limited_snapshots.size() < wide_block.sample_count / 1'024,
+         "wide-IQ FFT does not emit one frame per transform length at high sample rates");
+
+  SpectrumAnalyzer multi_mhz_limited(
+      {.fft_size = 1'024, .averaging_frames = 1, .frame_rate_hz = 60});
+  wide_block.stream.sample_rate_hz = 8'000'000.0;
+  std::size_t multi_mhz_frames = 0;
+  std::uint64_t sample_offset = 0;
+  std::uint64_t last_frame_timestamp = 0;
+  for (std::uint64_t sequence = 0; sequence < 100; ++sequence) {
+    wide_block.sequence = sequence;
+    wide_block.timestamp_ns = static_cast<std::uint64_t>(
+        static_cast<long double>(sample_offset) * 1'000'000'000.0L /
+        wide_block.stream.sample_rate_hz);
+    const auto produced = multi_mhz_limited.process(wide_block);
+    for (const auto& snapshot : produced) {
+      if (multi_mhz_frames > 0) {
+        expect(snapshot.timestamp_ns > last_frame_timestamp + 16'600'000 &&
+                   snapshot.timestamp_ns < last_frame_timestamp + 16'800'000,
+               "multi-MHz overview frames retain the configured wall-clock cadence");
+      }
+      last_frame_timestamp = snapshot.timestamp_ns;
+      ++multi_mhz_frames;
+    }
+    sample_offset += wide_block.sample_count;
+  }
+  expect(multi_mhz_frames == 4,
+         "an 8 MHz overview emits about 60 frames per second instead of one per FFT");
+
+  SpectrumAnalyzer discontinuous_average(
+      {.fft_size = 1'024, .averaging_frames = 4, .frame_rate_hz = 60});
+  wide_block.stream.sample_rate_hz = 240'000.0;
+  wide_block.timestamp_ns = 0;
+  wide_block.sequence = 0;
+  std::fill_n(wide_block.samples.begin(), wide_block.sample_count,
+              std::complex<float>{1.0F, 0.0F});
+  static_cast<void>(discontinuous_average.process(wide_block));
+  wide_block.timestamp_ns = 1'000'000'000;
+  wide_block.sequence = 2;
+  std::fill_n(wide_block.samples.begin(), wide_block.sample_count,
+              std::complex<float>{0.0F, 0.0F});
+  const auto after_discontinuity = discontinuous_average.process(wide_block);
+  expect(!after_discontinuity.empty() &&
+             after_discontinuity.front().bins_dbfs ==
+                 after_discontinuity.front().instantaneous_bins_dbfs,
+         "a capture discontinuity clears spectral averaging instead of ghosting old RF");
 }
 
 void test_remote_control_lease() {

@@ -75,15 +75,28 @@ sample sequence numbers. Different channels may execute concurrently.
 
 The direct-SDR adapter uses the same ring and DSP worker. A SoapySDR capture
 worker owns one receive-only CF32 channel, reads back the actual center
-frequency/sample rate/gain, and emits fixed complex-IQ blocks. Audio capture
+frequency/sample rate/RF bandwidth/antenna/gain, and emits fixed complex-IQ
+blocks. Audio capture
 and SDR capture are mutually exclusive producers serialized on the receiver
 capture thread, preserving the ring's SPSC contract. The dependency-free IQ
 boundary rejects invalid descriptors, non-finite or excessive samples, and
 records sequence/timestamp discontinuities before data reaches spectral or CW
-state. The analyzer accumulates across input blocks for a 16,384-point wideband
-FFT; the channel bank retains absolute RF coordinates and independently
-filters qualifying carriers. Only selected filtered carriers are converted to
-48 kHz monitor audio. Raw IQ is never routed to the loudspeaker.
+state. The receive path then branches. A bounded-rate 16,384-point overview
+analyzer retains the complete acquired passband and skips excess input between
+requested frames rather than flooding the UI at multi-megasample rates.
+Separately, one shared phase-continuous mixer, fourth-order anti-alias filter,
+and rational decimator extracts the configured decoder window at a bounded
+48–192 kS/s. The channel bank retains absolute RF coordinates but detection and
+every per-track filter consume only that bounded branch. Only selected filtered
+carriers are converted to 48 kHz monitor audio. Raw IQ is never routed to the
+loudspeaker.
+
+Optional RX-VFO following consumes authoritative radio-controller readback at
+the application boundary, independent of the concrete OmniRig, CAT4OM, direct
+CAT, Hamlib, or future provider. It moves the decode window and applies a signed
+profile LO offset to the SDR centre, clamping the arrangement so the entire
+decoder window remains inside the acquired passband. It cannot write TX, PTT,
+or KEY state.
 
 SoapySDR headers and linkage remain confined to the desktop adapter target and
 are optional for custom builds. Official packages enable the adapter and either

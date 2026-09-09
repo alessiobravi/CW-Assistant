@@ -255,6 +255,17 @@ double SpectrumWaterfallItem::lowerFrequencyHz() const noexcept {
 double SpectrumWaterfallItem::upperFrequencyHz() const noexcept {
   return upper_frequency_hz_;
 }
+double SpectrumWaterfallItem::sourceLowerFrequencyHz() const noexcept {
+  return source_lower_frequency_hz_;
+}
+double SpectrumWaterfallItem::sourceUpperFrequencyHz() const noexcept {
+  return source_upper_frequency_hz_;
+}
+bool SpectrumWaterfallItem::zoomed() const noexcept {
+  return view_initialized_ &&
+      (lower_frequency_hz_ > source_lower_frequency_hz_ + 0.5 ||
+       upper_frequency_hz_ < source_upper_frequency_hz_ - 0.5);
+}
 qulonglong SpectrumWaterfallItem::droppedRows() const noexcept {
   return dropped_rows_;
 }
@@ -274,10 +285,17 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
               frame.instantaneous_bins_dbfs.size() == frame.bins_dbfs.size()
           ? frame.instantaneous_bins_dbfs
           : frame.bins_dbfs;
-  if (!qFuzzyCompare(lower_frequency_hz_, frame.lower_frequency_hz) ||
-      !qFuzzyCompare(upper_frequency_hz_, frame.upper_frequency_hz)) {
+  const bool source_changed =
+      !qFuzzyCompare(source_lower_frequency_hz_, frame.lower_frequency_hz) ||
+      !qFuzzyCompare(source_upper_frequency_hz_, frame.upper_frequency_hz);
+  if (source_changed) {
+    source_lower_frequency_hz_ = frame.lower_frequency_hz;
+    source_upper_frequency_hz_ = frame.upper_frequency_hz;
+  }
+  if (!view_initialized_ || source_changed) {
     lower_frequency_hz_ = frame.lower_frequency_hz;
     upper_frequency_hz_ = frame.upper_frequency_hz;
+    view_initialized_ = true;
     emit frequencyRangeChanged();
   }
   if (has_sequence_ && frame.sequence > last_sequence_ + 1) {
@@ -312,6 +330,58 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   scheduleRender();
 }
 
+void SpectrumWaterfallItem::zoomAt(const double frequency_hz,
+                                   const double factor) {
+  if (!view_initialized_ || !std::isfinite(frequency_hz) ||
+      !std::isfinite(factor) || factor <= 0.0 ||
+      source_upper_frequency_hz_ <= source_lower_frequency_hz_) {
+    return;
+  }
+  const double source_span =
+      source_upper_frequency_hz_ - source_lower_frequency_hz_;
+  const double current_span = upper_frequency_hz_ - lower_frequency_hz_;
+  const double minimum_span = std::max(
+      500.0, source_span / std::max(64.0, static_cast<double>(latest_bins_.size())) * 32.0);
+  const double next_span =
+      std::clamp(current_span * factor, minimum_span, source_span);
+  const double anchor = std::clamp(
+      (frequency_hz - lower_frequency_hz_) / std::max(1.0, current_span),
+      0.0, 1.0);
+  double next_lower = frequency_hz - anchor * next_span;
+  next_lower = std::clamp(next_lower, source_lower_frequency_hz_,
+                          source_upper_frequency_hz_ - next_span);
+  const double next_upper = next_lower + next_span;
+  if (qFuzzyCompare(lower_frequency_hz_, next_lower) &&
+      qFuzzyCompare(upper_frequency_hz_, next_upper)) {
+    return;
+  }
+  lower_frequency_hz_ = next_lower;
+  upper_frequency_hz_ = next_upper;
+  emit frequencyRangeChanged();
+  update();
+}
+
+void SpectrumWaterfallItem::panBy(const double frequency_delta_hz) {
+  if (!zoomed() || !std::isfinite(frequency_delta_hz)) return;
+  const double span = upper_frequency_hz_ - lower_frequency_hz_;
+  const double next_lower = std::clamp(
+      lower_frequency_hz_ + frequency_delta_hz, source_lower_frequency_hz_,
+      source_upper_frequency_hz_ - span);
+  if (qFuzzyCompare(lower_frequency_hz_, next_lower)) return;
+  lower_frequency_hz_ = next_lower;
+  upper_frequency_hz_ = next_lower + span;
+  emit frequencyRangeChanged();
+  update();
+}
+
+void SpectrumWaterfallItem::resetZoom() {
+  if (!view_initialized_) return;
+  lower_frequency_hz_ = source_lower_frequency_hz_;
+  upper_frequency_hz_ = source_upper_frequency_hz_;
+  emit frequencyRangeChanged();
+  update();
+}
+
 void SpectrumWaterfallItem::resetFrames() {
   latest_bins_.clear();
   waterfall_rows_.clear();
@@ -331,6 +401,9 @@ void SpectrumWaterfallItem::resetFrames() {
   dropped_rows_ = 0;
   lower_frequency_hz_ = 0.0;
   upper_frequency_hz_ = 0.0;
+  source_lower_frequency_hz_ = 0.0;
+  source_upper_frequency_hz_ = 0.0;
+  view_initialized_ = false;
   emit droppedRowsChanged();
   emit noiseFloorChanged();
   emit frequencyRangeChanged();
@@ -411,12 +484,12 @@ QVector<float> SpectrumWaterfallItem::conditionedWaterfallRow(
     const auto* replay = qobject_cast<ReplayController*>(source_);
     return cwSymbolRow(
         replay == nullptr ? QVariantList{} : replay->decoderChannels(),
-        bins.size(), lower_frequency_hz_, upper_frequency_hz_,
+        bins.size(), source_lower_frequency_hz_, source_upper_frequency_hz_,
         effective_lower_bound_db_, effective_upper_bound_db_);
   }
   if (!noise_floor_initialized_) return bins;
   const double bin_width_hz = bins.size() > 1
-      ? (upper_frequency_hz_ - lower_frequency_hz_) /
+      ? (source_upper_frequency_hz_ - source_lower_frequency_hz_) /
             static_cast<double>(bins.size() - 1)
       : 1.0;
   return conditioner_.process(
@@ -460,18 +533,34 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   const float waterfall_top = spectrum_height + 8.0F;
   const float waterfall_height = std::max(0.0F, height - waterfall_top);
 
+  qsizetype first_bin = 0;
+  qsizetype last_bin = latest_bins_.isEmpty() ? -1 : latest_bins_.size() - 1;
+  const double source_span =
+      source_upper_frequency_hz_ - source_lower_frequency_hz_;
+  if (last_bin > 0 && source_span > 0.0) {
+    first_bin = std::clamp<qsizetype>(static_cast<qsizetype>(std::floor(
+        (lower_frequency_hz_ - source_lower_frequency_hz_) / source_span *
+        static_cast<double>(last_bin))), 0, last_bin);
+    last_bin = std::clamp<qsizetype>(static_cast<qsizetype>(std::ceil(
+        (upper_frequency_hz_ - source_lower_frequency_hz_) / source_span *
+        static_cast<double>(latest_bins_.size() - 1))), first_bin,
+        latest_bins_.size() - 1);
+  }
+  const qsizetype visible_bins = last_bin >= first_bin
+      ? last_bin - first_bin + 1 : 0;
   auto* spectrum_geometry = root->spectrum->geometry();
-  spectrum_geometry->allocate(latest_bins_.size());
+  spectrum_geometry->allocate(visible_bins);
   auto* vertices = spectrum_geometry->vertexDataAsPoint2D();
   const double span = std::max(1.0, effective_upper_bound_db_ -
                                        effective_lower_bound_db_);
-  for (qsizetype i = 0; i < latest_bins_.size(); ++i) {
-    const float x = latest_bins_.size() > 1
+  for (qsizetype i = 0; i < visible_bins; ++i) {
+    const qsizetype source_index = first_bin + i;
+    const float x = visible_bins > 1
                         ? width * static_cast<float>(i) /
-                              static_cast<float>(latest_bins_.size() - 1)
+                              static_cast<float>(visible_bins - 1)
                         : 0.0F;
     const double normalized =
-        std::clamp((static_cast<double>(latest_bins_[i]) -
+        std::clamp((static_cast<double>(latest_bins_[source_index]) -
                     effective_lower_bound_db_) /
                        span,
                    0.0, 1.0);
@@ -501,8 +590,8 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   }
   root->grid->markDirty(QSGNode::DirtyGeometry);
 
-  if (!latest_bins_.isEmpty() && window() != nullptr) {
-    const int image_width = latest_bins_.size();
+  if (visible_bins > 0 && window() != nullptr) {
+    const int image_width = static_cast<int>(visible_bins);
     const int image_height = waterfallRowCapacity();
     QImage image(image_width, image_height, QImage::Format_RGB32);
     const QRgb blank_color = waterfallColor(0.0F);
@@ -514,8 +603,9 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
       }
       const auto& row = waterfall_rows_[static_cast<std::size_t>(y)];
       for (int x = 0; x < image_width; ++x) {
+        const qsizetype source_index = first_bin + x;
         const float normalized = static_cast<float>(std::clamp(
-            (static_cast<double>(row[x]) - effective_lower_bound_db_) / span,
+            (static_cast<double>(row[source_index]) - effective_lower_bound_db_) / span,
             0.0, 1.0));
         scanline[x] = waterfallColor(normalized);
       }

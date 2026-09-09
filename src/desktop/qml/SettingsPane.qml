@@ -244,6 +244,15 @@ Pane {
                             ? "Select the directly connected receive-only SDR"
                             : "Install the matching SoapySDR hardware module, connect the receiver, then refresh"
                     }
+                    Label { text: "Device mode" }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: appSettings.sdrDeviceDisplayName.indexOf("RSPduo") >= 0
+                            ? "RSPduo entries are operating modes of the same receiver. Single Tuner is recommended for one CW Buddy receive path; Dual Tuner and Master modes are advanced multi-channel/master-slave configurations."
+                            : "The selector may list alternative operating configurations exposed by the device driver."
+                    }
                     Label { text: "Discovery" }
                     RowLayout {
                         Layout.fillWidth: true
@@ -266,6 +275,7 @@ Pane {
                         objectName: "sdrCenterFrequencyField"
                         Layout.fillWidth: true
                         enabled: appSettings.sdrBackendAvailable
+                                 && !appSettings.sdrFollowRadioVfo
                         inputMethodHints: Qt.ImhDigitsOnly
                         text: appSettings.sdrCenterFrequencyHz.toString()
                         placeholderText: "14050000"
@@ -280,13 +290,106 @@ Pane {
                         Layout.fillWidth: true
                         enabled: appSettings.sdrBackendAvailable
                         editable: true
-                        model: [250000, 1024000, 2000000, 2400000, 8000000, 10000000]
+                        model: appSettings.sdrSampleRateOptions.length > 0
+                            ? appSettings.sdrSampleRateOptions
+                            : [62500, 96000, 125000, 192000, 250000,
+                               384000, 500000, 768000, 1000000,
+                               2000000, 2400000, 8000000, 10000000]
                         currentIndex: model.indexOf(appSettings.sdrSampleRateHz)
                         displayText: appSettings.sdrSampleRateHz + " Hz"
                         onActivated: appSettings.sdrSampleRateHz = currentValue
                         onAccepted: appSettings.sdrSampleRateHz = Number(editText.replace(/[^0-9]/g, ""))
                         ToolTip.visible: hovered
-                        ToolTip.text: "Requested IQ bandwidth; the device may choose the nearest supported rate"
+                        ToolTip.text: "Effective IQ output rate. Drivers such as SDRplay apply their supported hardware decimation automatically for lower rates."
+                    }
+                    Label { text: "Hardware RF bandwidth" }
+                    ComboBox {
+                        objectName: "sdrBandwidthCombo"
+                        Layout.fillWidth: true
+                        enabled: appSettings.sdrBackendAvailable
+                        editable: true
+                        model: appSettings.sdrBandwidthOptions.length > 1
+                            ? appSettings.sdrBandwidthOptions
+                            : [0, 200000, 300000, 600000, 1536000,
+                               5000000, 6000000, 7000000, 8000000]
+                        currentIndex: model.indexOf(appSettings.sdrBandwidthHz)
+                        displayText: appSettings.sdrBandwidthHz === 0
+                            ? "Automatic" : appSettings.sdrBandwidthHz + " Hz"
+                        onActivated: appSettings.sdrBandwidthHz = currentValue
+                        onAccepted: appSettings.sdrBandwidthHz =
+                            Number(editText.replace(/[^0-9]/g, ""))
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Requested analogue/baseband RF filter width; the provider selects the nearest supported value"
+                    }
+                    Label { text: "Driver decimation" }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#43c6ac"
+                        text: "Automatic through the effective IQ sample rate ("
+                              + appSettings.sdrSampleRateHz + " S/s requested)"
+                    }
+                    Label { text: "Antenna / tuner input" }
+                    ComboBox {
+                        objectName: "sdrAntennaCombo"
+                        Layout.fillWidth: true
+                        model: appSettings.sdrAntennaNames
+                        currentIndex: appSettings.sdrAntennaIndex
+                        enabled: appSettings.sdrAntennaNames.length > 0
+                        onActivated: appSettings.selectSdrAntenna(currentIndex)
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Receiver input exposed by the selected SDR operating mode"
+                            : "This SDR driver does not expose an antenna selector"
+                    }
+                    Label { text: "Decoder window center (Hz)" }
+                    TextField {
+                        objectName: "sdrDecoderCenterFrequencyField"
+                        Layout.fillWidth: true
+                        enabled: appSettings.sdrBackendAvailable
+                                 && !appSettings.sdrFollowRadioVfo
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        text: appSettings.sdrDecoderCenterFrequencyHz.toString()
+                        validator: RegularExpressionValidator { regularExpression: /[0-9]{1,11}/ }
+                        onEditingFinished:
+                            appSettings.sdrDecoderCenterFrequencyHz = Number(text)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Only this bounded RF region is sent to stream detection and CW decoding"
+                    }
+                    Label { text: "Decoder bandwidth" }
+                    ComboBox {
+                        objectName: "sdrDecoderBandwidthCombo"
+                        Layout.fillWidth: true
+                        model: [6000, 12000, 24000, 48000, 96000]
+                        currentIndex: model.indexOf(appSettings.sdrDecoderBandwidthHz)
+                        displayText: (appSettings.sdrDecoderBandwidthHz / 1000)
+                                     + " kHz"
+                        onActivated:
+                            appSettings.sdrDecoderBandwidthHz = currentValue
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Limits CPU-intensive CW detection while the full acquired spectrum remains visible"
+                    }
+                    Label { text: "Radio synchronization" }
+                    CheckBox {
+                        objectName: "sdrFollowRadioVfoCheck"
+                        text: "Follow authoritative RX VFO readback"
+                        checked: appSettings.sdrFollowRadioVfo
+                        enabled: appSettings.radioEnabled
+                        onToggled: appSettings.sdrFollowRadioVfo = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Keep the decoder centered on the radio RX VFO and retune the SDR through the configured radio-control abstraction"
+                    }
+                    Label { text: "SDR LO offset (Hz)" }
+                    TextField {
+                        objectName: "sdrRadioLoOffsetField"
+                        Layout.fillWidth: true
+                        enabled: appSettings.sdrFollowRadioVfo
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        text: appSettings.sdrRadioLoOffsetHz.toString()
+                        validator: RegularExpressionValidator { regularExpression: /-?[0-9]{1,8}/ }
+                        onEditingFinished: appSettings.sdrRadioLoOffsetHz = Number(text)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Optional offset between the radio RX frequency and SDR center; automatically bounded so the decoder remains inside the acquired passband"
                     }
                     Label { text: "Visible RF span" }
                     Label {
@@ -301,6 +404,7 @@ Pane {
                         objectName: "sdrAutomaticGainCheck"
                         text: "Use device automatic gain when supported"
                         enabled: appSettings.sdrBackendAvailable
+                                 && appSettings.sdrAutomaticGainAvailable
                         checked: appSettings.sdrAutomaticGain
                         onToggled: appSettings.sdrAutomaticGain = checked
                     }
@@ -308,8 +412,8 @@ Pane {
                     SpinBox {
                         objectName: "sdrGainSpinBox"
                         editable: true
-                        from: -100
-                        to: 100
+                        from: Math.ceil(appSettings.sdrMinimumGainDb)
+                        to: Math.floor(appSettings.sdrMaximumGainDb)
                         value: Math.round(appSettings.sdrGainDb)
                         enabled: appSettings.sdrBackendAvailable
                                  && !appSettings.sdrAutomaticGain
