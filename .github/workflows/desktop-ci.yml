@@ -126,6 +126,8 @@ jobs:
         if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          Start-Transcript -Path windows-sdr-build.log -Force
           function Invoke-Checked {
             param(
               [Parameter(Mandatory = $true)][string]$Executable,
@@ -188,6 +190,7 @@ jobs:
             'architecture=x64'
             'direction=RX-only'
           ) | Set-Content "$env:CWA_SOAPYSDR_ROOT/BUILD_PROVENANCE"
+          Stop-Transcript
       - name: Verify pinned Windows SoapySDR runtime
         id: verify_windows_sdr
         if: runner.os == 'Windows'
@@ -679,6 +682,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          exec > >(tee portable-linux-sdr-bundle.log) 2>&1
           portable_root=portable-stage/stage
           cmake -E make_directory portable-stage
           cmake -E copy_directory stage "${portable_root}"
@@ -720,7 +724,7 @@ jobs:
 
           notice_root="${portable_root}/share/doc/cw-buddy/third-party"
           for package in libsoapysdr0.8 soapysdr0.8-module-rtlsdr \
-                         librtlsdr0 libusb-1.0-0 libudev1 libcap2; do
+                         librtlsdr2 libusb-1.0-0 libudev1 libcap2; do
             copyright="/usr/share/doc/${package}/copyright"
             test -s "${copyright}"
             cmake -E make_directory "${notice_root}/${package}"
@@ -731,15 +735,15 @@ jobs:
           test -x "${app}.bin"
           test -s "${bundled_module_dir}/librtlsdrSupport.so"
           test -s "${runtime_dir}/libSoapySDR.so.0.8"
-          test -s "${runtime_dir}/librtlsdr.so.0"
+          test -s "${runtime_dir}/librtlsdr.so.2"
           test -s "${runtime_dir}/libusb-1.0.so.0"
           test -s "${runtime_dir}/libudev.so.1"
           test -s "${runtime_dir}/libcap.so.2"
           readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
-            | grep -F 'librtlsdr.so.0'
+            | grep -F 'librtlsdr.so.2'
           readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
             | grep -F 'libSoapySDR.so.0.8'
-          readelf -d "${runtime_dir}/librtlsdr.so.0" \
+          readelf -d "${runtime_dir}/librtlsdr.so.2" \
             | grep -F 'libusb-1.0.so.0'
           readelf -d "${runtime_dir}/libusb-1.0.so.0" \
             | grep -F 'libudev.so.1'
@@ -752,7 +756,7 @@ jobs:
           for elf in \
             "${bundled_module_dir}/librtlsdrSupport.so" \
             "${runtime_dir}/libSoapySDR.so.0.8" \
-            "${runtime_dir}/librtlsdr.so.0" \
+            "${runtime_dir}/librtlsdr.so.2" \
             "${runtime_dir}/libusb-1.0.so.0" \
             "${runtime_dir}/libudev.so.1" \
             "${runtime_dir}/libcap.so.2"; do
@@ -915,10 +919,11 @@ jobs:
             fi
           fi
           if [[ "${CWA_WINDOWS_SDR_BUILD_RESULT}" == "failure" ]]; then
-            status_message="${status_message}"$'\n'"windows_sdr_build_failed=inspect the pinned SDR runtime build step"
+            windows_sdr_log="$(tail -n 80 windows-sdr-build.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            status_message="${status_message}"$'\n'"windows_sdr_log=${windows_sdr_log:-unavailable}"
           fi
           if [[ "${CWA_LINUX_SDR_BUNDLE_RESULT}" == "failure" ]]; then
-            linux_sdr_log="$(tail -n 80 portable-linux-sdr-ldd.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            linux_sdr_log="$(tail -n 80 portable-linux-sdr-bundle.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
             if [[ -n "${linux_sdr_log}" ]]; then
               status_message="${status_message}"$'\n'"linux_sdr_log=${linux_sdr_log}"
             fi
@@ -947,7 +952,8 @@ jobs:
           fi
           git config user.name "CW Buddy CI"
           git config user.email "ci@cw-buddy.invalid"
-          git tag --force --annotate "${status_tag}" --message "${status_message}"
+          printf '%s\n' "${status_message}" > ci-status-message.txt
+          git tag --force --annotate "${status_tag}" --file ci-status-message.txt
           for attempt in 1 2 3 4; do
             if git push origin "refs/tags/${status_tag}" --force; then
               break

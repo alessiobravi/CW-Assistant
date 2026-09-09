@@ -11,8 +11,9 @@ the RX-only SoapySDR adapter and include or depend on a verified RTL-SDR runtime
 closure. Application-relative discovery preserves external vendor-module paths,
 and staged-package smoke tests load the RTL factory before publication. The
 SDRplay API remains an operator-installed proprietary prerequisite. The first
-hosted run exposed and corrected a Windows shell parse error and a missing
-portable-Linux libcap closure member without relaxing package validation.
+hosted runs exposed and corrected a Windows shell parse error plus Ubuntu
+24.04's `librtlsdr.so.2`/libcap closure requirements without relaxing package
+validation; bounded package-step diagnostics are retained in CI status tags.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

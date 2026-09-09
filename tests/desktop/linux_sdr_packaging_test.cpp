@@ -45,8 +45,9 @@ int main() {
   // The portable archive carries the Soapy runtime, RTL module, its direct
   // USB dependencies, and the corresponding distribution copyright records.
   for (const std::string_view required : {
-           "librtlsdrSupport.so", "librtlsdr.so.0", "libusb-1.0.so.0",
-           "libudev.so.1", "libcap.so.2", "libcap2", "third-party",
+           "librtlsdrSupport.so", "librtlsdr.so.2", "libusb-1.0.so.0",
+           "libudev.so.1", "libcap.so.2", "librtlsdr2", "libcap2",
+           "third-party",
            "--sdr-backend-smoke-test",
            "ci-portable-sdr-smoke",
            "Unexpected external SDR runtime dependency",
