@@ -23,6 +23,9 @@ struct SdrDiscoveryReport {
   bool backend_available{false};
   std::string backend_version;
   std::vector<std::string> modules;
+  // Factory names whose modules loaded and registered without an error.
+  // This distinguishes a module file being present from a usable driver.
+  std::vector<std::string> loaded_drivers;
   std::vector<SdrDeviceDescriptor> devices;
   std::string diagnostic;
 };

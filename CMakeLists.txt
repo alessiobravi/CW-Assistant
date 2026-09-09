@@ -29,6 +29,8 @@ option(CWA_ENABLE_ONNX_CHARACTER_DECODER
   "Enable the optional ONNX character-decoder runtime" OFF)
 option(CWA_ENABLE_SOAPY_SDR
   "Enable direct RX-only SoapySDR device support" OFF)
+set(CWA_SOAPY_SDR_RUNTIME_ROOT "" CACHE PATH
+  "Prepared SoapySDR runtime tree bundled by Windows SDR-enabled packages")
 set(CWA_ONNXRUNTIME_ROOT "" CACHE PATH
   "Root of a pinned ONNX Runtime CPU distribution")
 
@@ -78,6 +80,11 @@ if(CWA_BUILD_DESKTOP)
   set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
   set(CPACK_DEBIAN_PACKAGE_RELEASE "1")
   set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+  if(CWA_ENABLE_SOAPY_SDR AND UNIX AND NOT APPLE)
+    # Soapy modules are loaded dynamically, so dpkg-shlibdeps cannot infer
+    # this hardware-provider requirement from the executable's ELF links.
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "soapysdr-module-rtlsdr")
+  endif()
   # The public package name changes with the product, but package managers must
   # still replace the previously installed application instead of keeping both.
   set(CPACK_DEBIAN_PACKAGE_CONFLICTS "cw-assistant")

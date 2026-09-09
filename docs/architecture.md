@@ -86,8 +86,13 @@ filters qualifying carriers. Only selected filtered carriers are converted to
 48 kHz monitor audio. Raw IQ is never routed to the loudspeaker.
 
 SoapySDR headers and linkage remain confined to the desktop adapter target and
-are optional at build time. A build without them instantiates a diagnostic-only
-backend. No SDR transmit, PTT, or KEY operation exists at this boundary.
+are optional for custom builds. Official packages enable the adapter and either
+carry the redistributable RTL-SDR runtime closure or declare its distribution
+dependency. Application-relative module paths are prepended without removing
+Soapy's normal or operator-provided paths, so a compatible externally installed
+vendor module remains discoverable. Package smoke tests must load and enumerate
+the RTL-SDR factory without hardware before publication. No SDR transmit, PTT,
+or KEY operation exists at this boundary.
 
 The FFT is calculated once per input window. Candidate channels reuse its bins;
 their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,

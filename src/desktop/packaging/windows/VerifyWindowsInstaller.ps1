@@ -67,6 +67,34 @@ function Read-Record {
     }
 }
 
+function Read-ColumnValues {
+    param(
+        [Parameter(Mandatory = $true)] $Database,
+        [Parameter(Mandatory = $true)] [string] $Query
+    )
+
+    $values = @()
+    $sql = ($Query -replace '\s+', ' ').Trim()
+    $view = Invoke-ComMethod $Database "OpenView" @($sql)
+    try {
+        [void](Invoke-ComMethod $view "Execute" $null)
+        while ($true) {
+            $record = Invoke-ComMethod $view "Fetch" $null
+            if ($null -eq $record) { break }
+            try {
+                $values += [string](Read-ComField $record "StringData" 1)
+            }
+            finally {
+                [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($record)
+            }
+        }
+    }
+    finally {
+        [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($view)
+    }
+    return $values
+}
+
 $packages = @(Get-ChildItem -LiteralPath $PackageDirectory -Filter *.msi -File)
 Assert-Equal $packages.Count 1 "Expected exactly one Windows installer"
 
@@ -75,6 +103,26 @@ $database = Invoke-ComMethod $installer "OpenDatabase" `
     @($packages[0].FullName, 0)
 
 try {
+    $packagedFiles = @(Read-ColumnValues $database 'SELECT `FileName` FROM `File`') |
+        ForEach-Object {
+            $parts = $_ -split '\|', 2
+            if ($parts.Count -eq 2) { $parts[1] } else { $parts[0] }
+        }
+    foreach ($requiredSdrFile in @(
+        'SoapySDR.dll',
+        'rtlsdr.dll',
+        'libusb-1.0.dll',
+        'pthreadVC3.dll',
+        'rtlsdrSupport.dll',
+        'LICENSE_1_0.txt',
+        'LICENSE.txt',
+        'BUILD_PROVENANCE'
+    )) {
+        if ($packagedFiles -notcontains $requiredSdrFile) {
+            throw "The installer is missing the SDR runtime file $requiredSdrFile"
+        }
+    }
+
     $launchText = Read-Record $database @'
 SELECT `Value` FROM `Property`
 WHERE `Property`='WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT'

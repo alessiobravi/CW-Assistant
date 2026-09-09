@@ -2,6 +2,10 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
   Core Gui Multimedia Network Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
 
 set(CWA_HAVE_SOAPY_SDR 0)
+set(CWA_SOAPY_SDR_MODULE "" CACHE FILEPATH
+  "Optional SoapySDR receive module to embed in a macOS application bundle")
+set(CWA_SOAPY_SDR_LICENSE_DIR "" CACHE PATH
+  "Directory containing SDR runtime licenses and build provenance")
 if(CWA_ENABLE_SOAPY_SDR)
   find_package(SoapySDR CONFIG REQUIRED)
   set(CWA_HAVE_SOAPY_SDR 1)
@@ -42,6 +46,8 @@ qt_add_executable(cw-buddy-desktop
   sdr/sdr_receiver.hpp
   sdr/sdr_capture_worker.cpp
   sdr/sdr_capture_worker.hpp
+  sdr/sdr_runtime_environment.cpp
+  sdr/sdr_runtime_environment.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
   radio/hamlib_rigctld_client.cpp
@@ -155,6 +161,38 @@ target_compile_definitions(cw-buddy-desktop PRIVATE
   CWA_HAVE_SOAPY_SDR=${CWA_HAVE_SOAPY_SDR})
 
 if(CWA_BUILD_TESTS)
+  qt_add_executable(cwa_sdr_runtime_environment_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/sdr_runtime_environment_test.cpp
+    sdr/sdr_runtime_environment.cpp
+    sdr/sdr_runtime_environment.hpp)
+  target_link_libraries(cwa_sdr_runtime_environment_test PRIVATE Qt6::Core)
+  target_include_directories(cwa_sdr_runtime_environment_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_sdr_runtime_environment_test
+    COMMAND cwa_sdr_runtime_environment_test)
+  set_tests_properties(cwa_sdr_runtime_environment_test PROPERTIES TIMEOUT 10)
+
+  if(WIN32 AND CWA_HAVE_SOAPY_SDR)
+    qt_add_executable(cwa_soapy_sdr_runtime_test
+      ${PROJECT_SOURCE_DIR}/tests/desktop/soapy_sdr_runtime_test.cpp)
+    if(TARGET SoapySDR::SoapySDR)
+      target_link_libraries(cwa_soapy_sdr_runtime_test PRIVATE
+        SoapySDR::SoapySDR)
+    else()
+      target_include_directories(cwa_soapy_sdr_runtime_test PRIVATE
+        ${SoapySDR_INCLUDE_DIRS})
+      target_link_libraries(cwa_soapy_sdr_runtime_test PRIVATE
+        ${SoapySDR_LIBRARIES})
+    endif()
+    add_test(NAME cwa_soapy_sdr_runtime_test
+      COMMAND cwa_soapy_sdr_runtime_test
+        "${CWA_SOAPY_SDR_RUNTIME_ROOT}/lib/SoapySDR/modules0.8/rtlsdrSupport.dll")
+    set_tests_properties(cwa_soapy_sdr_runtime_test PROPERTIES
+      ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:${CWA_SOAPY_SDR_RUNTIME_ROOT}/bin"
+      TIMEOUT 10)
+  endif()
+
   qt_add_executable(cwa_sdr_receiver_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/sdr_receiver_test.cpp
     sdr/sdr_receiver.cpp
@@ -340,9 +378,38 @@ install(TARGETS cw-buddy-desktop
   RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
+set(cwa_sdr_deploy_arguments "")
+if(APPLE AND CWA_HAVE_SOAPY_SDR AND CWA_SOAPY_SDR_MODULE)
+  if(NOT EXISTS "${CWA_SOAPY_SDR_MODULE}")
+    message(FATAL_ERROR
+      "CWA_SOAPY_SDR_MODULE does not exist: ${CWA_SOAPY_SDR_MODULE}")
+  endif()
+  get_filename_component(cwa_soapy_module_name
+    "${CWA_SOAPY_SDR_MODULE}" NAME)
+  install(FILES "${CWA_SOAPY_SDR_MODULE}"
+    DESTINATION
+      "cw-buddy-desktop.app/Contents/PlugIns/SoapySDR")
+  # macdeployqt follows this runtime-loaded module as an additional Mach-O
+  # root, copies librtlsdr/libusb into Frameworks, rewrites install names, and
+  # includes the module in its final bundle signature.
+  list(APPEND cwa_sdr_deploy_arguments DEPLOY_TOOL_OPTIONS
+    "-executable=cw-buddy-desktop.app/Contents/PlugIns/SoapySDR/${cwa_soapy_module_name}")
+endif()
+
+if(CWA_HAVE_SOAPY_SDR AND CWA_SOAPY_SDR_LICENSE_DIR)
+  if(NOT IS_DIRECTORY "${CWA_SOAPY_SDR_LICENSE_DIR}")
+    message(FATAL_ERROR
+      "CWA_SOAPY_SDR_LICENSE_DIR is not a directory: ${CWA_SOAPY_SDR_LICENSE_DIR}")
+  endif()
+  install(DIRECTORY "${CWA_SOAPY_SDR_LICENSE_DIR}/"
+    DESTINATION
+      "${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/third-party/sdr-runtime")
+endif()
+
 qt_generate_deploy_qml_app_script(
   TARGET cw-buddy-desktop
   OUTPUT_SCRIPT cwa_deploy_script
+  ${cwa_sdr_deploy_arguments}
   NO_UNSUPPORTED_PLATFORM_ERROR
 )
 
@@ -360,6 +427,38 @@ install(FILES ${PROJECT_SOURCE_DIR}/LICENSE
   RENAME copyright)
 install(FILES ${PROJECT_SOURCE_DIR}/docs/licensing.md
   DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy)
+if(WIN32 AND CWA_HAVE_SOAPY_SDR)
+  if(NOT CWA_SOAPY_SDR_RUNTIME_ROOT)
+    message(FATAL_ERROR
+      "Windows SDR-enabled packages require CWA_SOAPY_SDR_RUNTIME_ROOT")
+  endif()
+  foreach(cwa_sdr_runtime_file IN ITEMS
+      "bin/SoapySDR.dll"
+      "bin/rtlsdr.dll"
+      "bin/libusb-1.0.dll"
+      "bin/pthreadVC3.dll"
+      "lib/SoapySDR/modules0.8/rtlsdrSupport.dll"
+      "share/licenses/soapysdr/LICENSE_1_0.txt"
+      "share/licenses/soapyrtlsdr/LICENSE.txt"
+      "share/licenses/rtlsdr/copyright"
+      "share/licenses/libusb/copyright"
+      "share/licenses/pthreads/copyright"
+      "BUILD_PROVENANCE")
+    if(NOT EXISTS "${CWA_SOAPY_SDR_RUNTIME_ROOT}/${cwa_sdr_runtime_file}")
+      message(FATAL_ERROR
+        "The prepared Windows SDR runtime is incomplete: ${cwa_sdr_runtime_file}")
+    endif()
+  endforeach()
+  install(DIRECTORY "${CWA_SOAPY_SDR_RUNTIME_ROOT}/bin/"
+    DESTINATION ${CMAKE_INSTALL_BINDIR}
+    FILES_MATCHING PATTERN "*.dll")
+  install(DIRECTORY "${CWA_SOAPY_SDR_RUNTIME_ROOT}/lib/SoapySDR"
+    DESTINATION ${CMAKE_INSTALL_LIBDIR})
+  install(DIRECTORY "${CWA_SOAPY_SDR_RUNTIME_ROOT}/share/licenses/"
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/third-party/sdr)
+  install(FILES "${CWA_SOAPY_SDR_RUNTIME_ROOT}/BUILD_PROVENANCE"
+    DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/doc/cw-buddy/third-party/sdr)
+endif()
 if(APPLE)
   # Keep the canonical record inside the self-contained application bundle.
   # The custom Info.plist reads the same CWA_BUILD_VERSION directly so bundle

@@ -21,6 +21,18 @@ The build installs the matching license, third-party notice, and privacy notice
 beside the runtime. CW Buddy explicitly disables runtime telemetry and does
 not bundle, download, or redistribute a model or model metadata.
 
+Hosted desktop distributions provide the receive-only SoapySDR runtime under
+the Boost Software License 1.0, the SoapyRTLSDR module under the MIT license,
+and the redistributable librtlsdr/libusb runtime closure under their applicable
+licenses. Portable packages bundle those components and their license records;
+the Linux `.deb` declares the distribution module dependency, whose package
+manager supplies its runtime and notices. Package construction records exact
+versions or pinned source commits where components are bundled. SDRplay's API,
+service, and device driver remain external vendor prerequisites: CW Buddy
+neither downloads nor redistributes them. A compatible externally installed
+SoapySDRPlay3 module may be discovered without displacing the bundled RTL-SDR
+module path.
+
 The optional managed callsign cache downloads `MASTER.SCP` at runtime directly
 from the [Super Check Partial Database](https://www.supercheckpartial.com/),
 maintained by W9KKN. No explicit redistribution grant is published for that

@@ -119,9 +119,12 @@ and other receive-capable SoapySDR modules. It does not require another SDR
 application to be running, and another application must not own the same USB
 device.
 
-1. Install SoapySDR and the module for the receiver. SDRplay additionally
-   requires its compatible vendor API/service. A source build must be
-   configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
+1. For RTL-SDR, install the current official CW Buddy package. Windows, macOS,
+   and the portable Linux archive carry their SDR runtime; the Linux `.deb`
+   instead makes APT install the distribution's RTL-SDR Soapy module and its
+   dependencies. SDRplay requires its compatible vendor API/service and
+   SoapySDRPlay3 module to be installed separately. A custom source build must
+   be configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
 2. Open **Settings → SDR**, select **Refresh devices**, then choose the receiver.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
@@ -139,11 +142,14 @@ device.
    that carrier through the narrow, carrier-following CW filter. Several card
    speakers may still be mixed.
 
-This first direct-SDR slice is receive-only. It exposes no SDR transmit, PTT,
-or KEY command. Debug capture still records sound-card audio only; interoperable
-IQ recording is tracked separately. Official packages may report that
-SoapySDR is unavailable until runtime bundling is completed; that is an honest
-build capability state, not a device-discovery failure.
+This direct-SDR path is receive-only. It exposes no SDR transmit, PTT, or KEY
+command. Debug capture still records sound-card audio only; interoperable IQ
+recording is tracked separately. If a current official package reports the
+SoapySDR backend unavailable, the installation is incomplete or damaged. If
+the backend is ready but no receiver appears, check the USB connection,
+platform device access, and the device-specific module/vendor driver. Linux
+users may need to reconnect the receiver after installing device-access rules;
+the portable archive cannot supply kernel drivers or grant USB permissions.
 
 If a stationary peak fills the far-left edge, open **Settings → Audio** and
 leave **Remove input DC offset** enabled. This is normally sound-card DC bias,

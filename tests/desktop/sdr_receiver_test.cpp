@@ -26,6 +26,7 @@ class FakeBackend final : public cwassistant::desktop::SdrReceiveBackend {
       .backend_available = true,
       .backend_version = "fake-1",
       .modules = {"fake-module"},
+      .loaded_drivers = {"fake"},
       .devices = {{.id = "fake:01:0",
                    .label = "Fake RX",
                    .driver = "fake",
@@ -93,7 +94,8 @@ int main() {
   auto* fake_view = fake.get();
   SdrReceiver receiver(std::move(fake));
   const auto report = receiver.discover();
-  expect(report.backend_available && report.devices.size() == 1,
+  expect(report.backend_available && report.devices.size() == 1 &&
+             report.loaded_drivers == std::vector<std::string>{"fake"},
          "fake discovery crosses backend-neutral contract");
 
   std::string error;

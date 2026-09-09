@@ -29,9 +29,10 @@ active implementation.
 - Advanced live-audio channel, sample-rate, buffer, calibration, and level-meter
   controls (cross-platform capture plus DC rejection, manual/automatic gain,
   and manual/automatic processing bandwidth are implemented)
-- Direct receive-only RTL-SDR and SDRplay IQ reception through optional
-  SoapySDR modules (implemented for source builds; official runtime packaging
-  and physical-device qualification remain in progress)
+- Direct receive-only RTL-SDR IQ reception through the SoapySDR module provided
+  by official packages; SDRplay reception uses the same internal boundary
+  after the operator installs the compatible vendor API and SoapySDRPlay3
+  module. Physical-device qualification remains in progress.
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
 - Live-source and WAV-replay spectrum with scrolling waterfall
@@ -118,13 +119,13 @@ When multiple station profiles exist, the desktop opens a profile chooser.
 and parallel instances.
 
 The desktop currently uses Qt 6, including Qt Multimedia for audio capture.
-Direct SDR source builds require SoapySDR at configure time and
-`-DCWA_ENABLE_SOAPY_SDR=ON`, plus the receiver-specific SoapyRTLSDR or
-SoapySDRPlay3 module at runtime. SDRplay also requires the vendor's
-platform-specific API/driver. No separate SDR application is needed. Builds
-without these optional components remain fully functional for sound-card audio
-and show an explicit unavailable-backend diagnostic instead of probing an
-unknown device.
+Official packages enable direct SDR reception and provide the redistributable
+SoapySDR and RTL-SDR runtime, either inside a portable package or through the
+Linux `.deb` dependency. SDRplay additionally requires the operator to install
+the vendor's platform-specific API/driver and a compatible SoapySDRPlay3
+module; CW Buddy does not redistribute that proprietary runtime. No separate
+SDR application is needed. Custom source builds use
+`-DCWA_ENABLE_SOAPY_SDR=ON` and the matching development package.
 
 Every push to `main` and pull request builds and tests natively on Windows x64,
 Linux x64, macOS ARM64, and macOS x64 with a Sonoma 14 deployment target, then

@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QCoreApplication>
 #include <QIcon>
 #include <QCommandLineParser>
 #include <QMetaObject>
@@ -11,10 +12,15 @@
 #include <QTimer>
 #include <qqml.h>
 
+#include <algorithm>
 #include <cstdlib>
+#include <iostream>
+#include <string_view>
 #include <utility>
 
 #include "replay/replay_controller.hpp"
+#include "sdr/sdr_receiver.hpp"
+#include "sdr/sdr_runtime_environment.hpp"
 #include "settings/app_settings.hpp"
 #include "settings/product_migration.hpp"
 #include "transmit/transmit_controller.hpp"
@@ -22,7 +28,43 @@
 #include "updates/update_checker.hpp"
 #include "visualization/spectrum_waterfall_item.hpp"
 
+namespace {
+
+bool sdr_backend_smoke_requested(const int argc, char* argv[]) {
+  for (int index = 1; index < argc; ++index) {
+    if (std::string_view(argv[index]) == "--sdr-backend-smoke-test") {
+      return true;
+    }
+  }
+  return false;
+}
+
+int run_sdr_backend_smoke() {
+  cwassistant::desktop::SdrReceiver receiver(
+      cwassistant::desktop::makeSoapySdrReceiveBackend());
+  const auto report = receiver.discover();
+  const bool rtl_module_loaded = std::ranges::find(
+                                     report.loaded_drivers, "rtlsdr") !=
+                                 report.loaded_drivers.end();
+  if (!report.backend_available || !rtl_module_loaded) {
+    std::cerr << "SDR backend smoke failed: " << report.diagnostic << '\n';
+    return 2;
+  }
+  std::cout << "SDR backend smoke passed: SoapySDR "
+            << report.backend_version << ", RTL-SDR module loaded\n";
+  return 0;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
+  if (sdr_backend_smoke_requested(argc, argv)) {
+    QCoreApplication application(argc, argv);
+    cwassistant::desktop::configureBundledSoapyRuntime(
+        QCoreApplication::applicationDirPath());
+    return run_sdr_backend_smoke();
+  }
+
   QGuiApplication application(argc, argv);
   // Resolve the legacy locations before adopting the new public identity.
   // The old bundle identifier remains stable for installer compatibility,
@@ -45,6 +87,8 @@ int main(int argc, char* argv[]) {
       current_app_data_path));
   QCoreApplication::setApplicationVersion(QStringLiteral(CWA_VERSION));
   application.setWindowIcon(QIcon(QStringLiteral(":/icons/cw-buddy.png")));
+  cwassistant::desktop::configureBundledSoapyRuntime(
+      QCoreApplication::applicationDirPath());
 
   QCommandLineParser parser;
   parser.setApplicationDescription(

@@ -64,6 +64,17 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
     try {
       report.modules = SoapySDR::listModules();
       const auto devices = SoapySDR::Device::enumerate();
+      for (const auto& module : report.modules) {
+        for (const auto& [driver, load_error] :
+             SoapySDR::getLoaderResult(module)) {
+          if (load_error.empty() &&
+              std::find(report.loaded_drivers.begin(),
+                        report.loaded_drivers.end(), driver) ==
+                  report.loaded_drivers.end()) {
+            report.loaded_drivers.push_back(driver);
+          }
+        }
+      }
       known_devices_.clear();
       for (std::size_t index = 0; index < devices.size(); ++index) {
         const auto& values = devices[index];
@@ -79,6 +90,10 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
         report.diagnostic =
             "SoapySDR is installed, but no device modules were found. Install "
             "the RTL-SDR or SDRplay Soapy module.";
+      } else if (report.loaded_drivers.empty()) {
+        report.diagnostic =
+            "SoapySDR module files were found, but no receiver driver loaded. "
+            "Check the module ABI and its runtime dependencies.";
       } else if (report.devices.empty()) {
         report.diagnostic =
             "SoapySDR modules are installed, but no receiver was found. Check "

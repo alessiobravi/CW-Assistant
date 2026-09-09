@@ -379,9 +379,12 @@ decoding hints rather than sharing one assumed contest sequence.
 ### SDR
 
 - Use SoapySDR as the device-neutral API.
-- Initial plugins: RTL-SDR and SDRplay 3.
-- Keep vendor drivers out of the distributable core. Detect missing modules and
-  show actionable installation diagnostics.
+- Bundle the redistributable RTL-SDR receive runtime with official portable
+  packages, declare distribution dependencies where appropriate, and prove the
+  module factory loads before publication.
+- Support SDRplay 3 through an externally installed compatible vendor API and
+  module. Keep proprietary vendor drivers out of CW Buddy packages, preserve
+  their system discovery paths, and show actionable installation diagnostics.
 - Keep the adapter receive-only: device discovery, center frequency, sample
   rate, RX gain and CF32 stream reads must not expose SDR transmit, PTT, or KEY.
 - Validate fixed IQ blocks, preserve absolute RF, report device overflow and

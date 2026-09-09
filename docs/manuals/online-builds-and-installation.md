@@ -130,6 +130,13 @@ The installer presents the canonical GPL-3.0-or-later text. The build copies
 that UTF-8 source into the `.txt` input format required by CPack's WiX generator;
 the repository license remains the single source of truth.
 
+The MSI also contains the receive-only SoapySDR runtime, RTL-SDR module,
+librtlsdr, libusb, and required Windows runtime DLLs. No separate SDR program
+is needed. The build loads the module and verifies its registered RTL-SDR
+factory before constructing the MSI, then inspects the MSI file table for the
+runtime and license records. The normal RTL-SDR Windows USB driver must still
+be installed for the dongle itself.
+
 Development installers are currently unsigned, so Windows may identify the
 publisher as unknown. Verify `SHA256SUMS` before continuing. Automatic in-app
 download/install is intentionally not enabled until the MSI, update manifest,
@@ -174,6 +181,11 @@ do not disable Gatekeeper globally. A "damaged" error is not an expected
 unsigned-build warning: download the current archive again and report the
 release version if it persists.
 
+The application bundle includes SoapySDR, SoapyRTLSDR, librtlsdr, and libusb.
+Packaging treats the runtime-loaded RTL module as a Mach-O deployment root,
+rejects unresolved Homebrew paths, verifies the final deep signature, and runs
+the real backend/module smoke test without requiring attached hardware.
+
 ## Debian and Ubuntu
 
 Only the Linux matrix job runs the Debian packaging stage. It produces a
@@ -205,6 +217,22 @@ desktop entry, 512 px application icon, license, and user manuals. The package i
 Ubuntu 24.04, so runtime validation on supported Debian and Ubuntu releases is a
 release gate. A signed APT repository is planned; until it exists, installing a
 downloaded `.deb` is not the same as subscribing to an APT repository.
+
+APT resolves the package's RTL-SDR Soapy module dependency. The portable Linux
+archive instead includes the SDR-specific SoapySDR/RTL-SDR ELF closure and
+launches through a package-relative wrapper, so it does not depend on a
+separately running SDR application. Keep the archive layout intact when moving
+or extracting it; invoking its launcher through a symbolic link is supported.
+The archive remains an x86-64 Linux build against the Ubuntu 24.04 system ABI,
+and it cannot bundle kernel drivers, device-access rules, or USB permissions.
+Both package forms execute a backend/module smoke test before publication; that
+test proves the driver factory loads, not that a physical dongle is accessible.
+
+SDRplay is intentionally different: install a compatible SDRplay API/service
+and SoapySDRPlay3 module from their respective providers. CW Buddy neither
+downloads nor redistributes the proprietary vendor runtime. Its packaged RTL
+module path is added without hiding compatible modules in the normal system or
+operator-provided SoapySDR search paths.
 
 Because the hosted package deploys its pinned Qt runtime, available Qt SDK
 license texts are installed under

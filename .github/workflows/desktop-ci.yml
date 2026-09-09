@@ -32,6 +32,7 @@ jobs:
             portable_archive: false
             windows_installer: true
             debian_package: false
+            sdr_configure_arguments: ""
             ort_arch: x64
           - name: Linux x64 / GCC
             os: ubuntu-24.04
@@ -43,6 +44,7 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: true
+            sdr_configure_arguments: -DCWA_ENABLE_SOAPY_SDR=ON
             ort_arch: x64
           - name: macOS ARM64 / Apple Clang
             os: macos-15
@@ -54,6 +56,7 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: false
+            sdr_configure_arguments: ""
             ort_arch: arm64
           - name: macOS x64 / Apple Clang
             os: macos-15-intel
@@ -65,6 +68,7 @@ jobs:
             portable_archive: true
             windows_installer: false
             debian_package: false
+            sdr_configure_arguments: ""
             ort_arch: x86_64
     runs-on: ${{ matrix.os }}
     permissions:
@@ -75,9 +79,157 @@ jobs:
       CWA_ONNXRUNTIME_WINDOWS_SHA256: c4eedd29489d5feca21866d054638416f3655bf6b18851b3b6b85c8313e95c35
       CWA_ONNXRUNTIME_ROOT: ${{ github.workspace }}/.dependencies/onnxruntime-root
       CWA_ONNXRUNTIME_SOURCE: ${{ github.workspace }}/.dependencies/onnxruntime-source
+      CWA_SOAPYSDR_COMMIT: 1cf5a539a21414ff509ff7d0eedfc5fa8edb90c6
+      CWA_SOAPYRTLSDR_COMMIT: 80c93fbe189def3ab68d47a6ad3f813f96d3cb99
+      CWA_VCPKG_COMMIT: f781d9387e4684783e69e136e2e124ff4660bffc
+      CWA_SOAPYSDR_ROOT: ${{ github.workspace }}/.dependencies/soapysdr-root
+      CWA_SOAPYSDR_SOURCE: ${{ github.workspace }}/.dependencies/soapysdr-source
+      CWA_SOAPYRTLSDR_SOURCE: ${{ github.workspace }}/.dependencies/soapyrtlsdr-source
+      CWA_VCPKG_SOURCE: ${{ github.workspace }}/.dependencies/vcpkg-source
+      CWA_VCPKG_INSTALLED: ${{ github.workspace }}/.dependencies/vcpkg-installed
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+      - name: Restore pinned Windows SoapySDR and RTL-SDR runtime
+        id: cache_windows_sdr
+        if: runner.os == 'Windows'
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.CWA_SOAPYSDR_ROOT }}
+          key: cwa-windows-sdr-${{ env.CWA_SOAPYSDR_COMMIT }}-${{ env.CWA_SOAPYRTLSDR_COMMIT }}-${{ env.CWA_VCPKG_COMMIT }}-x64-v1
+      - name: Check out pinned SoapySDR source
+        if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: pothosware/SoapySDR
+          ref: ${{ env.CWA_SOAPYSDR_COMMIT }}
+          path: .dependencies/soapysdr-source
+          fetch-depth: 1
+      - name: Check out pinned SoapyRTLSDR source
+        if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: pothosware/SoapyRTLSDR
+          ref: ${{ env.CWA_SOAPYRTLSDR_COMMIT }}
+          path: .dependencies/soapyrtlsdr-source
+          fetch-depth: 1
+      - name: Check out pinned vcpkg registry
+        if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ env.CWA_VCPKG_COMMIT }}
+          path: .dependencies/vcpkg-source
+          fetch-depth: 1
+      - name: Build pinned Windows SoapySDR and RTL-SDR runtime
+        id: build_windows_sdr
+        if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          function Invoke-Checked {
+            param(
+              [Parameter(Mandatory = $true)][string]$Executable,
+              [Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments
+            )
+            & $Executable @Arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Native command failed with exit code $LASTEXITCODE: $Executable $($Arguments -join ' ')"
+            }
+          }
+
+          if ((git -C $env:CWA_SOAPYSDR_SOURCE rev-parse HEAD) -ne $env:CWA_SOAPYSDR_COMMIT) {
+            throw 'The SoapySDR source pin did not match.'
+          }
+          if ((git -C $env:CWA_SOAPYRTLSDR_SOURCE rev-parse HEAD) -ne $env:CWA_SOAPYRTLSDR_COMMIT) {
+            throw 'The SoapyRTLSDR source pin did not match.'
+          }
+          if ((git -C $env:CWA_VCPKG_SOURCE rev-parse HEAD) -ne $env:CWA_VCPKG_COMMIT) {
+            throw 'The vcpkg registry pin did not match.'
+          }
+
+          Invoke-Checked "$env:CWA_VCPKG_SOURCE/bootstrap-vcpkg.bat" '-disableMetrics'
+          Invoke-Checked "$env:CWA_VCPKG_SOURCE/vcpkg.exe" 'install' 'rtlsdr:x64-windows' `
+            "--x-install-root=$env:CWA_VCPKG_INSTALLED" '--clean-after-build'
+
+          Invoke-Checked 'cmake' '-S' $env:CWA_SOAPYSDR_SOURCE '-B' '.dependencies/soapysdr-build' `
+            '-A' 'x64' '-DENABLE_APPS=OFF' '-DENABLE_TESTS=OFF' `
+            '-DENABLE_PYTHON=OFF' '-DENABLE_PYTHON3=OFF' `
+            "-DCMAKE_INSTALL_PREFIX=$env:CWA_SOAPYSDR_ROOT"
+          Invoke-Checked 'cmake' '--build' '.dependencies/soapysdr-build' `
+            '--config' 'Release' '--target' 'install' '--parallel' '2'
+
+          $tripletRoot = Join-Path $env:CWA_VCPKG_INSTALLED 'x64-windows'
+          Invoke-Checked 'cmake' '-S' $env:CWA_SOAPYRTLSDR_SOURCE `
+            '-B' '.dependencies/soapyrtlsdr-build' '-A' 'x64' `
+            "-DSoapySDR_DIR=$env:CWA_SOAPYSDR_ROOT/share/cmake/SoapySDR" `
+            "-DRTLSDR_INCLUDE_DIR=$tripletRoot/include" `
+            "-DRTLSDR_LIBRARY=$tripletRoot/lib/rtlsdr.lib" `
+            '-DCMAKE_POLICY_VERSION_MINIMUM=3.5' `
+            "-DCMAKE_INSTALL_PREFIX=$env:CWA_SOAPYSDR_ROOT"
+          Invoke-Checked 'cmake' '--build' '.dependencies/soapyrtlsdr-build' `
+            '--config' 'Release' '--target' 'install' '--parallel' '2'
+
+          Copy-Item "$tripletRoot/bin/*.dll" "$env:CWA_SOAPYSDR_ROOT/bin/"
+          foreach ($license in @(
+            @('soapysdr', "$env:CWA_SOAPYSDR_SOURCE/LICENSE_1_0.txt", 'LICENSE_1_0.txt'),
+            @('soapyrtlsdr', "$env:CWA_SOAPYRTLSDR_SOURCE/LICENSE.txt", 'LICENSE.txt'),
+            @('rtlsdr', "$tripletRoot/share/rtlsdr/copyright", 'copyright'),
+            @('libusb', "$tripletRoot/share/libusb/copyright", 'copyright'),
+            @('pthreads', "$tripletRoot/share/pthreads/copyright", 'copyright')
+          )) {
+            $destination = Join-Path "$env:CWA_SOAPYSDR_ROOT/share/licenses" $license[0]
+            New-Item -ItemType Directory -Force $destination | Out-Null
+            Copy-Item $license[1] (Join-Path $destination $license[2])
+          }
+          @(
+            "soapysdr_commit=$env:CWA_SOAPYSDR_COMMIT"
+            "soapyrtlsdr_commit=$env:CWA_SOAPYRTLSDR_COMMIT"
+            "vcpkg_commit=$env:CWA_VCPKG_COMMIT"
+            'architecture=x64'
+            'direction=RX-only'
+          ) | Set-Content "$env:CWA_SOAPYSDR_ROOT/BUILD_PROVENANCE"
+      - name: Verify pinned Windows SoapySDR runtime
+        id: verify_windows_sdr
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          foreach ($relative in @(
+            'bin/SoapySDR.dll',
+            'bin/rtlsdr.dll',
+            'bin/libusb-1.0.dll',
+            'bin/pthreadVC3.dll',
+            'lib/SoapySDR/modules0.8/rtlsdrSupport.dll',
+            'share/licenses/soapysdr/LICENSE_1_0.txt',
+            'share/licenses/soapyrtlsdr/LICENSE.txt',
+            'share/licenses/rtlsdr/copyright',
+            'share/licenses/libusb/copyright',
+            'share/licenses/pthreads/copyright',
+            'BUILD_PROVENANCE'
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $env:CWA_SOAPYSDR_ROOT $relative) -PathType Leaf)) {
+              throw "Prepared Windows SDR runtime is missing $relative"
+            }
+          }
+          $provenance = Get-Content "$env:CWA_SOAPYSDR_ROOT/BUILD_PROVENANCE"
+          foreach ($line in @(
+            "soapysdr_commit=$env:CWA_SOAPYSDR_COMMIT",
+            "soapyrtlsdr_commit=$env:CWA_SOAPYRTLSDR_COMMIT",
+            "vcpkg_commit=$env:CWA_VCPKG_COMMIT",
+            'architecture=x64',
+            'direction=RX-only'
+          )) {
+            if ($provenance -notcontains $line) {
+              throw "Prepared Windows SDR provenance is missing: $line"
+            }
+          }
+      - name: Install Linux SDR build and RTL-SDR runtime
+        id: install_linux_sdr
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libsoapysdr-dev soapysdr-module-rtlsdr
       - name: Restore pinned ONNX Runtime CPU build
         id: cache_onnxruntime
         uses: actions/cache@v5
@@ -324,8 +476,60 @@ jobs:
           aqtversion: ==3.3.0
           py7zrversion: ==1.0.0
           extra: --external 7z
+      - name: Prepare direct SDR runtime on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install soapysdr soapyrtlsdr
+          module_root="$(brew --prefix soapyrtlsdr)/lib/SoapySDR"
+          module_list="${RUNNER_TEMP}/cw-buddy-rtlsdr-modules.txt"
+          find "${module_root}" -type f -name 'librtlsdrSupport.so' \
+            -print > "${module_list}"
+          module_count="$(wc -l < "${module_list}" | tr -d ' ')"
+          if [[ "${module_count}" -ne 1 ]]; then
+            echo "Expected one RTL-SDR Soapy module; found ${module_count}." >&2
+            exit 1
+          fi
+          rtl_module="$(head -n 1 "${module_list}")"
+
+          license_root="${RUNNER_TEMP}/cw-buddy-sdr-runtime-licenses"
+          mkdir -p "${license_root}"
+          : > "${license_root}/BUILD_PROVENANCE"
+          for formula in soapysdr soapyrtlsdr librtlsdr libusb; do
+            metadata="$(brew info --json=v2 "${formula}")"
+            version="$(jq -r '.formulae[0].versions.stable' <<<"${metadata}")"
+            source_url="$(jq -r '.formulae[0].urls.stable.url' <<<"${metadata}")"
+            source_sha="$(jq -r '.formulae[0].urls.stable.checksum' <<<"${metadata}")"
+            archive="${RUNNER_TEMP}/${formula}-${version}.source"
+            source_dir="${RUNNER_TEMP}/${formula}-${version}-source"
+            curl --fail --location --retry 3 --output "${archive}" "${source_url}"
+            echo "${source_sha}  ${archive}" | shasum -a 256 -c -
+            rm -rf "${source_dir}"
+            mkdir -p "${source_dir}"
+            tar -xf "${archive}" -C "${source_dir}"
+            license_files=()
+            while IFS= read -r license_path; do
+              license_files+=("${license_path}")
+            done < <(find "${source_dir}" -maxdepth 3 -type f \
+              \( -iname 'license*' -o -iname 'copying*' \) -print | sort)
+            if [[ "${#license_files[@]}" -lt 1 ]]; then
+              echo "No license file found in verified ${formula} source." >&2
+              exit 1
+            fi
+            cp "${license_files[0]}" \
+              "${license_root}/${formula}-$(basename "${license_files[0]}")"
+            printf '%s\n' \
+              "${formula}=${version}" \
+              "${formula}_source_sha256=${source_sha}" \
+              >> "${license_root}/BUILD_PROVENANCE"
+          done
+          soapy_cmake_dir="$(brew --prefix soapysdr)/lib/cmake/SoapySDR"
+          echo "CWA_MACOS_SDR_CONFIGURE_ARGUMENTS=-DCWA_ENABLE_SOAPY_SDR=ON -DSoapySDR_DIR=${soapy_cmake_dir} -DCWA_SOAPY_SDR_MODULE=${rtl_module} -DCWA_SOAPY_SDR_LICENSE_DIR=${license_root}" \
+            >> "${GITHUB_ENV}"
       - name: Configure desktop
         id: configure
+        shell: bash
         run: >-
           cmake -S . -B build
           -DCMAKE_BUILD_TYPE=Release
@@ -333,8 +537,13 @@ jobs:
           -DCWA_BUILD_DESKTOP=ON
           -DCWA_BUILD_TESTS=ON
           -DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON
+          -DCWA_ENABLE_SOAPY_SDR=${{ matrix.windows_installer }}
+          -DSoapySDR_DIR="${{ env.CWA_SOAPYSDR_ROOT }}/share/cmake/SoapySDR"
+          -DCWA_SOAPY_SDR_RUNTIME_ROOT="${{ env.CWA_SOAPYSDR_ROOT }}"
           -DCWA_ONNXRUNTIME_ROOT="${{ env.CWA_ONNXRUNTIME_ROOT }}"
           -DCWA_PACKAGE_REVISION=${{ github.run_number }}
+          ${{ matrix.sdr_configure_arguments }}
+          ${CWA_MACOS_SDR_CONFIGURE_ARGUMENTS:-}
           ${{ matrix.configure-arguments }}
       - name: Build desktop and core tests
         id: build
@@ -372,6 +581,17 @@ jobs:
               cmp build/cw-buddy-version.txt "${installed_version_file}"
               test -f stage/bin/cw-buddy-desktop.exe
               test -f stage/bin/onnxruntime.dll
+              test -f stage/bin/SoapySDR.dll
+              test -f stage/bin/rtlsdr.dll
+              test -f stage/bin/libusb-1.0.dll
+              test -f stage/bin/pthreadVC3.dll
+              test -f stage/lib/SoapySDR/modules0.8/rtlsdrSupport.dll
+              test -f stage/share/doc/cw-buddy/third-party/sdr/BUILD_PROVENANCE
+              test -f stage/share/doc/cw-buddy/third-party/sdr/soapysdr/LICENSE_1_0.txt
+              test -f stage/share/doc/cw-buddy/third-party/sdr/soapyrtlsdr/LICENSE.txt
+              test -f stage/share/doc/cw-buddy/third-party/sdr/rtlsdr/copyright
+              test -f stage/share/doc/cw-buddy/third-party/sdr/libusb/copyright
+              test -f stage/share/doc/cw-buddy/third-party/sdr/pthreads/copyright
               executable_version="$(powershell.exe -NoProfile -Command \
                 "(Get-Item 'stage/bin/cw-buddy-desktop.exe').VersionInfo.ProductVersion" \
                 | tr -d '\r\n')"
@@ -386,6 +606,37 @@ jobs:
               test -x "${app_binary}"
               test -f stage/cw-buddy-desktop.app/Contents/Frameworks/libonnxruntime.1.dylib
               otool -L "${app_binary}" | grep -F '@rpath/libonnxruntime.1.dylib'
+              sdr_plugin_dir=stage/cw-buddy-desktop.app/Contents/PlugIns/SoapySDR
+              sdr_plugin_list="${RUNNER_TEMP}/cw-buddy-staged-rtlsdr-modules.txt"
+              find "${sdr_plugin_dir}" -type f \
+                -name 'librtlsdrSupport.so' -print > "${sdr_plugin_list}"
+              test "$(wc -l < "${sdr_plugin_list}" | tr -d ' ')" -eq 1
+              sdr_plugin="$(head -n 1 "${sdr_plugin_list}")"
+              find stage/cw-buddy-desktop.app/Contents/Frameworks \
+                -type f -name 'libSoapySDR*.dylib' | grep -q .
+              find stage/cw-buddy-desktop.app/Contents/Frameworks \
+                -type f -name 'librtlsdr*.dylib' | grep -q .
+              find stage/cw-buddy-desktop.app/Contents/Frameworks \
+                -type f -name 'libusb-*.dylib' | grep -q .
+              {
+                otool -L "${app_binary}"
+                while IFS= read -r -d '' binary; do
+                  if file "${binary}" | grep -q 'Mach-O'; then
+                    otool -L "${binary}"
+                  fi
+                done < <(find \
+                  stage/cw-buddy-desktop.app/Contents/Frameworks \
+                  "${sdr_plugin_dir}" -type f -print0)
+              } | tee macos-sdr-links.log
+              ! grep -E '/(opt/homebrew|usr/local)/' macos-sdr-links.log
+              sdr_license_dir=stage/share/doc/cw-buddy/third-party/sdr-runtime
+              test -s "${sdr_license_dir}/BUILD_PROVENANCE"
+              for dependency in soapysdr soapyrtlsdr librtlsdr libusb; do
+                grep -Eq "^${dependency}=" \
+                  "${sdr_license_dir}/BUILD_PROVENANCE"
+                find "${sdr_license_dir}" -type f \
+                  -name "${dependency}-*" | grep -q .
+              done
               xcrun vtool -show-build "${app_binary}" | grep -Eq 'minos +14\.0'
               cmake \
                 -DCWA_APP_BUNDLE="$PWD/stage/cw-buddy-desktop.app" \
@@ -399,6 +650,7 @@ jobs:
               test -x stage/bin/cw-buddy-desktop
               test -f stage/lib/cw-buddy/libonnxruntime.so.1
               readelf -d stage/bin/cw-buddy-desktop | grep -F 'libonnxruntime.so.1'
+              readelf -d stage/bin/cw-buddy-desktop | grep -F 'libSoapySDR.so.0.8'
               ;;
           esac
       - name: Smoke-test staged application with native graphics
@@ -407,19 +659,138 @@ jobs:
         run: |
           case "${RUNNER_OS}" in
             Windows)
+              stage/bin/cw-buddy-desktop.exe --sdr-backend-smoke-test
               stage/bin/cw-buddy-desktop.exe --profile ci-native-smoke --smoke-test
               ;;
             macOS)
               stage/cw-buddy-desktop.app/Contents/MacOS/cw-buddy-desktop --profile ci-native-smoke --smoke-test
+              stage/cw-buddy-desktop.app/Contents/MacOS/cw-buddy-desktop \
+                --sdr-backend-smoke-test
               ;;
             Linux)
+              QT_QPA_PLATFORM=offscreen \
+                stage/bin/cw-buddy-desktop --sdr-backend-smoke-test
               xvfb-run -a stage/bin/cw-buddy-desktop --profile ci-native-smoke --smoke-test
               ;;
           esac
+      - name: Assemble and verify portable Linux SDR runtime
+        id: bundle_linux_sdr
+        if: runner.os == 'Linux' && matrix.portable_archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          portable_root=portable-stage/stage
+          cmake -E make_directory portable-stage
+          cmake -E copy_directory stage "${portable_root}"
+
+          app="${portable_root}/bin/cw-buddy-desktop"
+          mv "${app}" "${app}.bin"
+          cmake -E copy \
+            src/desktop/packaging/linux/cw-buddy-portable-launcher.sh "${app}"
+          chmod 0755 "${app}" "${app}.bin"
+
+          module_path="$(dpkg -L soapysdr0.8-module-rtlsdr \
+            | grep -E '/librtlsdrSupport\.so$' | head -n 1)"
+          test -f "${module_path}"
+          module_leaf="$(basename "$(dirname "${module_path}")")"
+          bundled_module_dir="${portable_root}/lib/SoapySDR/${module_leaf}"
+          cmake -E make_directory "${bundled_module_dir}"
+          cp -L "${module_path}" \
+            "${bundled_module_dir}/librtlsdrSupport.so"
+
+          runtime_dir="${portable_root}/lib/cw-buddy"
+          cmake -E make_directory "${runtime_dir}"
+          copy_linked_library() {
+            local subject=$1
+            local expression=$2
+            local entry
+            entry="$(ldd "${subject}" | awk -v expression="${expression}" \
+              '$1 ~ expression && $2 == "=>" { print $1 " " $3; exit }')"
+            test -n "${entry}"
+            local soname=${entry%% *}
+            local resolved=${entry#* }
+            test -f "${resolved}"
+            cp -L "${resolved}" "${runtime_dir}/${soname}"
+          }
+          copy_linked_library "${app}.bin" '^libSoapySDR\.so'
+          copy_linked_library "${module_path}" '^librtlsdr\.so'
+          copy_linked_library "${module_path}" '^libusb-1\.0\.so'
+          copy_linked_library "${runtime_dir}/libusb-1.0.so.0" '^libudev\.so'
+
+          notice_root="${portable_root}/share/doc/cw-buddy/third-party"
+          for package in libsoapysdr0.8 soapysdr0.8-module-rtlsdr \
+                         librtlsdr0 libusb-1.0-0 libudev1; do
+            copyright="/usr/share/doc/${package}/copyright"
+            test -s "${copyright}"
+            cmake -E make_directory "${notice_root}/${package}"
+            cmake -E copy "${copyright}" "${notice_root}/${package}/copyright"
+          done
+
+          test -x "${app}"
+          test -x "${app}.bin"
+          test -s "${bundled_module_dir}/librtlsdrSupport.so"
+          test -s "${runtime_dir}/libSoapySDR.so.0.8"
+          test -s "${runtime_dir}/librtlsdr.so.0"
+          test -s "${runtime_dir}/libusb-1.0.so.0"
+          test -s "${runtime_dir}/libudev.so.1"
+          readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
+            | grep -F 'librtlsdr.so.0'
+          readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
+            | grep -F 'libSoapySDR.so.0.8'
+          readelf -d "${runtime_dir}/librtlsdr.so.0" \
+            | grep -F 'libusb-1.0.so.0'
+          readelf -d "${runtime_dir}/libusb-1.0.so.0" \
+            | grep -F 'libudev.so.1'
+          : > portable-linux-ldd.log
+          : > portable-linux-sdr-ldd.log
+          LD_LIBRARY_PATH="${runtime_dir}" ldd "${app}.bin" \
+            >> portable-linux-ldd.log
+          for elf in \
+            "${bundled_module_dir}/librtlsdrSupport.so" \
+            "${runtime_dir}/libSoapySDR.so.0.8" \
+            "${runtime_dir}/librtlsdr.so.0" \
+            "${runtime_dir}/libusb-1.0.so.0" \
+            "${runtime_dir}/libudev.so.1"; do
+            LD_LIBRARY_PATH="${runtime_dir}" ldd "${elf}" \
+              >> portable-linux-sdr-ldd.log
+          done
+          cat portable-linux-sdr-ldd.log >> portable-linux-ldd.log
+          ! grep -F 'not found' portable-linux-ldd.log
+          while read -r soname arrow resolved remainder; do
+            if [[ "${arrow}" != "=>" || "${resolved}" != /* ]]; then
+              continue
+            fi
+            case "${soname}" in
+              libc.so.*|libm.so.*|libdl.so.*|librt.so.*|libpthread.so.*|\
+              libstdc++.so.*|libgcc_s.so.*)
+                continue
+                ;;
+            esac
+            echo "Unexpected external SDR runtime dependency: ${soname} => ${resolved}" >&2
+            exit 1
+          done < portable-linux-sdr-ldd.log
+
+          # Soapy normally searches its compiled system prefix before the
+          # plugin path. Give only this probe an empty root so success proves
+          # the module copied into the archive actually loads. The wrapper
+          # leaves the normal root untouched for real launches, preserving
+          # system-installed vendor modules such as SoapySDRPlay3.
+          isolated_soapy_root="${RUNNER_TEMP}/cw-buddy-empty-soapy-root"
+          cmake -E make_directory "${isolated_soapy_root}"
+          SOAPY_SDR_ROOT="${isolated_soapy_root}" QT_QPA_PLATFORM=offscreen \
+            "${app}" --sdr-backend-smoke-test
+          xvfb-run -a "${app}" --profile ci-portable-sdr-smoke --smoke-test
       - name: Preserve the staged application as an archive
         id: archive
         if: matrix.portable_archive
-        run: cmake -E tar czf ${{ matrix.artifact }}.tar.gz --format=gnutar stage
+        shell: bash
+        run: |
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            (cd portable-stage && cmake -E tar czf \
+              ../${{ matrix.artifact }}.tar.gz --format=gnutar stage)
+          else
+            cmake -E tar czf ${{ matrix.artifact }}.tar.gz --format=gnutar stage
+          fi
       - name: Publish downloadable build
         id: upload
         if: matrix.portable_archive
@@ -468,6 +839,12 @@ jobs:
           deb_packages=(packages/*.deb)
           test "${#deb_packages[@]}" -eq 1
           test "$(dpkg-deb -f "${deb_packages[0]}" Version)" = "${build_version}-1"
+          dpkg-deb -f "${deb_packages[0]}" Depends \
+            | tee debian-dependencies.txt
+          grep -Eq '(^|, )soapysdr-module-rtlsdr([, ]|$)' \
+            debian-dependencies.txt
+          dpkg-deb --contents "${deb_packages[0]}" \
+            | grep -F './usr/bin/cw-buddy-desktop'
           cmake -E copy build/cw-buddy-version.txt packages/cw-buddy-version.txt
       - name: Publish Debian/Ubuntu package
         id: upload_deb
@@ -500,6 +877,10 @@ jobs:
           CWA_INSTALL_RESULT: ${{ steps.install.outcome }}
           CWA_VERIFY_STAGE_RESULT: ${{ steps.verify_stage.outcome }}
           CWA_STAGE_SMOKE_RESULT: ${{ steps.smoke_stage.outcome }}
+          CWA_LINUX_SDR_INSTALL_RESULT: ${{ steps.install_linux_sdr.outcome }}
+          CWA_LINUX_SDR_BUNDLE_RESULT: ${{ steps.bundle_linux_sdr.outcome }}
+          CWA_WINDOWS_SDR_BUILD_RESULT: ${{ steps.build_windows_sdr.outcome }}
+          CWA_WINDOWS_SDR_VERIFY_RESULT: ${{ steps.verify_windows_sdr.outcome }}
           CWA_ARCHIVE_RESULT: ${{ steps.archive.outcome }}
           CWA_UPLOAD_RESULT: ${{ steps.upload.outcome }}
           CWA_WINDOWS_INSTALLER_RESULT: ${{ steps.build_windows_installer.outcome }}
@@ -509,7 +890,7 @@ jobs:
           CWA_DEB_UPLOAD_RESULT: ${{ steps.upload_deb.outcome }}
         run: |
           status_tag="ci-status/${CWA_MARKER}-${GITHUB_SHA}"
-          status_message="ort_cache=${CWA_ORT_CACHE_RESULT} ort_checkout=${CWA_ORT_CHECKOUT_RESULT} ort_build_posix=${CWA_ORT_BUILD_POSIX_RESULT} ort_download_windows=${CWA_ORT_DOWNLOAD_WINDOWS_RESULT} ort_normalize_posix=${CWA_ORT_NORMALIZE_POSIX_RESULT} ort_normalize_windows=${CWA_ORT_NORMALIZE_WINDOWS_RESULT} ort_verify=${CWA_ORT_VERIFY_RESULT} qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_verify=${CWA_WINDOWS_VERIFY_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
+          status_message="ort_cache=${CWA_ORT_CACHE_RESULT} ort_checkout=${CWA_ORT_CHECKOUT_RESULT} ort_build_posix=${CWA_ORT_BUILD_POSIX_RESULT} ort_download_windows=${CWA_ORT_DOWNLOAD_WINDOWS_RESULT} ort_normalize_posix=${CWA_ORT_NORMALIZE_POSIX_RESULT} ort_normalize_windows=${CWA_ORT_NORMALIZE_WINDOWS_RESULT} ort_verify=${CWA_ORT_VERIFY_RESULT} qt=${CWA_QT_RESULT} qt_retry=${CWA_QT_RETRY_RESULT} linux_sdr_install=${CWA_LINUX_SDR_INSTALL_RESULT} windows_sdr_build=${CWA_WINDOWS_SDR_BUILD_RESULT} windows_sdr_verify=${CWA_WINDOWS_SDR_VERIFY_RESULT} configure=${CWA_CONFIGURE_RESULT} build=${CWA_BUILD_RESULT} test=${CWA_TEST_RESULT} install=${CWA_INSTALL_RESULT} verify_stage=${CWA_VERIFY_STAGE_RESULT} stage_smoke=${CWA_STAGE_SMOKE_RESULT} linux_sdr_bundle=${CWA_LINUX_SDR_BUNDLE_RESULT} archive=${CWA_ARCHIVE_RESULT} upload=${CWA_UPLOAD_RESULT} win_installer=${CWA_WINDOWS_INSTALLER_RESULT} win_verify=${CWA_WINDOWS_VERIFY_RESULT} win_upload=${CWA_WINDOWS_UPLOAD_RESULT} deb=${CWA_DEB_RESULT} deb_upload=${CWA_DEB_UPLOAD_RESULT}"
           if [[ "${CWA_ORT_BUILD_POSIX_RESULT}" == "failure" ]]; then
             ort_log="$(tail -n 30 "${CWA_ONNXRUNTIME_SOURCE}/onnxruntime-build.log" 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${ort_log}" ]]; then

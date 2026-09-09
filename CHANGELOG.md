@@ -8,6 +8,11 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Packaged SDR module discovery now resolves application-relative directories
+  before retaining operator-provided SoapySDR paths. Moving a portable install
+  or launching the macOS bundle from Finder therefore does not hide its bundled
+  RTL-SDR module or a separately installed vendor module.
+
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby
   stream markers.
@@ -57,6 +62,16 @@ All notable changes to CW Buddy are recorded here. The format follows
   prematurely completing or faulting a transmission.
 
 ### Added
+
+- Official Windows, macOS, and Linux builds now enable the receive-only
+  SoapySDR backend. Windows and macOS packages bundle SoapySDR, SoapyRTLSDR,
+  librtlsdr, libusb, required runtime libraries, licenses, and exact build
+  provenance. The portable Linux archive bundles the corresponding ELF closure;
+  the Debian/Ubuntu package declares its RTL-SDR module dependency. CI loads the
+  packaged module and enumerates its factory without requiring attached
+  hardware, rejects unresolved build-machine paths, and verifies installer
+  contents. SDRplay's proprietary API remains an operator-installed vendor
+  prerequisite and is never downloaded or redistributed by CW Buddy.
 
 - An optional receive-only SoapySDR adapter now discovers installed modules
   and receivers, accepts direct complex-float IQ, reports device overflow,

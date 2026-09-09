@@ -50,9 +50,12 @@ guessed RF frequency.
   **Manual gain** is requested in dB and the actual readback remains
   authoritative.
 
-Direct SDR support is compiled with `CWA_ENABLE_SOAPY_SDR=ON` and requires the
-matching runtime module. With it disabled or absent, all controls fail closed
-and normal audio/WAV reception is unchanged. The SDR boundary is RX-only.
+Official packages compile direct SDR support on and provide the RTL-SDR module.
+SDRplay requires an independently installed compatible vendor API/service and
+SoapySDRPlay3 module. Custom builds use `CWA_ENABLE_SOAPY_SDR=ON` and matching
+development/runtime modules. When a backend or device dependency is absent,
+the controls fail closed and normal audio/WAV reception is unchanged. The SDR
+boundary is RX-only.
 
 The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under

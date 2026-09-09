@@ -55,6 +55,15 @@ target_compile_definitions(cwa_sdr_settings_qml_test PRIVATE
 add_test(NAME cwa_sdr_settings_qml_test
   COMMAND cwa_sdr_settings_qml_test)
 
+add_executable(cwa_linux_sdr_packaging_test
+  desktop/linux_sdr_packaging_test.cpp)
+target_compile_definitions(cwa_linux_sdr_packaging_test PRIVATE
+  CWA_DESKTOP_WORKFLOW_PATH="${PROJECT_SOURCE_DIR}/.github/workflows/desktop-ci.yml"
+  CWA_ROOT_CMAKE_PATH="${PROJECT_SOURCE_DIR}/CMakeLists.txt"
+  CWA_LINUX_SDR_LAUNCHER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/packaging/linux/cw-buddy-portable-launcher.sh")
+add_test(NAME cwa_linux_sdr_packaging_test
+  COMMAND cwa_linux_sdr_packaging_test)
+
 add_executable(cwa_decoder_display_separation_test
   desktop/decoder_display_separation_test.cpp)
 target_compile_definitions(cwa_decoder_display_separation_test PRIVATE
