@@ -34,10 +34,25 @@ checksum, sample format, center frequency when known, and annotation revision.
 
 ## Annotation format
 
-Each expected event needs start/end sample indices, channel/tone frequency,
-literal text, normalized text, callsign regions, and an uncertainty marker.
-Metrics are character error rate, callsign precision/recall, channel tracking
-continuity, false-channel rate, and end-of-character latency.
+The implemented bounded TSV v1 sidecar binds exactly one WAV by SHA-256 and
+records its integer sample rate. Each `event` contains start/end sample indices,
+audio-tone frequency in hertz, literal and canonical normalized text, a
+comma-separated exact callsign set, and a `0`/`1` uncertainty marker. Lines are
+limited to 4,096 bytes and manifests to 256 events; malformed, duplicate,
+out-of-order, noncanonical, checksum-mismatched, or out-of-range data fails
+closed. Uncertain events remain reviewable but are excluded from scores.
+
+Run an annotated receiver report with:
+
+```sh
+cwa_capture_replay --annotations reviewed.tsv audio.wav
+```
+
+The report matches a track using its frequency during the annotated interval,
+then prints character/word error, exact callsign precision/recall, first
+provisional/stable latency, non-append provisional revisions, and unmatched
+published stream/callsign rates. Co-channel operators at the same frequency are
+not yet truthfully attributable, and no reviewed receiver recording is bundled.
 
 ## Synthetic matrix
 

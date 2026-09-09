@@ -2305,22 +2305,19 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
                                  track.last_candidate_match_ns) /
                 1'000'000'000.0L <= kCandidateMatchHoldSeconds;
     std::string callsign;
-    // Refined text has already crossed the lattice's append-only N-best
-    // consensus and minimum acoustic-evidence gates. Do not suppress that
-    // independent evidence because the legacy greedy path's recent timing
-    // average later fell below its own verification threshold. Prefer a
-    // complete, context-supported refined call; otherwise retain the literal
-    // decoder's separately gated result.
-    callsign = CallsignPolicy::best_complete_in_text(
-                   track.update.refined_text, operator_role_,
-                   config_.own_callsign)
+    // Reconcile the independent literal and append-only refined paths. Shared
+    // evidence settles disagreement; refinement remains usable when the
+    // literal path's timing gate fails, but degluing a prosign cannot create a
+    // stream label without an exact refined token.
+    const std::string_view primary_for_callsign =
+        track.update.timing_quality >=
+                config_.minimum_verification_timing_quality
+            ? std::string_view(track.update.text)
+            : std::string_view{};
+    callsign = CallsignPolicy::best_complete_in_parallel_texts(
+                   primary_for_callsign, track.update.refined_text,
+                   operator_role_, config_.own_callsign)
                    .value_or(std::string{});
-    if (track.update.timing_quality >=
-            config_.minimum_verification_timing_quality && callsign.empty()) {
-      callsign = CallsignPolicy::best_complete_in_text(
-                     track.update.text, operator_role_, config_.own_callsign)
-                     .value_or(std::string{});
-    }
     // Never label a stream with the operator's own callsign. It appears in
     // received text whenever somebody calls the operator, and a caller that
     // sends it repeatedly without ever completing its own would otherwise take

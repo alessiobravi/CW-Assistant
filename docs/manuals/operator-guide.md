@@ -331,7 +331,13 @@ preferred order, or focus the handle and press Up/Down for keyboard reordering.
 The card prefers
 the append-only phase/timing consensus once it has stable content and uses the
 literal greedy decoder only while that consensus is unavailable. This makes
-compressed manual character and word gaps easier to read. Stable text, amber
+compressed manual character and word gaps easier to read. Its newest roughly
+one second remains provisional until at least six later mark/gap observations
+support it; a brief detector dropout therefore does not freeze a premature
+guess, while sustained silence still closes the transmission. Callsign labels
+compare the literal and refined paths: shared evidence wins disagreements, and
+splitting a prosign from a call-shaped fragment is not sufficient by itself to
+create a label. Stable text, amber
 provisional text/elements, adaptive WPM, SNR, confidence, drift, and selected
 filter width update in place. Competitive acoustic timing paths remain
 available for callsign selection and debug capture; they are not appended as a

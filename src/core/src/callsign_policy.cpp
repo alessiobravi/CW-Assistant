@@ -343,6 +343,44 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
   return result;
 }
 
+std::optional<std::string> CallsignPolicy::best_complete_in_parallel_texts(
+    const std::string_view primary_text,
+    const std::string_view refined_text,
+    const CwOperatorRole role,
+    const std::string_view own_callsign) {
+  const auto primary = best_complete_in_text(primary_text, role, own_callsign);
+  const auto refined = best_complete_in_text(refined_text, role, own_callsign);
+  if (!refined) return primary;
+  if (primary) {
+    if (*primary == *refined) return primary;
+    std::string combined;
+    combined.reserve(primary_text.size() + refined_text.size() + 1U);
+    combined.append(primary_text);
+    combined.push_back(' ');
+    combined.append(refined_text);
+    return best_complete_in_text(combined, role, own_callsign);
+  }
+
+  std::size_t exact_occurrences = 0;
+  std::string token;
+  const auto count_token = [&] {
+    const auto normalized = normalize(token);
+    if (normalized && *normalized == *refined) ++exact_occurrences;
+    token.clear();
+  };
+  for (const unsigned char character : refined_text) {
+    if (std::isalnum(character) != 0 || character == '/') {
+      token.push_back(static_cast<char>(character));
+    } else if (!token.empty()) {
+      count_token();
+    }
+  }
+  if (!token.empty()) count_token();
+  if (exact_occurrences >= 1U) return refined;
+  const auto sender = strong_sender_in_text(refined_text);
+  return sender && *sender == *refined ? refined : std::nullopt;
+}
+
 bool CallsignPolicy::add_ignored(const std::string_view callsign) {
   const auto normalized = normalize(callsign);
   return normalized.has_value() && ignored_.insert(*normalized).second;

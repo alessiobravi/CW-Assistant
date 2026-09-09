@@ -661,6 +661,12 @@ CwMultiSpeedDecoder::CwMultiSpeedDecoder(
       std::isfinite(config_.lattice_checkpoint_ms)
           ? config_.lattice_checkpoint_ms : 500.0,
       100.0, 2'000.0);
+  config_.lattice_fixed_lag_ms = std::clamp(
+      std::isfinite(config_.lattice_fixed_lag_ms)
+          ? config_.lattice_fixed_lag_ms : 1'000.0,
+      250.0, 5'000.0);
+  config_.lattice_fixed_lag_observations = std::clamp<std::size_t>(
+      config_.lattice_fixed_lag_observations, 2U, 32U);
   config_.lattice_competitive_cost_margin = std::clamp(
       std::isfinite(config_.lattice_competitive_cost_margin)
           ? config_.lattice_competitive_cost_margin : 1.0,
@@ -803,12 +809,11 @@ CwDecoderUpdate CwMultiSpeedDecoder::suspendInput(
   locked_index_ = leader_index_;
   locked_ = true;
   observeLattice(false, 0.0F, timestamp_ns);
-  refreshLattice(CwLatticeDecodeMode::Flush);
-  // Flush is an explicit end-of-segment boundary. Preserve that fact in the
-  // append-only refined transcript so a callsign ending the transmission is
-  // complete even when no following mark arrived to classify the final gap.
-  if (!refined_text_.empty() && refined_text_.back() != ' ')
-    refined_text_.push_back(' ');
+  // Association can disappear during an ordinary word gap. Keep the bounded
+  // lattice and its ambiguous suffix provisional until reacquisition proves a
+  // semantic turn boundary; forcing MAP here made a brief detector dropout an
+  // irreversible decoding decision.
+  refreshLattice(CwLatticeDecodeMode::Provisional);
   updateCurrentSender();
   return snapshot(true);
 }
@@ -826,7 +831,11 @@ CwDecoderUpdate CwMultiSpeedDecoder::resumeInput(
     // The acoustic state was already drained when association disappeared.
     // Only the independently measured sustained absence makes it a semantic
     // operator-turn boundary.
+    refreshLattice(CwLatticeDecodeMode::Flush);
+    if (!refined_text_.empty() && refined_text_.back() != ' ')
+      refined_text_.push_back(' ');
     completeTransmission(final_leader);
+    resetLatticeSegment();
     beginNextTransmissionWithoutAcousticReset();
     return snapshot(true);
   }
@@ -838,6 +847,9 @@ CwDecoderUpdate CwMultiSpeedDecoder::flush(
     const std::uint64_t timestamp_ns) {
   static_cast<void>(suspendInput(timestamp_ns));
   const std::size_t final_leader = selectLeader();
+  refreshLattice(CwLatticeDecodeMode::Flush);
+  if (!refined_text_.empty() && refined_text_.back() != ' ')
+    refined_text_.push_back(' ');
   completeTransmission(final_leader);
   return snapshot(true);
 }
@@ -1560,6 +1572,13 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
     return;
   }
 
+  const std::uint64_t provisional_commit_limit =
+      mode == CwLatticeDecodeMode::Flush
+          ? std::numeric_limits<std::uint64_t>::max()
+          : cwFixedLagCommitObservationId(
+                decoded.observations, config_.lattice_fixed_lag_ms,
+                config_.lattice_fixed_lag_observations);
+
   const auto& best_symbols = decoded.alternatives.front().symbols;
   for (std::size_t symbol_index = 0; symbol_index < best_symbols.size();
        ++symbol_index) {
@@ -1567,6 +1586,7 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
     if (candidate.last_observation_id <= lattice_committed_observation_id_) {
       continue;
     }
+    if (candidate.last_observation_id > provisional_commit_limit) break;
     // Never let a later best path reinterpret a run that has already crossed
     // the append-only boundary. A newly agreed symbol must begin entirely to
     // the right of the last committed physical observation.

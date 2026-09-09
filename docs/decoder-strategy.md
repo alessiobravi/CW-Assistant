@@ -223,7 +223,11 @@ mark/gap transition. At completed-gap checkpoints (bounded to at most once per
 500 ms) its beam search emits up to four time/observation-scoped acoustic
 alternatives. Characters and gap decisions common to all competitive paths are
 committed into a separate append-only refinement after sufficient timing
-evidence; the primary live transcript is not rewritten. The lattice tracks dit
+evidence. The newest suffix remains provisional until at least one second and
+six later physical observations support it, allowing later spacing to resolve
+a recent character or word-gap ambiguity. Brief spectrum-association loss does
+not force that suffix final; sustained silence or explicit end-of-input does.
+The primary live transcript is not rewritten. The lattice tracks dit
 length, mark/gap duration distributions, character and word spacing, and
 manual-keying variance. This gives a low-resource baseline that can explain why
 a character was selected and can abstain instead of inventing text.
@@ -516,6 +520,15 @@ stream or callsign publications during a one-minute no-carrier fixture. Its
 clean and moderately jittered messages are a deterministic regression floor,
 not receiver calibration: weak-SNR curves, revision rate, co-channel overlap,
 and annotated real-audio accuracy remain required.
+
+A disjoint generated receiver-path gate adds manual weighting, timing jitter,
+drift, fading, publication/revision measurements, exact callsign scoring, and a
+30-second no-CW hard negative. Its current production-path baseline is CER
+0.458, WER 0.786, exact-call precision 1.0, recall 0.333, maximum publication
+latency 7.13 seconds, and zero hard-negative publications. These deliberately
+weak accuracy figures are a regression ceiling, not a receiver-quality claim.
+The checksum-bound annotation replay described in `test-data.md` is the path to
+replacing generated limits with reviewed over-the-air evidence.
 
 The timing hypotheses retain one update each. Scalar evidence remains current
 at the 500 Hz decoder cadence, while strings and character vectors refresh only

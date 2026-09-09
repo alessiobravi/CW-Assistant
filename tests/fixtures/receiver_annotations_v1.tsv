@@ -1,0 +1,7 @@
+# Deterministic parser fixture; it names no receiver recording.
+CWA-RECEIVER-ANNOTATIONS	1
+sample_rate_hz	8000
+audio_sha256	0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+event	8000	48000	700.0	CQ DE W1AW	CQ DE W1AW	W1AW	0
+event	56000	96000	703.5	W1AW DE EA1EYL	W1AW DE EA1EYL	W1AW,EA1EYL	0
+event	104000	112000	900.0	unclear	UNCLEAR		1

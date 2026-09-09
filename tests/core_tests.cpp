@@ -2085,6 +2085,21 @@ void test_callsign_policy() {
          "a repeated bare callsign does not guess the current sender");
   expect(!CallsignPolicy::strong_sender_in_text("DE SV7BIO K "),
          "an isolated DE fragment is insufficient sender evidence");
+  expect(CallsignPolicy::best_complete_in_parallel_texts(
+             "TEST SM5IMO TU DL1NKB DAN 1854 TU SM5E ",
+             "TEST SM5IMO TU DL1NKB DAN 1854 TU SM5U ",
+             cwassistant::core::CwOperatorRole::Monitor, {}) ==
+             std::optional<std::string>("DL1NKB"),
+         "independent paths reinforce the shared contest callsign");
+  expect(!CallsignPolicy::best_complete_in_parallel_texts(
+              {}, "TTE C 5NE S TU5NEET6T E HI ",
+              cwassistant::core::CwOperatorRole::Monitor, {}),
+         "a call created only by splitting a glued TU cannot label a stream");
+  expect(CallsignPolicy::best_complete_in_parallel_texts(
+             {}, "G4LJU G4LJU COLIN ",
+             cwassistant::core::CwOperatorRole::Monitor, {}) ==
+             std::optional<std::string>("G4LJU"),
+         "an exact refined-only callsign remains usable");
 }
 
 void test_cw_context_rescorer() {

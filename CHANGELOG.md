@@ -8,6 +8,14 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Brief spectrum-association dropouts no longer force the event lattice to
+  finalize its newest ambiguous Morse symbols. A bounded one-second/six-run
+  look-ahead lets later spacing resolve that suffix append-only; sustained
+  silence and explicit end-of-input still close the transmission. Callsign
+  labels now reconcile the literal and refined transcripts, preventing a
+  one-off callsign created only by a reconstructed prosign boundary from
+  displacing independently shared evidence.
+
 - **A=B** now writes the exact VFO A/RX whole-hertz value to VFO B/TX. The
   previous path incorrectly passed a whole-hertz integer through the public
   kHz/MHz text-entry API and therefore rejected every synchronization request.
@@ -30,6 +38,14 @@ All notable changes to CW Buddy are recorded here. The format follows
   prematurely completing or faulting a transmission.
 
 ### Added
+
+- A checksum-bound, sample-indexed receiver-annotation sidecar and replay mode
+  now report CER/WER, exact callsign precision/recall, decode latency,
+  non-append revisions, and unmatched publications without committing private
+  recordings. A separate generated receiver-path holdout gates fading, drift,
+  manual weighting, timing jitter, latency, callsign precision, and a no-CW
+  hard negative; its current CER 0.458, WER 0.786, and callsign recall 0.333
+  explicitly record the decoder's remaining immaturity.
 
 - A generated production-path decoder quality gate now enforces normalized
   character and word error, exact callsign precision/recall, provisional and

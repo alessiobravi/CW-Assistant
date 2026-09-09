@@ -250,6 +250,11 @@ struct CwMultiSpeedConfig {
   std::uint8_t lock_after_symbols{2};
   float lock_score_margin{0.10F};
   double lattice_checkpoint_ms{500.0};
+  // Keep a bounded acoustic look-ahead before crossing the append-only
+  // refinement boundary. Later spacing evidence can then resolve a recent
+  // character/word-gap ambiguity without ever rewriting committed text.
+  double lattice_fixed_lag_ms{1'000.0};
+  std::size_t lattice_fixed_lag_observations{6};
   double lattice_competitive_cost_margin{1.0};
   float minimum_lattice_evidence_confidence{0.40F};
   // Pair each mark with the gap immediately following it when fitting the

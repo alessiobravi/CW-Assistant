@@ -93,6 +93,14 @@ class CallsignPolicy {
   [[nodiscard]] static std::optional<std::string> best_complete_in_text(
       std::string_view stable_text, CwOperatorRole role,
       std::string_view own_callsign);
+  // Reconciles the independent literal and lattice-refined paths. A call seen
+  // only in refinement must occur as an exact decoded token or have explicit
+  // sender evidence; splitting a glued prosign is not enough by itself.
+  [[nodiscard]] static std::optional<std::string>
+  best_complete_in_parallel_texts(std::string_view primary_text,
+                                  std::string_view refined_text,
+                                  CwOperatorRole role,
+                                  std::string_view own_callsign);
 
  private:
   std::unordered_set<std::string> ignored_;

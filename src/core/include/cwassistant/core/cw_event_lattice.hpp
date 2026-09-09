@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -86,6 +87,15 @@ struct CwEventLatticeConfig {
   std::size_t minimum_tolerance_observations{12};
   float minimum_tolerance_observation_confidence{0.55F};
 };
+
+// Returns the newest physical observation that is safe to cross an
+// append-only fixed-lag boundary. The complete lattice may use all later
+// observations for N-best scoring, but a provisional decoder commits only
+// symbols wholly to the left of this ID. Missing/non-monotonic timestamps fail
+// closed; an explicit segment flush does not use this helper.
+[[nodiscard]] std::uint64_t cwFixedLagCommitObservationId(
+    std::span<const CwRunObservation> observations, double lag_ms,
+    std::size_t minimum_later_observations) noexcept;
 
 // Bounded acoustic candidate generator. It deliberately has no language,
 // callsign, database, frequency, or QSO-context input. All alternatives arise

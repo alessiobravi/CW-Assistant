@@ -278,6 +278,44 @@ std::string CwLatticeAlternative::text(const char unknown_marker) const {
   return result;
 }
 
+std::uint64_t cwFixedLagCommitObservationId(
+    const std::span<const CwRunObservation> observations,
+    const double lag_ms,
+    const std::size_t minimum_later_observations) noexcept {
+  if (observations.empty() || !std::isfinite(lag_ms) || lag_ms < 0.0 ||
+      minimum_later_observations >= observations.size()) {
+    return 0U;
+  }
+  const auto lag_ns = static_cast<std::uint64_t>(std::min<long double>(
+      std::ceil(static_cast<long double>(lag_ms) * 1'000'000.0L),
+      static_cast<long double>(std::numeric_limits<std::uint64_t>::max())));
+  std::uint64_t previous_end_ns = 0U;
+  std::uint64_t previous_id = 0U;
+  for (const auto& observation : observations) {
+    if (observation.observation_id == 0U ||
+        observation.observation_id <= previous_id ||
+        observation.ended_ns <= observation.started_ns ||
+        (previous_end_ns != 0U &&
+         observation.started_ns < previous_end_ns)) {
+      return 0U;
+    }
+    previous_id = observation.observation_id;
+    previous_end_ns = observation.ended_ns;
+  }
+  const std::uint64_t latest_end_ns = observations.back().ended_ns;
+  std::uint64_t safe_id = 0U;
+  for (std::size_t index = 0;
+       index + minimum_later_observations < observations.size(); ++index) {
+    const auto& observation = observations[index];
+    if (observation.ended_ns > latest_end_ns ||
+        latest_end_ns - observation.ended_ns < lag_ns) {
+      break;
+    }
+    safe_id = observation.observation_id;
+  }
+  return safe_id;
+}
+
 CwEventLattice::CwEventLattice(CwEventLatticeConfig config)
     : config_(config) {
   config_.maximum_observations =

@@ -102,6 +102,12 @@ target_link_libraries(cwa_decoder_snapshot_cache_tests PRIVATE cwa_core)
 add_test(NAME cwa_decoder_snapshot_cache_tests
   COMMAND cwa_decoder_snapshot_cache_tests)
 
+add_executable(cwa_fixed_lag_refinement_tests
+  cw_fixed_lag_refinement_tests.cpp)
+target_link_libraries(cwa_fixed_lag_refinement_tests PRIVATE cwa_core)
+add_test(NAME cwa_fixed_lag_refinement_tests
+  COMMAND cwa_fixed_lag_refinement_tests)
+
 add_executable(cwa_decoder_evaluation_metrics_tests
   decoder_evaluation_metrics_tests.cpp)
 add_test(NAME cwa_decoder_evaluation_metrics_tests
@@ -110,6 +116,18 @@ add_test(NAME cwa_decoder_evaluation_metrics_tests
 add_executable(cwa_decoder_quality_gate cw_decoder_quality_gate.cpp)
 target_link_libraries(cwa_decoder_quality_gate PRIVATE cwa_core)
 add_test(NAME cwa_decoder_quality_gate COMMAND cwa_decoder_quality_gate)
+
+add_executable(cwa_receiver_annotations_tests receiver_annotations_tests.cpp)
+target_compile_definitions(cwa_receiver_annotations_tests PRIVATE
+  CWA_RECEIVER_ANNOTATION_FIXTURE="${PROJECT_SOURCE_DIR}/tests/fixtures/receiver_annotations_v1.tsv")
+add_test(NAME cwa_receiver_annotations_tests
+  COMMAND cwa_receiver_annotations_tests)
+
+add_executable(cwa_receiver_holdout_benchmark
+  cw_receiver_holdout_benchmark.cpp)
+target_link_libraries(cwa_receiver_holdout_benchmark PRIVATE cwa_core)
+add_test(NAME cwa_receiver_holdout_benchmark
+  COMMAND cwa_receiver_holdout_benchmark)
 
 add_executable(cwa_verification_benchmark cw_verification_benchmark.cpp)
 target_link_libraries(cwa_verification_benchmark PRIVATE cwa_core)
