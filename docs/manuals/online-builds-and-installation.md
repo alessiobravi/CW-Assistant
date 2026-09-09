@@ -234,7 +234,8 @@ package-step diagnostic is retained with that platform's CI status record. The
 Windows dependency build pins both upstream revisions and their accepted CMake
 policy compatibility floor. Configure-stage CMake failures use the same bounded
 status diagnostic path, and the application configure resolves SoapySDR from
-the prepared runtime root rather than a build-machine package registry.
+the verified platform-specific CMake directory in the prepared runtime root
+rather than a build-machine package registry.
 
 SDRplay is intentionally different: install a compatible SDRplay API/service
 and SoapySDRPlay3 module from their respective providers. CW Buddy neither
