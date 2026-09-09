@@ -38,7 +38,9 @@ The implemented bounded TSV v1 sidecar binds exactly one WAV by SHA-256 and
 records its integer sample rate. Each `event` contains start/end sample indices,
 audio-tone frequency in hertz, literal and canonical normalized text, a
 comma-separated exact callsign set, and a `0`/`1` uncertainty marker. Lines are
-limited to 4,096 bytes and manifests to 256 events; malformed, duplicate,
+canonical UTF-8-compatible text with LF endings so their own review history is
+portable. They are limited to 4,096 bytes and manifests to 256 events;
+malformed, duplicate,
 out-of-order, noncanonical, checksum-mismatched, or out-of-range data fails
 closed. Uncertain events remain reviewable but are excluded from scores.
 
