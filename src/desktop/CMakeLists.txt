@@ -1,6 +1,13 @@
 find_package(Qt6 6.5 REQUIRED COMPONENTS
   Core Gui Multimedia Network Qml Quick QuickControls2 QuickDialogs2 SerialPort WebSockets)
 
+set(CWA_HAVE_SOAPY_SDR 0)
+if(CWA_ENABLE_SOAPY_SDR)
+  find_package(SoapySDR CONFIG REQUIRED)
+  set(CWA_HAVE_SOAPY_SDR 1)
+  message(STATUS "Direct SoapySDR reception enabled")
+endif()
+
 qt_standard_project_setup(REQUIRES 6.5)
 
 function(cwa_target_add_local_character_decoder target_name)
@@ -30,6 +37,11 @@ qt_add_executable(cw-buddy-desktop
   replay/decoder_channel_model.hpp
   replay/live_audio_worker.cpp
   replay/live_audio_worker.hpp
+  replay/live_audio_pipe.hpp
+  sdr/sdr_receiver.cpp
+  sdr/sdr_receiver.hpp
+  sdr/sdr_capture_worker.cpp
+  sdr/sdr_capture_worker.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
   radio/hamlib_rigctld_client.cpp
@@ -56,6 +68,16 @@ qt_add_executable(cw-buddy-desktop
   visualization/spectrum_waterfall_item.cpp
   visualization/spectrum_waterfall_item.hpp
 )
+
+if(CWA_HAVE_SOAPY_SDR)
+  target_sources(cw-buddy-desktop PRIVATE sdr/soapy_sdr_backend.cpp)
+  if(TARGET SoapySDR::SoapySDR)
+    target_link_libraries(cw-buddy-desktop PRIVATE SoapySDR::SoapySDR)
+  else()
+    target_include_directories(cw-buddy-desktop PRIVATE ${SoapySDR_INCLUDE_DIRS})
+    target_link_libraries(cw-buddy-desktop PRIVATE ${SoapySDR_LIBRARIES})
+  endif()
+endif()
 
 set(CWA_MACOS_BUNDLE_NAME "CW Buddy")
 set(CWA_MACOS_BUNDLE_EXECUTABLE "cw-buddy-desktop")
@@ -129,9 +151,22 @@ target_link_libraries(cw-buddy-desktop PRIVATE
 )
 cwa_target_add_local_character_decoder(cw-buddy-desktop)
 target_compile_definitions(cw-buddy-desktop PRIVATE
-  CWA_VERSION="${CWA_BUILD_VERSION}")
+  CWA_VERSION="${CWA_BUILD_VERSION}"
+  CWA_HAVE_SOAPY_SDR=${CWA_HAVE_SOAPY_SDR})
 
 if(CWA_BUILD_TESTS)
+  qt_add_executable(cwa_sdr_receiver_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/sdr_receiver_test.cpp
+    sdr/sdr_receiver.cpp
+    sdr/sdr_receiver.hpp)
+  target_link_libraries(cwa_sdr_receiver_test PRIVATE cwa_core Qt6::Core)
+  target_include_directories(cwa_sdr_receiver_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_definitions(cwa_sdr_receiver_test PRIVATE
+    CWA_HAVE_SOAPY_SDR=0)
+  add_test(NAME cwa_sdr_receiver_test COMMAND cwa_sdr_receiver_test)
+  set_tests_properties(cwa_sdr_receiver_test PROPERTIES TIMEOUT 10)
+
   qt_add_executable(cwa_hamlib_rigctld_client_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/hamlib_rigctld_client_test.cpp
     radio/hamlib_rigctld_client.cpp
@@ -221,6 +256,11 @@ if(CWA_BUILD_TESTS)
     replay/replay_controller.hpp
     replay/live_audio_worker.cpp
     replay/live_audio_worker.hpp
+    replay/live_audio_pipe.hpp
+    sdr/sdr_receiver.cpp
+    sdr/sdr_receiver.hpp
+    sdr/sdr_capture_worker.cpp
+    sdr/sdr_capture_worker.hpp
     replay/decoder_channel_model.cpp
     replay/decoder_channel_model.hpp
     visualization/spectrum_frame.hpp
@@ -233,6 +273,8 @@ if(CWA_BUILD_TESTS)
     cwa_core Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Quick)
   target_include_directories(cwa_desktop_render_startup_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
+  target_compile_definitions(cwa_desktop_render_startup_test PRIVATE
+    CWA_HAVE_SOAPY_SDR=0)
   cwa_target_add_local_character_decoder(cwa_desktop_render_startup_test)
   add_test(NAME cwa_desktop_render_startup_test
     COMMAND cwa_desktop_render_startup_test)

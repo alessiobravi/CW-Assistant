@@ -382,6 +382,13 @@ decoding hints rather than sharing one assumed contest sequence.
 - Initial plugins: RTL-SDR and SDRplay 3.
 - Keep vendor drivers out of the distributable core. Detect missing modules and
   show actionable installation diagnostics.
+- Keep the adapter receive-only: device discovery, center frequency, sample
+  rate, RX gain and CF32 stream reads must not expose SDR transmit, PTT, or KEY.
+- Validate fixed IQ blocks, preserve absolute RF, report device overflow and
+  pipeline overrun separately, and stop safely on malformed/non-finite input.
+- Never route raw IQ to an audio output. Full-passband listening applies only
+  to audio sources; an SDR monitor must select one or more independently
+  filtered CW streams and convert only those streams to bounded audio.
 
 ### Network SDR
 

@@ -2,6 +2,10 @@ add_executable(cwa_core_tests core_tests.cpp)
 target_link_libraries(cwa_core_tests PRIVATE cwa_core)
 add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 
+add_executable(cwa_iq_receive_tests iq_receive_tests.cpp)
+target_link_libraries(cwa_iq_receive_tests PRIVATE cwa_core)
+add_test(NAME cwa_iq_receive_tests COMMAND cwa_iq_receive_tests)
+
 add_executable(cwa_radio_control_tests radio_control_tests.cpp)
 target_link_libraries(cwa_radio_control_tests PRIVATE cwa_core)
 add_test(NAME cwa_radio_control_tests COMMAND cwa_radio_control_tests)
@@ -38,6 +42,18 @@ target_compile_definitions(cwa_action_tooltip_qml_test PRIVATE
   CWA_PROFILE_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/ProfileChooser.qml")
 add_test(NAME cwa_action_tooltip_qml_test
   COMMAND cwa_action_tooltip_qml_test)
+
+add_executable(cwa_sdr_settings_qml_test
+  desktop/sdr_settings_qml_test.cpp)
+target_compile_definitions(cwa_sdr_settings_qml_test PRIVATE
+  CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml"
+  CWA_SETTINGS_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SettingsPane.qml"
+  CWA_APP_SETTINGS_HPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.hpp"
+  CWA_APP_SETTINGS_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.cpp"
+  CWA_REPLAY_CONTROLLER_HPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/replay_controller.hpp"
+  CWA_REPLAY_CONTROLLER_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/replay_controller.cpp")
+add_test(NAME cwa_sdr_settings_qml_test
+  COMMAND cwa_sdr_settings_qml_test)
 
 add_executable(cwa_decoder_display_separation_test
   desktop/decoder_display_separation_test.cpp)

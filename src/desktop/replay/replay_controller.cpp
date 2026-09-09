@@ -35,6 +35,7 @@
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
 #include "../decoder/local_character_decoder.hpp"
+#include "../sdr/sdr_capture_worker.hpp"
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
@@ -713,7 +714,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             if (fresh_evidence) {
               const QString stable_text =
                   QString::fromStdString(*fresh_evidence);
-              if (source_mode == 0) {
+              if (source_mode != 1) {
                 emit liveCharacterRefinementRequested(
                     static_cast<qulonglong>(id), stable_text,
                     static_cast<qulonglong>(hypothesis->window_ended_ns));
@@ -815,12 +816,20 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
 
   auto pipe = std::make_shared<LiveAudioPipe>();
   auto* capture_worker = new LiveAudioCaptureWorker(pipe);
+  auto* sdr_worker = new SdrCaptureWorker(pipe);
   auto* dsp_worker = new LiveAudioDspWorker(std::move(pipe));
   audio_capture_worker_ = capture_worker;
+  sdr_capture_worker_ = sdr_worker;
   audio_dsp_worker_ = dsp_worker;
   capture_worker->moveToThread(&audio_capture_thread_);
+  // LiveAudioPipe is deliberately SPSC. Keep both mutually-exclusive capture
+  // producers on one thread so source-switch commands are serialized and the
+  // ring can never briefly become a two-producer queue.
+  sdr_worker->moveToThread(&audio_capture_thread_);
   dsp_worker->moveToThread(&audio_dsp_thread_);
   connect(&audio_capture_thread_, &QThread::finished, capture_worker,
+          &QObject::deleteLater);
+  connect(&audio_capture_thread_, &QThread::finished, sdr_worker,
           &QObject::deleteLater);
   connect(&audio_dsp_thread_, &QThread::finished, dsp_worker,
           &QObject::deleteLater);
@@ -828,6 +837,10 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioCaptureWorker::start);
   connect(this, &ReplayController::liveStopRequested, capture_worker,
           &LiveAudioCaptureWorker::stop);
+  connect(this, &ReplayController::sdrStartRequested, sdr_worker,
+          &SdrCaptureWorker::start);
+  connect(this, &ReplayController::sdrStopRequested, sdr_worker,
+          &SdrCaptureWorker::stop);
   connect(this, &ReplayController::liveDspStartRequested, dsp_worker,
           &LiveAudioDspWorker::start);
   connect(this, &ReplayController::liveDspStopRequested, dsp_worker,
@@ -896,7 +909,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             emit stateChanged();
           });
   connect(capture_worker, &LiveAudioCaptureWorker::stopped, this, [this] {
-    if (live_capturing_) {
+    if (live_capturing_ && source_mode_ == 0) {
       live_capturing_ = false;
       rebuildDecoderModels();
       status_text_ = QStringLiteral("Live audio stopped");
@@ -915,6 +928,55 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             input_overruns_ = count;
             emit stateChanged();
           });
+  connect(sdr_worker, &SdrCaptureWorker::started, this,
+          [this](const QString&, const double center_frequency_hz,
+                 const double sample_rate_hz, const bool automatic_gain,
+                 const double gain_db) {
+            source_name_ = sdr_device_name_;
+            sample_rate_ = sample_rate_hz;
+            duration_seconds_ = 0.0;
+            position_seconds_ = 0.0;
+            input_overruns_ = 0;
+            live_capturing_ = true;
+            rebuildDecoderModels();
+            status_text_ = QStringLiteral(
+                "Live SDR: %1 • center %2 Hz • %3 S/s • %4")
+                .arg(source_name_)
+                .arg(center_frequency_hz, 0, 'f', 0)
+                .arg(sample_rate_hz, 0, 'f', 0)
+                .arg(automatic_gain
+                         ? QStringLiteral("AGC")
+                         : QStringLiteral("%1 dB gain").arg(gain_db, 0, 'f', 1));
+            emit stateChanged();
+          });
+  connect(sdr_worker, &SdrCaptureWorker::stopped, this, [this] {
+    if (live_capturing_ && source_mode_ == 2) {
+      live_capturing_ = false;
+      rebuildDecoderModels();
+      status_text_ = QStringLiteral("Live SDR stopped");
+      emit stateChanged();
+    }
+  });
+  connect(sdr_worker, &SdrCaptureWorker::failed, this,
+          [this](const QString& message) {
+            live_capturing_ = false;
+            rebuildDecoderModels();
+            emit liveDspStopRequested();
+            setStatus(QStringLiteral("Live SDR error: %1").arg(message));
+          });
+  connect(sdr_worker, &SdrCaptureWorker::diagnosticsChanged, this,
+          [this](const qulonglong source_overruns,
+                 const qulonglong device_overflows,
+                 const qulonglong read_timeouts,
+                 const qulonglong read_errors) {
+            input_overruns_ = source_overruns + device_overflows;
+            if (read_errors > 0) {
+              status_text_ = QStringLiteral(
+                  "SDR read errors: %1 • device overflows: %2 • timeouts: %3")
+                  .arg(read_errors).arg(device_overflows).arg(read_timeouts);
+            }
+            emit stateChanged();
+          });
   connect(dsp_worker, &LiveAudioDspWorker::frameProduced, this,
           &ReplayController::frameReady);
   connect(dsp_worker, &LiveAudioDspWorker::decoderProduced, this,
@@ -928,7 +990,7 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           });
   connect(dsp_worker, &LiveAudioDspWorker::monitorAudioProduced, this,
           &ReplayController::writeMonitorAudio);
-  audio_capture_thread_.setObjectName(QStringLiteral("Live audio capture"));
+  audio_capture_thread_.setObjectName(QStringLiteral("Live receiver capture"));
   audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
   audio_capture_thread_.start();
   audio_dsp_thread_.start();
@@ -942,6 +1004,10 @@ ReplayController::~ReplayController() {
   }
   if (audio_dsp_worker_ != nullptr && audio_dsp_thread_.isRunning()) {
     QMetaObject::invokeMethod(audio_dsp_worker_, "stop",
+                              Qt::BlockingQueuedConnection);
+  }
+  if (sdr_capture_worker_ != nullptr && audio_capture_thread_.isRunning()) {
+    QMetaObject::invokeMethod(sdr_capture_worker_, "stop",
                               Qt::BlockingQueuedConnection);
   }
   audio_capture_thread_.quit();
@@ -971,7 +1037,7 @@ bool ReplayController::liveCapturing() const noexcept {
   return live_capturing_;
 }
 bool ReplayController::activeSource() const noexcept {
-  return source_mode_ == 0 ? live_capturing_ : source_loaded_;
+  return source_mode_ == 1 ? source_loaded_ : live_capturing_;
 }
 qulonglong ReplayController::inputOverruns() const noexcept {
   return input_overruns_;
@@ -1232,8 +1298,9 @@ void ReplayController::rebuildDecoderModels() {
   const QVariantList previous_sessions = decoder_sessions_;
   decoder_channels_.clear();
   QHash<qulonglong, QVariantMap> by_id;
-  const bool show_rf = radio_frequency_available_ && source_mode_ == 0 &&
-                       live_capturing_;
+  const bool mapped_audio_rf = radio_frequency_available_ &&
+                               source_mode_ == 0 && live_capturing_;
+  const bool direct_iq_rf = source_mode_ == 2 && live_capturing_;
   for (const QVariant& value : raw_decoder_channels_) {
     QVariantMap item = value.toMap();
     const auto id = item.value(QStringLiteral("id")).toULongLong();
@@ -1245,7 +1312,14 @@ void ReplayController::rebuildDecoderModels() {
         ? presentation.toDouble() : tracked_audio_hz;
     item.insert(QStringLiteral("audioFrequencyHz"), audio_hz);
     item.insert(QStringLiteral("trackedAudioFrequencyHz"), tracked_audio_hz);
-    if (show_rf) {
+    if (direct_iq_rf) {
+      const auto rf_hz = static_cast<qulonglong>(std::llround(audio_hz));
+      item.insert(QStringLiteral("displayFrequencyHz"),
+                  QVariant::fromValue<qulonglong>(rf_hz));
+      item.insert(QStringLiteral("frequencyKind"), QStringLiteral("RF"));
+      item.insert(QStringLiteral("frequencyLabel"),
+                  QStringLiteral("%1 Hz RF").arg(rf_hz));
+    } else if (mapped_audio_rf) {
       const auto resolved_rf = cwassistant::core::resolve_audio_tone_rf(
           radio_rx_rf_hz_, audio_hz, cw_reference_tone_hz_,
           cw_sideband_index_ == 0);
@@ -1474,6 +1548,12 @@ void ReplayController::setRadioFrequencyContext(
 
 void ReplayController::setMonitorMode(const int mode) {
   const int sanitized = std::clamp(mode, 0, 2);
+  if (source_mode_ == 2 && sanitized == 1) {
+    monitor_status_ = QStringLiteral(
+        "Whole-IQ listening is unavailable; select one or more CW streams.");
+    emit monitorChanged();
+    return;
+  }
   if (monitor_mode_ == sanitized) return;
   monitor_mode_ = sanitized;
   if (monitor_mode_ != 2) monitored_channel_ids_.clear();
@@ -1626,7 +1706,7 @@ void ReplayController::openDecoderSession(const qulonglong channel_id) {
 void ReplayController::openManualDecoderSession(
     const double audio_frequency_hz) {
   if (!activeSource() || !std::isfinite(audio_frequency_hz)) return;
-  if (source_mode_ == 0) {
+  if (source_mode_ != 1) {
     emit liveManualDecoderFrequencyRequested(audio_frequency_hz);
   } else {
     emit manualDecoderFrequencyRequested(audio_frequency_hz);
@@ -1675,17 +1755,20 @@ void ReplayController::resetDecoder() {
 }
 
 void ReplayController::setSourceMode(const int value) {
-  const int clamped = std::clamp(value, 0, 1);
+  const int clamped = std::clamp(value, 0, 2);
   if (source_mode_ == clamped) {
     return;
   }
-  if (clamped == 0) {
+  if (clamped != 1) {
     emit stopRequested();
     playing_ = false;
-  } else {
-    stopLiveAudio();
   }
+  emit liveStopRequested();
+  emit sdrStopRequested();
+  emit liveDspStopRequested();
+  live_capturing_ = false;
   source_mode_ = clamped;
+  if (source_mode_ == 2 && monitor_mode_ == 1) setMonitorMode(0);
   rebuildDecoderModels();
   emit sourceReset();
   emit stateChanged();
@@ -1743,9 +1826,27 @@ void ReplayController::setAudioInputSelection(QString encoded_id,
   const bool changed = audio_input_id_ != encoded_id;
   audio_input_id_ = std::move(encoded_id);
   audio_input_name_ = std::move(display_name);
-  if (changed && live_capturing_) {
+  if (changed && live_capturing_ && source_mode_ == 0) {
     beginLiveAudioCapture();
   }
+}
+
+void ReplayController::setSdrInputSelection(
+    QString device_id, QString display_name,
+    const qulonglong center_frequency_hz, const int sample_rate_hz,
+    const bool automatic_gain, const double gain_db) {
+  const bool restart = live_capturing_ && source_mode_ == 2 &&
+      (sdr_device_id_ != device_id ||
+       sdr_center_frequency_hz_ != center_frequency_hz ||
+       sdr_sample_rate_hz_ != sample_rate_hz ||
+       sdr_automatic_gain_ != automatic_gain || sdr_gain_db_ != gain_db);
+  sdr_device_id_ = std::move(device_id);
+  sdr_device_name_ = std::move(display_name);
+  sdr_center_frequency_hz_ = center_frequency_hz;
+  sdr_sample_rate_hz_ = sample_rate_hz;
+  sdr_automatic_gain_ = automatic_gain;
+  sdr_gain_db_ = gain_db;
+  if (restart) beginLiveSdrCapture();
 }
 
 void ReplayController::openFile(const QUrl& url) {
@@ -1795,7 +1896,13 @@ void ReplayController::startLiveAudio() {
   }
 }
 
+void ReplayController::startLiveSdr() {
+  setSourceMode(2);
+  beginLiveSdrCapture();
+}
+
 void ReplayController::beginLiveAudioCapture() {
+  emit sdrStopRequested();
   emit stopRequested();
   playing_ = false;
   source_loaded_ = false;
@@ -1807,7 +1914,34 @@ void ReplayController::beginLiveAudioCapture() {
   emit liveStartRequested(audio_input_id_);
 }
 
+void ReplayController::beginLiveSdrCapture() {
+  if (sdr_device_id_.isEmpty()) {
+    setStatus(QStringLiteral(
+        "Select a discovered SDR device in Settings before starting RX."));
+    return;
+  }
+  emit liveStopRequested();
+  emit stopRequested();
+  playing_ = false;
+  source_loaded_ = false;
+  live_capturing_ = false;
+  input_overruns_ = 0;
+  emit sourceReset();
+  setStatus(QStringLiteral("Starting live SDR from %1…").arg(sdr_device_name_));
+  publishSpectrumConfiguration();
+  emit liveDspStartRequested();
+  emit sdrStartRequested(sdr_device_id_,
+                         static_cast<double>(sdr_center_frequency_hz_),
+                         static_cast<double>(sdr_sample_rate_hz_),
+                         sdr_automatic_gain_, sdr_gain_db_);
+}
+
 void ReplayController::startDebugCapture() {
+  if (source_mode_ == 2) {
+    setStatus(QStringLiteral(
+        "SDR IQ capture is not available yet; use audio debug capture or an external SigMF recorder."));
+    return;
+  }
   if (!live_capturing_) {
     setStatus(QStringLiteral(
         "Debug capture requires live RX to be running."));
@@ -1830,6 +1964,7 @@ void ReplayController::stopDebugCapture() {
 
 void ReplayController::stopLiveAudio() {
   emit liveStopRequested();
+  emit sdrStopRequested();
   emit liveDspStopRequested();
   if (live_capturing_) {
     live_capturing_ = false;

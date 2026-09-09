@@ -217,11 +217,17 @@ ApplicationWindow {
                 z: 20
                 Label { text: "Receiver workspace"; font.pixelSize: 18; font.weight: Font.DemiBold }
                 ComboBox {
-                    model: ["Live audio", "WAV replay"]
+                    model: ["Live audio", "WAV replay", "Live SDR"]
                     currentIndex: replayController.sourceMode
-                    onActivated: replayController.sourceMode = currentIndex
+                    onActivated: {
+                        replayController.sourceMode = currentIndex
+                        if (currentIndex === 0)
+                            appSettings.receiverInputTypeIndex = 0
+                        else if (currentIndex === 2)
+                            appSettings.receiverInputTypeIndex = 1
+                    }
                     ToolTip.visible: hovered
-                    ToolTip.text: "Choose live receiver audio or a recorded WAV replay"
+                    ToolTip.text: "Choose sound-card audio, a recorded WAV, or direct SDR IQ reception"
                 }
                 Rectangle { width: 1; height: 28; color: "#303a46" }
                 Label { text: "Listen"; color: "#91a0b1"; font.pixelSize: 11 }
@@ -240,9 +246,12 @@ ApplicationWindow {
                     checkable: true
                     checked: replayController.monitorMode === 1
                     enabled: replayController.activeSource
+                             && replayController.sourceMode !== 2
                     onClicked: replayController.setMonitorMode(1)
                     ToolTip.visible: hovered
-                    ToolTip.text: "Play the complete receiver passband without a stream filter"
+                    ToolTip.text: replayController.sourceMode === 2
+                        ? "Raw wideband IQ is not loudspeaker audio; use a decoder-card speaker to monitor filtered streams"
+                        : "Play the complete receiver passband without a stream filter"
                 }
                 ToolButton {
                     objectName: "monitorSignalButton"
@@ -271,9 +280,11 @@ ApplicationWindow {
                 Label {
                     text: replayController.sourceMode === 0
                           ? appSettings.audioInputDisplayName
-                          : (replayController.sourceLoaded
+                          : (replayController.sourceMode === 2
+                             ? appSettings.sdrDeviceDisplayName
+                             : (replayController.sourceLoaded
                              ? replayController.sourceName + "  •  " + replayController.sampleRate.toFixed(0) + " Hz"
-                             : "No replay source")
+                             : "No replay source"))
                     color: "#8d9aaa"
                 }
                 Button {
@@ -297,6 +308,28 @@ ApplicationWindow {
                     ToolTip.text: enabled
                         ? "Stop live audio processing"
                         : "Live receiver processing is not running"
+                }
+                Button {
+                    objectName: "startLiveSdrButton"
+                    z: 21
+                    text: "Start SDR RX"
+                    visible: replayController.sourceMode === 2
+                    enabled: !replayController.liveCapturing
+                             && appSettings.sdrBackendAvailable
+                             && appSettings.sdrDeviceIndex >= 0
+                    onClicked: replayController.startLiveSdr()
+                    ToolTip.visible: hovered
+                    ToolTip.text: enabled
+                        ? "Start direct IQ reception, wide spectrum analysis, and CW decoding"
+                        : appSettings.sdrDiagnostic
+                }
+                Button {
+                    text: "Stop SDR RX"
+                    visible: replayController.sourceMode === 2
+                    enabled: replayController.liveCapturing
+                    onClicked: replayController.stopLiveAudio()
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Stop direct SDR reception"
                 }
                 Button {
                     text: "Open WAV"
@@ -418,6 +451,7 @@ ApplicationWindow {
                                                 + 0.5 * appSettings.cwGuideWidthHz
                     readonly property color guideColor: "#ff7b84"
                     visible: appSettings.showCwGuide
+                             && replayController.sourceMode !== 2
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
                     anchors.fill: spectrumDisplay
@@ -679,7 +713,7 @@ ApplicationWindow {
                                   ? "≈ " + modelData.callsignSuggestion
                                   : modelData.frequencyLabel
                             color: modelData.color
-                            font.pixelSize: channelMarker.pointerHovered ? 32 : 18
+                            font.pixelSize: channelMarker.pointerHovered ? 22 : 18
                             font.weight: Font.Bold
                             leftPadding: 4
                             rightPadding: 4
@@ -751,6 +785,7 @@ ApplicationWindow {
                 }
                 Label {
                     visible: appSettings.showCwGuide
+                             && replayController.sourceMode !== 2
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
                     anchors.top: parent.top
@@ -768,25 +803,43 @@ ApplicationWindow {
                     visible: !replayController.activeSource
                     Label {
                         Layout.alignment: Qt.AlignHCenter
-                        text: replayController.sourceMode === 0 ? "Live receiver audio" : "Replay a receiver recording"
+                        text: replayController.sourceMode === 0
+                              ? "Live receiver audio"
+                              : (replayController.sourceMode === 2
+                                 ? "Direct SDR receiver"
+                                 : "Replay a receiver recording")
                         font.pixelSize: 17
                     }
                     Label {
                         Layout.alignment: Qt.AlignHCenter
                         text: replayController.sourceMode === 0
                               ? "Start live RX to process the selected audio input"
-                              : "Open a PCM or 32-bit float WAV file to inspect its real spectrum and waterfall"
+                              : (replayController.sourceMode === 2
+                                 ? appSettings.sdrDiagnostic
+                                 : "Open a PCM or 32-bit float WAV file to inspect its real spectrum and waterfall")
                         color: "#8290a0"
                     }
                     Button {
                         objectName: "emptyStateStartButton"
                         Layout.alignment: Qt.AlignHCenter
-                        text: replayController.sourceMode === 0 ? "Start live RX" : "Choose WAV recording"
-                        onClicked: replayController.sourceMode === 0 ? replayController.startLiveAudio() : wavDialog.open()
+                        text: replayController.sourceMode === 0
+                              ? "Start live RX"
+                              : (replayController.sourceMode === 2
+                                 ? "Start SDR RX" : "Choose WAV recording")
+                        enabled: replayController.sourceMode !== 2
+                                 || (appSettings.sdrBackendAvailable
+                                     && appSettings.sdrDeviceIndex >= 0)
+                        onClicked: replayController.sourceMode === 0
+                                   ? replayController.startLiveAudio()
+                                   : (replayController.sourceMode === 2
+                                      ? replayController.startLiveSdr()
+                                      : wavDialog.open())
                         ToolTip.visible: hovered
                         ToolTip.text: replayController.sourceMode === 0
                             ? "Start spectrum analysis and CW decoding"
-                            : "Choose a receiver WAV recording"
+                            : (replayController.sourceMode === 2
+                               ? appSettings.sdrDiagnostic
+                               : "Choose a receiver WAV recording")
                     }
                 }
             }
@@ -1051,7 +1104,7 @@ ApplicationWindow {
                     value: replayController.positionSeconds
                 }
                 Label {
-                    text: replayController.sourceMode === 0
+                    text: replayController.sourceMode !== 1
                           ? "Input overruns: " + replayController.inputOverruns + "  •  "
                             + appSettings.targetFps + " FPS  •  " + appSettings.waterfallRate + " rows/s"
                           : replayController.positionSeconds.toFixed(1) + " / "

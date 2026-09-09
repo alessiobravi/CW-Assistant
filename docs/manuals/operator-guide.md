@@ -112,6 +112,39 @@ live RX starts. If the display remains blank while **Input overruns** rises,
 stop live RX and install a newer build because the processing worker is not
 draining captured blocks correctly.
 
+## Receive directly from an SDR
+
+An SDR-enabled build can receive complex IQ directly from RTL-SDR, SDRplay,
+and other receive-capable SoapySDR modules. It does not require another SDR
+application to be running, and another application must not own the same USB
+device.
+
+1. Install SoapySDR and the module for the receiver. SDRplay additionally
+   requires its compatible vendor API/service. A source build must be
+   configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
+2. Open **Settings → SDR**, select **Refresh devices**, then choose the receiver.
+   If the backend, module, vendor runtime, USB permission, or device is missing,
+   the page keeps sound-card reception available and explains what was not
+   found.
+3. Enter the RF center frequency in whole hertz. Start conservatively at
+   250000 samples/s; the device may select its nearest supported rate. Enable
+   hardware AGC only when that receiver provides it, otherwise select a manual
+   gain.
+4. In the Receiver workspace select **Live SDR**, then **Start SDR RX**. The
+   spectrum and waterfall use absolute RF coordinates across the captured IQ
+   passband and all qualifying CW carriers enter the same independent decoder
+   bank used by audio reception.
+5. **ALL RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
+   are not loudspeaker audio. Open a decoder card and enable its speaker to hear
+   that carrier through the narrow, carrier-following CW filter. Several card
+   speakers may still be mixed.
+
+This first direct-SDR slice is receive-only. It exposes no SDR transmit, PTT,
+or KEY command. Debug capture still records sound-card audio only; interoperable
+IQ recording is tracked separately. Official packages may report that
+SoapySDR is unavailable until runtime bundling is completed; that is an honest
+build capability state, not a device-discovery failure.
+
 If a stationary peak fills the far-left edge, open **Settings → Audio** and
 leave **Remove input DC offset** enabled. This is normally sound-card DC bias,
 not gain. Keep **Automatic gain** off for a calibrated receiver and tune

@@ -53,8 +53,10 @@ chosen reference rig without any decoder event directly controlling TX.
 ## M4 — Log4OM and SDR
 
 - Durable logging outbox and Log4OM 2 UDP ADIF adapter
-- SoapySDR device discovery and stream adapter
-- RTL-SDR and SDRplay setup diagnostics
+- SoapySDR device discovery and RX stream adapter (foundation implemented;
+  official packaging and physical-device qualification remain)
+- RTL-SDR and SDRplay setup diagnostics (implemented; cross-platform live
+  acceptance remains)
 - IQ tuning, frequency mapping, and CAT/SDR frequency synchronization
 - Cached network SDR directory with frequency/location/protocol filters
 - KiwiSDR receive-only WebSocket adapter and browser handoff for unsupported

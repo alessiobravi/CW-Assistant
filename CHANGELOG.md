@@ -8,6 +8,14 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Hovering a detected-stream label now applies a smaller, less intrusive text
+  enlargement, preserving frequency context and reducing overlap with nearby
+  stream markers.
+
+- Switching from audio to direct SDR now clears an incompatible full-passband
+  loudspeaker monitor selection. Selected-stream monitoring remains available,
+  and its downsampler cannot carry a partial sample across source restarts.
+
 - Receiver-annotation reports now score the callsigns actually published at
   each event instead of re-extracting calls from transcript text. Reviewed
   coverage is explicit, withdrawals and transient labels are timestamped,
@@ -49,6 +57,21 @@ All notable changes to CW Buddy are recorded here. The format follows
   prematurely completing or faulting a transmission.
 
 ### Added
+
+- An optional receive-only SoapySDR adapter now discovers installed modules
+  and receivers, accepts direct complex-float IQ, reports device overflow,
+  pipeline overrun, timeout, invalid-block, and read-error conditions, and
+  feeds the existing wide-spectrum detector and per-stream decoder. The SDR
+  settings page exposes center frequency, requested sample rate, AGC/manual
+  gain, actual availability, and actionable missing-module diagnostics. Raw
+  wideband IQ never reaches the loudspeaker; selected-stream monitoring uses
+  the existing carrier-following filter and bounded audio conversion.
+
+- The dependency-free receiver core now validates timestamped IQ descriptors,
+  sequence continuity, finite samples, and bounded magnitude, supports a
+  16,384-point wideband FFT, preserves absolute RF coordinates, and provides a
+  selected-channel IQ-to-audio bridge with deterministic tests. The adapter is
+  strictly RX-only and exposes no SDR transmit, PTT, or KEY operation.
 
 - Completed transmissions now receive a bounded second timing pass over the
   retained physical mark/gap lattice. Up to nine existing WPM hypotheses are

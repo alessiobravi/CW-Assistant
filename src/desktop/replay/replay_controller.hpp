@@ -191,6 +191,10 @@ class ReplayController final : public QObject {
   void configureOfflineCallsignDatabase(bool enabled,
                                         const QString& database_path);
   void setAudioInputSelection(QString encoded_id, QString display_name);
+  void setSdrInputSelection(QString device_id, QString display_name,
+                            qulonglong center_frequency_hz,
+                            int sample_rate_hz, bool automatic_gain,
+                            double gain_db);
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active,
                                 int sideband_index,
@@ -205,6 +209,7 @@ class ReplayController final : public QObject {
   Q_INVOKABLE void pause();
   Q_INVOKABLE void stop();
   Q_INVOKABLE void startLiveAudio();
+  Q_INVOKABLE void startLiveSdr();
   Q_INVOKABLE void stopLiveAudio();
   Q_INVOKABLE void openDecoderSession(qulonglong channel_id);
   Q_INVOKABLE void openManualDecoderSession(double audio_frequency_hz);
@@ -243,6 +248,11 @@ class ReplayController final : public QObject {
                           double upper_frequency_hz);
   void liveStartRequested(const QString& encoded_device_id);
   void liveStopRequested();
+  void sdrStartRequested(const QString& device_id,
+                         double center_frequency_hz,
+                         double sample_rate_hz, bool automatic_gain,
+                         double gain_db);
+  void sdrStopRequested();
   void liveDspStartRequested();
   void liveDspStopRequested();
   void liveDspConfigureRequested(int averaging_frames, int frame_rate_hz,
@@ -294,6 +304,7 @@ class ReplayController final : public QObject {
  private:
   void setStatus(QString status);
   void beginLiveAudioCapture();
+  void beginLiveSdrCapture();
   void publishSpectrumConfiguration();
   void acceptDecoderChannels(const QVariantList& channels);
   void rebuildDecoderModels();
@@ -308,6 +319,7 @@ class ReplayController final : public QObject {
   QObject* worker_{nullptr};
   QThread audio_capture_thread_;
   QObject* audio_capture_worker_{nullptr};
+  QObject* sdr_capture_worker_{nullptr};
   QThread audio_dsp_thread_;
   QObject* audio_dsp_worker_{nullptr};
   QThread character_inference_thread_;
@@ -321,6 +333,12 @@ class ReplayController final : public QObject {
   qulonglong input_overruns_{0};
   QString audio_input_id_;
   QString audio_input_name_{QStringLiteral("System default input")};
+  QString sdr_device_id_;
+  QString sdr_device_name_{QStringLiteral("No SDR selected")};
+  qulonglong sdr_center_frequency_hz_{14'050'000ULL};
+  int sdr_sample_rate_hz_{250'000};
+  bool sdr_automatic_gain_{true};
+  double sdr_gain_db_{30.0};
   double sample_rate_{0.0};
   double duration_seconds_{0.0};
   double position_seconds_{0.0};

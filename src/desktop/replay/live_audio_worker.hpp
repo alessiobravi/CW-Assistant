@@ -17,8 +17,8 @@
 #include "cwassistant/core/sample_block.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
-#include "cwassistant/core/spsc_ring_buffer.hpp"
 #include "cwassistant/core/wav_writer.hpp"
+#include "live_audio_pipe.hpp"
 #include "../visualization/spectrum_frame.hpp"
 #include "../decoder/local_character_decoder.hpp"
 
@@ -28,12 +28,6 @@ class QAudioSource;
 class QIODevice;
 
 namespace cwassistant::desktop {
-
-struct LiveAudioPipe {
-  cwassistant::core::SpscRingBuffer<cwassistant::core::RealtimeSampleBlock, 32>
-      blocks;
-  std::atomic<qulonglong> overruns{0};
-};
 
 class LiveAudioCaptureWorker final : public QObject {
   Q_OBJECT
@@ -164,6 +158,11 @@ signals:
   qulonglong radio_rx_rf_hz_{0};
   qulonglong radio_tx_rf_hz_{0};
   bool radio_split_active_{false};
+  int monitor_mode_{0};
+  double monitor_resample_phase_{0.0};
+  double monitor_resample_input_rate_hz_{0.0};
+  float monitor_resample_sum_{0.0F};
+  std::size_t monitor_resample_count_{0};
   QVariantMap presentation_diagnostics_;
   // How long a debug capture runs before stopping itself. Configurable because
   // a signal that only misbehaves occasionally cannot be caught inside a fixed

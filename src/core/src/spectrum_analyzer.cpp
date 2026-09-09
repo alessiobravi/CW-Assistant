@@ -9,7 +9,9 @@ namespace cwassistant::core {
 namespace {
 
 bool valid_fft_size(const std::size_t size) noexcept {
-  return size >= 64 && size <= RealtimeSampleBlock{}.samples.size() &&
+  // Accumulation already spans input blocks. Keep transforms explicitly
+  // bounded while allowing useful CW-bin resolution at SDR sample rates.
+  return size >= 64 && size <= 16'384 &&
          (size & (size - 1U)) == 0;
 }
 

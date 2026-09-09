@@ -31,6 +31,7 @@ Pane {
             id: tabs
             Layout.fillWidth: true
             TabButton { text: "Audio" }
+            TabButton { text: "SDR" }
             TabButton { text: "Decoder" }
             TabButton { text: "Radio" }
             TabButton { text: "Keying" }
@@ -161,6 +162,152 @@ Pane {
                         wrapMode: Text.WordWrap
                         color: "#f3bd55"
                         text: "DC rejection removes the persistent zero-frequency peak. Software gain is optional and does not alter the operating-system mixer; when automatic gain is disabled, the manual dB value is exact. Automatic bandwidth derives a 100–3000 Hz CW-oriented view from the input sample rate."
+                    }
+                }
+            }
+
+            ScrollView {
+                contentWidth: availableWidth
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 18
+                    rowSpacing: 12
+                    anchors.margins: 22
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Select direct, receive-only SDR input for a much wider RF passband than sound-card audio. SDR reception never exposes transmit, PTT, or KEY control."
+                    }
+                    Label { text: "Receiver source" }
+                    ComboBox {
+                        objectName: "receiverInputTypeCombo"
+                        Layout.fillWidth: true
+                        model: appSettings.receiverInputTypeNames
+                        currentIndex: appSettings.receiverInputTypeIndex
+                        enabled: appSettings.sdrBackendAvailable
+                                 && appSettings.sdrDeviceNames.length > 0
+                        onActivated: appSettings.receiverInputTypeIndex = currentIndex
+                        ToolTip.visible: hovered
+                        ToolTip.text: appSettings.sdrBackendAvailable
+                            ? "Choose conventional sound-card audio or a directly connected wide-passband SDR"
+                            : "SDR is unavailable in this build; sound-card audio remains fully operational"
+                    }
+                    Label { text: "SoapySDR backend" }
+                    Label {
+                        objectName: "sdrBackendStateLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: appSettings.sdrBackendAvailable ? "#43c6ac" : "#f3bd55"
+                        text: appSettings.sdrBackendAvailable
+                            ? "Available" + (appSettings.sdrBackendVersion.length > 0
+                                ? "  •  " + appSettings.sdrBackendVersion : "")
+                            : "Unavailable — sound-card audio remains selected"
+                    }
+                    Label { text: "Installed modules" }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: appSettings.sdrModuleNames.length > 0
+                            ? appSettings.sdrModuleNames.join(", ")
+                            : "No SoapySDR receiver modules detected"
+                    }
+                    Label { text: "SDR device" }
+                    ComboBox {
+                        objectName: "sdrDeviceCombo"
+                        Layout.fillWidth: true
+                        model: appSettings.sdrDeviceNames
+                        currentIndex: appSettings.sdrDeviceIndex
+                        enabled: appSettings.sdrBackendAvailable
+                                 && appSettings.sdrDeviceNames.length > 0
+                        onActivated: appSettings.selectSdrDevice(currentIndex)
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Select the directly connected receive-only SDR"
+                            : "Install the matching SoapySDR hardware module, connect the receiver, then refresh"
+                    }
+                    Label { text: "Discovery" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Button {
+                            objectName: "refreshSdrDevicesButton"
+                            text: "Refresh devices"
+                            onClicked: appSettings.refreshSdrDevices()
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Rescan SoapySDR modules and attached receivers without starting reception"
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: appSettings.sdrBackendAvailable ? "#91a0b1" : "#f3bd55"
+                            text: appSettings.sdrDiagnostic
+                        }
+                    }
+                    Label { text: "Center frequency (Hz)" }
+                    TextField {
+                        objectName: "sdrCenterFrequencyField"
+                        Layout.fillWidth: true
+                        enabled: appSettings.sdrBackendAvailable
+                        inputMethodHints: Qt.ImhDigitsOnly
+                        text: appSettings.sdrCenterFrequencyHz.toString()
+                        placeholderText: "14050000"
+                        validator: RegularExpressionValidator { regularExpression: /[0-9]{1,11}/ }
+                        onEditingFinished: appSettings.sdrCenterFrequencyHz = Number(text)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "RF center frequency in whole hertz; supported range extends to 99 GHz"
+                    }
+                    Label { text: "IQ sample rate" }
+                    ComboBox {
+                        objectName: "sdrSampleRateCombo"
+                        Layout.fillWidth: true
+                        enabled: appSettings.sdrBackendAvailable
+                        editable: true
+                        model: [250000, 1024000, 2000000, 2400000, 8000000, 10000000]
+                        currentIndex: model.indexOf(appSettings.sdrSampleRateHz)
+                        displayText: appSettings.sdrSampleRateHz + " Hz"
+                        onActivated: appSettings.sdrSampleRateHz = currentValue
+                        onAccepted: appSettings.sdrSampleRateHz = Number(editText.replace(/[^0-9]/g, ""))
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Requested IQ bandwidth; the device may choose the nearest supported rate"
+                    }
+                    Label { text: "Visible RF span" }
+                    Label {
+                        objectName: "sdrWidePassbandLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#43c6ac"
+                        text: appSettings.sdrWidePassbandSummary
+                    }
+                    Label { text: "Gain control" }
+                    CheckBox {
+                        objectName: "sdrAutomaticGainCheck"
+                        text: "Use device automatic gain when supported"
+                        enabled: appSettings.sdrBackendAvailable
+                        checked: appSettings.sdrAutomaticGain
+                        onToggled: appSettings.sdrAutomaticGain = checked
+                    }
+                    Label { text: "Manual gain (dB)" }
+                    SpinBox {
+                        objectName: "sdrGainSpinBox"
+                        editable: true
+                        from: -100
+                        to: 100
+                        value: Math.round(appSettings.sdrGainDb)
+                        enabled: appSettings.sdrBackendAvailable
+                                 && !appSettings.sdrAutomaticGain
+                        onValueModified: appSettings.sdrGainDb = value
+                    }
+                    Label { text: "Safety and availability" }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#f3bd55"
+                        text: appSettings.sdrBackendAvailable
+                            ? "Configuration is receive-only. Selecting or refreshing a device does not start it; use the receiver workspace to begin reception."
+                            : "Install SoapySDR plus the receiver-specific module (for example RTL-SDR or SDRplay), then use an SDR-enabled CW Buddy build. No external SDR application is required."
                     }
                 }
             }

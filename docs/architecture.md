@@ -73,6 +73,22 @@ and a bounded worker pool. A tracked frequency is a state object, not a thread.
 Tasks for the same channel are serialized and carry monotonically increasing
 sample sequence numbers. Different channels may execute concurrently.
 
+The direct-SDR adapter uses the same ring and DSP worker. A SoapySDR capture
+worker owns one receive-only CF32 channel, reads back the actual center
+frequency/sample rate/gain, and emits fixed complex-IQ blocks. Audio capture
+and SDR capture are mutually exclusive producers serialized on the receiver
+capture thread, preserving the ring's SPSC contract. The dependency-free IQ
+boundary rejects invalid descriptors, non-finite or excessive samples, and
+records sequence/timestamp discontinuities before data reaches spectral or CW
+state. The analyzer accumulates across input blocks for a 16,384-point wideband
+FFT; the channel bank retains absolute RF coordinates and independently
+filters qualifying carriers. Only selected filtered carriers are converted to
+48 kHz monitor audio. Raw IQ is never routed to the loudspeaker.
+
+SoapySDR headers and linkage remain confined to the desktop adapter target and
+are optional at build time. A build without them instantiates a diagnostic-only
+backend. No SDR transmit, PTT, or KEY operation exists at this boundary.
+
 The FFT is calculated once per input window. Candidate channels reuse its bins;
 their narrowband pipelines then perform NCO mixing, filtering/decimation, AGC,
 tone/envelope estimation, adaptive dit timing, symbol decoding, and language

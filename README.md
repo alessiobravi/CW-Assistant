@@ -24,12 +24,14 @@ timing state, and shows color-linked spectrum markers and decode rows. The
 700 Hz guide is visual only. Multiple-pass weak-signal decoding remains under
 active implementation.
 
-## Planned capabilities
+## Current and planned capabilities
 
 - Advanced live-audio channel, sample-rate, buffer, calibration, and level-meter
   controls (cross-platform capture plus DC rejection, manual/automatic gain,
   and manual/automatic processing bandwidth are implemented)
-- RTL-SDR and SDRplay reception through SoapySDR modules
+- Direct receive-only RTL-SDR and SDRplay IQ reception through optional
+  SoapySDR modules (implemented for source builds; official runtime packaging
+  and physical-device qualification remain in progress)
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
 - Live-source and WAV-replay spectrum with scrolling waterfall
@@ -116,9 +118,13 @@ When multiple station profiles exist, the desktop opens a profile chooser.
 and parallel instances.
 
 The desktop currently uses Qt 6, including Qt Multimedia for audio capture.
-Dependencies planned for adapter milestones are Hamlib, SoapySDR,
-SoapyRTLSDR, and SoapySDRPlay3. SDRplay also requires the vendor's
-platform-specific API/driver.
+Direct SDR source builds require SoapySDR at configure time and
+`-DCWA_ENABLE_SOAPY_SDR=ON`, plus the receiver-specific SoapyRTLSDR or
+SoapySDRPlay3 module at runtime. SDRplay also requires the vendor's
+platform-specific API/driver. No separate SDR application is needed. Builds
+without these optional components remain fully functional for sound-card audio
+and show an explicit unavailable-backend diagnostic instead of probing an
+unknown device.
 
 Every push to `main` and pull request builds and tests natively on Windows x64,
 Linux x64, macOS ARM64, and macOS x64 with a Sonoma 14 deployment target, then

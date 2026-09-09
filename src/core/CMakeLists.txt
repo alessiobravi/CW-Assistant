@@ -19,6 +19,7 @@ add_library(cwa_core
   src/conversation_profile.cpp
   src/frequency_plan.cpp
   src/hardware_acceptance.cpp
+  src/iq_receive.cpp
   src/offline_callsign_database.cpp
   src/reference_rig_profiles.cpp
   src/radio_control.cpp

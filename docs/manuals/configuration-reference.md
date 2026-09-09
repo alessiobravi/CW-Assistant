@@ -29,6 +29,31 @@ leaving it disabled keeps every marker explicitly labeled **AF**. It is disabled
 by default so a system microphone or another receiver is never assigned a
 guessed RF frequency.
 
+## SDR page
+
+- **Receiver source** stores whether the profile normally starts from
+  sound-card audio or a directly connected SDR. Selecting it never starts the
+  device.
+- **SoapySDR backend**, **Installed modules**, and **Discovery** distinguish an
+  SDR-disabled build, a missing receiver module, no attached device, and a
+  successful scan. **Refresh devices** performs discovery without opening an
+  RX stream.
+- **Center frequency** is absolute RF in whole hertz, from 1 Hz through
+  99 GHz subject to the selected hardware.
+- **IQ sample rate** requests 25 kS/s through 64 MS/s. The adapter selects the
+  nearest rate advertised by the receiver and reports the actual value after
+  start. The default is 250 kS/s to preserve narrow CW bin resolution and
+  bounded CPU use; increase it only when the wider view is worth the added DSP
+  load.
+- **Automatic gain** requests the receiver's hardware gain mode. A receiver
+  without that capability fails explicitly until manual gain is selected.
+  **Manual gain** is requested in dB and the actual readback remains
+  authoritative.
+
+Direct SDR support is compiled with `CWA_ENABLE_SOAPY_SDR=ON` and requires the
+matching runtime module. With it disabled or absent, all controls fail closed
+and normal audio/WAV reception is unchanged. The SDR boundary is RX-only.
+
 The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under
 implementation.

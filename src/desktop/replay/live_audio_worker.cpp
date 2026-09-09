@@ -228,6 +228,10 @@ void LiveAudioDspWorker::start() {
   analyzer_.reset();
   decoder_.reset();
   character_frontends_.reset();
+  monitor_resample_phase_ = 0.0;
+  monitor_resample_input_rate_hz_ = 0.0;
+  monitor_resample_sum_ = 0.0F;
+  monitor_resample_count_ = 0;
   cwassistant::core::RealtimeSampleBlock stale;
   while (pipe_->blocks.try_pop(stale)) {
   }
@@ -239,6 +243,10 @@ void LiveAudioDspWorker::stop() {
   analyzer_.reset();
   decoder_.reset();
   character_frontends_.reset();
+  monitor_resample_phase_ = 0.0;
+  monitor_resample_input_rate_hz_ = 0.0;
+  monitor_resample_sum_ = 0.0F;
+  monitor_resample_count_ = 0;
   emit diagnosticsProduced(
       verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   if (capture_active_) {
@@ -611,6 +619,11 @@ void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
 void LiveAudioDspWorker::setMonitor(const int mode,
                                     const QVariantList& channel_ids,
                                     const double reference_tone_hz) {
+  monitor_mode_ = std::clamp(mode, 0, 2);
+  monitor_resample_phase_ = 0.0;
+  monitor_resample_input_rate_hz_ = 0.0;
+  monitor_resample_sum_ = 0.0F;
+  monitor_resample_count_ = 0;
   const auto selected_mode = mode == 1
       ? cwassistant::core::CwMonitorMode::FullReceiver
       : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
@@ -650,6 +663,15 @@ void LiveAudioDspWorker::drain() {
   int drained = 0;
   while (drained < 8 && pipe_->blocks.try_pop(block)) {
     ++drained;
+    const std::size_t wanted_fft_size =
+        block.stream.kind == cwassistant::core::StreamKind::ComplexIq
+            ? 16'384U
+            : 2'048U;
+    if (analyzer_.config().fft_size != wanted_fft_size) {
+      auto config = analyzer_.config();
+      config.fft_size = wanted_fft_size;
+      static_cast<void>(analyzer_.configure(config));
+    }
     auto snapshots = analyzer_.process(block);
     for (const auto& snapshot : snapshots) {
       // Detection consumes the unaveraged bins and applies its own fixed-time
@@ -661,9 +683,46 @@ void LiveAudioDspWorker::drain() {
           false));
     }
     const auto& decoder_channels = decoder_.processSamples(block);
-    const QByteArray monitor_audio = monitor_bytes(decoder_.monitorAudio());
-    if (!monitor_audio.isEmpty())
-      emit monitorAudioProduced(monitor_audio, block.stream.sample_rate_hz);
+    const auto& raw_monitor_audio = decoder_.monitorAudio();
+    if (!raw_monitor_audio.empty() &&
+        block.stream.kind == cwassistant::core::StreamKind::ComplexIq) {
+      // A raw IQ passband is not meaningful loudspeaker audio. Selected-track
+      // monitoring is already narrow-filtered and re-pitched by the channel
+      // bank; downsample only that result to a widely supported audio rate.
+      if (monitor_mode_ == 2) {
+        const double monitor_output_rate_hz =
+            std::min(48'000.0, block.stream.sample_rate_hz);
+        if (monitor_resample_input_rate_hz_ != block.stream.sample_rate_hz) {
+          monitor_resample_phase_ = 0.0;
+          monitor_resample_sum_ = 0.0F;
+          monitor_resample_count_ = 0;
+          monitor_resample_input_rate_hz_ = block.stream.sample_rate_hz;
+        }
+        std::vector<float> resampled;
+        resampled.reserve(static_cast<std::size_t>(
+            std::ceil(static_cast<double>(raw_monitor_audio.size()) *
+                      monitor_output_rate_hz / block.stream.sample_rate_hz)));
+        for (const float sample : raw_monitor_audio) {
+          monitor_resample_sum_ += sample;
+          ++monitor_resample_count_;
+          monitor_resample_phase_ += monitor_output_rate_hz;
+          if (monitor_resample_phase_ >= block.stream.sample_rate_hz) {
+            monitor_resample_phase_ -= block.stream.sample_rate_hz;
+            resampled.push_back(monitor_resample_sum_ /
+                                static_cast<float>(monitor_resample_count_));
+            monitor_resample_sum_ = 0.0F;
+            monitor_resample_count_ = 0;
+          }
+        }
+        const QByteArray monitor_audio = monitor_bytes(resampled);
+        if (!monitor_audio.isEmpty())
+          emit monitorAudioProduced(monitor_audio, monitor_output_rate_hz);
+      }
+    } else {
+      const QByteArray monitor_audio = monitor_bytes(raw_monitor_audio);
+      if (!monitor_audio.isEmpty())
+        emit monitorAudioProduced(monitor_audio, block.stream.sample_rate_hz);
+    }
     const auto& character_tracks = decoder_.characterRefinementTracks();
     for (auto& window : character_frontends_.process(block, character_tracks))
       emit characterWindowProduced(0, std::move(window));

@@ -27,6 +27,8 @@ option(CWA_BUILD_DESKTOP "Build the Qt Quick desktop application" OFF)
 option(CWA_BUILD_TESTS "Build unit tests" ON)
 option(CWA_ENABLE_ONNX_CHARACTER_DECODER
   "Enable the optional ONNX character-decoder runtime" OFF)
+option(CWA_ENABLE_SOAPY_SDR
+  "Enable direct RX-only SoapySDR device support" OFF)
 set(CWA_ONNXRUNTIME_ROOT "" CACHE PATH
   "Root of a pinned ONNX Runtime CPU distribution")
 

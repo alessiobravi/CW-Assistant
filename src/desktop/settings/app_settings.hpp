@@ -35,6 +35,20 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QStringList audioOutputNames READ audioOutputNames NOTIFY audioOutputsChanged)
   Q_PROPERTY(int audioOutputIndex READ audioOutputIndex NOTIFY audioOutputsChanged)
   Q_PROPERTY(QString audioOutputDisplayName READ audioOutputDisplayName NOTIFY audioOutputsChanged)
+  Q_PROPERTY(QStringList receiverInputTypeNames READ receiverInputTypeNames CONSTANT)
+  Q_PROPERTY(int receiverInputTypeIndex READ receiverInputTypeIndex WRITE setReceiverInputTypeIndex NOTIFY receiverInputTypeChanged)
+  Q_PROPERTY(bool sdrBackendAvailable READ sdrBackendAvailable NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrBackendVersion READ sdrBackendVersion NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QStringList sdrModuleNames READ sdrModuleNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QStringList sdrDeviceNames READ sdrDeviceNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrDeviceIndex READ sdrDeviceIndex NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrDeviceDisplayName READ sdrDeviceDisplayName NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrDiagnostic READ sdrDiagnostic NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(qulonglong sdrCenterFrequencyHz READ sdrCenterFrequencyHz WRITE setSdrCenterFrequencyHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrSampleRateHz READ sdrSampleRateHz WRITE setSdrSampleRateHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrAutomaticGain READ sdrAutomaticGain WRITE setSdrAutomaticGain NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(double sdrGainDb READ sdrGainDb WRITE setSdrGainDb NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrWidePassbandSummary READ sdrWidePassbandSummary NOTIFY sdrSettingsChanged)
   Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE setAudioDcRejection NOTIFY settingsChanged)
   Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE setAudioAutomaticGain NOTIFY settingsChanged)
   Q_PROPERTY(double audioGainDb READ audioGainDb WRITE setAudioGainDb NOTIFY settingsChanged)
@@ -158,6 +172,21 @@ class AppSettings final : public QObject {
   [[nodiscard]] int audioOutputIndex() const noexcept;
   [[nodiscard]] QString audioOutputDisplayName() const;
   [[nodiscard]] const QString& audioOutputId() const noexcept;
+  [[nodiscard]] QStringList receiverInputTypeNames() const;
+  [[nodiscard]] int receiverInputTypeIndex() const noexcept;
+  [[nodiscard]] bool sdrBackendAvailable() const noexcept;
+  [[nodiscard]] const QString& sdrBackendVersion() const noexcept;
+  [[nodiscard]] const QStringList& sdrModuleNames() const noexcept;
+  [[nodiscard]] const QStringList& sdrDeviceNames() const noexcept;
+  [[nodiscard]] int sdrDeviceIndex() const noexcept;
+  [[nodiscard]] const QString& sdrDeviceId() const noexcept;
+  [[nodiscard]] QString sdrDeviceDisplayName() const;
+  [[nodiscard]] const QString& sdrDiagnostic() const noexcept;
+  [[nodiscard]] qulonglong sdrCenterFrequencyHz() const noexcept;
+  [[nodiscard]] int sdrSampleRateHz() const noexcept;
+  [[nodiscard]] bool sdrAutomaticGain() const noexcept;
+  [[nodiscard]] double sdrGainDb() const noexcept;
+  [[nodiscard]] QString sdrWidePassbandSummary() const;
   [[nodiscard]] bool audioDcRejection() const noexcept;
   [[nodiscard]] bool audioAutomaticGain() const noexcept;
   [[nodiscard]] double audioGainDb() const noexcept;
@@ -263,6 +292,11 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
+  void setReceiverInputTypeIndex(int value);
+  void setSdrCenterFrequencyHz(qulonglong value);
+  void setSdrSampleRateHz(int value);
+  void setSdrAutomaticGain(bool value);
+  void setSdrGainDb(double value);
   void setRadioTuningStepHz(int value);
   void setAudioDcRejection(bool value);
   void setAudioAutomaticGain(bool value);
@@ -337,6 +371,8 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void selectAudioInput(int index);
   Q_INVOKABLE void refreshAudioOutputs();
   Q_INVOKABLE void selectAudioOutput(int index);
+  Q_INVOKABLE void refreshSdrDevices();
+  Q_INVOKABLE void selectSdrDevice(int index);
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
   Q_INVOKABLE bool apply();
@@ -373,6 +409,8 @@ class AppSettings final : public QObject {
   void serialPortsChanged();
   void audioInputsChanged();
   void audioOutputsChanged();
+  void receiverInputTypeChanged();
+  void sdrSettingsChanged();
   void statusMessageChanged();
   void setupCompleteChanged();
   void profileChanged();
@@ -430,6 +468,20 @@ class AppSettings final : public QObject {
   QStringList audio_output_ids_;
   QString audio_output_id_;
   QString audio_output_name_;
+  int receiver_input_type_index_{0};
+  bool sdr_backend_available_{false};
+  QString sdr_backend_version_;
+  QStringList sdr_module_names_;
+  QStringList sdr_device_names_;
+  QStringList sdr_device_ids_;
+  QString sdr_device_id_;
+  QString sdr_device_name_;
+  QString sdr_diagnostic_{QStringLiteral(
+      "SDR discovery has not run. Live audio remains available.")};
+  qulonglong sdr_center_frequency_hz_{14'050'000ULL};
+  int sdr_sample_rate_hz_{250'000};
+  bool sdr_automatic_gain_{true};
+  double sdr_gain_db_{30.0};
   bool audio_dc_rejection_{true};
   bool audio_automatic_gain_{false};
   double audio_gain_db_{0.0};

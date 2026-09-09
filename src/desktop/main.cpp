@@ -139,6 +139,12 @@ int main(int argc, char* argv[]) {
         settings.radioTxModeTarget(), settings.radioTxModeConfirmed(),
         settings.radioSplitKnown(), settings.controlledSplitActive());
   };
+  const auto apply_sdr_input = [&settings, &replay_controller] {
+    replay_controller.setSdrInputSelection(
+        settings.sdrDeviceId(), settings.sdrDeviceDisplayName(),
+        settings.sdrCenterFrequencyHz(), settings.sdrSampleRateHz(),
+        settings.sdrAutomaticGain(), settings.sdrGainDb());
+  };
   const auto apply_offline_callsign_database =
       [&settings, &replay_controller, &callsign_database_updater] {
     if (callsign_database_updater.managedEnabled()) {
@@ -167,6 +173,9 @@ int main(int argc, char* argv[]) {
   apply_transmit_radio_safety();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
+  apply_sdr_input();
+  if (settings.receiverInputTypeIndex() == 1)
+    replay_controller.setSourceMode(2);
   replay_controller.setMonitorOutputSelection(settings.audioOutputId());
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
@@ -264,6 +273,15 @@ int main(int argc, char* argv[]) {
       &replay_controller, [&settings, &replay_controller] {
         replay_controller.setAudioInputSelection(
             settings.audioInputId(), settings.audioInputDisplayName());
+      });
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::sdrSettingsChanged,
+      &replay_controller, apply_sdr_input);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::receiverInputTypeChanged,
+      &replay_controller, [&settings, &replay_controller] {
+        replay_controller.setSourceMode(
+            settings.receiverInputTypeIndex() == 1 ? 2 : 0);
       });
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::audioOutputsChanged,
