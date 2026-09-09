@@ -234,19 +234,21 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          exec > >(tee linux-sdr-install.log) 2>&1
           ubuntu_sources=/etc/apt/sources.list.d/ubuntu.sources
           test -s "${ubuntu_sources}"
-          grep -Eq '^URIs: .*archive\.ubuntu\.com/ubuntu' "${ubuntu_sources}"
+          isolated_source_parts="${RUNNER_TEMP}/cw-buddy-empty-apt-sources"
+          mkdir -p "${isolated_source_parts}"
           apt_source_options=(
             -o "Dir::Etc::sourcelist=${ubuntu_sources}"
-            -o 'Dir::Etc::sourceparts=-'
+            -o "Dir::Etc::sourceparts=${isolated_source_parts}"
             -o 'Acquire::Retries=5'
           )
           {
             sudo apt-get "${apt_source_options[@]}" update
             sudo apt-get "${apt_source_options[@]}" install --yes --no-install-recommends \
               libsoapysdr-dev soapysdr-module-rtlsdr
-          } 2>&1 | tee linux-sdr-install.log
+          }
       - name: Restore pinned ONNX Runtime CPU build
         id: cache_onnxruntime
         uses: actions/cache@v5

@@ -35,6 +35,8 @@ All notable changes to CW Buddy are recorded here. The format follows
   retains its install log when a repository or mirror fails. Hosted SDR package
   setup reads only the runner's signed Ubuntu source definition, so an unrelated
   preinstalled third-party repository cannot block the release matrix.
+  The isolated source-parts directory is explicit and install logging begins
+  before source preflight, avoiding assumptions about mirror URI text.
 
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby

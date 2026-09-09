@@ -27,6 +27,8 @@ and independently loaded from the staged installer layout.
 Linux package acquisition uses bounded APT retries and retains failures in the
 same CI status channel. It is scoped to the runner's signed Ubuntu source file,
 so unrelated preinstalled repositories cannot affect SDR package validation.
+The isolation uses an explicit empty source-parts directory rather than a
+special path value or mirror-name assumption.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

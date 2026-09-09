@@ -234,7 +234,8 @@ package-step diagnostic is retained with that platform's CI status record. The
 hosted Linux dependency step retries transient repository downloads a bounded
 number of times and uses only the runner's signed Ubuntu source definition;
 unrelated preinstalled third-party repositories are excluded from this package
-build. The release is still withheld if installation cannot finish.
+build through an explicit empty auxiliary-source directory; no mirror URI name
+is assumed. The release is still withheld if installation cannot finish.
 The Windows dependency build pins both upstream revisions and their accepted CMake
 policy compatibility floor. Configure-stage CMake failures use the same bounded
 status diagnostic path, and the application configure resolves SoapySDR from
