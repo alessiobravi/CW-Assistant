@@ -4,12 +4,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "cwassistant/core/cw_event_lattice.hpp"
 #include "cwassistant/core/cw_semi_markov_segmenter.hpp"
+#include "cwassistant/core/cw_turn_timing_fingerprint.hpp"
 
 namespace cwassistant::core {
 
@@ -42,6 +44,10 @@ struct CwTransmissionTurn {
   std::string sender_callsign;
   double wpm{0.0};
   float cadence_confidence{0.0F};
+  // Present only when this exact completed turn retained a contiguous,
+  // timestamp-aligned physical key-run sequence. It is diagnostic timing
+  // evidence and is deliberately independent of sender attribution.
+  std::optional<CwTurnTimingFingerprint> timing_fingerprint;
 };
 
 struct CwSenderCadence {
@@ -351,6 +357,7 @@ class CwMultiSpeedDecoder {
   std::string current_sender_callsign_;
   double current_sender_wpm_{0.0};
   bool active_transmission_completed_{false};
+  std::optional<CwTurnTimingFingerprint> pending_turn_timing_fingerprint_;
   std::uint64_t lattice_state_started_ns_{0};
   std::uint64_t lattice_last_timestamp_ns_{0};
   std::uint64_t lattice_last_decode_ns_{0};

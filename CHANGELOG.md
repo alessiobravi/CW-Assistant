@@ -8,6 +8,12 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Receiver-annotation reports now score the callsigns actually published at
+  each event instead of re-extracting calls from transcript text. Reviewed
+  coverage is explicit, withdrawals and transient labels are timestamped,
+  uncertain events protect matching tracks without entering accuracy scores,
+  and false-publication episodes exclude unreviewed audio.
+
 - Cross-platform CI now retries each platform's diagnostic status-tag push
   with bounded backoff, so a transient Git transport failure after successful
   build, tests, packaging, and artifact upload does not immediately discard the
@@ -43,6 +49,18 @@ All notable changes to CW Buddy are recorded here. The format follows
   prematurely completing or faulting a transmission.
 
 ### Added
+
+- Completed transmissions now receive a bounded second timing pass over the
+  retained physical mark/gap lattice. Up to nine existing WPM hypotheses are
+  compared using aligned acoustic cost and confidence; contradictory,
+  immaterial, or committed-boundary-crossing alternatives abstain, while
+  provisional live text remains unchanged.
+
+- Completed turns can now carry an exact-run timing fingerprint with dit/dah
+  and gap counts/medians, keying weight, normalized mark residual, evidence
+  interval, and duration-weighted confidence. Replay and debug-capture output
+  expose it for co-channel research, but it contains no callsign, carrier, or
+  sender inference and cannot affect decoding or transmission.
 
 - A checksum-bound, sample-indexed receiver-annotation sidecar and replay mode
   now report CER/WER, exact callsign precision/recall, decode latency,

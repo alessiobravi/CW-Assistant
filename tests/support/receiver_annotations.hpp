@@ -1,13 +1,13 @@
 #pragma once
 
 #include <algorithm>
-#include <cerrno>
 #include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <istream>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -26,11 +26,49 @@ struct ReceiverAnnotation {
   bool uncertain{false};
 };
 
+struct ReceiverAnnotationCoverage {
+  std::uint64_t start_sample{0};
+  std::uint64_t end_sample{0};
+};
+
 struct ReceiverAnnotationManifest {
+  std::uint32_t version{0};
   std::uint32_t sample_rate_hz{0};
   std::string audio_sha256;
+  std::vector<ReceiverAnnotationCoverage> coverage;
   std::vector<ReceiverAnnotation> events;
 };
+
+[[nodiscard]] inline bool overlapsReviewedCoverage(
+    const std::uint64_t start_sample, const std::uint64_t end_sample,
+    const std::vector<ReceiverAnnotationCoverage>& coverage) noexcept {
+  return std::any_of(coverage.cbegin(), coverage.cend(),
+                     [start_sample, end_sample](const auto& interval) {
+    return start_sample < interval.end_sample &&
+           interval.start_sample < end_sample;
+  });
+}
+
+[[nodiscard]] inline std::uint64_t reviewedCoverageSamples(
+    const std::vector<ReceiverAnnotationCoverage>& coverage) noexcept {
+  std::uint64_t total = 0;
+  for (const auto& interval : coverage)
+    total += interval.end_sample - interval.start_sample;
+  return total;
+}
+
+[[nodiscard]] inline bool receiverAnnotationsFitAudio(
+    const ReceiverAnnotationManifest& manifest,
+    const std::uint64_t total_samples) noexcept {
+  return std::all_of(manifest.events.cbegin(), manifest.events.cend(),
+                     [total_samples](const auto& event) {
+           return event.end_sample <= total_samples;
+         }) &&
+         std::all_of(manifest.coverage.cbegin(), manifest.coverage.cend(),
+                     [total_samples](const auto& interval) {
+           return interval.end_sample <= total_samples;
+         });
+}
 
 inline bool parseUnsigned(const std::string_view text,
                           std::uint64_t& value) {
@@ -42,11 +80,10 @@ inline bool parseUnsigned(const std::string_view text,
 
 inline bool parseDouble(const std::string_view text, double& value) {
   if (text.empty()) return false;
-  const std::string owned(text);
-  char* end = nullptr;
-  errno = 0;
-  value = std::strtod(owned.c_str(), &end);
-  return errno == 0 && end == owned.c_str() + owned.size() &&
+  std::istringstream input{std::string(text)};
+  input.imbue(std::locale::classic());
+  input >> value;
+  return input && input.peek() == std::char_traits<char>::eof() &&
          std::isfinite(value);
 }
 
@@ -91,13 +128,17 @@ inline bool parseCallsigns(const std::string_view field,
 }
 
 // Bounded, dependency-free sidecar format:
-//   CWA-RECEIVER-ANNOTATIONS\t1
+//   CWA-RECEIVER-ANNOTATIONS\t<1|2>
 //   sample_rate_hz\t<integer>
 //   audio_sha256\t<64 lowercase hex characters>
+//   coverage\t<start sample>\t<end sample>             (v2, required)
 //   event\t<start sample>\t<end sample>\t<Hz>\t<literal>\t<normalized>
 //         \t<comma-separated exact callsigns>\t<0|1 uncertain>
 // Text fields may contain spaces but not tabs or newlines. Uncertain events are
-// retained for review and excluded from quality scores.
+// retained for review and excluded from quality scores. Version 1 sidecars
+// retain their legacy implicit full-file coverage. Version 2 coverage declares
+// exhaustively reviewed, non-overlapping intervals; an interval with no event
+// is an explicit no-CW fixture.
 inline bool parseReceiverAnnotations(std::istream& input,
                                      ReceiverAnnotationManifest& manifest,
                                      std::string& error) {
@@ -110,6 +151,8 @@ inline bool parseReceiverAnnotations(std::istream& input,
   bool header_seen = false;
   bool rate_seen = false;
   bool hash_seen = false;
+  std::uint64_t previous_coverage_end = 0;
+  bool coverage_seen = false;
   std::uint64_t previous_start = 0;
   bool event_seen = false;
   while (std::getline(input, line)) {
@@ -122,11 +165,13 @@ inline bool parseReceiverAnnotations(std::istream& input,
     if (line.empty() || line.front() == '#') continue;
     const auto fields = tabFields(line);
     if (!header_seen) {
+      std::uint64_t version = 0;
       if (fields.size() != 2U || fields[0] != "CWA-RECEIVER-ANNOTATIONS" ||
-          fields[1] != "1") {
-        error = "first data line must declare annotation format version 1";
+          !parseUnsigned(fields[1], version) || version < 1U || version > 2U) {
+        error = "first data line must declare annotation format version 1 or 2";
         return false;
       }
+      manifest.version = static_cast<std::uint32_t>(version);
       header_seen = true;
       continue;
     }
@@ -153,6 +198,22 @@ inline bool parseReceiverAnnotations(std::istream& input,
       }
       manifest.audio_sha256 = fields[1];
       hash_seen = true;
+      continue;
+    }
+    if (fields[0] == "coverage") {
+      ReceiverAnnotationCoverage interval;
+      if (manifest.version != 2U || fields.size() != 3U ||
+          manifest.coverage.size() >= kMaximumEvents ||
+          !parseUnsigned(fields[1], interval.start_sample) ||
+          !parseUnsigned(fields[2], interval.end_sample) ||
+          interval.end_sample <= interval.start_sample ||
+          (coverage_seen && interval.start_sample < previous_coverage_end)) {
+        error = "invalid or overlapping coverage interval";
+        return false;
+      }
+      manifest.coverage.push_back(interval);
+      previous_coverage_end = interval.end_sample;
+      coverage_seen = true;
       continue;
     }
     if (fields[0] != "event" || fields.size() != 8U ||
@@ -182,8 +243,10 @@ inline bool parseReceiverAnnotations(std::istream& input,
     previous_start = manifest.events.back().start_sample;
     event_seen = true;
   }
-  if (!header_seen || !rate_seen || !hash_seen || manifest.events.empty()) {
-    error = "annotation header, sample rate, hash, and events are required";
+  if (!header_seen || !rate_seen || !hash_seen ||
+      (manifest.version == 1U && manifest.events.empty()) ||
+      (manifest.version == 2U && manifest.coverage.empty())) {
+    error = "annotation header, sample rate, hash, and reviewed data are required";
     return false;
   }
   for (const auto& event : manifest.events) {
@@ -191,6 +254,20 @@ inline bool parseReceiverAnnotations(std::istream& input,
         static_cast<double>(manifest.sample_rate_hz) * 0.5) {
       error = "annotation frequency exceeds the audio Nyquist limit";
       return false;
+    }
+  }
+  if (manifest.version == 2U) {
+    for (const auto& event : manifest.events) {
+      const bool contained = std::any_of(
+          manifest.coverage.cbegin(), manifest.coverage.cend(),
+          [&event](const auto& interval) {
+        return event.start_sample >= interval.start_sample &&
+               event.end_sample <= interval.end_sample;
+      });
+      if (!contained) {
+        error = "annotation event lies outside reviewed coverage";
+        return false;
+      }
     }
   }
   return true;

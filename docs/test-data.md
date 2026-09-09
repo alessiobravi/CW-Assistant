@@ -34,15 +34,21 @@ checksum, sample format, center frequency when known, and annotation revision.
 
 ## Annotation format
 
-The implemented bounded TSV v1 sidecar binds exactly one WAV by SHA-256 and
-records its integer sample rate. Each `event` contains start/end sample indices,
-audio-tone frequency in hertz, literal and canonical normalized text, a
-comma-separated exact callsign set, and a `0`/`1` uncertainty marker. Lines are
-canonical UTF-8-compatible text with LF endings so their own review history is
-portable. They are limited to 4,096 bytes and manifests to 256 events;
-malformed, duplicate,
+The implemented bounded TSV sidecar binds exactly one WAV by SHA-256 and
+records its integer sample rate. Version 1 remains accepted for compatibility
+and treats the complete WAV as reviewed. Version 2 requires one or more sorted,
+non-overlapping `coverage` sample intervals. Coverage is exhaustive: an
+interval without an event explicitly asserts that no CW is present there.
+Every event must lie wholly inside reviewed coverage.
+
+Each `event` contains start/end sample indices, audio-tone frequency in hertz,
+literal and canonical normalized text, a comma-separated exact callsign set,
+and a `0`/`1` uncertainty marker. Lines are canonical UTF-8-compatible text
+with LF endings so their review history is portable. They are limited to 4,096
+bytes and manifests to 256 records; malformed, duplicate, overlapping,
 out-of-order, noncanonical, checksum-mismatched, or out-of-range data fails
-closed. Uncertain events remain reviewable but are excluded from scores.
+closed. An uncertain event is frequency-matched so its real track is not called
+a false publication, but it is excluded from CER, WER, and callsign scores.
 
 Run an annotated receiver report with:
 
@@ -51,10 +57,15 @@ cwa_capture_replay --annotations reviewed.tsv audio.wav
 ```
 
 The report matches a track using its frequency during the annotated interval,
-then prints character/word error, exact callsign precision/recall, first
+then prints character/word error, timestamped published-callsign
+precision/recall, separate transcript callsign extractability, first
 provisional/stable latency, non-append provisional revisions, and unmatched
-published stream/callsign rates. Co-channel operators at the same frequency are
-not yet truthfully attributable, and no reviewed receiver recording is bundled.
+publication/callsign episodes inside reviewed coverage only. Co-channel
+operators at the same frequency are not yet truthfully attributable. Completed
+turn output includes an exact-run timing fingerprint when the retained lattice
+is complete, or explicitly reports it unavailable; the fingerprint is a
+measurement, not an operator identity. No reviewed receiver recording is
+bundled.
 
 ## Synthetic matrix
 

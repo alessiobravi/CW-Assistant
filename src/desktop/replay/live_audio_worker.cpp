@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QMediaDevices>
 
 #include <algorithm>
@@ -448,6 +449,55 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
         value.insert(QStringLiteral("wpm"), turn.wpm);
         value.insert(QStringLiteral("cadenceConfidence"),
                      turn.cadence_confidence);
+        if (turn.timing_fingerprint) {
+          const auto& timing = *turn.timing_fingerprint;
+          QJsonObject fingerprint;
+          fingerprint.insert(QStringLiteral("firstObservationId"),
+                             static_cast<qint64>(
+                                 timing.first_observation_id));
+          fingerprint.insert(QStringLiteral("lastObservationId"),
+                             static_cast<qint64>(
+                                 timing.last_observation_id));
+          fingerprint.insert(QStringLiteral("evidenceStartedNs"),
+                             static_cast<qint64>(timing.evidence_started_ns));
+          fingerprint.insert(QStringLiteral("evidenceEndedNs"),
+                             static_cast<qint64>(timing.evidence_ended_ns));
+          fingerprint.insert(QStringLiteral("markCount"),
+                             static_cast<qint64>(timing.mark_count));
+          fingerprint.insert(QStringLiteral("gapCount"),
+                             static_cast<qint64>(timing.gap_count));
+          fingerprint.insert(QStringLiteral("ditCount"),
+                             static_cast<qint64>(timing.dit_count));
+          fingerprint.insert(QStringLiteral("dahCount"),
+                             static_cast<qint64>(timing.dah_count));
+          fingerprint.insert(QStringLiteral("elementGapCount"),
+                             static_cast<qint64>(
+                                 timing.element_gap_count));
+          fingerprint.insert(QStringLiteral("characterGapCount"),
+                             static_cast<qint64>(
+                                 timing.character_gap_count));
+          fingerprint.insert(QStringLiteral("wordGapCount"),
+                             static_cast<qint64>(timing.word_gap_count));
+          fingerprint.insert(QStringLiteral("ditMedianMs"),
+                             timing.dit_median_ms);
+          fingerprint.insert(QStringLiteral("dahMedianMs"),
+                             timing.dah_median_ms);
+          fingerprint.insert(QStringLiteral("elementGapMedianMs"),
+                             timing.element_gap_median_ms);
+          fingerprint.insert(QStringLiteral("characterGapMedianMs"),
+                             timing.character_gap_median_ms);
+          fingerprint.insert(QStringLiteral("wordGapMedianMs"),
+                             timing.word_gap_median_ms);
+          fingerprint.insert(QStringLiteral("keyingWeight"),
+                             timing.keying_weight);
+          fingerprint.insert(QStringLiteral("normalizedMarkResidual"),
+                             timing.normalized_mark_residual);
+          fingerprint.insert(QStringLiteral("evidenceConfidence"),
+                             timing.evidence_confidence);
+          value.insert(QStringLiteral("timingFingerprint"), fingerprint);
+        } else {
+          value.insert(QStringLiteral("timingFingerprint"), QJsonValue::Null);
+        }
         transmissions.push_back(value);
       }
     }

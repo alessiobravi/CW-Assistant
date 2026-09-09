@@ -4,6 +4,7 @@ add_library(cwa_core
   src/callsign_policy.cpp
   src/cat4om_protocol.cpp
   src/channel_scheduler.cpp
+  src/cw_acoustic_refinement.cpp
   src/cw_character_decoder.cpp
   src/cw_character_lane_frontend.cpp
   src/cw_channel_bank.cpp
@@ -12,6 +13,7 @@ add_library(cwa_core
   src/cw_event_lattice.cpp
   src/cw_probabilistic_decoder.cpp
   src/cw_semi_markov_segmenter.cpp
+  src/cw_turn_timing_fingerprint.cpp
   src/cw_transmit_encoder.cpp
   src/cw_transmit_scheduler.cpp
   src/conversation_profile.cpp

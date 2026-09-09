@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <string>
 #include <string_view>
@@ -114,6 +115,112 @@ struct CallsignCounts {
                                 static_cast<double>(expected);
   }
 };
+
+// Callsign publication is a time-varying decoder result. Receiver annotation
+// scoring must inspect the callsign set visible by the end of an event rather
+// than re-running callsign extraction over that event's transcript. The latter
+// remains useful as a separate diagnostic, but it is not publication recall.
+struct TimestampedPublication {
+  std::uint64_t sample{0};
+  bool published{false};
+  std::vector<std::string> callsigns;
+};
+
+[[nodiscard]] inline std::vector<std::string> callsignsAtOrBefore(
+    const std::vector<TimestampedPublication>& points,
+    const std::uint64_t sample) {
+  std::vector<std::string> result;
+  for (const auto& point : points) {
+    if (point.sample > sample) break;
+    result = point.published ? point.callsigns : std::vector<std::string>{};
+  }
+  return result;
+}
+
+struct SampleEpisode {
+  std::uint64_t start_sample{0};
+  std::uint64_t end_sample{0};
+};
+
+[[nodiscard]] inline bool halfOpenOverlaps(
+    const SampleEpisode& left, const SampleEpisode& right) noexcept {
+  return left.start_sample < right.end_sample &&
+         right.start_sample < left.end_sample;
+}
+
+// A known-good event takes precedence over an overlapping uncertain interval:
+// uncertainty protects a label only when no reviewed event contradicts it.
+[[nodiscard]] inline bool callsignEpisodeIsProtected(
+    const bool matches_expected_callsign,
+    const bool overlaps_certain_event,
+    const bool overlaps_uncertain_event) noexcept {
+  return matches_expected_callsign ||
+         (!overlaps_certain_event && overlaps_uncertain_event);
+}
+
+struct CallsignEpisode : SampleEpisode {
+  std::string callsign;
+};
+
+[[nodiscard]] inline std::vector<SampleEpisode> publicationEpisodes(
+    const std::vector<TimestampedPublication>& points,
+    const std::uint64_t end_sample) {
+  std::vector<SampleEpisode> result;
+  bool published = false;
+  std::uint64_t started = 0;
+  for (const auto& point : points) {
+    if (!published && point.published) {
+      started = point.sample;
+      published = true;
+    } else if (published && !point.published) {
+      if (point.sample > started) result.push_back({started, point.sample});
+      published = false;
+    }
+  }
+  if (published && end_sample > started)
+    result.push_back({started, end_sample});
+  return result;
+}
+
+[[nodiscard]] inline std::vector<CallsignEpisode> callsignEpisodes(
+    const std::vector<TimestampedPublication>& points,
+    const std::uint64_t end_sample) {
+  struct ActiveCallsign {
+    std::string callsign;
+    std::uint64_t started{0};
+  };
+  std::vector<ActiveCallsign> active;
+  std::vector<CallsignEpisode> result;
+  for (const auto& point : points) {
+    std::vector<std::string> next = point.published
+        ? point.callsigns : std::vector<std::string>{};
+    std::sort(next.begin(), next.end());
+    next.erase(std::unique(next.begin(), next.end()), next.end());
+    for (auto iterator = active.begin(); iterator != active.end();) {
+      if (std::binary_search(next.cbegin(), next.cend(), iterator->callsign)) {
+        ++iterator;
+        continue;
+      }
+      if (point.sample > iterator->started) {
+        result.push_back(
+            {{iterator->started, point.sample}, iterator->callsign});
+      }
+      iterator = active.erase(iterator);
+    }
+    for (const auto& callsign : next) {
+      const bool retained = std::any_of(
+          active.cbegin(), active.cend(), [&](const auto& current) {
+        return current.callsign == callsign;
+      });
+      if (!retained) active.push_back({callsign, point.sample});
+    }
+  }
+  for (const auto& current : active) {
+    if (end_sample > current.started)
+      result.push_back({{current.started, end_sample}, current.callsign});
+  }
+  return result;
+}
 
 [[nodiscard]] inline CallsignCounts callsignCounts(
     std::vector<std::string> expected, std::vector<std::string> published) {

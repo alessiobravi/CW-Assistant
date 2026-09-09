@@ -8,6 +8,7 @@
 #include <string_view>
 
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_acoustic_refinement.hpp"
 #include "cwassistant/core/cw_context_rescorer.hpp"
 
 namespace cwassistant::core {
@@ -696,6 +697,7 @@ void CwMultiSpeedDecoder::reset() {
   current_sender_callsign_.clear();
   current_sender_wpm_ = 0.0;
   active_transmission_completed_ = false;
+  pending_turn_timing_fingerprint_.reset();
   lattice_committed_observation_id_ = 0;
   resetLatticeSegment();
   resetHypotheses();
@@ -735,6 +737,7 @@ void CwMultiSpeedDecoder::resetHypotheses() {
   current_sender_callsign_.clear();
   current_sender_wpm_ = 0.0;
   active_transmission_completed_ = false;
+  pending_turn_timing_fingerprint_.reset();
 }
 
 CwDecoderUpdate CwMultiSpeedDecoder::process(
@@ -1300,6 +1303,7 @@ void CwMultiSpeedDecoder::beginNextTransmissionWithoutAcousticReset() {
   current_sender_callsign_.clear();
   current_sender_wpm_ = 0.0;
   active_transmission_completed_ = false;
+  pending_turn_timing_fingerprint_.reset();
 
   // A semantic sender turn gets a fresh cadence observation window without
   // rewriting the continuously accumulated acoustic transcript or timing
@@ -1394,7 +1398,10 @@ void CwMultiSpeedDecoder::completeTransmission(
                             .text = std::move(text),
                             .sender_callsign = sender,
                             .wpm = turn_wpm,
-                            .cadence_confidence = turn_confidence});
+                            .cadence_confidence = turn_confidence,
+                            .timing_fingerprint =
+                                pending_turn_timing_fingerprint_});
+  pending_turn_timing_fingerprint_.reset();
   active_transmission_completed_ = true;
   active_transmission_sequence_ = ++next_transmission_sequence_;
 }
@@ -1467,6 +1474,8 @@ void CwMultiSpeedDecoder::observeLattice(
 }
 
 void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
+  if (mode == CwLatticeDecodeMode::Flush)
+    pending_turn_timing_fingerprint_.reset();
   if (event_lattice_.observationCount() == 0U || hypotheses_.empty()) return;
   // Every fixed timing anchor continues running after presentation lock. Use
   // the currently strongest complete acoustic path, not the historical lock,
@@ -1503,6 +1512,40 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
   if (!std::isfinite(candidate_wpm) || candidate_wpm <= 0.0) return;
 
   auto decoded = event_lattice_.decode(1'200.0 / candidate_wpm, mode);
+  // Only a completed semantic turn may re-evaluate timing. The live and
+  // fixed-lag paths remain unchanged and append-only. Every alternative uses
+  // the same immutable physical runs; filter-width retries require a separate
+  // bounded receive-feature store and are not fabricated here.
+  if (mode == CwLatticeDecodeMode::Flush) {
+    std::array<CwLatticeTimingPass, 9> passes{};
+    std::size_t pass_count = 0U;
+    const auto add_pass = [&](const double wpm) {
+      if (!std::isfinite(wpm) || wpm < 5.0 || wpm > 80.0 ||
+          pass_count >= passes.size()) {
+        return;
+      }
+      for (std::size_t index = 0; index < pass_count; ++index) {
+        if (std::abs(passes[index].wpm - wpm) < 0.25) return;
+      }
+      passes[pass_count++] = {.wpm = wpm, .dot_ms = 1'200.0 / wpm};
+    };
+    add_pass(candidate_wpm);
+    for (const auto& hypothesis : hypotheses_)
+      add_pass(hypothesis.decoder.currentUpdate().wpm);
+    if (pass_count > 1U) {
+      auto refinement = refineCwEventLattice(
+          event_lattice_, std::span(passes).first(pass_count), mode);
+      if (refinement.selection.accepted &&
+          cwLatticeCleanlyExtendsCommit(
+              refinement.decoded, lattice_committed_observation_id_)) {
+        decoded = std::move(refinement.decoded);
+        // This local value labels the selected lattice alternatives below. It
+        // does not replace the decoder's live WPM or the completed sender's
+        // independently measured cadence.
+        candidate_wpm = refinement.selected_wpm;
+      }
+    }
+  }
   if (mode == CwLatticeDecodeMode::Flush &&
       decoded.alternatives.size() > 1U) {
     std::vector<CwContextAlternative> contextual;
@@ -1516,6 +1559,10 @@ void CwMultiSpeedDecoder::refreshLattice(const CwLatticeDecodeMode mode) {
     if (selected.index < decoded.alternatives.size())
       contextual_lattice_text_ = reconstructCwWordGaps(
           decoded.alternatives[selected.index].text());
+  }
+  if (mode == CwLatticeDecodeMode::Flush && !decoded.alternatives.empty()) {
+    pending_turn_timing_fingerprint_ = makeCwTurnTimingFingerprint(
+        decoded, 1'200.0 / candidate_wpm);
   }
   acoustic_alternatives_.clear();
   if (decoded.alternatives.empty()) return;

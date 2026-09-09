@@ -640,6 +640,19 @@ than wall-clock guesses. The first integration does not yet provide seeking or
 looping. Frequency labels cover 0 Hz through half the WAV sample rate because
 ordinary WAV replay is treated as real-valued audio, not complex I/Q.
 
+When a transmission ends, the decoder may compare the completed mark/gap
+sequence against the other timing speeds it was already tracking. It adopts an
+alternative only when the acoustic fit improves clearly, extends already
+committed text cleanly, and no near-tied physical interpretation disagrees.
+This can correct a bad early speed lock, but it does not rewrite text while the
+station is still sending and it does not use a callsign database or conversation
+guess to manufacture characters.
+
+Debug captures record a `timingFingerprint` for each completed turn when its
+retained mark/gap sequence is complete and contiguous. It summarizes physical
+timing only; a missing value is reported as unavailable, and a present value
+does not identify an operator or confirm a callsign.
+
 Open **Settings → Display** to select the redraw target, waterfall row rate,
 automatic or manual dBFS range, DSP averaging from 1 to 32 frames, and the
 profile-persisted spectrum view. Switching views while live or replaying does

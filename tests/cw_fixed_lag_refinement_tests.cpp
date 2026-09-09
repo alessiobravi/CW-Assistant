@@ -152,12 +152,31 @@ void testSuspensionDefersButBoundaryFinalizes() {
          "fixed-lag refinement remains inside the decoder state budget");
 }
 
+void testCompletedTurnOwnsAlignedPhysicalTiming() {
+  DecoderFixture fixture;
+  static_cast<void>(fixture.advance(100, 0.0F));
+  for (int character = 0; character < 5; ++character)
+    static_cast<void>(fixture.sendE());
+  const auto completed = fixture.decoder.flush(fixture.now_ns + 1'000'000U);
+  expect(completed.transmissions.size() == 1U,
+         "test signal produces one completed turn");
+  const auto& fingerprint = completed.transmissions.front().timing_fingerprint;
+  expect(fingerprint.has_value() && fingerprint->mark_count >= 3U &&
+             fingerprint->gap_count >= 2U &&
+             fingerprint->evidence_ended_ns >
+                 fingerprint->evidence_started_ns,
+         "completed turn carries only its timestamp-aligned physical timing");
+  expect(completed.transmissions.front().sender_callsign.empty(),
+         "timing evidence does not manufacture sender attribution");
+}
+
 }  // namespace
 
 int main() {
   testCommitLimitUsesTimeAndLaterRuns();
   testLaterSpacingResolvesRecentWordGap();
   testSuspensionDefersButBoundaryFinalizes();
+  testCompletedTurnOwnsAlignedPhysicalTiming();
   std::cout << "cw_fixed_lag_refinement_tests: PASS\n";
   return EXIT_SUCCESS;
 }

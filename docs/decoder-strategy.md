@@ -327,6 +327,17 @@ is about 192 kB per track before metadata; its total size and track count remain
 hard-limited. Refinement work runs only inside a configured CPU budget and is
 discardable before live capture is allowed to overrun.
 
+The first segment-pass slice is implemented. At a completed transmission only,
+the retained bounded physical mark/gap lattice is decoded at up to nine
+distinct WPM values already maintained by the live hypotheses. A pass can
+replace the live baseline only when it covers the same observations, preserves
+confidence and symbol-count bounds, materially lowers normalized acoustic cost,
+cleanly extends the committed observation boundary, and has no contradictory
+near-tied physical explanation. Otherwise it abstains. Live and provisional
+text are untouched. Alternative filter-width passes remain pending because the
+receiver does not yet retain replayable per-width features; retrying a cleared
+filter envelope would not be a valid acoustic comparison.
+
 ## Same-frequency pileup separation
 
 Several callers may occupy the same displayed frequency at a runner station.
@@ -339,6 +350,15 @@ malformed keyer. The separator first maintains soft identity fingerprints from:
 - rise/fall shape, key-click signature, element weighting, and timing jitter;
 - slowly varying amplitude, QSB trajectory, and receiver-path observations;
 - decoded-prefix compatibility only as a separately weighted contextual clue.
+
+The first diagnostic foundation retains an exact physical-run timing
+fingerprint with each completed turn when the event lattice has a contiguous,
+untruncated sequence. It measures dit/dah and gap counts/medians, weighting,
+normalized mark residual, evidence interval, and confidence. Replay and debug
+capture expose the record—or explicitly mark it unavailable—but it deliberately
+contains no callsign, carrier identity, or inferred sender. Carrier/phase
+features still require a separately timestamp-aligned source before the
+fingerprint can participate in operator association.
 
 A bounded factorial semi-Markov model jointly estimates the key-up/key-down and
 timing state of two callers first, expanding to three only when evidence and CPU
@@ -529,6 +549,13 @@ latency 7.13 seconds, and zero hard-negative publications. These deliberately
 weak accuracy figures are a regression ceiling, not a receiver-quality claim.
 The checksum-bound annotation replay described in `test-data.md` is the path to
 replacing generated limits with reviewed over-the-air evidence.
+
+Receiver reports distinguish two callsign questions: whether the application
+actually published a call by the end of the annotated event, and whether a call
+could be extracted from that event's transcript. Publication and callsign
+episodes retain later withdrawals. False-publication rates use only explicitly
+reviewed coverage; uncertain events protect a matched signal from false-positive
+accounting but do not contribute accuracy scores.
 
 The timing hypotheses retain one update each. Scalar evidence remains current
 at the 500 Hz decoder cadence, while strings and character vectors refresh only

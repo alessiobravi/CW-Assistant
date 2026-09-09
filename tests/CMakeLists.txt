@@ -47,6 +47,14 @@ target_compile_definitions(cwa_decoder_display_separation_test PRIVATE
 add_test(NAME cwa_decoder_display_separation_test
   COMMAND cwa_decoder_display_separation_test)
 
+add_executable(cwa_turn_timing_diagnostics_contract_test
+  desktop/turn_timing_diagnostics_contract_test.cpp)
+target_compile_definitions(cwa_turn_timing_diagnostics_contract_test PRIVATE
+  CWA_LIVE_AUDIO_WORKER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/live_audio_worker.cpp"
+  CWA_CAPTURE_REPLAY_PATH="${PROJECT_SOURCE_DIR}/tests/cw_capture_replay.cpp")
+add_test(NAME cwa_turn_timing_diagnostics_contract_test
+  COMMAND cwa_turn_timing_diagnostics_contract_test)
+
 add_executable(cwa_decoder_surface_benchmark cw_decoder_surface_benchmark.cpp)
 target_link_libraries(cwa_decoder_surface_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_decoder_surface_benchmark
@@ -107,6 +115,18 @@ add_executable(cwa_fixed_lag_refinement_tests
 target_link_libraries(cwa_fixed_lag_refinement_tests PRIVATE cwa_core)
 add_test(NAME cwa_fixed_lag_refinement_tests
   COMMAND cwa_fixed_lag_refinement_tests)
+
+add_executable(cwa_acoustic_refinement_tests
+  cw_acoustic_refinement_tests.cpp)
+target_link_libraries(cwa_acoustic_refinement_tests PRIVATE cwa_core)
+add_test(NAME cwa_acoustic_refinement_tests
+  COMMAND cwa_acoustic_refinement_tests)
+
+add_executable(cwa_turn_timing_fingerprint_tests
+  cw_turn_timing_fingerprint_tests.cpp)
+target_link_libraries(cwa_turn_timing_fingerprint_tests PRIVATE cwa_core)
+add_test(NAME cwa_turn_timing_fingerprint_tests
+  COMMAND cwa_turn_timing_fingerprint_tests)
 
 add_executable(cwa_decoder_evaluation_metrics_tests
   decoder_evaluation_metrics_tests.cpp)
