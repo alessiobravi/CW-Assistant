@@ -242,7 +242,7 @@ ApplicationWindow {
                 }
                 ToolButton {
                     objectName: "monitorReceiverButton"
-                    text: "ALL RX"
+                    text: "RX"
                     checkable: true
                     checked: replayController.monitorMode === 1
                     enabled: replayController.activeSource
@@ -252,18 +252,6 @@ ApplicationWindow {
                     ToolTip.text: replayController.sourceMode === 2
                         ? "Raw wideband IQ is not loudspeaker audio; use a decoder-card speaker to monitor filtered streams"
                         : "Play the complete receiver passband without a stream filter"
-                }
-                ToolButton {
-                    objectName: "monitorSignalButton"
-                    text: "STREAM"
-                    checkable: true
-                    checked: replayController.monitorMode === 2
-                    enabled: replayController.activeSource
-                    onClicked: replayController.setMonitorMode(2)
-                    ToolTip.visible: hovered
-                    ToolTip.text: replayController.monitoredChannelIds.length === 0
-                        ? "Use the speaker on one or more decoder cards to monitor those streams"
-                        : replayController.monitorStatus
                 }
                 Slider {
                     objectName: "monitorLevelSlider"

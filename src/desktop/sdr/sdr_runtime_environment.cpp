@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QSettings>
 
 namespace cwassistant::desktop {
 namespace {
@@ -16,6 +17,36 @@ void append_existing_unique(QStringList& paths, const QString& candidate) {
     paths.append(absolute);
   }
 }
+
+#ifdef Q_OS_WIN
+QStringList installed_sdrplay_runtime_paths() {
+  QStringList paths;
+  for (const QString& registry_key : {
+           QStringLiteral("HKEY_LOCAL_MACHINE\\SOFTWARE\\SDRplay\\Service\\API"),
+           QStringLiteral("HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\SDRplay\\Service\\API")}) {
+    const QSettings registry(registry_key, QSettings::NativeFormat);
+    const QString install_directory =
+        registry.value(QStringLiteral("Install_Dir")).toString().trimmed();
+    if (!install_directory.isEmpty()) {
+      append_existing_unique(paths,
+                             QDir(install_directory).filePath("x64"));
+    }
+  }
+  return paths;
+}
+
+void prepend_to_path(const QStringList& candidates) {
+  QStringList paths = candidates;
+  const QString existing = QString::fromLocal8Bit(qgetenv("PATH"));
+  for (const QString& path :
+       existing.split(QDir::listSeparator(), Qt::SkipEmptyParts)) {
+    if (!paths.contains(path, Qt::CaseInsensitive)) paths.append(path);
+  }
+  if (!paths.isEmpty()) {
+    qputenv("PATH", paths.join(QDir::listSeparator()).toLocal8Bit());
+  }
+}
+#endif
 
 }  // namespace
 
@@ -40,6 +71,12 @@ QStringList bundledSoapyModulePaths(const QString& executable_directory) {
 }
 
 void configureBundledSoapyRuntime(const QString& executable_directory) {
+#ifdef Q_OS_WIN
+  // SoapySDRPlay3 stays redistributable while SDRplay's proprietary API stays
+  // operator-installed. Make the registered 64-bit API runtime visible to the
+  // Windows loader before Soapy attempts to load sdrPlaySupport.dll.
+  prepend_to_path(installed_sdrplay_runtime_paths());
+#endif
   QStringList paths = bundledSoapyModulePaths(executable_directory);
   const QString existing = QString::fromLocal8Bit(qgetenv("SOAPY_SDR_PLUGIN_PATH"));
   for (const QString& path :

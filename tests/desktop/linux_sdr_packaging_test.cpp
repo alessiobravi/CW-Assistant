@@ -21,8 +21,11 @@ bool contains(const std::string_view source, const std::string_view text) {
 int main() {
   const std::string workflow = readFile(CWA_DESKTOP_WORKFLOW_PATH);
   const std::string root_cmake = readFile(CWA_ROOT_CMAKE_PATH);
+  const std::string desktop_cmake = readFile(CWA_DESKTOP_CMAKE_PATH);
+  const std::string windows_verifier = readFile(CWA_WINDOWS_SDR_VERIFIER_PATH);
   const std::string launcher = readFile(CWA_LINUX_SDR_LAUNCHER_PATH);
-  if (workflow.empty() || root_cmake.empty() || launcher.empty()) return 1;
+  if (workflow.empty() || root_cmake.empty() || desktop_cmake.empty() ||
+      windows_verifier.empty() || launcher.empty()) return 1;
 
   // Official Linux builds must compile the real backend and install an RTL-SDR
   // module instead of silently publishing the unavailable stub.
@@ -66,6 +69,23 @@ int main() {
       contains(launcher, "SOAPY_SDR_ROOT") ||
       contains(launcher, "eval ")) {
     return 5;
+  }
+
+  // Windows carries the redistributable bridge but never the proprietary API.
+  // The checksum-pinned vendor installer is only an ephemeral build input.
+  for (const std::string_view required : {
+           "CWA_SOAPYSDRPLAY3_COMMIT",
+           "CWA_SDRPLAY_API_WINDOWS_SHA256",
+           "https://sdrplay.com/download/hardware-api-windows/?wpdmdl=1905",
+           "sdrPlaySupport.dll", "soapysdrplay3/LICENSE.txt"}) {
+    if (!contains(workflow, required)) return 6;
+  }
+  if (!contains(desktop_cmake, "sdrPlaySupport.dll") ||
+      !contains(windows_verifier, "sdrPlaySupport.dll") ||
+      contains(desktop_cmake, "sdrplay_api.dll") ||
+      !contains(windows_verifier,
+                "The installer must not redistribute sdrplay_api.dll")) {
+    return 7;
   }
 
   return 0;

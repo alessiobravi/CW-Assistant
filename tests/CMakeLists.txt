@@ -60,6 +60,8 @@ add_executable(cwa_linux_sdr_packaging_test
 target_compile_definitions(cwa_linux_sdr_packaging_test PRIVATE
   CWA_DESKTOP_WORKFLOW_PATH="${PROJECT_SOURCE_DIR}/.github/workflows/desktop-ci.yml"
   CWA_ROOT_CMAKE_PATH="${PROJECT_SOURCE_DIR}/CMakeLists.txt"
+  CWA_DESKTOP_CMAKE_PATH="${PROJECT_SOURCE_DIR}/src/desktop/CMakeLists.txt"
+  CWA_WINDOWS_SDR_VERIFIER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/packaging/windows/VerifyWindowsInstaller.ps1"
   CWA_LINUX_SDR_LAUNCHER_PATH="${PROJECT_SOURCE_DIR}/src/desktop/packaging/linux/cw-buddy-portable-launcher.sh")
 add_test(NAME cwa_linux_sdr_packaging_test
   COMMAND cwa_linux_sdr_packaging_test)

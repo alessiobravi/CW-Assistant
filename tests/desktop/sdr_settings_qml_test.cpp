@@ -64,8 +64,17 @@ int main() {
       !contains(header, "Q_INVOKABLE void selectSdrDevice(int index)")) {
     return 5;
   }
-  if (contains(implementation, "  refreshSdrDevices();") ||
-      !contains(header, "Press Refresh devices")) {
+  // Opening the SDR page requests discovery once, after the page can render.
+  // Application/profile construction must still never probe hardware.
+  if (!contains(qml, "property bool sdrDiscoveryRequested: false") ||
+      !contains(qml, "function requestInitialSdrDiscovery()") ||
+      !contains(qml, "if (currentIndex === 1)") ||
+      !contains(qml,
+                "Qt.callLater(function() { appSettings.refreshSdrDevices() })") ||
+      contains(implementation, "  refreshSdrDevices();") ||
+      !contains(implementation, "canonicalFilePath()") ||
+      !contains(implementation, "Qt::CaseInsensitive") ||
+      !contains(header, "Open the SDR settings page or press Refresh devices")) {
     return 9;
   }
 

@@ -379,6 +379,8 @@ int main() {
       !contains(qml, "objectName: \"decoderSessionMonitorButton\"") ||
       !contains(qml, "replayController.toggleMonitorChannel(") ||
       !contains(qml, "replayController.monitoredChannelIds.indexOf(") ||
+      contains(qml, "objectName: \"monitorSignalButton\"") ||
+      contains(qml, "text: \"STREAM\"") ||
       !contains(qml, "objectName: \"closeDecoderSessionButton\"") ||
       !contains(qml, "onPressed: replayController.closeDecoderSession(")) {
     return 8;

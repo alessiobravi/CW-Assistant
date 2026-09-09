@@ -67,6 +67,10 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
       for (const auto& module : report.modules) {
         for (const auto& [driver, load_error] :
              SoapySDR::getLoaderResult(module)) {
+          if (!load_error.empty()) {
+            report.module_load_errors.push_back(driver + ": " + load_error);
+            continue;
+          }
           if (load_error.empty() &&
               std::find(report.loaded_drivers.begin(),
                         report.loaded_drivers.end(), driver) ==
@@ -101,6 +105,10 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
             "already owns the device.";
       } else {
         report.diagnostic = "SoapySDR receiver discovery completed.";
+      }
+      if (!report.module_load_errors.empty()) {
+        report.diagnostic += " Module load failure: " +
+                             report.module_load_errors.front();
       }
     } catch (const std::exception& exception) {
       report.diagnostic = std::string("SoapySDR discovery failed: ") +

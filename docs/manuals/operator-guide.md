@@ -86,9 +86,9 @@ throughout the receiver, settings, setup, and profile views explain their
 effect and any disabled state when hovered.
 
 To listen through CW Buddy, choose a **Monitor output** under **Settings →
-Audio**, then use the receiver toolbar's **OFF / ALL RX / STREAM** controls.
-**ALL RX** passes the complete receiver window without filtering. **STREAM**
-stays silent until the operator presses the speaker button in a decoder card.
+Audio**, then use the receiver toolbar's **OFF / RX** control. **RX** passes
+the complete receiver window without filtering. Per-stream monitoring is
+controlled only by the speaker button in each decoder card.
 Each enabled card passes through its own carrier-following narrow filter and is
 moved to the configured CW reference tone. Enable several card speakers to mix
 several isolated streams; disable the last speaker to return monitoring to
@@ -122,12 +122,20 @@ device.
 1. For RTL-SDR, install the current official CW Buddy package. Windows, macOS,
    and the portable Linux archive carry their SDR runtime; the Linux `.deb`
    instead makes APT install the distribution's RTL-SDR Soapy module and its
-   dependencies. SDRplay requires its compatible vendor API/service and
-   SoapySDRPlay3 module to be installed separately. A custom source build must
-   be configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
-2. Open **Settings → SDR**, select **Refresh devices** to start hardware
-   discovery, then choose the receiver. Startup deliberately does not probe SDR
-   hardware.
+   dependencies. On Windows, CW Buddy provides the SoapySDRPlay3 bridge but
+   requires the separately installed [SDRplay Hardware API 3.15](https://www.sdrplay.com/hardware-api/)
+   and service; the
+   API installed for a current SDRUno installation satisfies that prerequisite.
+   Close SDRUno before discovery because only one application can own an RSP.
+   macOS and Linux additionally require a compatible SoapySDRPlay3 module. A
+   custom source build must be configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
+   On Windows, **Installed modules** should include `sdrPlaySupport.dll` after
+   opening Settings → SDR. If it is listed but fails to load, reinstall API
+   3.15; if it loads but the RSP is absent, close SDRUno/SDRconnect and refresh.
+2. Open **Settings → SDR**. The page performs one discovery scan after it
+   renders; choose the receiver when it appears. Application startup deliberately
+   does not probe SDR hardware. Select **Refresh devices** after reconnecting or
+   hot-plugging a receiver.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
    found.
@@ -139,7 +147,7 @@ device.
    spectrum and waterfall use absolute RF coordinates across the captured IQ
    passband and all qualifying CW carriers enter the same independent decoder
    bank used by audio reception.
-5. **ALL RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
+5. Global **RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
    are not loudspeaker audio. Open a decoder card and enable its speaker to hear
    that carrier through the narrow, carrier-following CW filter. Several card
    speakers may still be mixed.

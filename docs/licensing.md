@@ -23,6 +23,7 @@ not bundle, download, or redistribute a model or model metadata.
 
 Hosted desktop distributions provide the receive-only SoapySDR runtime under
 the Boost Software License 1.0, the SoapyRTLSDR module under the MIT license,
+and, on Windows, the SoapySDRPlay3 bridge under the MIT license,
 and the redistributable librtlsdr/libusb runtime closure under their applicable
 licenses. The Linux portable closure also includes libudev and libcap with the
 distribution copyright records for both. Portable packages bundle those
@@ -31,9 +32,10 @@ the Linux `.deb` declares the distribution module dependency, whose package
 manager supplies its runtime and notices. Package construction records exact
 versions or pinned source commits where components are bundled. SDRplay's API,
 service, and device driver remain external vendor prerequisites: CW Buddy
-neither downloads nor redistributes them. A compatible externally installed
-SoapySDRPlay3 module may be discovered without displacing the bundled RTL-SDR
-module path.
+never redistributes them. The Windows CI builder downloads a checksum-pinned
+official API installer only as an ephemeral link-time dependency; it is absent
+from the release payload. A compatible externally installed SoapySDRPlay3
+module may still be discovered without displacing bundled module paths.
 
 The optional managed callsign cache downloads `MASTER.SCP` at runtime directly
 from the [Super Check Partial Database](https://www.supercheckpartial.com/),

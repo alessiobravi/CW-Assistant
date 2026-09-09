@@ -81,10 +81,15 @@ jobs:
       CWA_ONNXRUNTIME_SOURCE: ${{ github.workspace }}/.dependencies/onnxruntime-source
       CWA_SOAPYSDR_COMMIT: 1cf5a539a21414ff509ff7d0eedfc5fa8edb90c6
       CWA_SOAPYRTLSDR_COMMIT: 80c93fbe189def3ab68d47a6ad3f813f96d3cb99
+      CWA_SOAPYSDRPLAY3_COMMIT: 6cc31316b730503cee3e30906ff1975175a16400
+      CWA_SDRPLAY_API_VERSION: 3.15
+      CWA_SDRPLAY_API_WINDOWS_SHA256: 8ad5c36f1ca26cf7a61010c3f3c80dae69d4468ef5e59f7a0d42fb135a1c7326
+      CWA_SDRPLAY_API_WINDOWS_URL: https://sdrplay.com/download/hardware-api-windows/?wpdmdl=1905
       CWA_VCPKG_COMMIT: f781d9387e4684783e69e136e2e124ff4660bffc
       CWA_SOAPYSDR_ROOT: ${{ github.workspace }}/.dependencies/soapysdr-root
       CWA_SOAPYSDR_SOURCE: ${{ github.workspace }}/.dependencies/soapysdr-source
       CWA_SOAPYRTLSDR_SOURCE: ${{ github.workspace }}/.dependencies/soapyrtlsdr-source
+      CWA_SOAPYSDRPLAY3_SOURCE: ${{ github.workspace }}/.dependencies/soapysdrplay3-source
       CWA_VCPKG_SOURCE: ${{ github.workspace }}/.dependencies/vcpkg-source
       CWA_VCPKG_INSTALLED: ${{ github.workspace }}/.dependencies/vcpkg-installed
     steps:
@@ -96,7 +101,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ env.CWA_SOAPYSDR_ROOT }}
-          key: cwa-windows-sdr-${{ env.CWA_SOAPYSDR_COMMIT }}-${{ env.CWA_SOAPYRTLSDR_COMMIT }}-${{ env.CWA_VCPKG_COMMIT }}-x64-v1
+          key: cwa-windows-sdr-${{ env.CWA_SOAPYSDR_COMMIT }}-${{ env.CWA_SOAPYRTLSDR_COMMIT }}-${{ env.CWA_SOAPYSDRPLAY3_COMMIT }}-${{ env.CWA_SDRPLAY_API_VERSION }}-${{ env.CWA_VCPKG_COMMIT }}-x64-v2
       - name: Check out pinned SoapySDR source
         if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
         uses: actions/checkout@v7
@@ -112,6 +117,14 @@ jobs:
           repository: pothosware/SoapyRTLSDR
           ref: ${{ env.CWA_SOAPYRTLSDR_COMMIT }}
           path: .dependencies/soapyrtlsdr-source
+          fetch-depth: 1
+      - name: Check out pinned SoapySDRPlay3 source
+        if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: pothosware/SoapySDRPlay3
+          ref: ${{ env.CWA_SOAPYSDRPLAY3_COMMIT }}
+          path: .dependencies/soapysdrplay3-source
           fetch-depth: 1
       - name: Check out pinned vcpkg registry
         if: runner.os == 'Windows' && steps.cache_windows_sdr.outputs.cache-hit != 'true'
@@ -145,6 +158,9 @@ jobs:
           if ((git -C $env:CWA_SOAPYRTLSDR_SOURCE rev-parse HEAD) -ne $env:CWA_SOAPYRTLSDR_COMMIT) {
             throw 'The SoapyRTLSDR source pin did not match.'
           }
+          if ((git -C $env:CWA_SOAPYSDRPLAY3_SOURCE rev-parse HEAD) -ne $env:CWA_SOAPYSDRPLAY3_COMMIT) {
+            throw 'The SoapySDRPlay3 source pin did not match.'
+          }
           if ((git -C $env:CWA_VCPKG_SOURCE rev-parse HEAD) -ne $env:CWA_VCPKG_COMMIT) {
             throw 'The vcpkg registry pin did not match.'
           }
@@ -173,10 +189,38 @@ jobs:
           Invoke-Checked 'cmake' '--build' '.dependencies/soapyrtlsdr-build' `
             '--config' 'Release' '--target' 'install' '--parallel' '2'
 
+          # Build only the MIT-licensed Soapy bridge. The proprietary SDRplay
+          # API/service is an ephemeral build dependency and is not copied into
+          # or redistributed with CW Buddy.
+          $sdrplayInstaller = Join-Path $env:RUNNER_TEMP 'SDRplay_API-Windows.exe'
+          Invoke-WebRequest -Uri $env:CWA_SDRPLAY_API_WINDOWS_URL `
+            -OutFile $sdrplayInstaller
+          $sdrplayHash = (Get-FileHash -LiteralPath $sdrplayInstaller `
+            -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($sdrplayHash -ne $env:CWA_SDRPLAY_API_WINDOWS_SHA256) {
+            throw "The SDRplay API installer checksum did not match: $sdrplayHash"
+          }
+          $sdrplayInstall = Start-Process -FilePath $sdrplayInstaller -Wait `
+            -PassThru -ArgumentList @(
+              '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-'
+            )
+          if ($sdrplayInstall.ExitCode -ne 0) {
+            throw "The SDRplay API installer failed with exit code $($sdrplayInstall.ExitCode)."
+          }
+          Invoke-Checked 'cmake' '-S' $env:CWA_SOAPYSDRPLAY3_SOURCE `
+            '-B' '.dependencies/soapysdrplay3-build' '-A' 'x64' `
+            "-DSoapySDR_DIR=$env:CWA_SOAPYSDR_ROOT/cmake" `
+            '-DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE' `
+            '-DCMAKE_POLICY_VERSION_MINIMUM=3.5' `
+            "-DCMAKE_INSTALL_PREFIX=$env:CWA_SOAPYSDR_ROOT"
+          Invoke-Checked 'cmake' '--build' '.dependencies/soapysdrplay3-build' `
+            '--config' 'Release' '--target' 'install' '--parallel' '2'
+
           Copy-Item "$tripletRoot/bin/*.dll" "$env:CWA_SOAPYSDR_ROOT/bin/"
           foreach ($license in @(
             @('soapysdr', "$env:CWA_SOAPYSDR_SOURCE/LICENSE_1_0.txt", 'LICENSE_1_0.txt'),
             @('soapyrtlsdr', "$env:CWA_SOAPYRTLSDR_SOURCE/LICENSE.txt", 'LICENSE.txt'),
+            @('soapysdrplay3', "$env:CWA_SOAPYSDRPLAY3_SOURCE/LICENSE.txt", 'LICENSE.txt'),
             @('rtlsdr', "$tripletRoot/share/rtlsdr/copyright", 'copyright'),
             @('libusb', "$tripletRoot/share/libusb/copyright", 'copyright'),
             @('pthreads', "$tripletRoot/share/pthreads/copyright", 'copyright')
@@ -188,6 +232,9 @@ jobs:
           @(
             "soapysdr_commit=$env:CWA_SOAPYSDR_COMMIT"
             "soapyrtlsdr_commit=$env:CWA_SOAPYRTLSDR_COMMIT"
+            "soapysdrplay3_commit=$env:CWA_SOAPYSDRPLAY3_COMMIT"
+            "sdrplay_api_version=$env:CWA_SDRPLAY_API_VERSION"
+            "sdrplay_api_windows_sha256=$env:CWA_SDRPLAY_API_WINDOWS_SHA256"
             "vcpkg_commit=$env:CWA_VCPKG_COMMIT"
             'architecture=x64'
             'direction=RX-only'
@@ -205,8 +252,10 @@ jobs:
             'bin/pthreadVC3.dll',
             'cmake/SoapySDRConfig.cmake',
             'lib/SoapySDR/modules0.8/rtlsdrSupport.dll',
+            'lib/SoapySDR/modules0.8/sdrPlaySupport.dll',
             'share/licenses/soapysdr/LICENSE_1_0.txt',
             'share/licenses/soapyrtlsdr/LICENSE.txt',
+            'share/licenses/soapysdrplay3/LICENSE.txt',
             'share/licenses/rtlsdr/copyright',
             'share/licenses/libusb/copyright',
             'share/licenses/pthreads/copyright',
@@ -220,6 +269,9 @@ jobs:
           foreach ($line in @(
             "soapysdr_commit=$env:CWA_SOAPYSDR_COMMIT",
             "soapyrtlsdr_commit=$env:CWA_SOAPYRTLSDR_COMMIT",
+            "soapysdrplay3_commit=$env:CWA_SOAPYSDRPLAY3_COMMIT",
+            "sdrplay_api_version=$env:CWA_SDRPLAY_API_VERSION",
+            "sdrplay_api_windows_sha256=$env:CWA_SDRPLAY_API_WINDOWS_SHA256",
             "vcpkg_commit=$env:CWA_VCPKG_COMMIT",
             'architecture=x64',
             'direction=RX-only'
@@ -608,12 +660,19 @@ jobs:
               test -f stage/bin/libusb-1.0.dll
               test -f stage/bin/pthreadVC3.dll
               test -f stage/lib/SoapySDR/modules0.8/rtlsdrSupport.dll
+              test -f stage/lib/SoapySDR/modules0.8/sdrPlaySupport.dll
               test -f stage/share/doc/cw-buddy/third-party/sdr/BUILD_PROVENANCE
               test -f stage/share/doc/cw-buddy/third-party/sdr/soapysdr/LICENSE_1_0.txt
               test -f stage/share/doc/cw-buddy/third-party/sdr/soapyrtlsdr/LICENSE.txt
+              test -f stage/share/doc/cw-buddy/third-party/sdr/soapysdrplay3/LICENSE.txt
               test -f stage/share/doc/cw-buddy/third-party/sdr/rtlsdr/copyright
               test -f stage/share/doc/cw-buddy/third-party/sdr/libusb/copyright
               test -f stage/share/doc/cw-buddy/third-party/sdr/pthreads/copyright
+              if find stage -type f -iname 'sdrplay_api.dll' -print -quit \
+                  | grep -q .; then
+                echo 'The proprietary SDRplay API must not enter the package.' >&2
+                exit 1
+              fi
               executable_version="$(powershell.exe -NoProfile -Command \
                 "(Get-Item 'stage/bin/cw-buddy-desktop.exe').VersionInfo.ProductVersion" \
                 | tr -d '\r\n')"

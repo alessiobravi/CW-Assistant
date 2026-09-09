@@ -26,6 +26,7 @@ struct SdrDiscoveryReport {
   // Factory names whose modules loaded and registered without an error.
   // This distinguishes a module file being present from a usable driver.
   std::vector<std::string> loaded_drivers;
+  std::vector<std::string> module_load_errors;
   std::vector<SdrDeviceDescriptor> devices;
   std::string diagnostic;
 };

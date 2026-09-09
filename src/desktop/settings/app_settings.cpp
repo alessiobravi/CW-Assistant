@@ -4,6 +4,7 @@
 #include <QSerialPortInfo>
 #include <QAudioDevice>
 #include <QDateTime>
+#include <QDir>
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QRegularExpression>
@@ -1678,8 +1679,15 @@ void AppSettings::refreshSdrDevices() {
   sdr_backend_version_ = QString::fromStdString(report.backend_version);
   sdr_module_names_.clear();
   for (const auto& module : report.modules) {
-    const QString name = QString::fromStdString(module).trimmed();
-    if (!name.isEmpty() && !sdr_module_names_.contains(name))
+    QString name = QDir::cleanPath(QString::fromStdString(module).trimmed());
+    const QString canonical_name = QFileInfo(name).canonicalFilePath();
+    if (!canonical_name.isEmpty()) name = canonical_name;
+    const bool already_listed = std::any_of(
+        sdr_module_names_.cbegin(), sdr_module_names_.cend(),
+        [&name](const QString& existing) {
+          return existing.compare(name, Qt::CaseInsensitive) == 0;
+        });
+    if (!name.isEmpty() && !already_listed)
       sdr_module_names_.push_back(name);
   }
   sdr_module_names_.sort(Qt::CaseInsensitive);

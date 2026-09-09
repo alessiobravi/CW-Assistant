@@ -114,6 +114,7 @@ try {
         'libusb-1.0.dll',
         'pthreadVC3.dll',
         'rtlsdrSupport.dll',
+        'sdrPlaySupport.dll',
         'LICENSE_1_0.txt',
         'LICENSE.txt',
         'BUILD_PROVENANCE'
@@ -121,6 +122,9 @@ try {
         if ($packagedFiles -notcontains $requiredSdrFile) {
             throw "The installer is missing the SDR runtime file $requiredSdrFile"
         }
+    }
+    if ($packagedFiles -contains 'sdrplay_api.dll') {
+        throw 'The installer must not redistribute sdrplay_api.dll'
     }
 
     $launchText = Read-Record $database @'

@@ -477,7 +477,7 @@ class AppSettings final : public QObject {
   QString sdr_device_id_;
   QString sdr_device_name_;
   QString sdr_diagnostic_{QStringLiteral(
-      "SDR discovery has not run. Press Refresh devices; live audio remains available.")};
+      "SDR discovery has not run. Open the SDR settings page or press Refresh devices; live audio remains available.")};
   qulonglong sdr_center_frequency_hz_{14'050'000ULL};
   int sdr_sample_rate_hz_{250'000};
   bool sdr_automatic_gain_{true};

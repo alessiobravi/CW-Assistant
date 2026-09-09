@@ -7,6 +7,17 @@ Pane {
     id: root
     signal done()
     signal setupRequested()
+    property bool sdrDiscoveryRequested: false
+
+    function requestInitialSdrDiscovery() {
+        if (sdrDiscoveryRequested)
+            return
+        sdrDiscoveryRequested = true
+        // Let the SDR page render before a vendor module probes USB. Discovery
+        // remains receive-only and does not open or start any returned device.
+        Qt.callLater(function() { appSettings.refreshSdrDevices() })
+    }
+
     padding: 0
     background: Rectangle { color: "#151b23" }
 
@@ -30,6 +41,10 @@ Pane {
         TabBar {
             id: tabs
             Layout.fillWidth: true
+            onCurrentIndexChanged: {
+                if (currentIndex === 1)
+                    root.requestInitialSdrDiscovery()
+            }
             TabButton { text: "Audio" }
             TabButton { text: "SDR" }
             TabButton { text: "Decoder" }

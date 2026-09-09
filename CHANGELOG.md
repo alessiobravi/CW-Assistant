@@ -6,6 +6,18 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Opening Settings > SDR now performs one receive-only device discovery after
+  the page renders. Application and profile startup still never probe hardware,
+  and **Refresh devices** remains available for reconnect and hot-plug scans.
+  The module list canonicalizes and deduplicates paths reported more than once
+  by the runtime.
+
+- The receiver toolbar now exposes only **OFF / RX** for whole-window audio.
+  The redundant **STREAM** choice is removed; each decoder-card speaker is the
+  sole control for enabling or disabling one or more filtered CW streams.
+
 ### Fixed
 
 - Packaged SDR module discovery now resolves application-relative directories
@@ -88,6 +100,13 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
+- Official Windows packages now carry the MIT-licensed SoapySDRPlay3 bridge
+  for direct SDRplay RSP discovery. SDRplay Hardware API 3.15 and its service
+  remain operator-installed proprietary prerequisites and are never included
+  in CW Buddy. The Windows loader locates that registered 64-bit API runtime,
+  while discovery reports a module dependency failure instead of silently
+  hiding it.
+
 - Official Windows, macOS, and Linux builds now enable the receive-only
   SoapySDR backend. Windows and macOS packages bundle SoapySDR, SoapyRTLSDR,
   librtlsdr, libusb, required runtime libraries, licenses, and exact build
@@ -96,7 +115,7 @@ All notable changes to CW Buddy are recorded here. The format follows
   packaged module and enumerates its factory without requiring attached
   hardware, rejects unresolved build-machine paths, and verifies installer
   contents. SDRplay's proprietary API remains an operator-installed vendor
-  prerequisite and is never downloaded or redistributed by CW Buddy.
+  prerequisite and is never included in or redistributed with CW Buddy.
 
 - An optional receive-only SoapySDR adapter now discovers installed modules
   and receivers, accepts direct complex-float IQ, reports device overflow,

@@ -36,8 +36,8 @@ guessed RF frequency.
   device.
 - **SoapySDR backend**, **Installed modules**, and **Discovery** distinguish an
   SDR-disabled build, a missing receiver module, no attached device, and a
-  successful scan. **Refresh devices** performs discovery without opening an
-  RX stream.
+  successful scan. Opening this page requests one deferred scan. **Refresh
+  devices** repeats discovery without opening an RX stream.
 - **Center frequency** is absolute RF in whole hertz, from 1 Hz through
   99 GHz subject to the selected hardware.
 - **IQ sample rate** requests 25 kS/s through 64 MS/s. The adapter selects the
@@ -51,13 +51,16 @@ guessed RF frequency.
   authoritative.
 
 Official packages compile direct SDR support on and provide the RTL-SDR module.
-SDRplay requires an independently installed compatible vendor API/service and
-SoapySDRPlay3 module. Custom builds use `CWA_ENABLE_SOAPY_SDR=ON` and matching
-development/runtime modules. When a backend or device dependency is absent,
-the controls fail closed and normal audio/WAV reception is unchanged. The SDR
-boundary is RX-only.
+Windows packages also provide the SoapySDRPlay3 bridge; the independently
+installed SDRplay Hardware API 3.15/service remains required. macOS and Linux
+require both that vendor API/service and a compatible external SoapySDRPlay3
+module. Custom builds use `CWA_ENABLE_SOAPY_SDR=ON` and matching development/
+runtime modules. When a backend or device dependency is absent, discovery
+reports the module load failure, the controls fail closed, and normal audio/WAV
+reception is unchanged. The SDR boundary is RX-only.
 CW Buddy does not probe SDR hardware during application or profile startup.
-Open Settings > SDR and press **Refresh devices** to perform discovery.
+Opening Settings > SDR requests one scan after the page renders; use **Refresh
+devices** to repeat it after a hot-plug or reconnect.
 
 The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under

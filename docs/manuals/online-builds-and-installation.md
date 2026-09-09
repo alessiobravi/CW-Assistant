@@ -245,11 +245,15 @@ Before package staging, the Windows UI smoke resolves its linked SDR DLLs from
 that same prepared root. The later staged smoke then proves the installer layout
 is self-contained rather than inheriting this build-only path.
 
-SDRplay is intentionally different: install a compatible SDRplay API/service
-and SoapySDRPlay3 module from their respective providers. CW Buddy neither
-downloads nor redistributes the proprietary vendor runtime. Its packaged RTL
-module path is added without hiding compatible modules in the normal system or
-operator-provided SoapySDR search paths.
+SDRplay is intentionally different: install [SDRplay Hardware API 3.15](https://www.sdrplay.com/hardware-api/)
+and its
+service from SDRplay. The Windows package carries the MIT-licensed
+SoapySDRPlay3 bridge and locates the registered 64-bit vendor runtime, but it
+does not contain SDRplay's proprietary API, service, or driver. macOS and Linux
+also require a compatible separately installed SoapySDRPlay3 module. Packaged
+module paths do not hide compatible modules in normal system or operator-
+provided SoapySDR search paths. Close SDRUno or any other RSP owner before CW
+Buddy discovery.
 
 Because the hosted package deploys its pinned Qt runtime, available Qt SDK
 license texts are installed under
