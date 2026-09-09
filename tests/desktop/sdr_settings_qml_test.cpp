@@ -64,6 +64,10 @@ int main() {
       !contains(header, "Q_INVOKABLE void selectSdrDevice(int index)")) {
     return 5;
   }
+  if (contains(implementation, "  refreshSdrDevices();") ||
+      !contains(header, "Press Refresh devices")) {
+    return 9;
+  }
 
   // The configured device reaches an explicit live receiver mode and worker;
   // it is not a settings-only mock. Source selection remains operator-driven.

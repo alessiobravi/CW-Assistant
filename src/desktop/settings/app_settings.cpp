@@ -280,7 +280,6 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
           &AppSettings::refreshAudioOutputs);
   refreshAudioInputs();
   refreshAudioOutputs();
-  refreshSdrDevices();
   cat4om_client_ = std::make_unique<Cat4OmClient>(this);
   connect(cat4om_client_.get(), &Cat4OmClient::statusChanged, this, [this] {
     setStatusMessage(cat4om_client_->statusText());
@@ -2307,7 +2306,6 @@ bool AppSettings::selectProfile(const QString& profile_name) {
   resetInMemorySettings();
   load();
   refreshAudioInputs();
-  refreshSdrDevices();
   profile_selection_required_ = false;
   emit profileChanged();
   emit setupCompleteChanged();

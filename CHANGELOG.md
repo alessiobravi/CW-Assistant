@@ -13,6 +13,10 @@ All notable changes to CW Buddy are recorded here. The format follows
   or launching the macOS bundle from Finder therefore does not hide its bundled
   RTL-SDR module or a separately installed vendor module.
 
+- Application and profile startup no longer block while SoapySDR probes USB
+  hardware. Direct receiver discovery starts only from the explicit **Refresh
+  devices** action in Settings > SDR; live audio remains immediately usable.
+
 - Portable Linux SDR packaging now follows Ubuntu 24.04's `librtlsdr.so.2`
   package ABI and carries libudev's libcap dependency. Windows pinned-runtime
   builds explicitly enable the supported legacy policy floor required by the

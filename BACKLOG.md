@@ -20,6 +20,8 @@ Configure-stage CMake failures are retained through the same bounded channel.
 The Windows build resolves and verifies the pinned package only from upstream's
 platform-specific `<runtime>/cmake` directory, keeping hosted builds independent
 of CMake's transient user registry.
+SDR hardware enumeration is operator-triggered rather than blocking application
+or profile startup; physical hot-plug and reconnect acceptance remains open.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

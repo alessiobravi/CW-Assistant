@@ -56,6 +56,8 @@ SoapySDRPlay3 module. Custom builds use `CWA_ENABLE_SOAPY_SDR=ON` and matching
 development/runtime modules. When a backend or device dependency is absent,
 the controls fail closed and normal audio/WAV reception is unchanged. The SDR
 boundary is RX-only.
+CW Buddy does not probe SDR hardware during application or profile startup.
+Open Settings > SDR and press **Refresh devices** to perform discovery.
 
 The status bar exposes bounded-queue input overruns. Advanced channel,
 sample-rate, buffer-size, calibration, and level-meter controls remain under

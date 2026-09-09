@@ -125,7 +125,9 @@ device.
    dependencies. SDRplay requires its compatible vendor API/service and
    SoapySDRPlay3 module to be installed separately. A custom source build must
    be configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
-2. Open **Settings → SDR**, select **Refresh devices**, then choose the receiver.
+2. Open **Settings → SDR**, select **Refresh devices** to start hardware
+   discovery, then choose the receiver. Startup deliberately does not probe SDR
+   hardware.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
    found.
