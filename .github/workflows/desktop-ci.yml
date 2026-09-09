@@ -233,9 +233,12 @@ jobs:
         if: runner.os == 'Linux'
         shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends \
-            libsoapysdr-dev soapysdr-module-rtlsdr
+          set -o pipefail
+          {
+            sudo apt-get -o Acquire::Retries=5 update
+            sudo apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
+              libsoapysdr-dev soapysdr-module-rtlsdr
+          } 2>&1 | tee linux-sdr-install.log
       - name: Restore pinned ONNX Runtime CPU build
         id: cache_onnxruntime
         uses: actions/cache@v5
@@ -933,6 +936,10 @@ jobs:
             if [[ -n "${linux_sdr_log}" ]]; then
               status_message="${status_message}"$'\n'"linux_sdr_log=${linux_sdr_log}"
             fi
+          fi
+          if [[ "${CWA_LINUX_SDR_INSTALL_RESULT}" == "failure" ]]; then
+            linux_sdr_install_log="$(tail -n 80 linux-sdr-install.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            status_message="${status_message}"$'\n'"linux_sdr_install_log=${linux_sdr_install_log:-unavailable}"
           fi
           if [[ "${CWA_WINDOWS_VERIFY_RESULT}" == "failure" ]]; then
             verify_log="$(tail -n 30 windows-installer-verification.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"

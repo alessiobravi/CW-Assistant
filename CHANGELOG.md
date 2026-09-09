@@ -31,6 +31,8 @@ All notable changes to CW Buddy are recorded here. The format follows
   Windows now resolves and verifies the pinned SoapySDR CMake package at its
   upstream platform-specific `<runtime>/cmake` location rather than relying on
   a transient registry.
+  Linux dependency installation now uses bounded APT download retries and
+  retains its install log when a repository or mirror fails transiently.
 
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby
