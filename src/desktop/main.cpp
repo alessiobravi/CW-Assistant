@@ -458,8 +458,8 @@ int main(int argc, char* argv[]) {
           QStringLiteral("liveNoiseSuppressionCheck"));
       auto* live_cw_guide_check = root_object->findChild<QQuickItem*>(
           QStringLiteral("liveCwGuideCheck"));
-      auto* cw_guide_boundaries = root_object->findChild<QQuickItem*>(
-          QStringLiteral("cwGuideBoundaryOverlay"));
+      auto* tx_slice_guide = root_object->findChild<QQuickItem*>(
+          QStringLiteral("txSliceGuideOverlay"));
       auto* decoder_channel_list = root_object->findChild<QQuickItem*>(
           QStringLiteral("decoderChannelList"));
       auto* live_controls = root_object->findChild<QQuickItem*>(
@@ -482,7 +482,7 @@ int main(int argc, char* argv[]) {
           dc_rejection_check == nullptr || automatic_gain_check == nullptr ||
           automatic_bandwidth_check == nullptr ||
           live_levels_check == nullptr || live_noise_check == nullptr ||
-          live_cw_guide_check == nullptr || cw_guide_boundaries == nullptr ||
+          live_cw_guide_check == nullptr || tx_slice_guide == nullptr ||
           decoder_channel_list == nullptr ||
           live_controls == nullptr || view_selector == nullptr ||
           pin_live_controls == nullptr ||

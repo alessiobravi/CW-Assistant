@@ -38,8 +38,10 @@ guessed RF frequency.
   SDR-disabled build, a missing receiver module, no attached device, and a
   successful scan. Opening this page requests one deferred scan. **Refresh
   devices** repeats discovery without opening an RX stream.
-- **Center frequency** is absolute RF in whole hertz, from 1 Hz through
-  99 GHz subject to the selected hardware.
+- **SDR center frequency** and **Decoder window center** use VFO-style kHz;
+  `7021.43` represents 7.02143 MHz exactly. Their internal and driver boundary
+  remains whole-hertz integer RF through 99 GHz, subject to the selected
+  hardware.
 - **IQ sample rate** requests 25 kS/s through 64 MS/s. The adapter selects the
   nearest rate advertised by the receiver and reports the actual value after
   start. The selector is populated from the selected device when possible.
@@ -64,6 +66,10 @@ guessed RF frequency.
   **SDR LO offset** adds a signed offset to the SDR hardware centre for
   transverter or independently tuned receiver arrangements. CW Buddy bounds it
   so the decoder window stays inside the acquired passband.
+- Selecting direct SDR changes only the RX sample source. It does not hide or
+  disconnect Radio Control: a separately configured CAT radio may continue to
+  provide authoritative VFO state and the guarded TX/keying endpoint for
+  full-duplex operation.
 - **Automatic gain** requests the receiver's hardware gain mode. A receiver
   without that capability fails explicitly until manual gain is selected.
   **Manual gain** is requested in dB and the actual readback remains
@@ -153,8 +159,10 @@ The receiver workspace arranges them over multiple responsive rows, and the
 Settings page uses the same controls for precise profile editing.
 
 Hovering the spectrum or waterfall displays the pointer contract: left-click
-opens a detected stream, right-click creates a neutral manual probe, and the
-Ctrl+click TX-VFO action is unavailable until a guarded provider route exists.
+opens a detected stream, right-click creates a neutral manual probe, and
+capability-gated Ctrl+left-click requests the pointed exact RF on VFO B/TX
+through the configured provider, enabling split when needed. Provider readback
+remains authoritative and the gesture never arms or starts transmission.
 Action buttons in the receiver, settings, setup, and profile views also expose
 contextual hover help, including why an action is disabled where applicable.
 
@@ -179,13 +187,12 @@ suppression, not this keyed raster. CW symbols is acoustic keying evidence
 rather than decoded characters. Switching is immediate and does not clear
 tracking, timing hypotheses, or decoded sessions.
 
-**Visual guide** draws two dashed red vertical boundaries at the configured
-center minus/plus half-width, with no fill, so it is never mistaken for an
-identified signal (active verified CW tracks are the ones shown as a colored
-area). It defaults to a 700 Hz center and 200 Hz width and can be adjusted to
-match the receiver's preferred sidetone and CW passband.
-It does not select a decoder, limit channel detection, change decoder
-bandwidth, or retune the radio. Seven X-axis labels show the actual
+**TX slice guide** draws two dashed red vertical boundaries around authoritative
+VFO B/TX readback, using the configured width and no fill. Absolute SDR RF is
+used directly; sound-card audio maps the TX/RX RF difference around the
+configured CW reference tone according to sideband. Unknown, replay, or
+off-screen state hides the guide. It does not select a decoder, limit channel
+detection, arm TX, key the radio, or change decoder bandwidth. Seven X-axis labels show the actual
 displayed audio or RF frequency.
 
 The decoder scans the complete processed bandwidth selected under **Signal**.
@@ -283,7 +290,7 @@ identified senders retain independent cadence summaries, used only as a
 bounded prior when a later live timing estimate already agrees.
 Right-clicking an unmarked spectrum/waterfall position creates a neutral
 manual probe at that center and opens its card without moving the independent
-CW guide. Measured carrier evidence can move its DSP and presentation centers
+TX-slice guide. Measured carrier evidence can move its DSP and presentation centers
 through the ordinary bounded stream tracker. It is not included in the detected
 count, exposes no decoded content before ordinary verification, reuses only
 another manual center within 12 Hz, and expires after the configured decoded
@@ -615,6 +622,40 @@ The current receiver canvas is an honest empty state and does not draw simulated
 radio data.
 
 ## Profile examples
+
+The planned connection-profile wizard is generic; the following are
+illustrative saved topologies, not built-in presets or required equipment:
+
+These examples are acceptance scenarios for the planned generic wizard. The
+wizard must discover and validate equivalent endpoints instead of matching the
+example names or assuming a particular station layout.
+
+### HF SDR receive with separate transmitter
+
+```text
+Example profile name: HF — RSPduo RX / FT-450D TX
+RX: SDRplay RSPduo, tuner 2, high-impedance input
+TX: Yaesu FT-450D through the selected CAT and guarded keying providers
+Duplex: full duplex where the hardware routes permit it
+```
+
+### QO-100 full duplex
+
+```text
+Example profile name: QO-100 — RTL-SDR downlink / FT-818 uplink
+RX: RTL-SDR with a profile-defined receive/transverter offset
+TX: Yaesu FT-818 with an independent transmit/uplink offset
+Duplex: full duplex; RX and TX frequency domains are validated separately
+```
+
+### One-radio HF audio
+
+```text
+Example profile name: HF — FT-450D audio half duplex
+RX/TX: Yaesu FT-450D
+Spectrum input: the FT-450D receiver audio interface/sound card
+Duplex: half duplex
+```
 
 ### HF desk
 

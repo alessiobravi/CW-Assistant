@@ -10,6 +10,17 @@ bool contains(const std::string& value, const std::string& expected) {
   return value.find(expected) != std::string::npos;
 }
 
+std::size_t countOccurrences(const std::string& value,
+                             const std::string& expected) {
+  std::size_t count = 0;
+  std::size_t offset = 0;
+  while ((offset = value.find(expected, offset)) != std::string::npos) {
+    ++count;
+    offset += expected.size();
+  }
+  return count;
+}
+
 void normalizeLineEndings(std::string& value) {
   value.erase(std::remove(value.begin(), value.end(), '\r'), value.end());
 }
@@ -170,6 +181,13 @@ int main() {
   // Keep wrapping width independent of scrollbar visibility, with no
   // horizontal scrollbar and a permanently reserved vertical gutter.
   if (!contains(transcript, "width: transcriptScroll.availableWidth") ||
+      !contains(qml, "objectName: \"decoderTranscriptFrame\"") ||
+      !contains(transcript, "anchors.margins: 1") ||
+      !contains(transcript, "leftPadding: 9") ||
+      !contains(transcript, "rightPadding: 9") ||
+      !contains(transcript, "topPadding: 9") ||
+      !contains(transcript, "bottomPadding: 9") ||
+      !contains(transcript, "background: null") ||
       !contains(transcript,
                 "wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere") ||
       !contains(transcript, "height: Math.max(") ||
@@ -187,6 +205,33 @@ int main() {
       !contains(local_panel, "sessionCard.localModelHasText ? 88 : 50") ||
       !contains(local_panel, "clip: true")) {
     return 4;
+  }
+
+  const std::size_t action_row_start = qml.find(
+      "objectName: \"decoderSessionActionRow\"");
+  const std::size_t action_row_end = qml.find(
+      "id: txDrawer", action_row_start);
+  if (action_row_start == std::string::npos ||
+      action_row_end == std::string::npos) {
+    return 18;
+  }
+  const std::string action_row = qml.substr(
+      action_row_start, action_row_end - action_row_start);
+  const std::size_t tx_action = action_row.find(
+      "objectName: \"decoderSessionTxButton\"");
+  const std::size_t monitor_action = action_row.find(
+      "objectName: \"decoderSessionMonitorButton\"");
+  const std::size_t action_spacer = action_row.find(
+      "Item { Layout.fillWidth: true }");
+  if (tx_action == std::string::npos || monitor_action == std::string::npos ||
+      action_spacer == std::string::npos || tx_action >= action_spacer ||
+      action_spacer >= monitor_action ||
+      countOccurrences(action_row, "Layout.preferredWidth: 124") < 2 ||
+      countOccurrences(action_row, "Layout.preferredHeight: 38") < 2 ||
+      !contains(action_row, "text: sessionCard.streamMonitored") ||
+      !contains(action_row, "Monitor\"") ||
+      !contains(action_row, "Accessible.name: sessionCard.streamMonitored")) {
+    return 19;
   }
 
   const std::size_t manual_start = qml.find("id: manualSliceHitArea");
@@ -216,6 +261,10 @@ int main() {
       !contains(manual, "acceptedButtons: Qt.LeftButton | Qt.RightButton") ||
       !contains(manual, "function streamIdAtX(positionX)") ||
       !contains(manual, "replayController.openDecoderSession(streamId)") ||
+      !contains(manual, "mouse.modifiers & Qt.ControlModifier") ||
+      !contains(manual, "appSettings.radioTxFrequencySyncAvailable") ||
+      !contains(manual, "replayController.displayFrequencyToRfHz(") ||
+      !contains(manual, "appSettings.setControlledTxFrequencyHz(txRfHz)") ||
       !contains(manual, "mouse.button === Qt.LeftButton") ||
       !contains(manual, "onClicked: function(mouse)") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
@@ -224,7 +273,7 @@ int main() {
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
       !contains(manual, "LEFT: open decoder") ||
       !contains(manual, "RIGHT: manual probe") ||
-      !contains(manual, "CTRL: TX VFO unavailable") ||
+      !contains(manual, "CTRL+LEFT: set TX VFO") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
       !contains(tune_down, "appSettings.radioFrequencyWritable") ||
       !contains(tune_down, "z: 8") ||
@@ -364,6 +413,9 @@ int main() {
       !contains(qml, "appSettings.syncControlledTxFrequencyToRx()") ||
       !contains(qml, "TX mode is not copied") ||
       !contains(qml, "appSettings.setControlledTxFrequency(") ||
+      !contains(qml, "objectName: \"txSliceGuideOverlay\"") ||
+      !contains(qml, "appSettings.radioTxVfoFrequencyHz") ||
+      !contains(qml, "replayController.rfFrequencyToDisplayHz(tx)") ||
       contains(qml, "appSettings.cwToneSidebandIndex === 0") ||
       !contains(qml, "? \"SPLIT\" : \"SIMPLEX\"") ||
       !contains(qml, "Component.onCompleted: {") ||

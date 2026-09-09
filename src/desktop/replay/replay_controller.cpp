@@ -1627,6 +1627,41 @@ void ReplayController::setRadioFrequencyContext(
   rebuildDecoderModels();
 }
 
+double ReplayController::rfFrequencyToDisplayHz(
+    const qulonglong rf_frequency_hz) const noexcept {
+  if (rf_frequency_hz == 0U) return std::numeric_limits<double>::quiet_NaN();
+  if (source_mode_ == 2) return static_cast<double>(rf_frequency_hz);
+  if (source_mode_ != 0 || !radio_frequency_available_ ||
+      radio_rx_rf_hz_ == 0U) {
+    return std::numeric_limits<double>::quiet_NaN();
+  }
+  const double delta_rf_hz = static_cast<double>(rf_frequency_hz) -
+                             static_cast<double>(radio_rx_rf_hz_);
+  const double audio_hz = cw_reference_tone_hz_ +
+      (cw_sideband_index_ == 0 ? delta_rf_hz : -delta_rf_hz);
+  return std::isfinite(audio_hz) && audio_hz >= 0.0
+      ? audio_hz : std::numeric_limits<double>::quiet_NaN();
+}
+
+qulonglong ReplayController::displayFrequencyToRfHz(
+    const double display_frequency_hz) const noexcept {
+  if (!std::isfinite(display_frequency_hz) || display_frequency_hz < 0.0)
+    return 0U;
+  if (source_mode_ == 2) {
+    if (display_frequency_hz > 99'000'000'000.0) return 0U;
+    return static_cast<qulonglong>(std::llround(display_frequency_hz));
+  }
+  if (source_mode_ != 0 || !radio_frequency_available_ ||
+      radio_rx_rf_hz_ == 0U) {
+    return 0U;
+  }
+  const auto resolved = cwassistant::core::resolve_audio_tone_rf(
+      radio_rx_rf_hz_, display_frequency_hz, cw_reference_tone_hz_,
+      cw_sideband_index_ == 0);
+  return resolved && *resolved <= 99'000'000'000ULL
+      ? static_cast<qulonglong>(*resolved) : 0U;
+}
+
 void ReplayController::setMonitorMode(const int mode) {
   const int sanitized = std::clamp(mode, 0, 2);
   if (source_mode_ == 2 && sanitized == 1) {

@@ -17,6 +17,14 @@ Conversation profiles must be distinct: ordinary/general CW remains open-ended,
 while every contest profile versions its own rule-derived exchange grammar and
 decoding hints rather than sharing one assumed contest sequence.
 
+The receiver workspace provides four first-level operating modes in its left
+navigation rail: **Standard**, **PileUp Chaser**, **PileUp Slicer**, and
+**Runner**. Their behavior, adaptive-learning lifecycle, frequency-control
+authority, and fail-closed rules are specified in
+[`operating-modes.md`](operating-modes.md). A mode may change interpretation or
+request an explicitly enabled VFO B position; it never grants transmission
+authority.
+
 ## Functional requirements
 
 ### Receive and DSP
@@ -124,9 +132,13 @@ decoding hints rather than sharing one assumed contest sequence.
   expose dit/dah/gap timing. Full-passband and unverified noise belongs only in
   Audio spectrum. Switching views must not reset or influence decoding, and CW
   symbols must not fabricate text.
-- Render the configured CW pitch/width as two dashed vertical boundaries at
-  center ± half-width, with no filled guide band, visually distinct from the
-  stable-width area of active verified signal traces;
+- Render the configured CW-width as two dashed vertical boundaries around
+  authoritative VFO B/TX readback, with no filled guide band. Map absolute RF
+  directly for SDR and use the checked sideband-aware RX/RF-to-audio mapping
+  for sound-card input. Follow physical-radio VFO/frequency/split changes and
+  hide unknown, replay, or off-screen TX state rather than retaining a stale
+  position. Keep the guide visually distinct from the stable-width area of
+  active verified signal traces;
   keep vertical decoded annotations in
   the spectrum region rather than over waterfall history.
 - Keep verified-marker geometry stable while the decoder changes its internal
@@ -168,11 +180,15 @@ decoding hints rather than sharing one assumed contest sequence.
   operable during transcript, signal-activity, and model refreshes. Opening a
   card must not enable monitoring; a missing callsign must not be represented
   by placeholder text or exposed as a callsign TX target.
+- Keep the transcript border fixed outside the scrolling content, with
+  explicit style-independent edge padding. Place guarded TX at the left of the
+  lower action row and expose per-stream listening as a matching full-size
+  **Monitor** button with a speaker-state icon.
 - Auto-collapse the bottom live-control panel when it is not being used, while
   retaining a visible reveal header and an operator-controlled pinned state.
 - Left-clicking an identified stream opens its decoder card. Right-clicking an
   unmarked spectrum/waterfall frequency starts a neutral temporary decoder
-  region without moving the independent CW guide or retuning the radio. The
+  region without moving the independent TX-slice guide or retuning the radio. The
   region follows qualified carrier movement through normal bounded tracking
   and expires after the configured stream timeout unless promoted by ordinary
   CW verification.
@@ -184,6 +200,12 @@ decoding hints rather than sharing one assumed contest sequence.
   target only the receive VFO, preserve split TX and mode, and leave provider
   readback authoritative. Reject invalid, unavailable, or ambiguous requests
   visibly.
+- Permit capability-gated Ctrl+left-click on a live spectrum/waterfall to map
+  the pointed coordinate to checked exact RF and request it on VFO B/TX through
+  the provider-neutral command boundary, enabling split when required and
+  supported. Move the TX guide only after authoritative readback; ordinary
+  left-click remains decoder-open and right-click remains manual-probe. This
+  gesture must not arm TX, assert PTT/KEY, or bypass existing radio safety.
 - Keep provider observations and operator control targets as distinct
   provider-neutral state for every radio backend. VFO A/RX and VFO B/TX retain
   independent frequency and mode state. The operator TX-mode target is always
@@ -229,9 +251,10 @@ decoding hints rather than sharing one assumed contest sequence.
   collapse dit/dah timing; line rate changes temporal resolution, not duration.
 - Generate genuine waterfall timing frames with bounded overlapping analysis;
   never duplicate a spectrum row merely to satisfy a requested line rate.
-- Provide a toggleable, configurable CW center/passband guide and labeled
-  frequency ticks on the X axis. The guide is a visual reference only and must
-  never select, constrain, reset, or otherwise drive decoding.
+- Provide a toggleable TX-slice guide driven by authoritative VFO B/TX
+  readback and labeled frequency ticks on the X axis. The guide is a visual
+  reference only and must never select, constrain, reset, or otherwise drive
+  decoding.
   Configure automatic/manual range, lower and upper dB bounds, averaging, peak
   hold/decay, palette, color gain, black level, contrast/gamma, grid, label
   density/font, spectrum height, zoom, and pan. Invalid combinations are
@@ -392,6 +415,9 @@ decoding hints rather than sharing one assumed contest sequence.
 - Keep the adapter receive-only: device discovery, center frequency, sample
   rate, hardware RF bandwidth, antenna/input, RX gain and CF32 stream reads must
   not expose SDR transmit, PTT, or KEY.
+- Present SDR and decoder center-frequency editing in VFO-style kHz while
+  preserving exact checked integer-Hz values at the settings and driver
+  boundaries.
 - Preserve the complete acquired passband for an operator overview while a
   separately tunable, anti-aliased and decimated 6–96 kHz window bounds carrier
   detection and per-stream decoding. Overview frame production must remain
@@ -402,6 +428,9 @@ decoding hints rather than sharing one assumed contest sequence.
 - Allow optional decoder-window following from authoritative RX-VFO readback
   through the common radio-provider boundary, with a bounded signed SDR LO
   offset. Unknown or stale radio state must not cause a speculative SDR retune.
+- Keep RX-source selection independent from radio control. Selecting direct SDR
+  must not hide or disconnect a configured CAT radio that supplies VFO state
+  and a separately guarded TX/keying endpoint for full-duplex operation.
 - Validate fixed IQ blocks, preserve absolute RF, report device overflow and
   pipeline overrun separately, and stop safely on malformed/non-finite input.
 - Never route raw IQ to an audio output. Full-passband listening applies only

@@ -230,6 +230,10 @@ class ReplayController final : public QObject {
   Q_INVOKABLE bool isMonitorChannelEnabled(
       qulonglong channel_id) const noexcept;
   Q_INVOKABLE void toggleMonitorChannel(qulonglong channel_id);
+  Q_INVOKABLE double rfFrequencyToDisplayHz(
+      qulonglong rf_frequency_hz) const noexcept;
+  Q_INVOKABLE qulonglong displayFrequencyToRfHz(
+      double display_frequency_hz) const noexcept;
   void setMonitorOutputSelection(QString encoded_device_id);
 
   Q_INVOKABLE void openFile(const QUrl& url);

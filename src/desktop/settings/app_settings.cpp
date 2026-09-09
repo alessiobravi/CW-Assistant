@@ -1012,6 +1012,14 @@ bool AppSettings::setControlledTxFrequency(const QString& value,
   return requestControlledTxRfFrequency(*requested_rf);
 }
 
+bool AppSettings::setControlledTxFrequencyHz(const qulonglong value) {
+  if (value == 0U || value > 99'000'000'000ULL) {
+    setStatusMessage(QStringLiteral("Select a valid positive TX frequency."));
+    return false;
+  }
+  return requestControlledTxRfFrequency(static_cast<std::uint64_t>(value));
+}
+
 bool AppSettings::requestControlledTxRfFrequency(
     const std::uint64_t rf_frequency_hz) {
   const auto dial = cwassistant::core::resolve_dial_frequency(

@@ -9,6 +9,17 @@ Pane {
     signal setupRequested()
     property bool sdrDiscoveryRequested: false
 
+    function formatFrequencyKhz(frequencyHz) {
+        return Number((Number(frequencyHz) / 1000).toFixed(3)).toString()
+    }
+
+    function parseFrequencyKhz(value) {
+        var khz = Number(String(value).replace(",", "."))
+        if (!Number.isFinite(khz) || khz <= 0 || khz > 99000000)
+            return 0
+        return Math.round(khz * 1000)
+    }
+
     function requestInitialSdrDiscovery() {
         if (sdrDiscoveryRequested)
             return
@@ -270,19 +281,28 @@ Pane {
                             text: appSettings.sdrDiagnostic
                         }
                     }
-                    Label { text: "Center frequency (Hz)" }
+                    Label { text: "SDR center frequency (kHz)" }
                     TextField {
                         objectName: "sdrCenterFrequencyField"
                         Layout.fillWidth: true
                         enabled: appSettings.sdrBackendAvailable
                                  && !appSettings.sdrFollowRadioVfo
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        text: appSettings.sdrCenterFrequencyHz.toString()
-                        placeholderText: "14050000"
-                        validator: RegularExpressionValidator { regularExpression: /[0-9]{1,11}/ }
-                        onEditingFinished: appSettings.sdrCenterFrequencyHz = Number(text)
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        text: root.formatFrequencyKhz(
+                                  appSettings.sdrCenterFrequencyHz)
+                        placeholderText: "7021.43"
+                        validator: RegularExpressionValidator {
+                            regularExpression: /[0-9]{1,8}([.,][0-9]{0,3})?/
+                        }
+                        onEditingFinished: {
+                            var frequencyHz = root.parseFrequencyKhz(text)
+                            if (frequencyHz > 0)
+                                appSettings.sdrCenterFrequencyHz = frequencyHz
+                            text = root.formatFrequencyKhz(
+                                appSettings.sdrCenterFrequencyHz)
+                        }
                         ToolTip.visible: hovered
-                        ToolTip.text: "RF center frequency in whole hertz; supported range extends to 99 GHz"
+                        ToolTip.text: "Enter VFO-style kHz (for example 7021.43 means 7.02143 MHz). Radio-follow mode updates this from authoritative CAT readback."
                     }
                     Label { text: "IQ sample rate" }
                     ComboBox {
@@ -342,17 +362,25 @@ Pane {
                             ? "Receiver input exposed by the selected SDR operating mode"
                             : "This SDR driver does not expose an antenna selector"
                     }
-                    Label { text: "Decoder window center (Hz)" }
+                    Label { text: "Decoder window center (kHz)" }
                     TextField {
                         objectName: "sdrDecoderCenterFrequencyField"
                         Layout.fillWidth: true
                         enabled: appSettings.sdrBackendAvailable
                                  && !appSettings.sdrFollowRadioVfo
-                        inputMethodHints: Qt.ImhDigitsOnly
-                        text: appSettings.sdrDecoderCenterFrequencyHz.toString()
-                        validator: RegularExpressionValidator { regularExpression: /[0-9]{1,11}/ }
-                        onEditingFinished:
-                            appSettings.sdrDecoderCenterFrequencyHz = Number(text)
+                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                        text: root.formatFrequencyKhz(
+                                  appSettings.sdrDecoderCenterFrequencyHz)
+                        validator: RegularExpressionValidator {
+                            regularExpression: /[0-9]{1,8}([.,][0-9]{0,3})?/
+                        }
+                        onEditingFinished: {
+                            var frequencyHz = root.parseFrequencyKhz(text)
+                            if (frequencyHz > 0)
+                                appSettings.sdrDecoderCenterFrequencyHz = frequencyHz
+                            text = root.formatFrequencyKhz(
+                                appSettings.sdrDecoderCenterFrequencyHz)
+                        }
                         ToolTip.visible: hovered
                         ToolTip.text: "Only this bounded RF region is sent to stream detection and CW decoding"
                     }

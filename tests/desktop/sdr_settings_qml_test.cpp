@@ -72,6 +72,10 @@ int main() {
       !contains(qml, "objectName: \"sdrAntennaCombo\"") ||
       !contains(qml, "objectName: \"sdrDecoderBandwidthCombo\"") ||
       !contains(qml, "objectName: \"sdrFollowRadioVfoCheck\"") ||
+      !contains(qml, "function formatFrequencyKhz(frequencyHz)") ||
+      !contains(qml, "function parseFrequencyKhz(value)") ||
+      !contains(qml, "SDR center frequency (kHz)") ||
+      !contains(qml, "placeholderText: \"7021.43\"") ||
       !contains(qml, "RSPduo entries are operating modes") ||
       !contains(main_qml, "objectName: \"sdrDecoderWindowOverlay\"") ||
       !contains(main_qml, "spectrumDisplay.zoomAt(") ||
@@ -79,6 +83,20 @@ int main() {
       !contains(controller_header, "liveSdrDecoderWindowRequested") ||
       !contains(header, "sdrFollowRadioVfo")) {
     return 10;
+  }
+
+  // Radio control remains visible with direct SDR reception so an independent
+  // CAT radio can own the TX endpoint in a full-duplex profile.
+  const std::size_t vfo_start = main_qml.find("id: vfoDisplay");
+  const std::size_t vfo_end = main_qml.find("id: onAirIndicator", vfo_start);
+  if (vfo_start == std::string::npos || vfo_end == std::string::npos ||
+      contains(std::string_view(main_qml).substr(vfo_start,
+                                                vfo_end - vfo_start),
+               "sourceMode === 0") ||
+      !contains(std::string_view(main_qml).substr(vfo_start,
+                                                 vfo_end - vfo_start),
+                "visible: replayController.radioFrequencyAvailable")) {
+    return 11;
   }
   // Opening the SDR page requests discovery once, after the page can render.
   // Application/profile construction must still never probe hardware.

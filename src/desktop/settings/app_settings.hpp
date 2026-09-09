@@ -431,6 +431,7 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool stepControlledRxFrequency(int direction);
   Q_INVOKABLE bool setControlledTxFrequency(const QString& value,
                                             qulonglong unit_hz);
+  Q_INVOKABLE bool setControlledTxFrequencyHz(qulonglong value);
   Q_INVOKABLE bool syncControlledTxFrequencyToRx();
   Q_INVOKABLE bool cycleControlledRxMode();
   Q_INVOKABLE bool toggleControlledTxMode();

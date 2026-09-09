@@ -8,6 +8,29 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- The public design now defines distinct Standard, PileUp Chaser, PileUp
+  Slicer, and Runner workspaces. Chaser includes an observation-only learning
+  phase, configurable half-duplex relearning, continuous full-duplex learning,
+  asymmetric runner/pileup decoding, evidence-gated VFO B following, and a
+  strict boundary that prevents an operating mode or decoder output from
+  acquiring TX authority.
+
+- Decoder transcripts now scroll inside a fixed clipped frame with explicit
+  style-independent padding. The guarded TX action is left-aligned in the
+  lower row, while a matching full-size **Monitor** button replaces the small
+  standalone speaker glyph at the right.
+
+- The former fixed 700 Hz visual boundaries now show the authoritative TX-VFO
+  slice. They follow radio readback in both absolute-RF SDR and sideband-aware
+  audio views. Capability-gated Ctrl+click requests the pointed RF on the TX
+  VFO through the configured provider and enables split when required; ordinary
+  left-click and right-click retain decoder-open and manual-probe behavior.
+
+- SDR center and decoder-center editors now use VFO-style kHz input, such as
+  `7021.43` for 7.02143 MHz. Radio Control remains visible during direct-SDR
+  reception, allowing an SDR RX endpoint and a separately configured CAT/keyed
+  radio TX endpoint to operate as a full-duplex station topology.
+
 - Direct-SDR reception now separates the complete acquired RF overview from a
   bounded CW decoder window. The wide spectrum and waterfall remain visible,
   while one shared tuned, anti-aliased and decimated IQ branch limits the
@@ -50,6 +73,12 @@ All notable changes to CW Buddy are recorded here. The format follows
   sole control for enabling or disabling one or more filtered CW streams.
 
 ### Fixed
+
+- Material-style padding and the scrolling transcript background no longer let
+  the first decoded line touch or cross the decoder-card text-box border.
+
+- Selecting direct SDR reception no longer hides the configured Radio Control
+  panel.
 
 - High-rate SDR input no longer drives the overview FFT or every CW channel at
   the full hardware sample rate. Overview frame production is rate-limited and

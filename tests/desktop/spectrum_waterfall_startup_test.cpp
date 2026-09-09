@@ -204,6 +204,33 @@ bool testLocalCharacterFrontendBank() {
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
   if (!testLocalCharacterFrontendBank()) return 21;
+  cwassistant::desktop::ReplayController frequency_mapping;
+  frequency_mapping.setSourceMode(0);
+  frequency_mapping.setRadioFrequencyContext(
+      true, 7'020'000ULL, 7'021'300ULL, true, 0, 700.0);
+  if (std::abs(frequency_mapping.rfFrequencyToDisplayHz(7'021'300ULL) -
+               2'000.0) > 0.01 ||
+      frequency_mapping.displayFrequencyToRfHz(2'000.0) != 7'021'300ULL) {
+    return 51;
+  }
+  frequency_mapping.setRadioFrequencyContext(
+      true, 7'020'000ULL, 7'018'700ULL, true, 1, 700.0);
+  if (std::abs(frequency_mapping.rfFrequencyToDisplayHz(7'018'700ULL) -
+               2'000.0) > 0.01 ||
+      frequency_mapping.displayFrequencyToRfHz(2'000.0) != 7'018'700ULL) {
+    return 52;
+  }
+  frequency_mapping.setSourceMode(2);
+  if (frequency_mapping.rfFrequencyToDisplayHz(7'021'430ULL) != 7'021'430.0 ||
+      frequency_mapping.displayFrequencyToRfHz(7'021'430.4) != 7'021'430ULL) {
+    return 53;
+  }
+  frequency_mapping.setSourceMode(1);
+  if (std::isfinite(
+          frequency_mapping.rfFrequencyToDisplayHz(7'021'430ULL)) ||
+      frequency_mapping.displayFrequencyToRfHz(700.0) != 0U) {
+    return 54;
+  }
   cwassistant::core::OfflineCallsignDatabase callsign_database;
   const auto callsign_import =
       callsign_database.importText("EM90ZMV\nEA1EYL\nSV2HQL\nNV2HQD\n");

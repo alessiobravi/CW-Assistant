@@ -80,15 +80,18 @@ not create a second frequency marker or infer a sender from frequency alone.
 Hover over the spectrum or waterfall to see its pointer legend: left-click
 opens the decoder card for an already detected stream without changing audio
 monitoring, while right-click starts a neutral manual probe at that audio
-frequency. The Ctrl+click TX-VFO action is marked unavailable
-until the linked provider supports guarded TX-frequency writes. Action buttons
+frequency. When the linked provider supports TX-frequency and split writes,
+Ctrl+left-click requests the pointed RF on VFO B/TX and enables split if
+needed. The TX guide moves only after provider readback confirms the change;
+the gesture never arms or starts transmission. Action buttons
 throughout the receiver, settings, setup, and profile views explain their
 effect and any disabled state when hovered.
 
 To listen through CW Buddy, choose a **Monitor output** under **Settings →
 Audio**, then use the receiver toolbar's **OFF / RX** control. **RX** passes
 the complete receiver window without filtering. Per-stream monitoring is
-controlled only by the speaker button in each decoder card.
+controlled only by the **Monitor** button with its speaker icon in each decoder
+card.
 Each enabled card passes through its own carrier-following narrow filter and is
 moved to the configured CW reference tone. Enable several card speakers to mix
 several isolated streams; disable the last speaker to return monitoring to
@@ -143,7 +146,9 @@ device.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
    found.
-3. Select a supported effective IQ sample rate, hardware RF bandwidth, and
+3. Enter SDR and decoder center frequencies in VFO-style kHz: for example,
+   `7021.43` means 7.02143 MHz. Select a supported effective IQ sample rate,
+   hardware RF bandwidth, and
    antenna/input where the device exposes them. Start conservatively at 250000
    samples/s. For an RSPduo, the entries are modes of the same receiver: choose
    **Single Tuner** for the current one-channel path; **Dual Tuner** and
@@ -173,6 +178,11 @@ device.
    are not loudspeaker audio. Open a decoder card and enable its speaker to hear
    that carrier through the narrow, carrier-following CW filter. Several card
    speakers may still be mixed.
+
+Radio Control remains available while Live SDR is selected. The SDR can own the
+RX path while a separately configured CAT radio supplies authoritative VFO
+state and the guarded TX/keying endpoint; selecting an SDR never grants that
+receiver transmit authority.
 
 This direct-SDR path is receive-only. It exposes no SDR transmit, PTT, or KEY
 command. Debug capture still records sound-card audio only; interoperable IQ
@@ -231,18 +241,19 @@ labeled sliders for FPS, line rate, averaging, history, levels, CW center/width,
 and Audio-spectrum noise margin; each label shows the current numeric value.
 The full Settings → Display page offers the same slider interaction.
 
-Enable **Visual guide** to draw two dashed red boundaries around the desired
-receive region. Their positions are exactly the configured center minus/plus
-half the configured CW width. The default is centered at 700 Hz with a 200 Hz
-width; both values update in real time and are stored per profile. The region
-has no fill, so it cannot be mistaken for an identified signal — that treatment
-is reserved for active verified CW tracks (see below). This guide is visual
-only: it does not select a decoder, limit decoding, change receiver tuning, or
-change decoder bandwidth.
+Enable **TX slice guide** to draw two dashed red boundaries around the
+authoritative VFO B/TX frequency. The configured width defaults to 200 Hz. In
+direct SDR the guide uses absolute RF; in a sound-card view it is mapped around
+the configured CW reference tone according to RX frequency and sideband. It
+therefore follows VFO, split, and frequency changes made on the physical radio.
+Unknown, replay, or off-screen TX state hides the guide instead of retaining a
+stale position. The region has no fill, so it cannot be mistaken for an
+identified signal. It is visual only: it does not select a decoder, arm TX,
+key the radio, or change decoder bandwidth.
 
 Right-click an unmarked spectrum or waterfall trace to create and immediately
 open a neutral manual decoder region at that audio frequency. This does not
-move the independent red CW guide. As measured carrier evidence shifts, the
+change the independent TX-VFO guide. As measured carrier evidence shifts, the
 region follows it through the same bounded, smoothed tracker used by automatic
 streams rather than remaining frozen at the clicked coordinate.
 The slice uses real narrowband evidence but does not claim that the signal is
@@ -644,6 +655,14 @@ stream, its colour and its history are kept, so you can hear the same station
 under both and keep whichever reads better.
 
 ## Tell the decoder what you are doing
+
+The current release provides the neutral behavior described below. Planned
+left-rail modes will make **Standard**, **PileUp Chaser**, **PileUp Slicer**, and
+**Runner** separate operator workspaces. Chaser first learns a runner's
+listening pattern without transmitting; Slicer ranks comparatively clear slots;
+Runner organizes callers in simplex or split operation. See the public
+[operating-mode specification](../operating-modes.md). These modes do not yet
+appear in the application and none bypasses TX arming or confirmation.
 
 **Settings → Station → Operating role** tells the decoder whose callsign a
 stream is expected to carry. It matters because the text alone is sometimes

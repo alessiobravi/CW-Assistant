@@ -54,7 +54,7 @@ ApplicationWindow {
     }
 
     // Maps a spectrum frequency to its horizontal pixel position within the
-    // spectrumDisplay item, shared by the CW guide axis marker and the
+    // spectrumDisplay item, shared by the TX-slice marker and the
     // verified-signal area highlights so both stay pixel-aligned.
     function hzToX(hz) {
         return spectrumDisplay.x
@@ -468,27 +468,38 @@ ApplicationWindow {
                 }
 
                 Item {
-                    id: cwGuideBoundaryOverlay
-                    objectName: "cwGuideBoundaryOverlay"
-                    // Two dashed boundaries describe the configured receive
-                    // region without filling it or looking like a detected
-                    // stream. Their separation is exactly the configured CW
-                    // guide width around the configured center frequency.
-                    property real guideLowerHz: appSettings.cwGuideCenterHz
+                    id: txSliceGuideOverlay
+                    objectName: "txSliceGuideOverlay"
+                    // The guide follows only authoritative TX-VFO readback.
+                    // SDR frames already use absolute RF; sound-card frames
+                    // use the inverse of the sideband-aware RF/AF mapping.
+                    property real guideCenterHz: {
+                        var source = replayController.sourceMode
+                        var rx = replayController.radioRxFrequencyHz
+                        var tx = appSettings.radioTxVfoFrequencyHz
+                        if (tx <= 0 || source === 1
+                                || (source === 0 && rx <= 0))
+                            return NaN
+                        return replayController.rfFrequencyToDisplayHz(tx)
+                    }
+                    property real guideLowerHz: guideCenterHz
                                                 - 0.5 * appSettings.cwGuideWidthHz
-                    property real guideUpperHz: appSettings.cwGuideCenterHz
+                    property real guideUpperHz: guideCenterHz
                                                 + 0.5 * appSettings.cwGuideWidthHz
                     readonly property color guideColor: "#ff7b84"
                     visible: appSettings.showCwGuide
-                             && replayController.sourceMode !== 2
+                             && replayController.activeSource
+                             && Number.isFinite(guideCenterHz)
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz
+                             && guideCenterHz >= spectrumDisplay.lowerFrequencyHz
+                             && guideCenterHz <= spectrumDisplay.upperFrequencyHz
                     anchors.fill: spectrumDisplay
                     z: 3
 
                     Repeater {
-                        model: [cwGuideBoundaryOverlay.guideLowerHz,
-                                cwGuideBoundaryOverlay.guideUpperHz]
+                        model: [txSliceGuideOverlay.guideLowerHz,
+                                txSliceGuideOverlay.guideUpperHz]
                         delegate: Item {
                             required property var modelData
                             property real boundaryHz: Number(modelData)
@@ -496,7 +507,7 @@ ApplicationWindow {
                                      && boundaryHz <= spectrumDisplay.upperFrequencyHz
                             x: window.hzToX(boundaryHz) - spectrumDisplay.x - 1
                             width: 2
-                            height: cwGuideBoundaryOverlay.height
+                            height: txSliceGuideOverlay.height
 
                             Repeater {
                                 model: Math.ceil(parent.height / 12)
@@ -505,7 +516,7 @@ ApplicationWindow {
                                     y: index * 12
                                     width: 2
                                     height: 6
-                                    color: cwGuideBoundaryOverlay.guideColor
+                                    color: txSliceGuideOverlay.guideColor
                                 }
                             }
                         }
@@ -597,6 +608,16 @@ ApplicationWindow {
                                    <= spectrumDisplay.lowerFrequencyHz) {
                             return
                         }
+                        if (mouse.button === Qt.LeftButton
+                                && (mouse.modifiers & Qt.ControlModifier)) {
+                            if (!appSettings.radioTxFrequencySyncAvailable)
+                                return
+                            var txRfHz = replayController.displayFrequencyToRfHz(
+                                frequencyAtX(mouse.x))
+                            if (txRfHz > 0)
+                                appSettings.setControlledTxFrequencyHz(txRfHz)
+                            return
+                        }
                         if (mouse.button === Qt.LeftButton) {
                             var streamId = streamIdAtX(mouse.x)
                             if (streamId !== 0)
@@ -617,11 +638,15 @@ ApplicationWindow {
                         ? "Left click: open this stream's decoder card\n"
                           + "Right click: center the SDR decoder window and start a manual probe\n"
                           + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
-                          + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
+                          + (appSettings.radioTxFrequencySyncAvailable
+                             ? "Ctrl+click: set the pointed RF on VFO B / TX and enable split if needed"
+                             : "Ctrl+click: unavailable; the radio provider must support TX-frequency and split control")
                         : "Left click: no decoded stream at this position\n"
                           + "Right click: center the SDR decoder window and start a manual probe\n"
                           + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
-                          + "Ctrl+click: TX-frequency selection is not available until the linked provider supports guarded TX-VFO writes"
+                          + (appSettings.radioTxFrequencySyncAvailable
+                             ? "Ctrl+click: set the pointed RF on VFO B / TX and enable split if needed"
+                             : "Ctrl+click: unavailable; the radio provider must support TX-frequency and split control")
                 }
                 ToolButton {
                     objectName: "resetSpectrumZoomButton"
@@ -654,8 +679,8 @@ ApplicationWindow {
                         id: pointerHelpText
                         anchors.centerIn: parent
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open decoder   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
-                              : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL: TX VFO unavailable"
+                              ? "LEFT: open decoder   •   RIGHT: manual probe   •   CTRL+LEFT: set TX VFO"
+                              : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL+LEFT: set TX VFO"
                         color: "#d4dbe4"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
@@ -859,15 +884,14 @@ ApplicationWindow {
                     }
                 }
                 Label {
-                    visible: appSettings.showCwGuide
-                             && replayController.sourceMode !== 2
-                             && spectrumDisplay.upperFrequencyHz
-                                > spectrumDisplay.lowerFrequencyHz
+                    visible: txSliceGuideOverlay.visible
                     anchors.top: parent.top
                     anchors.right: parent.right
                     anchors.margins: 14
-                    text: "Visual guide  " + appSettings.cwGuideCenterHz.toFixed(0)
-                          + " Hz  •  " + appSettings.cwGuideWidthHz.toFixed(0)
+                    text: "TX slice  "
+                          + window.formatVfoFrequency(
+                              appSettings.radioTxVfoFrequencyHz)
+                          + "  •  " + appSettings.cwGuideWidthHz.toFixed(0)
                           + " Hz wide"
                     color: "#ff7b84"
                     font.pixelSize: 10
@@ -1119,23 +1143,22 @@ ApplicationWindow {
                             }
                             CheckBox {
                                 objectName: "liveCwGuideCheck"
-                                text: "CW boundaries"
+                                text: "TX slice guide"
                                 checked: appSettings.showCwGuide
                                 onToggled: appSettings.showCwGuide = checked
                             }
                             LabeledSlider {
                                 Layout.fillWidth: true
-                                caption: "CW center (Hz)"
+                                caption: "CW reference tone (Hz)"
                                 from: 0
                                 to: Math.max(3000, spectrumDisplay.upperFrequencyHz)
                                 stepSize: 10
                                 value: appSettings.cwGuideCenterHz
-                                enabled: appSettings.showCwGuide
                                 onMoved: value => appSettings.cwGuideCenterHz = value
                             }
                             LabeledSlider {
                                 Layout.fillWidth: true
-                                caption: "CW width (Hz)"
+                                caption: "TX slice width (Hz)"
                                 from: 10; to: 5000; stepSize: 10
                                 value: appSettings.cwGuideWidthHz
                                 enabled: appSettings.showCwGuide
@@ -1220,12 +1243,10 @@ ApplicationWindow {
                     id: vfoDisplay
                     objectName: "vfoDisplay"
                     property int controlButtonSize: 52
-                    // The VFO readout only means anything with a live,
-                    // connected radio driving the audio (CAT/OmniRig); it is
-                    // hidden entirely for receive-only SWL setups and WAV
-                    // replay, where there is no radio state to show.
+                    // Radio control is independent from the receive source.
+                    // A direct SDR may receive while a separate CAT radio owns
+                    // the TX VFO in a full-duplex station profile.
                     visible: replayController.radioFrequencyAvailable
-                             && replayController.sourceMode === 0
                     Layout.fillWidth: true
                     Layout.preferredHeight: 188
                     Layout.minimumHeight: 188
@@ -1917,7 +1938,7 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     text: replayController.decoderChannelCount > 0
                           ? "Click a colored signal marker in the spectrum or waterfall to open its decoded session here. Closed sessions continue decoding and can be reopened."
-                          : "Listening for CW signals across the spectrum…\n\nThe red CW boundaries are a visual reference only and do not limit decoding."
+                          : "Listening for CW signals across the spectrum…\n\nThe red TX-slice boundaries follow authoritative VFO B readback and do not limit decoding."
                     color: "#667789"
                     font.pixelSize: 15
                     wrapMode: Text.Wrap
@@ -2263,115 +2284,128 @@ ApplicationWindow {
                                 ToolTip.text: "Attributed only from an explicit decoded CALL1 DE CALL2 or CQ DE CALL handover"
                                 HoverHandler { id: senderHelp }
                             }
-                            ScrollView {
-                                id: transcriptScroll
+                            Rectangle {
+                                id: transcriptFrame
+                                objectName: "decoderTranscriptFrame"
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 112
+                                radius: 4
+                                color: "#0b121a"
+                                border.color: "#263241"
+                                border.width: 1
                                 clip: true
-                                property bool followTail: true
-                                function maximumContentY() {
-                                    if (!contentItem)
-                                        return 0
-                                    return Math.max(0, contentItem.contentHeight
-                                                       - contentItem.height)
-                                }
-                                function isAtTail() {
-                                    return !contentItem
-                                           || contentItem.contentY
-                                              >= maximumContentY() - 2
-                                }
-                                function pinToTail() {
-                                    if (followTail && contentItem)
-                                        contentItem.contentY = maximumContentY()
-                                }
-                                function followAppendedText() {
-                                    if (decodedTextArea.selectionStart
-                                            !== decodedTextArea.selectionEnd) {
-                                        followTail = false
-                                        return
+                                ScrollView {
+                                    id: transcriptScroll
+                                    anchors.fill: parent
+                                    anchors.margins: 1
+                                    clip: true
+                                    property bool followTail: true
+                                    function maximumContentY() {
+                                        if (!contentItem)
+                                            return 0
+                                        return Math.max(0, contentItem.contentHeight
+                                                           - contentItem.height)
                                     }
-                                    if (!followTail)
-                                        return
-                                    // Pin immediately so the tail is already
-                                    // correct in the frame the text grows in,
-                                    // then again once layout settles, because
-                                    // the content height for a wrapped line is
-                                    // only final after that pass.
-                                    pinToTail()
-                                    Qt.callLater(function() {
-                                        if (transcriptScroll.followTail
-                                                && transcriptScroll.contentItem) {
-                                            transcriptScroll.contentItem.contentY =
-                                                transcriptScroll.maximumContentY()
+                                    function isAtTail() {
+                                        return !contentItem
+                                               || contentItem.contentY
+                                                  >= maximumContentY() - 2
+                                    }
+                                    function pinToTail() {
+                                        if (followTail && contentItem)
+                                            contentItem.contentY = maximumContentY()
+                                    }
+                                    function followAppendedText() {
+                                        if (decodedTextArea.selectionStart
+                                                !== decodedTextArea.selectionEnd) {
+                                            followTail = false
+                                            return
                                         }
-                                    })
-                                }
-                                ScrollBar.horizontal: ScrollBar {
-                                    policy: ScrollBar.AlwaysOff
-                                }
-                                ScrollBar.vertical: ScrollBar {
-                                    id: transcriptVerticalBar
-                                    policy: ScrollBar.AsNeeded
-                                    onPressedChanged: {
-                                        if (!pressed)
+                                        if (!followTail)
+                                            return
+                                        // Pin immediately so the tail is already
+                                        // correct in the frame the text grows in,
+                                        // then again once layout settles, because
+                                        // the content height for a wrapped line is
+                                        // only final after that pass.
+                                        pinToTail()
+                                        Qt.callLater(function() {
+                                            if (transcriptScroll.followTail
+                                                    && transcriptScroll.contentItem) {
+                                                transcriptScroll.contentItem.contentY =
+                                                    transcriptScroll.maximumContentY()
+                                            }
+                                        })
+                                    }
+                                    ScrollBar.horizontal: ScrollBar {
+                                        policy: ScrollBar.AlwaysOff
+                                    }
+                                    ScrollBar.vertical: ScrollBar {
+                                        id: transcriptVerticalBar
+                                        policy: ScrollBar.AsNeeded
+                                        onPressedChanged: {
+                                            if (!pressed)
+                                                transcriptScroll.followTail =
+                                                    transcriptScroll.isAtTail()
+                                        }
+                                    }
+                                    Connections {
+                                        target: transcriptScroll.contentItem
+                                        function onMovementStarted() {
+                                            // Wheel/touch scrolling is an explicit
+                                            // request to inspect earlier output.
+                                            transcriptScroll.followTail = false
+                                        }
+                                        function onMovementEnded() {
                                             transcriptScroll.followTail =
                                                 transcriptScroll.isAtTail()
+                                        }
+                                        // Growing content would otherwise leave the
+                                        // viewport short of the new bottom until
+                                        // something else moved it.
+                                        function onContentHeightChanged() {
+                                            transcriptScroll.pinToTail()
+                                        }
                                     }
-                                }
-                                Connections {
-                                    target: transcriptScroll.contentItem
-                                    function onMovementStarted() {
-                                        // Wheel/touch scrolling is an explicit
-                                        // request to inspect earlier output.
-                                        transcriptScroll.followTail = false
-                                    }
-                                    function onMovementEnded() {
-                                        transcriptScroll.followTail =
-                                            transcriptScroll.isAtTail()
-                                    }
-                                    // Growing content would otherwise leave the
-                                    // viewport short of the new bottom until
-                                    // something else moved it.
-                                    function onContentHeightChanged() {
-                                        transcriptScroll.pinToTail()
-                                    }
-                                }
-                                TextArea {
-                                    id: decodedTextArea
-                                    objectName: "decodedSessionText"
-                                    readOnly: true
-                                    selectByMouse: true
-                                    width: transcriptScroll.availableWidth
-                                    // Keep the transcript background equal to
-                                    // the viewport when content is short, then
-                                    // let it grow vertically for scrolling.
-                                    height: Math.max(
-                                                transcriptScroll.availableHeight,
-                                                implicitHeight)
-                                    text: ""
-                                    textFormat: TextEdit.PlainText
-                                    color: modelData.text.length > 0
-                                           ? "#edf3f8"
-                                           : (modelData.provisionalText.length > 0
-                                              || modelData.elements.length > 0
-                                              ? "#e3ad55" : "#8290a0")
-                                    font.pixelSize: 16
-                                    font.italic: modelData.text.length === 0
-                                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                                    padding: 8
-                                    background: Rectangle {
-                                        radius: 4
-                                        color: "#0b121a"
-                                        border.color: "#263241"
-                                        border.width: 1
-                                    }
-                                    ToolTip.visible: transcriptHover.hovered
-                                    ToolTip.delay: 500
-                                    ToolTip.text: modelData.transmissions.length > 0
-                                        ? "A sustained pause starts a new line. Only cadence-supported word gaps are repaired; decoded characters remain visible while later corrections settle."
-                                        : "Live decoded text; select and scroll to pause automatic tail following"
-                                    HoverHandler { id: transcriptHover }
-                                    function applyDecodedText(nextText) {
+                                    TextArea {
+                                        id: decodedTextArea
+                                        objectName: "decodedSessionText"
+                                        readOnly: true
+                                        selectByMouse: true
+                                        width: transcriptScroll.availableWidth
+                                        // The fixed outer frame stays in place
+                                        // while only this padded text content
+                                        // scrolls. Its border can therefore
+                                        // never scroll through the first line.
+                                        height: Math.max(
+                                                    transcriptScroll.availableHeight,
+                                                    implicitHeight)
+                                        text: ""
+                                        textFormat: TextEdit.PlainText
+                                        color: modelData.text.length > 0
+                                               ? "#edf3f8"
+                                               : (modelData.provisionalText.length > 0
+                                                  || modelData.elements.length > 0
+                                                  ? "#e3ad55" : "#8290a0")
+                                        font.pixelSize: 16
+                                        font.italic: modelData.text.length === 0
+                                        wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
+                                        leftPadding: 9
+                                        rightPadding: 9
+                                        topPadding: 9
+                                        bottomPadding: 9
+                                        leftInset: 0
+                                        rightInset: 0
+                                        topInset: 0
+                                        bottomInset: 0
+                                        background: null
+                                        ToolTip.visible: transcriptHover.hovered
+                                        ToolTip.delay: 500
+                                        ToolTip.text: modelData.transmissions.length > 0
+                                            ? "A sustained pause starts a new line. Only cadence-supported word gaps are repaired; decoded characters remain visible while later corrections settle."
+                                            : "Live decoded text; select and scroll to pause automatic tail following"
+                                        HoverHandler { id: transcriptHover }
+                                        function applyDecodedText(nextText) {
                                         var oldSelectionStart = selectionStart
                                         var oldSelectionEnd = selectionEnd
                                         var hadSelection = oldSelectionStart
@@ -2402,14 +2436,15 @@ ApplicationWindow {
                                         }
                                         transcriptScroll.followAppendedText()
                                     }
-                                    Component.onCompleted:
-                                        applyDecodedText(
-                                            sessionCard.displayedDecodedText)
-                                    Connections {
-                                        target: sessionCard
-                                        function onDisplayedDecodedTextChanged() {
-                                            decodedTextArea.applyDecodedText(
+                                        Component.onCompleted:
+                                            applyDecodedText(
                                                 sessionCard.displayedDecodedText)
+                                        Connections {
+                                            target: sessionCard
+                                            function onDisplayedDecodedTextChanged() {
+                                                decodedTextArea.applyDecodedText(
+                                                    sessionCard.displayedDecodedText)
+                                            }
                                         }
                                     }
                                 }
@@ -2604,10 +2639,10 @@ ApplicationWindow {
                                 objectName: "decoderSessionActionRow"
                                 Layout.fillWidth: true
                                 spacing: 8
-                                Item { Layout.fillWidth: true }
                                 Button {
                                     objectName: "decoderSessionTxButton"
-                                    Layout.minimumWidth: 112
+                                    Layout.preferredWidth: 124
+                                    Layout.preferredHeight: 38
                                     text: modelData.callsign.length > 0
                                           ? "TX " + modelData.callsign : "TX"
                                     enabled: transmitController.armed
@@ -2629,14 +2664,14 @@ ApplicationWindow {
                                            ? "Select this exactly decoded station for guarded TX"
                                            : "Open QSO and arm TX first")
                                 }
-                                ToolButton {
+                                Item { Layout.fillWidth: true }
+                                Button {
                                     objectName: "decoderSessionMonitorButton"
-                                    Layout.preferredWidth: 46
+                                    Layout.preferredWidth: 124
                                     Layout.preferredHeight: 38
-                                    text: sessionCard.streamMonitored ? "🔊" : "🔈"
-                                    flat: false
+                                    text: sessionCard.streamMonitored
+                                          ? "🔊  Monitor" : "🔈  Monitor"
                                     highlighted: sessionCard.streamMonitored
-                                    font.pixelSize: 19
                                     Accessible.name: sessionCard.streamMonitored
                                         ? "Stop monitoring this CW stream"
                                         : "Monitor this CW stream"
@@ -2932,7 +2967,7 @@ ApplicationWindow {
                                      .toFixed(3), 1000)
                     ToolTip.visible: hovered
                     ToolTip.text: enabled
-                        ? "Retune RX so this runner falls on the CW guide; TX and split remain unchanged"
+                        ? "Retune RX so this runner falls on the configured CW reference tone; TX and split remain unchanged"
                         : "Requires a checked RF marker and a writable linked radio"
                 }
                 RowLayout {

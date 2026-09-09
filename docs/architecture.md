@@ -17,6 +17,7 @@ flowchart TB
     S4["TX safety supervisor"]
     S5["log coordinator and durable outbox"]
     S6["remote station coordinator and state snapshots"]
+    S7["operating-mode evidence and frequency advisor"]
   end
   subgraph CORE["dependency-free core"]
     C1["sample and spectral data contracts"]
@@ -97,6 +98,13 @@ CAT, Hamlib, or future provider. It moves the decode window and applies a signed
 profile LO offset to the SDR centre, clamping the arrangement so the entire
 decoder window remains inside the acquired passband. It cannot write TX, PTT,
 or KEY state.
+
+Receiver selection and radio control are orthogonal. Choosing a direct SDR as
+the RX sample source does not remove or replace the configured CAT/keying radio
+endpoint. A full-duplex topology may keep the SDR receiver active while a
+separate provider controls VFO B/TX; each endpoint retains its own frequency
+domain, offsets, capability state, and ownership. Profile activation must
+validate the complete topology before changing either endpoint.
 
 SoapySDR headers and linkage remain confined to the desktop adapter target and
 are optional for custom builds. Official packages enable the adapter and either
@@ -203,10 +211,11 @@ the presentation center through a deadband and slow slew, within a hard bound
 around the association origin. This follows a real drifting carrier without
 letting instantaneous noise, adjacent signals, or adaptive filter changes walk
 the operator's click target. A known VFO retune translates all three frequency
-states exactly. Inactive retained observations render
-only an axis mark; retention cannot assert live carrier/key-down state, which
-requires a current matched peak. The configurable 700 Hz receive region is represented by
-two unfilled dashed boundaries and is absent from the decoder data path.
+states exactly. Inactive retained observations render only an axis mark;
+retention cannot assert live carrier/key-down state, which requires a current
+matched peak. Two unfilled dashed boundaries show the configured CW-width
+around authoritative VFO B/TX readback. They are mapped into the current
+source's display domain and remain absent from the decoder data path.
 
 Timing acquisition is also bounded per track: nine deterministic decoders start
 at 8, 12, 16, 20, 25, 32, 40, 50, and 60 WPM. Recent bounded element quality,
@@ -425,6 +434,26 @@ Frequency synchronization is likewise a provider-neutral command: it resolves
 checked RX actual RF back through the independent TX offset and writes only the
 TX-frequency endpoint, enabling split through an advertised operation when
 needed. It never copies RX mode to TX.
+
+Spectrum-to-radio interaction crosses two explicit mappings. The receiver
+controller converts between the displayed coordinate and checked actual RF:
+direct SDR uses absolute RF, while demodulated audio uses the inverse
+sideband/pitch relation. The UI submits exact RF to the provider-neutral radio
+boundary, which applies the independent TX offset and waits for authoritative
+VFO B readback. The TX-slice overlay is driven only from that readback, so an
+accepted, rejected, delayed, or externally changed command cannot create
+optimistic radio state.
+
+Operating modes consume immutable receiver observations through the separate
+evidence/advisor service. Standard mode adds no interpretation. PileUp Chaser,
+PileUp Slicer, and Runner maintain bounded, session-scoped state as specified
+in [`operating-modes.md`](operating-modes.md). An advisor may publish a
+frequency suggestion or, after explicit session enablement, request a VFO B
+change through the same provider-neutral boundary. It has no PTT, KEY, arming,
+or message-send API. Half-duplex capture gaps reduce evidence; independent
+full-duplex RX permits continuous learning. Chaser gives the runner full
+decoding priority while pileup lanes use a constrained callsign/report grammar
+and otherwise contribute occupancy evidence.
 
 A network SDR is a receive-only source with its own tuned frequency. It is not a
 CAT rig and cannot acquire TX ownership. Any action that copies its frequency to
