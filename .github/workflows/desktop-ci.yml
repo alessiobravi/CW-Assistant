@@ -553,7 +553,16 @@ jobs:
           git config user.name "CW Buddy CI"
           git config user.email "ci@cw-buddy.invalid"
           git tag --force --annotate "${status_tag}" --message "${status_message}"
-          git push origin "refs/tags/${status_tag}" --force
+          for attempt in 1 2 3 4; do
+            if git push origin "refs/tags/${status_tag}" --force; then
+              break
+            fi
+            if [[ "${attempt}" == "4" ]]; then
+              echo "Unable to publish ${status_tag} after ${attempt} attempts." >&2
+              exit 1
+            fi
+            sleep "$((attempt * 5))"
+          done
 
   publish-continuous-release:
     name: Publish continuous binaries

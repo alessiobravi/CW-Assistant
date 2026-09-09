@@ -8,6 +8,11 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Cross-platform CI now retries each platform's diagnostic status-tag push
+  with bounded backoff, so a transient Git transport failure after successful
+  build, tests, packaging, and artifact upload does not immediately discard the
+  otherwise valid platform result.
+
 - Brief spectrum-association dropouts no longer force the event lattice to
   finalize its newest ambiguous Morse symbols. A bounded one-second/six-run
   look-ahead lets later spacing resolve that suffix append-only; sustained

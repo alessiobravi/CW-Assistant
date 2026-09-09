@@ -16,7 +16,9 @@ measure the remaining gap honestly: CER 0.458, WER 0.786, exact-call precision
 1.0, recall 0.333, and zero no-CW publications. A separated-state envelope
 experiment was rejected after one disjoint profile regressed despite a small
 aggregate gain. Reviewed legally reusable receiver annotations remain the next
-required evidence.
+required evidence. Per-platform diagnostic status publication now retries
+bounded transient Git failures after all substantive checks pass; this does
+not retry, skip, or weaken any compiler, test, package, smoke, or artifact gate.
 
 Previous review: 2026-09-09 (twenty-third entry) -- Wave 1 adds an executable
 CER/WER, exact-callsign, latency, and false-publication gate; removes nine

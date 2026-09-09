@@ -48,6 +48,9 @@ the Actions API, each matrix leg publishes a temporary annotated
 configure, build, test, staging, archive, upload, and package steps. A release
 failure publishes the same kind of marker. Successful release publication
 removes those diagnostic tags and advances `continuous`.
+Each diagnostic tag push uses bounded retry so a transient Git transport error
+after successful platform validation does not immediately invalidate that
+matrix leg; exhausting the retries still fails the job and blocks publication.
 When Qt installation or compilation fails, the status annotation also carries
 bounded compiler/linker error lines plus a shorter trailing log excerpt, so
 interleaved output from a later successful parallel target cannot hide the
