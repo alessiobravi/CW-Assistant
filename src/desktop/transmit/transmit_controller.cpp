@@ -111,6 +111,9 @@ const QString& TransmitController::speedSource() const noexcept {
   return speed_source_;
 }
 const QString& TransmitController::report() const noexcept { return report_; }
+const QString& TransmitController::exchange() const noexcept {
+  return exchange_;
+}
 bool TransmitController::autoQsoEnabled() const noexcept {
   return auto_qso_enabled_;
 }
@@ -119,6 +122,17 @@ bool TransmitController::tuning() const noexcept {
 }
 bool TransmitController::onAir() const noexcept {
   return hardware_ && hardware_->key();
+}
+double TransmitController::txElapsedSeconds() const noexcept {
+  return hardware_ ? static_cast<double>(hardware_->elapsedNs()) /
+                         1'000'000'000.0 : 0.0;
+}
+double TransmitController::txRemainingSeconds() const noexcept {
+  return hardware_ ? static_cast<double>(hardware_->remainingNs()) /
+                         1'000'000'000.0 : 0.0;
+}
+double TransmitController::txProgress() const noexcept {
+  return hardware_ ? hardware_->progress() : 0.0;
 }
 const QString& TransmitController::proposedMessage() const noexcept {
   return proposed_message_;
@@ -308,6 +322,13 @@ void TransmitController::setReport(const QString& value) {
   emit changed();
 }
 
+void TransmitController::setExchange(const QString& value) {
+  const QString trimmed = value.trimmed().toUpper();
+  if (trimmed.isEmpty() || trimmed.size() > 64 || exchange_ == trimmed) return;
+  exchange_ = trimmed;
+  emit changed();
+}
+
 void TransmitController::setAutoQsoEnabled(const bool enabled) {
   if (auto_qso_enabled_ == enabled) return;
   auto_qso_enabled_ = enabled;
@@ -428,6 +449,10 @@ bool TransmitController::prepareFreeText(const QString& text) {
 }
 bool TransmitController::prepareOwnCall() { return prepare(own_callsign_); }
 bool TransmitController::prepareReport() { return prepare(report_); }
+bool TransmitController::prepareExchange() { return prepare(exchange_); }
+bool TransmitController::prepareMacro(const QString& text) {
+  return prepare(text);
+}
 bool TransmitController::acceptProposal() {
   if (proposed_message_.isEmpty()) return false;
   return prepare(proposed_message_);

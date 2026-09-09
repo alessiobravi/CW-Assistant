@@ -350,11 +350,19 @@ ownership. The adapter may read/set frequency and split when advertised, but it
 does not route network PTT or CW around CW Buddy's station-local transmit
 guard. Profile passwords are never persisted.
 
+Hamlib is integrated through a bounded `rigctld` TCP adapter. It requires
+`rigctld --vfo`, explicitly addresses the configured RX and TX VFOs, and
+publishes state only after a complete frequency/mode/split poll. A successful
+`RPRT 0` acknowledges a request but never substitutes for the following
+authoritative readback. Because rigctld provides neither authentication nor
+transport encryption, CW Buddy accepts only loopback endpoints; remote access
+must terminate an authenticated encrypted tunnel locally. The adapter exposes
+no PTT or KEY operation.
+
 The operating panel expresses tuning requests in displayed actual RX RF. A
 dependency-free checked inverse removes the configured RX transverter offset
 before any provider sees a dial frequency. The UI calls one provider-neutral
-RX-frequency boundary; current OmniRig and CAT4OM adapters implement it, and
-the planned direct serial/Hamlib adapter must implement that same contract
+RX-frequency boundary; OmniRig, Hamlib rigctld, and CAT4OM implement it
 without adding provider-specific operating controls. CAT4OM names its pushed active VFO
 explicitly; its next pushed snapshot remains authoritative. Windows OmniRig
 selects the active receive-side `FreqA`/`FreqB` property when advertised, or
@@ -364,8 +372,9 @@ OmniRig frequency readback remains on the normal poll cadence, while its extra
 capability/VFO discovery is cached for one second to reduce out-of-process COM
 traffic. That cache controls only UI availability: every requested write reads
 and validates the complete live state again before changing frequency.
-OmniRig split/TX readback remains future work, so preserving rig state is not a
-claim that the current OmniRig display can describe that state.
+OmniRig reads split and the opposite standby/TX frequency where its automation
+surface exposes them; an inactive VFO mode remains unknown until that VFO has
+actually been observed as RX because OmniRig exposes only one mode property.
 
 Radio control separates operator targets from observed hardware state at the
 provider-neutral boundary. In particular, the transmit-mode target is always
@@ -390,7 +399,39 @@ a local rig crosses an explicit operator-confirmation boundary.
 Port enumeration is read-only. Opening a keying port initializes both control
 lines to their inactive polarity before the profile can be armed.
 
+Direct-keying acceptance is configuration-bound rather than a writable user
+flag. With the radio physically disconnected, the probe opens only the exact
+selected port under exclusive ownership, verifies the inactive baseline,
+observes RTS→CTS and DTR→DSR separately, then releases KEY before PTT and closes
+on every path. Only a successful electrical observation produces a persisted
+SHA-256 configuration fingerprint. Port, assignment, polarity, platform, or
+fingerprint changes fail closed. This loopback result permits safe adapter
+opening; documented minimum-power dummy-load acceptance remains a distinct
+operator procedure before on-air use.
+
 ## TX safety state machine
+
+The hardware and per-message gates are independent and cumulative:
+
+```mermaid
+flowchart LR
+  C["Exact keying configuration"] --> D["Operator confirms radio physically disconnected"]
+  D --> L["Measured RTS→CTS and DTR→DSR loopback"]
+  L --> H["Adapter may open safely inactive"]
+
+  R["Provider readback: TX RF + CW/CW-R + split"] --> A["Explicit Arm TX"]
+  H --> A
+  A --> Q["Exact target callsign confirmation"]
+  Q --> M["Exact outgoing-message confirmation"]
+  M --> K["Guarded scheduler may assert PTT/KEY"]
+  K --> W["Watchdog + cancel + emergency release"]
+  W --> X["Minimum-power dummy-load acceptance"]
+  X --> O["Operator approves configuration for on-air use"]
+```
+
+The application currently automates and persists the measured loopback gate;
+dummy-load acceptance remains an operator-executed procedure and must not be
+inferred from a loopback result.
 
 ```mermaid
 stateDiagram-v2

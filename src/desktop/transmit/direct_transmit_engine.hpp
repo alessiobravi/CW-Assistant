@@ -65,6 +65,11 @@ class DirectTransmitEngine final : public QObject {
   [[nodiscard]] bool key() const noexcept { return key_; }
   [[nodiscard]] bool fault() const noexcept { return fault_; }
   [[nodiscard]] const QString& status() const noexcept { return status_; }
+  [[nodiscard]] std::uint64_t elapsedNs() const noexcept { return elapsed_ns_; }
+  [[nodiscard]] std::uint64_t remainingNs() const noexcept {
+    return remaining_ns_;
+  }
+  [[nodiscard]] double progress() const noexcept { return progress_; }
 
  signals:
   void changed();
@@ -73,7 +78,9 @@ class DirectTransmitEngine final : public QObject {
   void initializeWorker(BackendFactory backend_factory);
   void updateCachedState(std::uint64_t revision, bool available,
                          bool open_safe, bool busy, bool ptt, bool key,
-                         bool fault, QString status);
+                         bool fault, QString status,
+                         std::uint64_t elapsed_ns,
+                         std::uint64_t remaining_ns, double progress);
 
   QThread* thread_{nullptr};
   DirectTransmitWorker* worker_{nullptr};
@@ -84,6 +91,9 @@ class DirectTransmitEngine final : public QObject {
   bool key_{false};
   bool fault_{false};
   QString status_{QStringLiteral("Direct transmit adapter is not configured")};
+  std::uint64_t elapsed_ns_{0U};
+  std::uint64_t remaining_ns_{0U};
+  double progress_{0.0};
   std::uint64_t cached_revision_{0U};
 };
 

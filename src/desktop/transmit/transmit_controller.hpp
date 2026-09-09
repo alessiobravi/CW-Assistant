@@ -34,6 +34,7 @@ class TransmitController final : public QObject {
                  NOTIFY changed)
   Q_PROPERTY(QString speedSource READ speedSource NOTIFY changed)
   Q_PROPERTY(QString report READ report WRITE setReport NOTIFY changed)
+  Q_PROPERTY(QString exchange READ exchange WRITE setExchange NOTIFY changed)
   Q_PROPERTY(bool autoQsoEnabled READ autoQsoEnabled WRITE setAutoQsoEnabled
                  NOTIFY changed)
   Q_PROPERTY(QString proposedMessage READ proposedMessage NOTIFY changed)
@@ -44,6 +45,9 @@ class TransmitController final : public QObject {
   Q_PROPERTY(QString hardwareStatus READ hardwareStatus NOTIFY changed)
   Q_PROPERTY(bool onAir READ onAir NOTIFY changed)
   Q_PROPERTY(bool tuning READ tuning NOTIFY changed)
+  Q_PROPERTY(double txElapsedSeconds READ txElapsedSeconds NOTIFY changed)
+  Q_PROPERTY(double txRemainingSeconds READ txRemainingSeconds NOTIFY changed)
+  Q_PROPERTY(double txProgress READ txProgress NOTIFY changed)
 
  public:
   explicit TransmitController(QObject* parent = nullptr);
@@ -63,6 +67,7 @@ class TransmitController final : public QObject {
   [[nodiscard]] int wordsPerMinute() const noexcept;
   [[nodiscard]] const QString& speedSource() const noexcept;
   [[nodiscard]] const QString& report() const noexcept;
+  [[nodiscard]] const QString& exchange() const noexcept;
   [[nodiscard]] bool autoQsoEnabled() const noexcept;
   [[nodiscard]] const QString& proposedMessage() const noexcept;
   [[nodiscard]] const QString& proposedReason() const noexcept;
@@ -72,6 +77,9 @@ class TransmitController final : public QObject {
   [[nodiscard]] const QString& hardwareStatus() const noexcept;
   [[nodiscard]] bool onAir() const noexcept;
   [[nodiscard]] bool tuning() const noexcept;
+  [[nodiscard]] double txElapsedSeconds() const noexcept;
+  [[nodiscard]] double txRemainingSeconds() const noexcept;
+  [[nodiscard]] double txProgress() const noexcept;
 
   void setOwnCallsign(const QString& callsign);
   void configureHardware(bool enabled, const QString& port_name,
@@ -86,6 +94,7 @@ class TransmitController final : public QObject {
                             bool split_active);
   void setWordsPerMinute(int value);
   void setReport(const QString& value);
+  void setExchange(const QString& value);
   void setAutoQsoEnabled(bool enabled);
   void observeDecoderChannels(const QVariantList& channels);
 
@@ -99,6 +108,8 @@ class TransmitController final : public QObject {
   Q_INVOKABLE bool prepareFreeText(const QString& text);
   Q_INVOKABLE bool prepareOwnCall();
   Q_INVOKABLE bool prepareReport();
+  Q_INVOKABLE bool prepareExchange();
+  Q_INVOKABLE bool prepareMacro(const QString& text);
   Q_INVOKABLE bool acceptProposal();
   Q_INVOKABLE bool confirmPreview(const QString& exact_preview);
   Q_INVOKABLE bool transmitPrepared();
@@ -124,6 +135,7 @@ class TransmitController final : public QObject {
   std::optional<cwassistant::core::CwTransmitPlan> plan_;
   QString own_callsign_;
   QString report_{QStringLiteral("599")};
+  QString exchange_{QStringLiteral("TU")};
   QString status_{QStringLiteral("Transmit disarmed")};
   QString proposed_message_;
   QString proposed_reason_;

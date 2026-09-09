@@ -32,10 +32,14 @@ qt_add_executable(cw-buddy-desktop
   replay/live_audio_worker.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
+  radio/hamlib_rigctld_client.cpp
+  radio/hamlib_rigctld_client.hpp
   transmit/transmit_controller.cpp
   transmit/transmit_controller.hpp
   transmit/direct_keying_adapter.cpp
   transmit/direct_keying_adapter.hpp
+  transmit/direct_keying_acceptance_probe.cpp
+  transmit/direct_keying_acceptance_probe.hpp
   transmit/direct_transmit_engine.cpp
   transmit/direct_transmit_engine.hpp
   settings/app_settings.cpp
@@ -128,6 +132,18 @@ target_compile_definitions(cw-buddy-desktop PRIVATE
   CWA_VERSION="${CWA_BUILD_VERSION}")
 
 if(CWA_BUILD_TESTS)
+  qt_add_executable(cwa_hamlib_rigctld_client_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/hamlib_rigctld_client_test.cpp
+    radio/hamlib_rigctld_client.cpp
+    radio/hamlib_rigctld_client.hpp)
+  target_link_libraries(cwa_hamlib_rigctld_client_test PRIVATE
+    cwa_core Qt6::Core Qt6::Network)
+  target_include_directories(cwa_hamlib_rigctld_client_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_hamlib_rigctld_client_test
+    COMMAND cwa_hamlib_rigctld_client_test)
+  set_tests_properties(cwa_hamlib_rigctld_client_test PROPERTIES TIMEOUT 10)
+
   qt_add_executable(cwa_transmit_controller_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/transmit_controller_test.cpp
     transmit/direct_keying_adapter.cpp
@@ -154,6 +170,20 @@ if(CWA_BUILD_TESTS)
     ${CMAKE_CURRENT_SOURCE_DIR})
   add_test(NAME cwa_direct_keying_adapter_test
     COMMAND cwa_direct_keying_adapter_test)
+
+  qt_add_executable(cwa_direct_keying_acceptance_probe_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/direct_keying_acceptance_probe_test.cpp
+    transmit/direct_keying_acceptance_probe.cpp
+    transmit/direct_keying_acceptance_probe.hpp
+    transmit/direct_keying_adapter.hpp)
+  target_link_libraries(cwa_direct_keying_acceptance_probe_test PRIVATE
+    Qt6::Core Qt6::SerialPort)
+  target_include_directories(cwa_direct_keying_acceptance_probe_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_direct_keying_acceptance_probe_test
+    COMMAND cwa_direct_keying_acceptance_probe_test)
+  set_tests_properties(cwa_direct_keying_acceptance_probe_test PROPERTIES
+    TIMEOUT 10)
 
   qt_add_executable(cwa_direct_transmit_engine_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/direct_transmit_engine_test.cpp

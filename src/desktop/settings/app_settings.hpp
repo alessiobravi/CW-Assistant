@@ -20,6 +20,7 @@
 namespace cwassistant::desktop {
 
 class Cat4OmClient;
+class HamlibRigctldClient;
 class AppSettings final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QStringList referenceRigNames READ referenceRigNames CONSTANT)
@@ -67,6 +68,13 @@ class AppSettings final : public QObject {
                  NOTIFY radioFrequencyChanged)
   Q_PROPERTY(bool radioSplitKnown READ radioSplitKnown NOTIFY radioFrequencyChanged)
   Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
+  Q_PROPERTY(QString hamlibHost READ hamlibHost WRITE setHamlibHost NOTIFY settingsChanged)
+  Q_PROPERTY(int hamlibPort READ hamlibPort WRITE setHamlibPort NOTIFY settingsChanged)
+  Q_PROPERTY(QString hamlibRxVfo READ hamlibRxVfo WRITE setHamlibRxVfo NOTIFY settingsChanged)
+  Q_PROPERTY(QString hamlibTxVfo READ hamlibTxVfo WRITE setHamlibTxVfo NOTIFY settingsChanged)
+  Q_PROPERTY(bool hamlibWritable READ hamlibWritable WRITE setHamlibWritable NOTIFY settingsChanged)
+  Q_PROPERTY(QString hamlibState READ hamlibState NOTIFY hamlibChanged)
+  Q_PROPERTY(bool hamlibCanWrite READ hamlibCanWrite NOTIFY hamlibChanged)
   Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omRadioId READ cat4omRadioId WRITE setCat4omRadioId NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omPassword READ cat4omPassword WRITE setCat4omPassword NOTIFY settingsChanged)
@@ -87,13 +95,18 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE setCwToneSidebandIndex NOTIFY settingsChanged)
   Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY settingsChanged)
   Q_PROPERTY(bool directKeyingEnabled READ directKeyingEnabled WRITE setDirectKeyingEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(bool directKeyingValidated READ directKeyingValidated WRITE setDirectKeyingValidated NOTIFY settingsChanged)
+  Q_PROPERTY(bool directKeyingValidated READ directKeyingValidated NOTIFY settingsChanged)
+  Q_PROPERTY(QString directKeyingAcceptanceStatus READ directKeyingAcceptanceStatus NOTIFY settingsChanged)
   Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(bool pttActiveHigh READ pttActiveHigh WRITE setPttActiveHigh NOTIFY settingsChanged)
   Q_PROPERTY(bool keyActiveHigh READ keyActiveHigh WRITE setKeyActiveHigh NOTIFY settingsChanged)
   Q_PROPERTY(int txSpeedMode READ txSpeedMode WRITE setTxSpeedMode NOTIFY settingsChanged)
   Q_PROPERTY(int fixedTxWpm READ fixedTxWpm WRITE setFixedTxWpm NOTIFY settingsChanged)
+  Q_PROPERTY(QString txMacro1 READ txMacro1 WRITE setTxMacro1 NOTIFY settingsChanged)
+  Q_PROPERTY(QString txMacro2 READ txMacro2 WRITE setTxMacro2 NOTIFY settingsChanged)
+  Q_PROPERTY(QString txMacro3 READ txMacro3 WRITE setTxMacro3 NOTIFY settingsChanged)
+  Q_PROPERTY(QString txMacro4 READ txMacro4 WRITE setTxMacro4 NOTIFY settingsChanged)
   Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY settingsChanged)
   Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
@@ -177,6 +190,13 @@ class AppSettings final : public QObject {
   [[nodiscard]] qulonglong radioTxVfoFrequencyHz() const noexcept;
   [[nodiscard]] bool radioSplitKnown() const noexcept;
   [[nodiscard]] int omniRigSlot() const noexcept;
+  [[nodiscard]] const QString& hamlibHost() const noexcept;
+  [[nodiscard]] int hamlibPort() const noexcept;
+  [[nodiscard]] const QString& hamlibRxVfo() const noexcept;
+  [[nodiscard]] const QString& hamlibTxVfo() const noexcept;
+  [[nodiscard]] bool hamlibWritable() const noexcept;
+  [[nodiscard]] QString hamlibState() const;
+  [[nodiscard]] bool hamlibCanWrite() const noexcept;
   [[nodiscard]] const QString& cat4omUrl() const noexcept;
   [[nodiscard]] const QString& cat4omRadioId() const noexcept;
   [[nodiscard]] const QString& cat4omPassword() const noexcept;
@@ -201,12 +221,17 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& keyingPort() const noexcept;
   [[nodiscard]] bool directKeyingEnabled() const noexcept;
   [[nodiscard]] bool directKeyingValidated() const noexcept;
+  [[nodiscard]] const QString& directKeyingAcceptanceStatus() const noexcept;
   [[nodiscard]] int pttLineIndex() const noexcept;
   [[nodiscard]] int keyLineIndex() const noexcept;
   [[nodiscard]] bool pttActiveHigh() const noexcept;
   [[nodiscard]] bool keyActiveHigh() const noexcept;
   [[nodiscard]] int txSpeedMode() const noexcept;
   [[nodiscard]] int fixedTxWpm() const noexcept;
+  [[nodiscard]] const QString& txMacro1() const noexcept;
+  [[nodiscard]] const QString& txMacro2() const noexcept;
+  [[nodiscard]] const QString& txMacro3() const noexcept;
+  [[nodiscard]] const QString& txMacro4() const noexcept;
   [[nodiscard]] int targetFps() const noexcept;
   [[nodiscard]] int waterfallRate() const noexcept;
   [[nodiscard]] int waterfallTimeSpanSeconds() const noexcept;
@@ -250,6 +275,11 @@ class AppSettings final : public QObject {
   void setOwnCallsign(const QString& value);
   void setRadioEnabled(bool value);
   void setOmniRigSlot(int value);
+  void setHamlibHost(const QString& value);
+  void setHamlibPort(int value);
+  void setHamlibRxVfo(const QString& value);
+  void setHamlibTxVfo(const QString& value);
+  void setHamlibWritable(bool value);
   void setCat4omUrl(const QString& value);
   void setCat4omRadioId(const QString& value);
   void setCat4omPassword(const QString& value);
@@ -267,13 +297,16 @@ class AppSettings final : public QObject {
   void setCwToneSidebandIndex(int value);
   void setKeyingPort(const QString& value);
   void setDirectKeyingEnabled(bool value);
-  void setDirectKeyingValidated(bool value);
   void setPttLineIndex(int value);
   void setKeyLineIndex(int value);
   void setPttActiveHigh(bool value);
   void setKeyActiveHigh(bool value);
   void setTxSpeedMode(int value);
   void setFixedTxWpm(int value);
+  void setTxMacro1(const QString& value);
+  void setTxMacro2(const QString& value);
+  void setTxMacro3(const QString& value);
+  void setTxMacro4(const QString& value);
   void setTargetFps(int value);
   void setWaterfallRate(int value);
   void setWaterfallTimeSpanSeconds(int value);
@@ -318,6 +351,9 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool selectProfile(const QString& profile_name);
   Q_INVOKABLE bool createProfile(const QString& profile_name);
   Q_INVOKABLE void showOmniRigConfiguration();
+  Q_INVOKABLE void connectHamlib();
+  Q_INVOKABLE void disconnectHamlib();
+  Q_INVOKABLE bool runDirectKeyingLoopback(bool radio_disconnected_confirmed);
   Q_INVOKABLE void testCat4omConnection();
   Q_INVOKABLE void connectCat4omControl();
   Q_INVOKABLE void disconnectCat4om();
@@ -343,6 +379,7 @@ class AppSettings final : public QObject {
   void profilesChanged();
   void profileSelectionRequiredChanged();
   void cat4omChanged();
+  void hamlibChanged();
   void radioFrequencyChanged();
   void radioFrequencyControlChanged();
   void detectedRadiosChanged();
@@ -364,9 +401,11 @@ class AppSettings final : public QObject {
   void refreshControlledFrequency();
   void reconcilePendingRxFrequency();
   void rememberPendingRxFrequency(std::uint64_t frequency_hz);
+  void invalidateDirectKeyingAcceptance(QString status);
   [[nodiscard]] std::optional<cwassistant::core::ResolvedFrequencies>
   resolvedControlledFrequencies() const noexcept;
   bool writeControlledRxDialFrequency(std::uint64_t dial_frequency_hz);
+  bool requestControlledTxRfFrequency(std::uint64_t rf_frequency_hz);
   bool writeControlledTxDialFrequency(std::uint64_t dial_frequency_hz);
   bool writeControlledMode(cwassistant::core::RadioMode mode, bool tx);
 #ifdef Q_OS_WIN
@@ -409,6 +448,11 @@ class AppSettings final : public QObject {
   cwassistant::core::RadioMode radio_tx_mode_target_{
       cwassistant::core::RadioMode::Cw};
   int omnirig_slot_{1};
+  QString hamlib_host_{QStringLiteral("127.0.0.1")};
+  int hamlib_port_{4'532};
+  QString hamlib_rx_vfo_{QStringLiteral("VFOA")};
+  QString hamlib_tx_vfo_{QStringLiteral("VFOB")};
+  bool hamlib_writable_{false};
   QString cat4om_url_{QStringLiteral("ws://127.0.0.1:5001/")};
   QString cat4om_radio_id_;
   QString cat4om_password_;
@@ -427,12 +471,21 @@ class AppSettings final : public QObject {
   QString keying_port_;
   bool direct_keying_enabled_{false};
   bool direct_keying_validated_{false};
+  QString direct_keying_acceptance_sha256_;
+  QString direct_keying_acceptance_platform_;
+  qint64 direct_keying_acceptance_utc_seconds_{0};
+  QString direct_keying_acceptance_status_{
+      QStringLiteral("Physical loopback has not been measured.")};
   int ptt_line_index_{0};
   int key_line_index_{1};
   bool ptt_active_high_{true};
   bool key_active_high_{true};
   int tx_speed_mode_{0};
   int fixed_tx_wpm_{20};
+  QString tx_macro_1_{QStringLiteral("TU")};
+  QString tx_macro_2_{QStringLiteral("AGN")};
+  QString tx_macro_3_{QStringLiteral("PSE K")};
+  QString tx_macro_4_{QStringLiteral("73")};
   int target_fps_{60};
   int waterfall_rate_{60};
   int waterfall_time_span_seconds_{10};
@@ -467,6 +520,7 @@ class AppSettings final : public QObject {
   bool com_initialized_{false};
   bool com_initialization_attempted_{false};
   std::unique_ptr<Cat4OmClient> cat4om_client_;
+  std::unique_ptr<HamlibRigctldClient> hamlib_client_;
   std::unique_ptr<QMediaDevices> media_devices_;
   QTimer radio_frequency_timer_;
   QTimer radio_frequency_request_timer_;

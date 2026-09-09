@@ -250,10 +250,10 @@ be used, all of the following must be true:
 
 1. **Settings → Keying** names a dedicated serial port, assigns separate PTT
    and KEY lines, and uses an electrically verified active-high interface.
-2. With the radio disconnected, both lines have been confirmed inactive; a
-   physical loopback test has then confirmed the selected line assignments.
-   Record that result with **Disconnected lines and physical loopback passed**.
-   Changing any keying detail clears this acknowledgement.
+2. Physically disconnect the radio, fit RTS→CTS and DTR→DSR loopbacks, select
+   the disconnected confirmation, and press **Run measured loopback**. CW Buddy
+   must observe the inactive baseline, each independent transition, and the
+   final release. Changing any keying detail invalidates the stored result.
 3. The radio-control provider confirms the exact TX frequency, split state,
    and a CW or CW-R TX mode. A target that the provider cannot read back is not
    sufficient to arm.
@@ -265,19 +265,24 @@ polarity change disarms before keying; a change observed while KEY/PTT is active
 causes an emergency release and latched fault.
 
 Choose **TX** on a decoder card whose callsign was decoded exactly. Retype that
-station before preparing **Send my call**, the editable report, or
-operator-authored free text. CW Buddy normalizes the message to uppercase
+station before preparing **Send my call**, the editable report/exchange, a
+profile-configured quick macro, or operator-authored free text. CW Buddy
+normalizes the message to uppercase
 Morse-compatible text and shows its duration at the selected 5–80 WPM; retype
 that exact preview as a separate confirmation. **Transmit confirmed message**
 then schedules the immutable Morse plan on the direct adapter. **Cancel
 transmission** and **EMERGENCY RELEASE** synchronously release KEY before PTT;
 emergency release also latches a fault and requires an explicit reset.
+While active, elapsed/remaining time and progress come from the worker's
+monotonic schedule rather than an optimistic UI timer and clear on completion,
+cancellation, or fault.
 
 For initial hardware acceptance, connect the transceiver to a dummy load, use
 minimum power, keep an independent means of removing power available, and
-verify line order and watchdog release before any on-air use. The software
-acknowledgement records an operator-performed test; it does not electrically
-measure or certify the interface.
+verify a message, cancellation, watchdog release, and emergency release before
+any on-air use. The measured serial loopback proves only the selected control
+and sense paths; it does not certify the radio interface or replace this
+dummy-load acceptance.
 
 **Auto-QSO suggestions** only prepares an operator-visible suggestion when the
 selected stream contains a listening cue such as `CQ`, `QRZ`, or `UP`, or when
@@ -749,11 +754,12 @@ prevent both processes from opening the same serial, audio, or SDR device.
 Actual-RF marker labels are enabled only while live capture is running, the
 profile explicitly links that audio input to the radio, and the selected
 frequency provider has a valid state. Windows OmniRig is polled for its online
-RX frequency; CAT4OM uses its pushed radio state. The RX transverter offset is
+state, Hamlib publishes only complete rigctld polls after verifying `--vfo`,
+and CAT4OM uses its pushed radio state. The RX transverter offset is
 applied before tone mapping. Recordings, SWL profiles, unlinked inputs, and
 unavailable frequency providers deliberately show **AF** rather than guessing.
 
-The **CW Decoder** panel shows the resolved radio state as a compact faceplate
+The **Radio Control** panel shows the resolved radio state as a compact faceplate
 above the signal list: grouped whole-hertz RX and TX digits, a dim/red ON AIR
 area, explicit VFO and SIMPLEX/SPLIT state, provider-reported RX mode, a
 separate CW/CW-R operator TX target, and an orange TX frequency. Unknown
@@ -788,7 +794,7 @@ never changes the rig merely to make the faceplate complete.
 
 Use **A=B** to copy the checked VFO A/RX actual-RF frequency into VFO B/TX.
 The same provider-neutral route performs independent transverter-offset
-conversion and enables split when the backend advertises both operations. SYNC
+conversion and enables split when the backend advertises both operations. A=B
 is disabled when RX state is unknown or either required capability is absent.
 It changes frequency only: it never copies the RX mode into the CW/CW-R TX
 target.
@@ -803,10 +809,13 @@ right-hand **Radio Control** heading owns this faceplate. The separate
 **CW Decoder** heading below it owns Diagnostics and Debug capture, so receiver
 control state and decoding tools are not presented as one panel.
 
-The equal-sized **TUNE** tile in Radio Control invokes the same guarded action
-as TUNE in the QSO panel. It remains disabled until TX is explicitly armed,
-never bypasses the hardware-readiness gate, and retains the hard 15-second
-continuous-KEY watchdog.
+The orange **TUNE** tile sits directly beneath the borderless ON AIR indicator;
+while active it displays the remaining watchdog seconds rounded up, and a
+second press releases KEY and PTT immediately.
+SPLIT and A=B are centered in the remaining lower-row space. The tile invokes
+the same guarded action as TUNE in the QSO panel, remains disabled until TX is
+explicitly armed, never bypasses the hardware-readiness gate, and retains the
+hard 15-second continuous-KEY watchdog.
 
 The entered value is actual RF, not necessarily the radio dial. CW Buddy
 removes the configured RX transverter offset with checked integer-Hz arithmetic
@@ -815,7 +824,10 @@ receive VFO, while TX edits target only the transmit VFO. The provider's subsequ
 poll/pushed state remains authoritative, so the display changes only when the
 radio reports the new frequency. Windows OmniRig tuning is enabled only while
 the radio reports online receive state and a writable active RX-frequency
-property; its authoritative split/TX display remains future work.
+property. Hamlib is read-only unless writes are explicitly enabled in Settings;
+it accepts only a local rigctld endpoint because the raw protocol has no
+authentication or encryption. Start rigctld with `--vfo`; use a locally
+terminated authenticated encrypted tunnel for a remote radio.
 
 Retuning the linked radio's RX VFO while live audio is running follows any
 already-identified signal rather than losing it: every tracked signal is
@@ -823,13 +835,9 @@ re-centered by the exact amount the RX dial moved (translated to audio Hz
 using the configured CW-U/CW-L sideband direction), so its decoded text and
 verification carry over across the retune instead of restarting.
 
-Next to the VFO readout is an **ON AIR** indicator. It is a placeholder
-only: it never lights, because no currently supported radio backend
-exposes live transmit/PTT state to the interface. OmniRig's receive/transmit
-flag is consulted transiently to block unsafe frequency writes while
-transmitting, but it is not yet retained as authoritative ON AIR telemetry;
-CAT4OM's protocol has no such field. The indicator will start reflecting real
-state once that telemetry is added.
+Next to the VFO readout is an **ON AIR** indicator. It lights only from the
+guarded local keying engine's authoritative KEY state, never because a CAT
+request was accepted, a message was queued, or decoder text suggested a reply.
 
 Example satellite station:
 

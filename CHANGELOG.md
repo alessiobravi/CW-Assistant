@@ -8,6 +8,10 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- **A=B** now writes the exact VFO A/RX whole-hertz value to VFO B/TX. The
+  previous path incorrectly passed a whole-hertz integer through the public
+  kHz/MHz text-entry API and therefore rejected every synchronization request.
+
 - Continuous-release replacement now retries GitHub asset uploads with bounded
   backoff. This covers the short deletion-propagation window exposed when the
   version manifest was replaced immediately after the platform payloads,
@@ -27,9 +31,30 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Added
 
+- A provider-neutral Hamlib rigctld adapter now reads and capability-gates
+  independent RX/TX frequency, mode, VFO, and split state, and routes the same
+  operating-panel commands as OmniRig and CAT4OM. It requires rigctld VFO mode,
+  treats only complete poll readback as authoritative, accepts loopback
+  endpoints only because the raw protocol has no authentication or TLS, and
+  deliberately exposes no PTT or KEY command.
+
+- Direct-keying validation now performs a real bounded electrical loopback on
+  the exact selected serial port. After explicit radio-disconnected
+  confirmation it verifies inactive lines, RTS→CTS and DTR→DSR independently,
+  releases KEY before PTT, and stores only a platform/configuration-bound
+  SHA-256 fingerprint and timestamp. The former writable acknowledgement
+  checkbox can no longer enable hardware.
+
+- Active message and TUNE operations now show authoritative elapsed time,
+  remaining time, and progress from the worker schedule. Report and exchange
+  fields plus four profile-configurable quick macros all prepare the existing
+  exact-confirmation preview and never send automatically. While TUNE is
+  active, its orange faceplate tile shows the rounded-up watchdog countdown;
+  pressing it again still releases KEY and PTT immediately.
+
 - Guarded direct CW transmission now connects the operator-confirmed QSO flow
-  to the dedicated RTS/DTR adapter. Arming requires an explicit physical-
-  loopback acknowledgement plus provider-confirmed TX frequency, CW/CW-R mode,
+  to the dedicated RTS/DTR adapter. Arming requires a measured physical
+  loopback plus provider-confirmed TX frequency, CW/CW-R mode,
   and split state; changing any captured station or keying condition disarms or
   emergency-releases. Confirmed own-call, editable-report, and free-text plans
   run at fixed or selected-stream RX-adaptive WPM, remain synchronously
@@ -38,9 +63,10 @@ All notable changes to CW Buddy are recorded here. The format follows
   Hardware remains opt-in and first acceptance is documented for a dummy load.
 
 - The radio faceplate aligns both frequency displays against equal-sized,
-  fixed right-hand RX/TX mode controls. TUNE now sits beside SIMPLEX and A=B as
-  an equal 52-pixel action tile, while ON AIR remains in the upper-left as a
-  borderless status lamp driven only by authoritative KEY state.
+  fixed right-hand RX/TX mode controls. The orange TUNE tile sits directly
+  beneath the borderless ON AIR status lamp, while SIMPLEX/SPLIT and A=B are
+  centered in the remaining lower-row space. ON AIR remains driven only by
+  authoritative KEY state.
 
 - A provider-neutral **A=B** control copies the checked VFO A/RX actual-RF
   frequency to VFO B/TX through advertised TX-frequency and split

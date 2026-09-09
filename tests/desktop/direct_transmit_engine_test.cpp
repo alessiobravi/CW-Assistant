@@ -109,20 +109,36 @@ int main(int argc, char** argv) {
            "engine rejects a plan without explicit exact-preview confirmation");
     expect(engine.start(*plan, true) && engine.busy() && engine.ptt(),
            "confirmed immutable plan starts with PTT asserted");
+    expect(engine.remainingNs() > 0U && engine.progress() >= 0.0 &&
+               engine.progress() < 1.0,
+           "a running immutable plan exposes bounded authoritative progress");
     expect(waitUntil([&engine] { return !engine.busy(); }, 1'000) &&
                !engine.ptt() && !engine.key() && !engine.fault(),
            "dedicated timer completes with both lines inactive");
+    expect(engine.elapsedNs() == 0U && engine.remainingNs() == 0U &&
+               engine.progress() == 0.0,
+           "completed transmission clears activity timing");
     expect(engine.start(*plan, true) && engine.cancel() && !engine.busy() &&
                !engine.ptt() && !engine.key() && !engine.fault(),
            "operator cancellation synchronously releases KEY before PTT");
     expect(!engine.startTune(false),
            "TUNE rejects a request without explicit operator authorization");
     expect(engine.startTune(true) && engine.busy() && engine.ptt() &&
-               engine.key() && !engine.startTune(true),
+               engine.key() && engine.remainingNs() > 0U &&
+               !engine.startTune(true),
            "authorized TUNE asserts PTT then KEY and cannot extend itself");
+    const auto initial_tune_remaining = engine.remainingNs();
+    expect(waitUntil([&engine, initial_tune_remaining] {
+               return engine.elapsedNs() > 0U &&
+                   engine.remainingNs() < initial_tune_remaining;
+             }, 500),
+           "TUNE countdown advances from the worker watchdog clock");
     expect(engine.stopTune() && !engine.busy() && !engine.ptt() &&
                !engine.key() && !engine.fault(),
            "stopping TUNE synchronously releases KEY then PTT");
+    expect(engine.elapsedNs() == 0U && engine.remainingNs() == 0U &&
+               engine.progress() == 0.0,
+           "stopped TUNE clears its watchdog countdown");
   }
 
   {

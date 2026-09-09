@@ -21,6 +21,9 @@ struct WorkerState {
   bool key{false};
   bool fault{false};
   QString status;
+  std::uint64_t elapsed_ns{0U};
+  std::uint64_t remaining_ns{0U};
+  double progress{0.0};
 };
 
 constexpr qint64 kAdapterHealthPollMs = 10;
@@ -137,6 +140,9 @@ class DirectTransmitWorker final : public QObject {
       return {false, state()};
     }
     status_ = QStringLiteral("Confirmed CW message is transmitting");
+    activity_start_ns_ = now_ns;
+    activity_total_ns_ = config_.scheduler.ptt_lead_ns +
+        plan.total_duration_ns + config_.scheduler.ptt_hang_ns;
     scheduleTimer();
     publish();
     return {true, state()};
@@ -160,6 +166,7 @@ class DirectTransmitWorker final : public QObject {
       if (!applyDesiredLines()) return {false, state()};
     }
     status_ = QStringLiteral("Transmission cancelled with KEY and PTT inactive");
+    clearActivityTiming();
     publish();
     return {true, state()};
   }
@@ -191,6 +198,8 @@ class DirectTransmitWorker final : public QObject {
     }
     tuning_ = true;
     tune_deadline_ns_ = now_ns + config_.maximum_tune_duration_ns;
+    activity_start_ns_ = now_ns;
+    activity_total_ns_ = config_.maximum_tune_duration_ns;
     status_ = QStringLiteral("TUNE active; hard 15-second watchdog armed");
     publish();
     scheduleTimer();
@@ -211,6 +220,7 @@ class DirectTransmitWorker final : public QObject {
       return {false, state()};
     }
     status_ = QStringLiteral("TUNE released with KEY and PTT inactive");
+    clearActivityTiming();
     publish();
     return {true, state()};
   }
@@ -219,6 +229,7 @@ class DirectTransmitWorker final : public QObject {
     timer_->stop();
     tuning_ = false;
     tune_deadline_ns_ = 0U;
+    clearActivityTiming();
     scheduler_.emergencyRelease();
     // The scheduler deliberately exposes KEY-off and PTT-off as two distinct
     // desired states. Apply both synchronously in that order.
@@ -238,9 +249,11 @@ class DirectTransmitWorker final : public QObject {
     return state();
   }
 
- signals:
+signals:
   void stateChanged(std::uint64_t revision, bool available, bool open_safe,
-                    bool busy, bool ptt, bool key, bool fault, QString status);
+                    bool busy, bool ptt, bool key, bool fault, QString status,
+                    std::uint64_t elapsed_ns, std::uint64_t remaining_ns,
+                    double progress);
 
  private:
   std::uint64_t monotonicNow() {
@@ -313,6 +326,7 @@ class DirectTransmitWorker final : public QObject {
     timer_->stop();
     tuning_ = false;
     tune_deadline_ns_ = 0U;
+    clearActivityTiming();
     scheduler_.emergencyRelease();
     if (adapter_) {
       static_cast<void>(adapter_->releaseAll());
@@ -345,6 +359,7 @@ class DirectTransmitWorker final : public QObject {
     if (timer_) timer_->stop();
     tuning_ = false;
     tune_deadline_ns_ = 0U;
+    clearActivityTiming();
     if (adapter_ && adapter_->snapshot().open_safe) drainSchedulerRelease();
     if (adapter_) adapter_->close();
     if (!preserve_fault) fault_ = false;
@@ -392,6 +407,9 @@ class DirectTransmitWorker final : public QObject {
             "TUNE watchdog expired; KEY and PTT were released"));
         return;
       }
+      // Keep the operator-visible watchdog countdown tied to the same
+      // monotonic worker clock that enforces the hard release deadline.
+      publish();
       scheduleTimer();
       return;
     }
@@ -407,6 +425,7 @@ class DirectTransmitWorker final : public QObject {
     if (scheduler_.snapshot().state ==
         cwassistant::core::CwTransmitSchedulerState::Completed) {
       status_ = QStringLiteral("Confirmed CW message completed");
+      clearActivityTiming();
     }
     publish();
     scheduleTimer();
@@ -415,6 +434,19 @@ class DirectTransmitWorker final : public QObject {
   WorkerState state() const {
     const auto hardware = adapter_ ? adapter_->snapshot()
                                    : DirectKeyingSnapshot{};
+    std::uint64_t elapsed_ns = 0U;
+    std::uint64_t remaining_ns = 0U;
+    double progress = 0.0;
+    if (activity_total_ns_ > 0U && clock_.isValid()) {
+      const qint64 sampled = clock_.nsecsElapsed();
+      const std::uint64_t now_ns = sampled > 0
+          ? static_cast<std::uint64_t>(sampled) : 0U;
+      elapsed_ns = now_ns > activity_start_ns_
+          ? std::min(now_ns - activity_start_ns_, activity_total_ns_) : 0U;
+      remaining_ns = activity_total_ns_ - elapsed_ns;
+      progress = static_cast<double>(elapsed_ns) /
+          static_cast<double>(activity_total_ns_);
+    }
     return {.revision = revision_,
             .available = configured_ && adapter_ != nullptr,
             .open_safe = hardware.open_safe && !hardware.fault_or_unknown &&
@@ -424,7 +456,15 @@ class DirectTransmitWorker final : public QObject {
             .ptt = lineActive(hardware.ptt),
             .key = lineActive(hardware.key),
             .fault = fault_ || !hardware.fault.isEmpty(),
-            .status = status_};
+            .status = status_,
+            .elapsed_ns = elapsed_ns,
+            .remaining_ns = remaining_ns,
+            .progress = progress};
+  }
+
+  void clearActivityTiming() noexcept {
+    activity_start_ns_ = 0U;
+    activity_total_ns_ = 0U;
   }
 
   void publish() {
@@ -432,7 +472,8 @@ class DirectTransmitWorker final : public QObject {
     const WorkerState current = state();
     emit stateChanged(current.revision, current.available, current.open_safe,
                       current.busy, current.ptt, current.key, current.fault,
-                      current.status);
+                      current.status, current.elapsed_ns,
+                      current.remaining_ns, current.progress);
   }
 
   DirectTransmitEngine::BackendFactory backend_factory_;
@@ -447,6 +488,8 @@ class DirectTransmitWorker final : public QObject {
   bool handling_fault_{false};
   bool tuning_{false};
   std::uint64_t tune_deadline_ns_{0U};
+  std::uint64_t activity_start_ns_{0U};
+  std::uint64_t activity_total_ns_{0U};
   std::uint64_t revision_{0U};
 };
 
@@ -489,7 +532,8 @@ void DirectTransmitEngine::configure(const DirectTransmitEngineConfig& config) {
       Qt::BlockingQueuedConnection);
   updateCachedState(result.revision, result.available, result.open_safe,
                     result.busy, result.ptt, result.key, result.fault,
-                    std::move(result.status));
+                    std::move(result.status), result.elapsed_ns,
+                    result.remaining_ns, result.progress);
 }
 
 bool DirectTransmitEngine::openSafe() {
@@ -501,7 +545,8 @@ bool DirectTransmitEngine::openSafe() {
   updateCachedState(result.second.revision, result.second.available,
                     result.second.open_safe, result.second.busy,
                     result.second.ptt, result.second.key, result.second.fault,
-                    std::move(result.second.status));
+                    std::move(result.second.status), result.second.elapsed_ns,
+                    result.second.remaining_ns, result.second.progress);
   return result.first;
 }
 
@@ -519,7 +564,8 @@ bool DirectTransmitEngine::start(
   updateCachedState(result.second.revision, result.second.available,
                     result.second.open_safe, result.second.busy,
                     result.second.ptt, result.second.key, result.second.fault,
-                    std::move(result.second.status));
+                    std::move(result.second.status), result.second.elapsed_ns,
+                    result.second.remaining_ns, result.second.progress);
   return result.first;
 }
 
@@ -532,7 +578,8 @@ bool DirectTransmitEngine::cancel() {
   updateCachedState(result.second.revision, result.second.available,
                     result.second.open_safe, result.second.busy,
                     result.second.ptt, result.second.key, result.second.fault,
-                    std::move(result.second.status));
+                    std::move(result.second.status), result.second.elapsed_ns,
+                    result.second.remaining_ns, result.second.progress);
   return result.first;
 }
 
@@ -548,7 +595,8 @@ bool DirectTransmitEngine::startTune(const bool operator_authorized) {
   updateCachedState(result.second.revision, result.second.available,
                     result.second.open_safe, result.second.busy,
                     result.second.ptt, result.second.key, result.second.fault,
-                    std::move(result.second.status));
+                    std::move(result.second.status), result.second.elapsed_ns,
+                    result.second.remaining_ns, result.second.progress);
   return result.first;
 }
 
@@ -561,7 +609,8 @@ bool DirectTransmitEngine::stopTune() {
   updateCachedState(result.second.revision, result.second.available,
                     result.second.open_safe, result.second.busy,
                     result.second.ptt, result.second.key, result.second.fault,
-                    std::move(result.second.status));
+                    std::move(result.second.status), result.second.elapsed_ns,
+                    result.second.remaining_ns, result.second.progress);
   return result.first;
 }
 
@@ -573,7 +622,8 @@ void DirectTransmitEngine::emergencyRelease() {
       Qt::BlockingQueuedConnection);
   updateCachedState(result.revision, result.available, result.open_safe,
                     result.busy, result.ptt, result.key, result.fault,
-                    std::move(result.status));
+                    std::move(result.status), result.elapsed_ns,
+                    result.remaining_ns, result.progress);
 }
 
 void DirectTransmitEngine::close() {
@@ -584,18 +634,21 @@ void DirectTransmitEngine::close() {
       Qt::BlockingQueuedConnection);
   updateCachedState(result.revision, result.available, result.open_safe,
                     result.busy, result.ptt, result.key, result.fault,
-                    std::move(result.status));
+                    std::move(result.status), result.elapsed_ns,
+                    result.remaining_ns, result.progress);
 }
 
 void DirectTransmitEngine::updateCachedState(
     const std::uint64_t revision, const bool available, const bool open_safe,
     const bool busy, const bool ptt, const bool key, const bool fault,
-    QString status) {
+    QString status, const std::uint64_t elapsed_ns,
+    const std::uint64_t remaining_ns, const double progress) {
   if (revision <= cached_revision_) return;
   cached_revision_ = revision;
   const bool changed_state = available_ != available || open_safe_ != open_safe ||
       busy_ != busy || ptt_ != ptt || key_ != key || fault_ != fault ||
-      status_ != status;
+      status_ != status || elapsed_ns_ != elapsed_ns ||
+      remaining_ns_ != remaining_ns || progress_ != progress;
   available_ = available;
   open_safe_ = open_safe;
   busy_ = busy;
@@ -603,6 +656,9 @@ void DirectTransmitEngine::updateCachedState(
   key_ = key;
   fault_ = fault;
   status_ = std::move(status);
+  elapsed_ns_ = elapsed_ns;
+  remaining_ns_ = remaining_ns;
+  progress_ = progress;
   if (changed_state) emit changed();
 }
 

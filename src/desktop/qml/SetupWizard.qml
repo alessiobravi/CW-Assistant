@@ -232,8 +232,23 @@ Dialog {
                 rowSpacing: 12
                 Label { text: "Frequency provider" }
                 ComboBox { Layout.fillWidth: true; model: ["OmniRig (Windows)", "Hamlib", "CAT4OM network service"]; currentIndex: appSettings.frequencyBackendIndex; onActivated: appSettings.frequencyBackendIndex = currentIndex }
-                Label { text: "OmniRig slot" }
-                SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                Label { text: "OmniRig slot"; visible: appSettings.frequencyBackendIndex === 0 }
+                SpinBox { visible: appSettings.frequencyBackendIndex === 0; from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                Label { text: "Hamlib rigctld endpoint"; visible: appSettings.frequencyBackendIndex === 1 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: appSettings.frequencyBackendIndex === 1
+                    TextField { Layout.fillWidth: true; text: appSettings.hamlibHost; placeholderText: "127.0.0.1"; onEditingFinished: appSettings.hamlibHost = text }
+                    SpinBox { editable: true; from: 1; to: 65535; value: appSettings.hamlibPort; onValueModified: appSettings.hamlibPort = value }
+                }
+                Label { text: "Hamlib VFO mapping"; visible: appSettings.frequencyBackendIndex === 1 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: appSettings.frequencyBackendIndex === 1
+                    TextField { Layout.fillWidth: true; text: appSettings.hamlibRxVfo; placeholderText: "VFOA (RX)"; onEditingFinished: appSettings.hamlibRxVfo = text }
+                    TextField { Layout.fillWidth: true; text: appSettings.hamlibTxVfo; placeholderText: "VFOB (TX)"; onEditingFinished: appSettings.hamlibTxVfo = text }
+                    CheckBox { text: "Allow writes"; checked: appSettings.hamlibWritable; onToggled: appSettings.hamlibWritable = checked }
+                }
                 Label { text: "CAT4OM Control URL"; visible: appSettings.frequencyBackendIndex === 2 }
                 TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omUrl; placeholderText: "ws://127.0.0.1:5001/"; onEditingFinished: appSettings.cat4omUrl = text }
                 Label { text: "CAT4OM radio ID"; visible: appSettings.frequencyBackendIndex === 2 }
@@ -307,15 +322,34 @@ Dialog {
                     CheckBox { text: "Active high"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
                 }
                 Label { text: "Hardware validation" }
-                CheckBox {
-                    objectName: "setupDirectKeyingValidatedCheck"
-                    text: "Disconnected lines and physical loopback passed"
-                    checked: appSettings.directKeyingValidated
+                ColumnLayout {
+                    Layout.fillWidth: true
                     enabled: appSettings.directKeyingEnabled
                              && appSettings.keyingPort.length > 0
-                    onToggled: appSettings.directKeyingValidated = checked
-                    ToolTip.visible: hovered
-                    ToolTip.text: "Required before CW Buddy can open the keying port or arm TX"
+                    CheckBox {
+                        id: setupRadioDisconnectedForLoopback
+                        objectName: "setupRadioDisconnectedForLoopbackCheck"
+                        text: "Radio disconnected; RTS→CTS and DTR→DSR loopbacks fitted"
+                    }
+                    Button {
+                        objectName: "setupRunDirectKeyingLoopbackButton"
+                        text: "Run measured loopback"
+                        enabled: setupRadioDisconnectedForLoopback.checked
+                        onClicked: {
+                            appSettings.runDirectKeyingLoopback(
+                                setupRadioDisconnectedForLoopback.checked)
+                            setupRadioDisconnectedForLoopback.checked = false
+                        }
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Measure both serial loopback paths before CW Buddy can open this keying configuration"
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: appSettings.directKeyingValidated
+                               ? "#43c6ac" : "#f3bd55"
+                        text: appSettings.directKeyingAcceptanceStatus
+                    }
                 }
                 Label { text: "TX speed" }
                 ComboBox {

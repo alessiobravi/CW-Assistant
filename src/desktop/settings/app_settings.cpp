@@ -3,6 +3,7 @@
 #include <QSettings>
 #include <QSerialPortInfo>
 #include <QAudioDevice>
+#include <QDateTime>
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QRegularExpression>
@@ -11,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 #ifdef Q_OS_WIN
 #include <Windows.h>
@@ -21,11 +23,25 @@
 #include "cwassistant/core/callsign_policy.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
 #include "../radio/cat4om_client.hpp"
+#include "../radio/hamlib_rigctld_client.hpp"
+#include "../transmit/direct_keying_acceptance_probe.hpp"
 
 namespace cwassistant::desktop {
 namespace {
 
 constexpr auto kSchemaVersion = 1;
+
+QString acceptancePlatformToken() {
+#ifdef Q_OS_WIN
+  return QStringLiteral("windows");
+#elif defined(Q_OS_MACOS)
+  return QStringLiteral("macos");
+#elif defined(Q_OS_LINUX)
+  return QStringLiteral("linux");
+#else
+  return QStringLiteral("unknown");
+#endif
+}
 
 #ifdef Q_OS_WIN
 constexpr long kOmniRigOnlineStatus = 4;
@@ -276,6 +292,17 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
     emit radioFrequencyChanged();
     emit radioFrequencyControlChanged();
   });
+  hamlib_client_ = std::make_unique<HamlibRigctldClient>(this);
+  connect(hamlib_client_.get(), &HamlibRigctldClient::statusChanged, this,
+          [this] {
+            setStatusMessage(hamlib_client_->statusText());
+            emit hamlibChanged();
+          });
+  connect(hamlib_client_.get(), &HamlibRigctldClient::radioStateChanged, this,
+          [this] {
+            refreshControlledFrequency();
+            emit hamlibChanged();
+          });
   radio_frequency_timer_.setInterval(200);
   connect(&radio_frequency_timer_, &QTimer::timeout, this,
           &AppSettings::refreshControlledFrequency);
@@ -494,6 +521,22 @@ bool AppSettings::radioSplitKnown() const noexcept {
          cwassistant::core::RadioObservation::Known;
 }
 int AppSettings::omniRigSlot() const noexcept { return omnirig_slot_; }
+const QString& AppSettings::hamlibHost() const noexcept { return hamlib_host_; }
+int AppSettings::hamlibPort() const noexcept { return hamlib_port_; }
+const QString& AppSettings::hamlibRxVfo() const noexcept {
+  return hamlib_rx_vfo_;
+}
+const QString& AppSettings::hamlibTxVfo() const noexcept {
+  return hamlib_tx_vfo_;
+}
+bool AppSettings::hamlibWritable() const noexcept { return hamlib_writable_; }
+QString AppSettings::hamlibState() const {
+  return hamlib_client_ ? hamlib_client_->statusText()
+                        : QStringLiteral("Unavailable");
+}
+bool AppSettings::hamlibCanWrite() const noexcept {
+  return hamlib_client_ && hamlib_client_->canWrite();
+}
 const QString& AppSettings::cat4omUrl() const noexcept { return cat4om_url_; }
 const QString& AppSettings::cat4omRadioId() const noexcept { return cat4om_radio_id_; }
 const QString& AppSettings::cat4omPassword() const noexcept { return cat4om_password_; }
@@ -714,6 +757,10 @@ void AppSettings::refreshControlledFrequency() {
       frequency_backend_index_ == 2 && cat4om_client_) {
     next_state = cat4om_client_->radioState();
   }
+  if (radio_enabled_ && audio_input_radio_linked_ &&
+      frequency_backend_index_ == 1 && hamlib_client_) {
+    next_state = hamlib_client_->radioState();
+  }
   if (frequency != omnirig_rx_dial_hz_ ||
       write_target != omnirig_rx_write_target_ || next_state != radio_state_) {
     omnirig_rx_dial_hz_ = frequency;
@@ -743,6 +790,14 @@ void AppSettings::rememberPendingRxFrequency(
   pending_rx_rf_hz_ = frequency_hz;
   pending_frequency_backend_index_ = frequency_backend_index_;
   radio_frequency_request_timer_.start();
+}
+
+void AppSettings::invalidateDirectKeyingAcceptance(QString status) {
+  direct_keying_validated_ = false;
+  direct_keying_acceptance_sha256_.clear();
+  direct_keying_acceptance_platform_.clear();
+  direct_keying_acceptance_utc_seconds_ = 0;
+  direct_keying_acceptance_status_ = std::move(status);
 }
 
 bool AppSettings::setControlledRxFrequency(const QString& value,
@@ -840,10 +895,11 @@ bool AppSettings::writeControlledRxDialFrequency(
       cat4om_client_->setRxFrequency(dial_frequency_hz)) {
     return true;
   }
-  setStatusMessage(
-      frequency_backend_index_ == 1
-          ? QStringLiteral("Hamlib frequency control is not implemented yet.")
-          : QStringLiteral("CAT4OM did not accept the RX-frequency request."));
+  if (frequency_backend_index_ == 1 && hamlib_client_ &&
+      hamlib_client_->setRxFrequency(dial_frequency_hz)) {
+    return true;
+  }
+  setStatusMessage(QStringLiteral("The radio provider did not accept the RX-frequency request."));
   return false;
 }
 
@@ -856,8 +912,13 @@ bool AppSettings::setControlledTxFrequency(const QString& value,
     setStatusMessage(QStringLiteral("Enter a valid positive TX frequency."));
     return false;
   }
+  return requestControlledTxRfFrequency(*requested_rf);
+}
+
+bool AppSettings::requestControlledTxRfFrequency(
+    const std::uint64_t rf_frequency_hz) {
   const auto dial = cwassistant::core::resolve_dial_frequency(
-      *requested_rf, tx_transverter_offset_hz_);
+      rf_frequency_hz, tx_transverter_offset_hz_);
   if (!dial) {
     setStatusMessage(QStringLiteral(
         "That TX frequency cannot be represented with the configured transverter offset."));
@@ -917,7 +978,7 @@ bool AppSettings::syncControlledTxFrequencyToRx() {
         "VFO frequency sync is unavailable from the selected radio provider."));
     return false;
   }
-  return setControlledTxFrequency(QString::number(*rx_rf_hz), 1U);
+  return requestControlledTxRfFrequency(*rx_rf_hz);
 }
 
 bool AppSettings::setControlledSplit(const bool enabled) {
@@ -935,6 +996,8 @@ bool AppSettings::setControlledSplit(const bool enabled) {
 #endif
   } else if (frequency_backend_index_ == 2 && cat4om_client_) {
     accepted = cat4om_client_->setSplit(enabled);
+  } else if (frequency_backend_index_ == 1 && hamlib_client_) {
+    accepted = hamlib_client_->setSplit(enabled);
   }
   if (!accepted) {
     setStatusMessage(QStringLiteral("The provider did not accept the split request."));
@@ -960,6 +1023,8 @@ bool AppSettings::writeControlledTxDialFrequency(
     return false;
 #endif
   }
+  if (frequency_backend_index_ == 1 && hamlib_client_)
+    return hamlib_client_->setTxFrequency(dial_frequency_hz);
   return frequency_backend_index_ == 2 && cat4om_client_ &&
          cat4om_client_->setTxFrequency(dial_frequency_hz);
 }
@@ -984,6 +1049,9 @@ bool AppSettings::writeControlledMode(const cwassistant::core::RadioMode mode,
     const auto& vfo = tx ? radio_state_.tx_vfo : radio_state_.rx_vfo;
     accepted = cat4om_client_->setMode(
         mode, QString::fromStdString(vfo.identifier), tx);
+  } else if (frequency_backend_index_ == 1 && hamlib_client_) {
+    accepted = tx ? hamlib_client_->setTxMode(mode)
+                  : hamlib_client_->setRxMode(mode);
   }
   if (!accepted) {
     setStatusMessage(QStringLiteral("The provider did not accept the mode request."));
@@ -1001,12 +1069,19 @@ bool AppSettings::directKeyingEnabled() const noexcept {
 bool AppSettings::directKeyingValidated() const noexcept {
   return direct_keying_validated_;
 }
+const QString& AppSettings::directKeyingAcceptanceStatus() const noexcept {
+  return direct_keying_acceptance_status_;
+}
 int AppSettings::pttLineIndex() const noexcept { return ptt_line_index_; }
 int AppSettings::keyLineIndex() const noexcept { return key_line_index_; }
 bool AppSettings::pttActiveHigh() const noexcept { return ptt_active_high_; }
 bool AppSettings::keyActiveHigh() const noexcept { return key_active_high_; }
 int AppSettings::txSpeedMode() const noexcept { return tx_speed_mode_; }
 int AppSettings::fixedTxWpm() const noexcept { return fixed_tx_wpm_; }
+const QString& AppSettings::txMacro1() const noexcept { return tx_macro_1_; }
+const QString& AppSettings::txMacro2() const noexcept { return tx_macro_2_; }
+const QString& AppSettings::txMacro3() const noexcept { return tx_macro_3_; }
+const QString& AppSettings::txMacro4() const noexcept { return tx_macro_4_; }
 int AppSettings::targetFps() const noexcept { return target_fps_; }
 int AppSettings::waterfallRate() const noexcept { return waterfall_rate_; }
 int AppSettings::waterfallTimeSpanSeconds() const noexcept {
@@ -1100,6 +1175,10 @@ const QString& AppSettings::statusMessage() const noexcept { return status_messa
 
 void AppSettings::setFrequencyBackendIndex(const int value) {
   if (assign_if_changed(frequency_backend_index_, value)) {
+    if (frequency_backend_index_ != 1 && hamlib_client_)
+      hamlib_client_->disconnectFromServer();
+    if (frequency_backend_index_ != 2 && cat4om_client_)
+      cat4om_client_->disconnectFromServer();
     pending_rx_rf_hz_.reset();
     pending_frequency_backend_index_ = -1;
     radio_frequency_request_timer_.stop();
@@ -1117,6 +1196,11 @@ CWA_SETTER(setAudioUpperFrequencyHz, audio_upper_frequency_hz_, double)
 CWA_SETTER(setAudioInputRadioLinked, audio_input_radio_linked_, bool)
 CWA_SETTER(setRadioEnabled, radio_enabled_, bool)
 CWA_SETTER(setOmniRigSlot, omnirig_slot_, int)
+CWA_SETTER(setHamlibHost, hamlib_host_, const QString&)
+CWA_SETTER(setHamlibPort, hamlib_port_, int)
+CWA_SETTER(setHamlibRxVfo, hamlib_rx_vfo_, const QString&)
+CWA_SETTER(setHamlibTxVfo, hamlib_tx_vfo_, const QString&)
+CWA_SETTER(setHamlibWritable, hamlib_writable_, bool)
 CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
 CWA_SETTER(setCat4omRadioId, cat4om_radio_id_, const QString&)
 CWA_SETTER(setCat4omPassword, cat4om_password_, const QString&)
@@ -1134,35 +1218,39 @@ CWA_SETTER(setTxTransverterOffsetHz, tx_transverter_offset_hz_, qint64)
 CWA_SETTER(setCwToneSidebandIndex, cw_tone_sideband_index_, int)
 void AppSettings::setKeyingPort(const QString& value) {
   if (!assign_if_changed(keying_port_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(QStringLiteral(
+      "Keying configuration changed; run the physical loopback again."));
   emit settingsChanged();
 }
 void AppSettings::setDirectKeyingEnabled(const bool value) {
   if (!assign_if_changed(direct_keying_enabled_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(
+      value ? QStringLiteral("Direct keying enabled; run the physical loopback.")
+            : QStringLiteral("Direct keying disabled; prior acceptance was cleared."));
   emit settingsChanged();
-}
-void AppSettings::setDirectKeyingValidated(const bool value) {
-  if (assign_if_changed(direct_keying_validated_, value)) emit settingsChanged();
 }
 void AppSettings::setPttLineIndex(const int value) {
   if (!assign_if_changed(ptt_line_index_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(QStringLiteral(
+      "Keying configuration changed; run the physical loopback again."));
   emit settingsChanged();
 }
 void AppSettings::setKeyLineIndex(const int value) {
   if (!assign_if_changed(key_line_index_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(QStringLiteral(
+      "Keying configuration changed; run the physical loopback again."));
   emit settingsChanged();
 }
 void AppSettings::setPttActiveHigh(const bool value) {
   if (!assign_if_changed(ptt_active_high_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(QStringLiteral(
+      "Keying configuration changed; run the physical loopback again."));
   emit settingsChanged();
 }
 void AppSettings::setKeyActiveHigh(const bool value) {
   if (!assign_if_changed(key_active_high_, value)) return;
-  direct_keying_validated_ = false;
+  invalidateDirectKeyingAcceptance(QStringLiteral(
+      "Keying configuration changed; run the physical loopback again."));
   emit settingsChanged();
 }
 void AppSettings::setTxSpeedMode(const int value) {
@@ -1171,6 +1259,22 @@ void AppSettings::setTxSpeedMode(const int value) {
 }
 void AppSettings::setFixedTxWpm(const int value) {
   if (assign_if_changed(fixed_tx_wpm_, std::clamp(value, 5, 80)))
+    emit settingsChanged();
+}
+void AppSettings::setTxMacro1(const QString& value) {
+  if (assign_if_changed(tx_macro_1_, value.simplified().toUpper().left(64)))
+    emit settingsChanged();
+}
+void AppSettings::setTxMacro2(const QString& value) {
+  if (assign_if_changed(tx_macro_2_, value.simplified().toUpper().left(64)))
+    emit settingsChanged();
+}
+void AppSettings::setTxMacro3(const QString& value) {
+  if (assign_if_changed(tx_macro_3_, value.simplified().toUpper().left(64)))
+    emit settingsChanged();
+}
+void AppSettings::setTxMacro4(const QString& value) {
+  if (assign_if_changed(tx_macro_4_, value.simplified().toUpper().left(64)))
     emit settingsChanged();
 }
 CWA_SETTER(setTargetFps, target_fps_, int)
@@ -1580,6 +1684,10 @@ bool AppSettings::apply() {
   radio_tuning_step_hz_ =
       std::clamp(radio_tuning_step_hz_, 1'000, 100'000);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
+  hamlib_host_ = hamlib_host_.trimmed();
+  hamlib_port_ = std::clamp(hamlib_port_, 1, 65'535);
+  hamlib_rx_vfo_ = hamlib_rx_vfo_.trimmed().toUpper();
+  hamlib_tx_vfo_ = hamlib_tx_vfo_.trimmed().toUpper();
   cat_baud_rate_ = std::clamp(cat_baud_rate_, 300, 1'000'000);
   cat_data_bits_ = std::clamp(cat_data_bits_, 5, 8);
   cat_parity_index_ = std::clamp(cat_parity_index_, 0, 2);
@@ -1587,6 +1695,10 @@ bool AppSettings::apply() {
   cat_flow_control_index_ = std::clamp(cat_flow_control_index_, 0, 1);
   poll_interval_ms_ = std::clamp(poll_interval_ms_, 50, 10'000);
   timeout_ms_ = std::clamp(timeout_ms_, 100, 60'000);
+  tx_macro_1_ = tx_macro_1_.simplified().toUpper().left(64);
+  tx_macro_2_ = tx_macro_2_.simplified().toUpper().left(64);
+  tx_macro_3_ = tx_macro_3_.simplified().toUpper().left(64);
+  tx_macro_4_ = tx_macro_4_.simplified().toUpper().left(64);
   target_fps_ = std::clamp(target_fps_, 10, 120);
   waterfall_rate_ = std::clamp(waterfall_rate_, 1, 120);
   waterfall_time_span_seconds_ =
@@ -1635,6 +1747,16 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("radio/txModeTarget")),
                     radioTxModeTarget());
   settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
+  settings.setValue(storageKey(QStringLiteral("radio/hamlibHost")),
+                    hamlib_host_);
+  settings.setValue(storageKey(QStringLiteral("radio/hamlibPort")),
+                    hamlib_port_);
+  settings.setValue(storageKey(QStringLiteral("radio/hamlibRxVfo")),
+                    hamlib_rx_vfo_);
+  settings.setValue(storageKey(QStringLiteral("radio/hamlibTxVfo")),
+                    hamlib_tx_vfo_);
+  settings.setValue(storageKey(QStringLiteral("radio/hamlibWritable")),
+                    hamlib_writable_);
   settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")), cat4om_radio_id_.trimmed());
   settings.setValue(storageKey(QStringLiteral("radio/catPort")), cat_port_.trimmed());
@@ -1652,8 +1774,14 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("keying/port")), keying_port_.trimmed());
   settings.setValue(storageKey(QStringLiteral("keying/directEnabled")),
                     direct_keying_enabled_);
-  settings.setValue(storageKey(QStringLiteral("keying/directValidated")),
-                    direct_keying_validated_);
+  settings.remove(storageKey(QStringLiteral("keying/directValidated")));
+  settings.setValue(
+      storageKey(QStringLiteral("keying/acceptanceConfigurationSha256")),
+      direct_keying_acceptance_sha256_);
+  settings.setValue(storageKey(QStringLiteral("keying/acceptancePlatform")),
+                    direct_keying_acceptance_platform_);
+  settings.setValue(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")),
+                    direct_keying_acceptance_utc_seconds_);
   settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/pttActiveHigh")), ptt_active_high_);
@@ -1662,6 +1790,10 @@ bool AppSettings::apply() {
                     tx_speed_mode_);
   settings.setValue(storageKey(QStringLiteral("keying/fixedTxWpm")),
                     fixed_tx_wpm_);
+  settings.setValue(storageKey(QStringLiteral("keying/txMacro1")), tx_macro_1_);
+  settings.setValue(storageKey(QStringLiteral("keying/txMacro2")), tx_macro_2_);
+  settings.setValue(storageKey(QStringLiteral("keying/txMacro3")), tx_macro_3_);
+  settings.setValue(storageKey(QStringLiteral("keying/txMacro4")), tx_macro_4_);
   settings.setValue(storageKey(QStringLiteral("display/targetFps")), target_fps_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallRate")), waterfall_rate_);
   settings.setValue(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), waterfall_time_span_seconds_);
@@ -1770,6 +1902,24 @@ void AppSettings::load() {
     radio_tx_mode_target_ = cwassistant::core::RadioMode::Cw;
   }
   omnirig_slot_ = settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1).toInt();
+  hamlib_host_ = settings
+      .value(storageKey(QStringLiteral("radio/hamlibHost")),
+             QStringLiteral("127.0.0.1"))
+      .toString();
+  hamlib_port_ = settings
+      .value(storageKey(QStringLiteral("radio/hamlibPort")), 4'532)
+      .toInt();
+  hamlib_rx_vfo_ = settings
+      .value(storageKey(QStringLiteral("radio/hamlibRxVfo")),
+             QStringLiteral("VFOA"))
+      .toString();
+  hamlib_tx_vfo_ = settings
+      .value(storageKey(QStringLiteral("radio/hamlibTxVfo")),
+             QStringLiteral("VFOB"))
+      .toString();
+  hamlib_writable_ = settings
+      .value(storageKey(QStringLiteral("radio/hamlibWritable")), false)
+      .toBool();
   cat4om_url_ = settings
                     .value(storageKey(QStringLiteral("radio/cat4omUrl")),
                            QStringLiteral("ws://127.0.0.1:5001/"))
@@ -1796,19 +1946,59 @@ void AppSettings::load() {
   direct_keying_enabled_ = settings
       .value(storageKey(QStringLiteral("keying/directEnabled")), false)
       .toBool();
-  direct_keying_validated_ = settings
-      .value(storageKey(QStringLiteral("keying/directValidated")), false)
-      .toBool();
   ptt_line_index_ = settings.value(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_).toInt();
   key_line_index_ = settings.value(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_).toInt();
   ptt_active_high_ = settings.value(storageKey(QStringLiteral("keying/pttActiveHigh")), true).toBool();
   key_active_high_ = settings.value(storageKey(QStringLiteral("keying/keyActiveHigh")), true).toBool();
+  direct_keying_acceptance_sha256_ = settings
+      .value(storageKey(
+          QStringLiteral("keying/acceptanceConfigurationSha256")))
+      .toString();
+  direct_keying_acceptance_platform_ = settings
+      .value(storageKey(QStringLiteral("keying/acceptancePlatform")))
+      .toString();
+  direct_keying_acceptance_utc_seconds_ = settings
+      .value(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")), 0)
+      .toLongLong();
+  const DirectKeyingConfig stored_keying_config{
+      .port_name = keying_port_,
+      .ptt_line = ptt_line_index_ == 0 ? DirectKeyingLine::Rts
+                                      : DirectKeyingLine::Dtr,
+      .key_line = key_line_index_ == 0 ? DirectKeyingLine::Rts
+                                      : DirectKeyingLine::Dtr,
+      .ptt_active_high = ptt_active_high_,
+      .key_active_high = key_active_high_};
+  const QString current_acceptance =
+      directKeyingConfigurationSha256(stored_keying_config);
+  direct_keying_validated_ = direct_keying_enabled_ &&
+      direct_keying_acceptance_utc_seconds_ > 0 &&
+      direct_keying_acceptance_platform_ == acceptancePlatformToken() &&
+      direct_keying_acceptance_sha256_ == current_acceptance;
+  direct_keying_acceptance_status_ = direct_keying_validated_
+      ? QStringLiteral("Measured physical loopback passed for this exact keying configuration. Complete dummy-load acceptance before on-air use.")
+      : QStringLiteral("Physical loopback has not been measured for this exact keying configuration.");
   tx_speed_mode_ = std::clamp(
       settings.value(storageKey(QStringLiteral("keying/txSpeedMode")), 0)
           .toInt(), 0, 1);
   fixed_tx_wpm_ = std::clamp(
       settings.value(storageKey(QStringLiteral("keying/fixedTxWpm")), 20)
           .toInt(), 5, 80);
+  tx_macro_1_ = settings
+      .value(storageKey(QStringLiteral("keying/txMacro1")),
+             QStringLiteral("TU"))
+      .toString().simplified().toUpper().left(64);
+  tx_macro_2_ = settings
+      .value(storageKey(QStringLiteral("keying/txMacro2")),
+             QStringLiteral("AGN"))
+      .toString().simplified().toUpper().left(64);
+  tx_macro_3_ = settings
+      .value(storageKey(QStringLiteral("keying/txMacro3")),
+             QStringLiteral("PSE K"))
+      .toString().simplified().toUpper().left(64);
+  tx_macro_4_ = settings
+      .value(storageKey(QStringLiteral("keying/txMacro4")),
+             QStringLiteral("73"))
+      .toString().simplified().toUpper().left(64);
   target_fps_ = settings.value(storageKey(QStringLiteral("display/targetFps")), 60).toInt();
   waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60).toInt();
   waterfall_time_span_seconds_ =
@@ -2023,6 +2213,12 @@ void AppSettings::resetInMemorySettings() {
   radio_tuning_step_hz_ = 1'000;
   radio_tx_mode_target_ = cwassistant::core::RadioMode::Cw;
   omnirig_slot_ = 1;
+  hamlib_host_ = QStringLiteral("127.0.0.1");
+  hamlib_port_ = 4'532;
+  hamlib_rx_vfo_ = QStringLiteral("VFOA");
+  hamlib_tx_vfo_ = QStringLiteral("VFOB");
+  hamlib_writable_ = false;
+  if (hamlib_client_) hamlib_client_->disconnectFromServer();
   cat4om_url_ = QStringLiteral("ws://127.0.0.1:5001/");
   cat4om_radio_id_.clear();
   cat4om_password_.clear();
@@ -2032,6 +2228,10 @@ void AppSettings::resetInMemorySettings() {
   direct_keying_validated_ = false;
   tx_speed_mode_ = 0;
   fixed_tx_wpm_ = 20;
+  tx_macro_1_ = QStringLiteral("TU");
+  tx_macro_2_ = QStringLiteral("AGN");
+  tx_macro_3_ = QStringLiteral("PSE K");
+  tx_macro_4_ = QStringLiteral("73");
   split_enabled_ = false;
   rx_transverter_offset_hz_ = 0;
   tx_transverter_offset_hz_ = 0;
@@ -2101,6 +2301,78 @@ void AppSettings::showOmniRigConfiguration() {
 #else
   setStatusMessage(QStringLiteral("OmniRig integration is available on Windows; use Hamlib on this platform."));
 #endif
+}
+
+void AppSettings::connectHamlib() {
+  if (!hamlib_client_) return;
+  HamlibRigctldClient::Configuration configuration;
+  configuration.host = hamlib_host_.trimmed();
+  configuration.port =
+      static_cast<quint16>(std::clamp(hamlib_port_, 1, 65'535));
+  configuration.rx_vfo = hamlib_rx_vfo_.trimmed().toUpper();
+  configuration.tx_vfo = hamlib_tx_vfo_.trimmed().toUpper();
+  configuration.writable = hamlib_writable_;
+  configuration.poll_interval_ms = std::clamp(poll_interval_ms_, 50, 10'000);
+  configuration.request_timeout_ms = std::clamp(timeout_ms_, 100, 60'000);
+  hamlib_client_->connectToServer(std::move(configuration));
+}
+
+void AppSettings::disconnectHamlib() {
+  if (hamlib_client_) hamlib_client_->disconnectFromServer();
+}
+
+bool AppSettings::runDirectKeyingLoopback(
+    const bool radio_disconnected_confirmed) {
+  if (!direct_keying_enabled_) {
+    direct_keying_acceptance_status_ =
+        QStringLiteral("Enable direct keying before running the loopback test.");
+    emit settingsChanged();
+    return false;
+  }
+  if (!cat_port_.trimmed().isEmpty() &&
+      keying_port_.trimmed() == cat_port_.trimmed()) {
+    direct_keying_acceptance_status_ = QStringLiteral(
+        "The CAT and keying ports must be different before testing.");
+    emit settingsChanged();
+    return false;
+  }
+  const DirectKeyingConfig configuration{
+      .port_name = keying_port_.trimmed(),
+      .ptt_line = ptt_line_index_ == 0 ? DirectKeyingLine::Rts
+                                      : DirectKeyingLine::Dtr,
+      .key_line = key_line_index_ == 0 ? DirectKeyingLine::Rts
+                                      : DirectKeyingLine::Dtr,
+      .ptt_active_high = ptt_active_high_,
+      .key_active_high = key_active_high_};
+  DirectKeyingAcceptanceProbe probe;
+  const DirectKeyingProbeResult result =
+      probe.run(configuration, radio_disconnected_confirmed);
+  direct_keying_validated_ = result.passed;
+  direct_keying_acceptance_status_ = result.detail;
+  direct_keying_acceptance_sha256_ = result.passed
+      ? directKeyingConfigurationSha256(configuration) : QString{};
+  direct_keying_acceptance_platform_ = result.passed
+      ? acceptancePlatformToken() : QString{};
+  direct_keying_acceptance_utc_seconds_ = result.passed
+      ? QDateTime::currentSecsSinceEpoch() : 0;
+
+  QSettings settings;
+  settings.remove(storageKey(QStringLiteral("keying/directValidated")));
+  settings.setValue(
+      storageKey(QStringLiteral("keying/acceptanceConfigurationSha256")),
+      direct_keying_acceptance_sha256_);
+  settings.setValue(storageKey(QStringLiteral("keying/acceptancePlatform")),
+                    direct_keying_acceptance_platform_);
+  settings.setValue(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")),
+                    direct_keying_acceptance_utc_seconds_);
+  settings.sync();
+  if (settings.status() != QSettings::NoError) {
+    direct_keying_validated_ = false;
+    direct_keying_acceptance_status_ = QStringLiteral(
+        "Loopback result could not be stored; transmit remains unavailable.");
+  }
+  emit settingsChanged();
+  return direct_keying_validated_;
 }
 
 #ifdef Q_OS_WIN

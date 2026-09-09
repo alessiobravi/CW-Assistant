@@ -1143,6 +1143,45 @@ ApplicationWindow {
                                     hoverEnabled: true
                                 }
                             }
+                            Rectangle {
+                                objectName: "radioTuneButton"
+                                Layout.preferredWidth: vfoDisplay.controlButtonSize
+                                Layout.preferredHeight: vfoDisplay.controlButtonSize
+                                radius: 5
+                                color: transmitController.tuning ? "#ff6a24"
+                                       : transmitController.armed
+                                         ? (radioTuneMouse.containsMouse
+                                            ? "#ff9a45" : "#e56b1f")
+                                         : "#2b2520"
+                                border.color: transmitController.armed
+                                              ? "#ffb05c" : "#493321"
+                                border.width: transmitController.tuning ? 2 : 1
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: transmitController.tuning
+                                          ? "TUNE " + Math.max(0, Math.ceil(
+                                                transmitController.txRemainingSeconds))
+                                          : "TUNE"
+                                    color: transmitController.armed
+                                           ? "#fff3df" : "#806c5b"
+                                    font.pixelSize: transmitController.tuning ? 9 : 10
+                                    font.weight: Font.Bold
+                                }
+                                MouseArea {
+                                    id: radioTuneMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    enabled: transmitController.armed
+                                    cursorShape: enabled ? Qt.PointingHandCursor
+                                                         : Qt.ArrowCursor
+                                    onClicked: transmitController.toggleTune()
+                                }
+                                ToolTip.visible: radioTuneMouse.containsMouse
+                                ToolTip.delay: 300
+                                ToolTip.text: transmitController.armed
+                                    ? "Operator-only KEY/PTT tune with a hard 15-second watchdog"
+                                    : "Arm TX in the QSO panel before using TUNE"
+                            }
                         }
 
                         ColumnLayout {
@@ -1574,6 +1613,7 @@ ApplicationWindow {
                                 Layout.preferredHeight: vfoDisplay.controlButtonSize
                                 Layout.minimumHeight: vfoDisplay.controlButtonSize
                                 spacing: 5
+                                Item { Layout.fillWidth: true }
                                 Rectangle {
                                     objectName: "vfoSplitBadge"
                                     Layout.preferredWidth: vfoDisplay.controlButtonSize
@@ -1643,41 +1683,6 @@ ApplicationWindow {
                                     ToolTip.text: appSettings.radioTxFrequencySyncAvailable
                                         ? "Copy VFO A / RX frequency to VFO B / TX; TX mode is not copied"
                                         : "Frequency sync requires known RX state plus writable TX frequency and split control"
-                                }
-                                Rectangle {
-                                    objectName: "radioTuneButton"
-                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
-                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
-                                    radius: 5
-                                    color: transmitController.tuning ? "#7b241f"
-                                           : radioTuneMouse.containsMouse
-                                             ? "#3b3022" : "#211d19"
-                                    border.color: transmitController.tuning ? "#ff5a4f"
-                                                  : transmitController.armed
-                                                    ? "#d59a4a" : "#433b34"
-                                    border.width: transmitController.tuning ? 2 : 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: transmitController.tuning ? "STOP" : "TUNE"
-                                        color: transmitController.armed
-                                               ? "#ffc26e" : "#6e665f"
-                                        font.pixelSize: 10
-                                        font.weight: Font.Bold
-                                    }
-                                    MouseArea {
-                                        id: radioTuneMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        enabled: transmitController.armed
-                                        cursorShape: enabled ? Qt.PointingHandCursor
-                                                             : Qt.ArrowCursor
-                                        onClicked: transmitController.toggleTune()
-                                    }
-                                    ToolTip.visible: radioTuneMouse.containsMouse
-                                    ToolTip.delay: 300
-                                    ToolTip.text: transmitController.armed
-                                        ? "Operator-only KEY/PTT tune with a hard 15-second watchdog"
-                                        : "Arm TX in the QSO panel before using TUNE"
                                 }
                                 Item { Layout.fillWidth: true }
                             }
@@ -2553,6 +2558,40 @@ ApplicationWindow {
                            ? "#ff7b84" : "#f3bd55"
                     text: transmitController.status
                 }
+                ColumnLayout {
+                    objectName: "txProgressPanel"
+                    Layout.fillWidth: true
+                    spacing: 4
+                    visible: transmitController.transmitting
+                             || transmitController.tuning
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            text: transmitController.tuning ? "TUNE" : "TRANSMITTING"
+                            color: "#ff7b84"
+                            font.weight: Font.Bold
+                        }
+                        Item { Layout.fillWidth: true }
+                        Label {
+                            objectName: "txCountdownLabel"
+                            text: transmitController.txRemainingSeconds.toFixed(1)
+                                  + " s remaining  •  "
+                                  + transmitController.txElapsedSeconds.toFixed(1)
+                                  + " s elapsed"
+                            color: "#ffffff"
+                            font.family: "monospace"
+                        }
+                    }
+                    ProgressBar {
+                        objectName: "txProgressBar"
+                        Layout.fillWidth: true
+                        from: 0.0
+                        to: 1.0
+                        value: transmitController.txProgress
+                        Accessible.name: transmitController.tuning
+                            ? "TUNE watchdog progress" : "Transmission progress"
+                    }
+                }
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
@@ -2606,26 +2645,100 @@ ApplicationWindow {
                         ToolTip.text: "Prepare your configured callsign for exact preview confirmation"
                     }
                     Button {
-                        text: "Prepare report"
-                        onClicked: transmitController.prepareReport()
+                        text: "End QSO"
+                        onClicked: transmitController.endQso()
                         ToolTip.visible: hovered
-                        ToolTip.text: "Prepare the displayed signal report for exact preview confirmation"
+                        ToolTip.text: "Clear the selected station and pending exchange"
                     }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.qsoConfirmed
+                    Label { text: "Report"; color: "#91a0b1" }
                     TextField {
+                        id: txReportField
                         objectName: "txReportField"
-                        Layout.preferredWidth: 90
+                        Layout.fillWidth: true
                         text: transmitController.report
                         maximumLength: 32
                         selectByMouse: true
                         onEditingFinished: transmitController.report = text
                         ToolTip.visible: hovered
-                        ToolTip.text: "Edit the operator-authored report or exchange before preparing it"
+                        ToolTip.text: "Edit the operator-authored signal report"
                     }
                     Button {
-                        text: "End QSO"
-                        onClicked: transmitController.endQso()
+                        text: "Prepare report"
+                        onClicked: {
+                            transmitController.report = txReportField.text
+                            transmitController.prepareReport()
+                        }
                         ToolTip.visible: hovered
-                        ToolTip.text: "Clear the selected station and pending exchange"
+                        ToolTip.text: "Move this report into exact preview confirmation; it does not transmit"
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: transmitController.qsoConfirmed
+                    Label { text: "Exchange"; color: "#91a0b1" }
+                    TextField {
+                        id: txExchangeField
+                        objectName: "txExchangeField"
+                        Layout.fillWidth: true
+                        text: transmitController.exchange
+                        maximumLength: 64
+                        selectByMouse: true
+                        onEditingFinished: transmitController.exchange = text
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Edit an operator-authored contest or conversational exchange"
+                    }
+                    Button {
+                        text: "Prepare exchange"
+                        onClicked: {
+                            transmitController.exchange = txExchangeField.text
+                            transmitController.prepareExchange()
+                        }
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Move this exchange into exact preview confirmation; it does not transmit"
+                    }
+                }
+                RowLayout {
+                    objectName: "txMacroRow"
+                    Layout.fillWidth: true
+                    visible: transmitController.qsoConfirmed
+                    Label { text: "Quick macros"; color: "#91a0b1" }
+                    Button {
+                        text: appSettings.txMacro1
+                        visible: text.length > 0
+                        onClicked: transmitController.prepareMacro(appSettings.txMacro1)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare " + text + " for exact preview confirmation"
+                    }
+                    Button {
+                        text: appSettings.txMacro2
+                        visible: text.length > 0
+                        onClicked: transmitController.prepareMacro(appSettings.txMacro2)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare " + text + " for exact preview confirmation"
+                    }
+                    Button {
+                        text: appSettings.txMacro3
+                        visible: text.length > 0
+                        onClicked: transmitController.prepareMacro(appSettings.txMacro3)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare " + text + " for exact preview confirmation"
+                    }
+                    Button {
+                        text: appSettings.txMacro4
+                        visible: text.length > 0
+                        onClicked: transmitController.prepareMacro(appSettings.txMacro4)
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Prepare " + text + " for exact preview confirmation"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: "Prepare only — exact preview required"
+                        color: "#f3bd55"
+                        font.pixelSize: 11
                     }
                 }
                 Button {

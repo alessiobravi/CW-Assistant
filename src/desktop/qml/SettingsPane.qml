@@ -575,8 +575,34 @@ Pane {
                         value: appSettings.radioTuningStepHz / 1000
                         onMoved: value => appSettings.radioTuningStepHz = Math.round(value * 1000)
                     }
-                    Label { text: "OmniRig radio slot" }
-                    SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                    Label { text: "OmniRig radio slot"; visible: appSettings.frequencyBackendIndex === 0 }
+                    SpinBox { visible: appSettings.frequencyBackendIndex === 0; from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                    Label { text: "Hamlib rigctld host"; visible: appSettings.frequencyBackendIndex === 1 }
+                    TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 1; text: appSettings.hamlibHost; placeholderText: "127.0.0.1"; onEditingFinished: appSettings.hamlibHost = text }
+                    Label { text: "Hamlib rigctld port"; visible: appSettings.frequencyBackendIndex === 1 }
+                    SpinBox { visible: appSettings.frequencyBackendIndex === 1; editable: true; from: 1; to: 65535; value: appSettings.hamlibPort; onValueModified: appSettings.hamlibPort = value }
+                    Label { text: "Hamlib VFO mapping"; visible: appSettings.frequencyBackendIndex === 1 }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: appSettings.frequencyBackendIndex === 1
+                        TextField { Layout.fillWidth: true; text: appSettings.hamlibRxVfo; placeholderText: "VFOA (RX)"; onEditingFinished: appSettings.hamlibRxVfo = text }
+                        TextField { Layout.fillWidth: true; text: appSettings.hamlibTxVfo; placeholderText: "VFOB (TX)"; onEditingFinished: appSettings.hamlibTxVfo = text }
+                    }
+                    Label { text: "Hamlib control"; visible: appSettings.frequencyBackendIndex === 1 }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: appSettings.frequencyBackendIndex === 1
+                        CheckBox {
+                            text: "Allow frequency, mode, and split writes"
+                            checked: appSettings.hamlibWritable
+                            onToggled: appSettings.hamlibWritable = checked
+                        }
+                        Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#91a0b1"; text: appSettings.hamlibState }
+                        RowLayout {
+                            Button { text: "Connect"; onClicked: appSettings.connectHamlib(); ToolTip.visible: hovered; ToolTip.text: "Connect to the configured rigctld endpoint; PTT and KEY are never exposed through this provider" }
+                            Button { text: "Disconnect"; onClicked: appSettings.disconnectHamlib(); ToolTip.visible: hovered; ToolTip.text: "Close the Hamlib radio-control connection" }
+                        }
+                    }
                     Label { text: "CAT4OM Control URL"; visible: appSettings.frequencyBackendIndex === 2 }
                     TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omUrl; placeholderText: "ws://127.0.0.1:5001/"; onEditingFinished: appSettings.cat4omUrl = text }
                     Label { text: "CAT4OM radio ID"; visible: appSettings.frequencyBackendIndex === 2 }
@@ -723,15 +749,34 @@ Pane {
                     Label { text: "KEY polarity" }
                     CheckBox { text: checked ? "Active high" : "Active low"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
                     Label { text: "Hardware validation" }
-                    CheckBox {
-                        objectName: "directKeyingValidatedCheck"
-                        text: "Disconnected lines and physical loopback passed"
-                        checked: appSettings.directKeyingValidated
+                    ColumnLayout {
+                        Layout.fillWidth: true
                         enabled: appSettings.directKeyingEnabled
                                  && appSettings.keyingPort.length > 0
-                        onToggled: appSettings.directKeyingValidated = checked
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Required before TX can arm; changing keying hardware settings clears this acknowledgement"
+                        CheckBox {
+                            id: radioDisconnectedForLoopback
+                            objectName: "radioDisconnectedForLoopbackCheck"
+                            text: "Radio is physically disconnected; RTS→CTS and DTR→DSR loopbacks are fitted"
+                        }
+                        Button {
+                            objectName: "runDirectKeyingLoopbackButton"
+                            text: "Run measured loopback"
+                            enabled: radioDisconnectedForLoopback.checked
+                            onClicked: {
+                                appSettings.runDirectKeyingLoopback(
+                                    radioDisconnectedForLoopback.checked)
+                                radioDisconnectedForLoopback.checked = false
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Test the exact selected port electrically; outputs are released and the port is closed on every result"
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: appSettings.directKeyingValidated
+                                   ? "#43c6ac" : "#f3bd55"
+                            text: appSettings.directKeyingAcceptanceStatus
+                        }
                     }
                     Label { text: "TX speed" }
                     ComboBox {
@@ -752,6 +797,15 @@ Pane {
                         stepSize: 1
                         value: appSettings.fixedTxWpm
                         onMoved: value => appSettings.fixedTxWpm = Math.round(value)
+                    }
+                    Label { text: "Quick TX macros" }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        TextField { Layout.fillWidth: true; maximumLength: 64; text: appSettings.txMacro1; placeholderText: "Macro 1"; onEditingFinished: appSettings.txMacro1 = text }
+                        TextField { Layout.fillWidth: true; maximumLength: 64; text: appSettings.txMacro2; placeholderText: "Macro 2"; onEditingFinished: appSettings.txMacro2 = text }
+                        TextField { Layout.fillWidth: true; maximumLength: 64; text: appSettings.txMacro3; placeholderText: "Macro 3"; onEditingFinished: appSettings.txMacro3 = text }
+                        TextField { Layout.fillWidth: true; maximumLength: 64; text: appSettings.txMacro4; placeholderText: "Macro 4"; onEditingFinished: appSettings.txMacro4 = text }
                     }
                     Label { text: "" }
                     Label {

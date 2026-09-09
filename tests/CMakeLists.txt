@@ -10,6 +10,10 @@ add_executable(cwa_transmit_scheduler_tests cw_transmit_scheduler_tests.cpp)
 target_link_libraries(cwa_transmit_scheduler_tests PRIVATE cwa_core)
 add_test(NAME cwa_transmit_scheduler_tests COMMAND cwa_transmit_scheduler_tests)
 
+add_executable(cwa_hardware_acceptance_tests hardware_acceptance_tests.cpp)
+target_link_libraries(cwa_hardware_acceptance_tests PRIVATE cwa_core)
+add_test(NAME cwa_hardware_acceptance_tests COMMAND cwa_hardware_acceptance_tests)
+
 add_executable(cwa_character_refinement_tests
   cw_character_refinement_tests.cpp)
 target_link_libraries(cwa_character_refinement_tests PRIVATE cwa_core)
@@ -20,7 +24,8 @@ add_executable(cwa_decoder_transcript_qml_test
   desktop/decoder_transcript_qml_test.cpp)
 target_compile_definitions(cwa_decoder_transcript_qml_test PRIVATE
   CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml"
-  CWA_DESKTOP_MAIN_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/main.cpp")
+  CWA_DESKTOP_MAIN_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/main.cpp"
+  CWA_APP_SETTINGS_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.cpp")
 add_test(NAME cwa_decoder_transcript_qml_test
   COMMAND cwa_decoder_transcript_qml_test)
 

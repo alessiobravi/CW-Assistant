@@ -264,10 +264,13 @@ decoding hints rather than sharing one assumed contest sequence.
   overflow/zero results, and show both before satellite transmission.
 - Support selecting RTS or DTR and active polarity independently for PTT and
   KEY. A profile may use one or two physical serial ports.
-- Require an explicit disconnected-line and physical-loopback acknowledgement
-  before direct keying can be armed. Clear it whenever port, line assignment,
-  polarity, or direct-keying enablement changes; never treat the acknowledgement
-  as an electrical measurement or a replacement for dummy-load acceptance.
+- Require a measured disconnected-line physical loopback before direct keying
+  can be armed. The operator must first confirm that the radio is physically
+  disconnected; the application then observes the configured output/input
+  pairs electrically and stores only configuration-bound evidence. Clear it
+  whenever enablement, port, line assignment, polarity, platform, or
+  fingerprint changes.
+  Loopback readiness is not a replacement for dummy-load acceptance.
 - Require authoritative provider readback of the exact TX frequency, CW/CW-R
   target mode, and known split state before arming. Snapshot that state and
   disarm while idle or emergency-release while active if it changes.
@@ -282,6 +285,9 @@ decoding hints rather than sharing one assumed contest sequence.
 - Permit operator-authored free text only after normalization to the supported
   Morse alphabet and exact visible-preview confirmation. Derive a bounded
   standard-timing plan at the selected WPM before any adapter request.
+- Show authoritative elapsed/remaining time and bounded progress while sending
+  a message or tuning. Profile quick macros and editable report/exchange fields
+  only prepare the same exact-confirmation preview and never auto-send.
 - Provide an operator-only TUNE toggle after explicit TX arming. TUNE asserts
   KEY/tone without accepting decoder input, releases on the second press or
   emergency stop, and has an independent hard maximum of 15 seconds.
@@ -304,7 +310,10 @@ decoding hints rather than sharing one assumed contest sequence.
   RTS/flow-control mode, polling interval, and timeout.
 - On Windows, OmniRig Rig 1/Rig 2 is the first frequency-control integration and
   its native configuration is reachable from the application Settings pane.
-  Hamlib provides the platform-neutral frequency-control path.
+  Hamlib rigctld provides a platform-neutral frequency-control path, requires
+  VFO mode, accepts loopback endpoints only, and exposes no PTT/KEY operation.
+  A remote rigctld connection requires a locally terminated authenticated,
+  encrypted tunnel.
 - CAT4OM is a network frequency-control backend using its native major-version
   compatible JSON WebSocket Control channel. It consumes pushed state, treats
   VFO names as opaque identifiers, honors group ownership, and never exposes

@@ -121,11 +121,24 @@ int main(int argc, char** argv) {
   expect(!controller.confirmPreview(QStringLiteral("DE IU0LFQ/P K")) &&
              controller.confirmPreview(QStringLiteral("DE IU0LFQ/P PSE K")),
          "the message guard rejects any preview mismatch");
+  controller.setExchange(QStringLiteral(" 001   tu "));
+  expect(controller.exchange() == QStringLiteral("001   TU") &&
+             controller.prepareExchange() &&
+             controller.preparedMessage() == QStringLiteral("001 TU") &&
+             !controller.messageConfirmed(),
+         "an editable exchange is prepared but never bypasses exact confirmation");
+  expect(controller.prepareMacro(QStringLiteral("PSE K")) &&
+             controller.preparedMessage() == QStringLiteral("PSE K") &&
+             !controller.messageConfirmed() && !controller.onAir(),
+         "an operator macro only enters the guarded preview workflow");
   expect(controller.prepareFreeText(QStringLiteral("E")) &&
              controller.confirmPreview(QStringLiteral("E")),
          "a short exact fixture is prepared for realtime hardware sequencing");
   expect(controller.transmitPrepared() && controller.transmitting(),
          "an exactly confirmed plan reaches the guarded fake adapter");
+  expect(controller.txRemainingSeconds() > 0.0 &&
+             controller.txProgress() >= 0.0 && controller.txProgress() < 1.0,
+         "controller exposes active immutable-plan timing to the UI");
   const bool message_completed = waitUntil(
       [&controller] { return !controller.transmitting(); }, 5'000);
   if (!message_completed || controller.state() != QStringLiteral("confirmed") ||
@@ -138,9 +151,13 @@ int main(int argc, char** argv) {
   expect(message_completed && controller.state() == QStringLiteral("confirmed") &&
              !controller.onAir(),
          "scheduled Morse completes with KEY and PTT inactive");
+  expect(controller.txElapsedSeconds() == 0.0 &&
+             controller.txRemainingSeconds() == 0.0 &&
+             controller.txProgress() == 0.0,
+         "controller clears progress after message completion");
 
   expect(controller.toggleTune() && controller.tuning() &&
-             controller.onAir(),
+             controller.onAir() && controller.txRemainingSeconds() > 0.0,
          "an armed operator can start guarded TUNE on known-safe hardware");
   expect(controller.toggleTune() && !controller.tuning() &&
              !controller.onAir(),

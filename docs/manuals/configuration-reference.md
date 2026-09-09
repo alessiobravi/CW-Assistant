@@ -424,8 +424,9 @@ rewrites, or corrects decoded characters.
 
 Use **Refresh detection** after starting or reconfiguring the frequency service.
 An installed but disabled, busy, unresponsive, or unconfigured radio is not
-shown in the detected-radio list. macOS and Linux currently use SWL or manual
-setup until live Hamlib discovery is implemented.
+shown in the detected-radio list. Hamlib model discovery remains planned, but
+macOS, Linux, and Windows can connect to an already configured local rigctld
+service.
 
 ### Reference radio
 
@@ -440,7 +441,13 @@ reference profile does not guess a physical port.
 
 - **OmniRig (Windows):** select radio slot 1 or 2. The Configure button opens
   its native setup. Direct key/PTT remains a separate COM connection.
-- **Hamlib:** portable serial CAT path; the live adapter is planned.
+- **Hamlib:** connect to `rigctld` started with `--vfo`. Configure the loopback
+  host (normally `127.0.0.1`), port (default `4532`), and distinct RX/TX VFO
+  names (normally `VFOA`/`VFOB`). Start read-only, or explicitly enable writes
+  for frequency, mode, and split. Raw rigctld has no authentication or TLS, so
+  CW Buddy refuses non-loopback hosts. For a remote radio, terminate an
+  authenticated encrypted tunnel locally and point CW Buddy at its loopback
+  endpoint. Hamlib PTT and KEY commands are never used.
 - **CAT4OM network service:** connect to a group-specific Control WebSocket and
   select a radio ID. See [CAT4OM setup](cat4om-setup.md).
 
@@ -495,12 +502,15 @@ Select a dedicated serial port and assign different lines to PTT and KEY.
 Defaults are RTS for PTT and DTR for KEY, both active high. Change polarity only
 to match an electrically verified interface. Port enumeration is passive.
 
-**Disconnected lines and physical loopback passed** is an explicit safety gate,
-not an automatic test. Before selecting it, disconnect the radio, verify both
-configured lines are inactive, then prove the PTT and KEY assignments with a
-physical loopback. Changing enablement, port, line assignment, or polarity
-clears the acknowledgement. The application will not open the keying port or
-arm direct TX without it. CAT and keying ports must be different.
+**Run measured loopback** is an electrical safety gate, not an acknowledgement
+checkbox. Disconnect the radio physically, connect RTS→CTS and DTR→DSR on the
+selected interface, confirm that disconnected state, then run the probe. CW
+Buddy opens only that exact port, establishes an inactive baseline, observes
+each loop separately, releases KEY before PTT, and closes the port on success
+or failure. A successful result is bound to a SHA-256 fingerprint of the exact
+port, line assignments, polarities, and platform; changing enablement or any
+fingerprinted value requires a new measurement. CAT and keying ports must be
+different.
 
 The direct serial adapter and worker-thread Morse scheduler are connected to
 the guarded application controller. Opening initializes KEY and then PTT to
@@ -510,13 +520,17 @@ speed when configured, otherwise the selected stream's bounded RX estimate.
 
 The **QSO** drawer requires explicit arming, an exactly decoded and retyped
 target callsign, and a second exact confirmation of the normalized outgoing
-message. Own-call, editable-report, and free-text actions all use the same
-boundary. **Auto-QSO** can propose one of those messages from decoded context
+message. Own-call, editable report/exchange, profile-configurable quick macros,
+and free-text actions all use the same boundary. The progress panel reports
+elapsed and remaining time from the worker's monotonic clock while a message or
+TUNE is active and clears at every terminal state. **Auto-QSO** can propose one
+of those messages from decoded context
 but cannot confirm or send it. **TUNE** is an operator-only toggle with a hard,
 non-extendable 15-second hardware deadline. Ordinary Morse elements have a
-separate three-second continuous-KEY guard. Always complete first acceptance
-into a dummy load at minimum power; the checkbox is not a substitute for that
-test.
+separate three-second continuous-KEY guard. A measured loopback permits safe
+port opening but is not on-air acceptance: always complete the documented
+message, cancel, watchdog, and emergency-release checks into a dummy load at
+minimum power first.
 
 ## Display page
 
