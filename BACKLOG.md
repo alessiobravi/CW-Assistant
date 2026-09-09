@@ -16,6 +16,7 @@ hosted runs exposed and corrected a Windows shell parse error plus Ubuntu
 validation. Windows also declares the supported legacy CMake policy floor for
 the pinned upstream source; bounded package-step diagnostics are retained in CI
 status tags.
+Configure-stage CMake failures are retained through the same bounded channel.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

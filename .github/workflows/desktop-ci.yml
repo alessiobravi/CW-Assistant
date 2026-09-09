@@ -534,21 +534,23 @@ jobs:
       - name: Configure desktop
         id: configure
         shell: bash
-        run: >-
-          cmake -S . -B build
-          -DCMAKE_BUILD_TYPE=Release
-          -DCWA_BUILD_APP=OFF
-          -DCWA_BUILD_DESKTOP=ON
-          -DCWA_BUILD_TESTS=ON
-          -DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON
-          -DCWA_ENABLE_SOAPY_SDR=${{ matrix.windows_installer }}
-          -DSoapySDR_DIR="${{ env.CWA_SOAPYSDR_ROOT }}/share/cmake/SoapySDR"
-          -DCWA_SOAPY_SDR_RUNTIME_ROOT="${{ env.CWA_SOAPYSDR_ROOT }}"
-          -DCWA_ONNXRUNTIME_ROOT="${{ env.CWA_ONNXRUNTIME_ROOT }}"
-          -DCWA_PACKAGE_REVISION=${{ github.run_number }}
-          ${{ matrix.sdr_configure_arguments }}
-          ${CWA_MACOS_SDR_CONFIGURE_ARGUMENTS:-}
-          ${{ matrix.configure-arguments }}
+        run: |
+          set -o pipefail
+          cmake -S . -B build \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCWA_BUILD_APP=OFF \
+            -DCWA_BUILD_DESKTOP=ON \
+            -DCWA_BUILD_TESTS=ON \
+            -DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON \
+            -DCWA_ENABLE_SOAPY_SDR=${{ matrix.windows_installer }} \
+            -DSoapySDR_DIR="${{ env.CWA_SOAPYSDR_ROOT }}/share/cmake/SoapySDR" \
+            -DCWA_SOAPY_SDR_RUNTIME_ROOT="${{ env.CWA_SOAPYSDR_ROOT }}" \
+            -DCWA_ONNXRUNTIME_ROOT="${{ env.CWA_ONNXRUNTIME_ROOT }}" \
+            -DCWA_PACKAGE_REVISION=${{ github.run_number }} \
+            ${{ matrix.sdr_configure_arguments }} \
+            ${CWA_MACOS_SDR_CONFIGURE_ARGUMENTS:-} \
+            ${{ matrix.configure-arguments }} \
+            2>&1 | tee configure-output.log
       - name: Build desktop and core tests
         id: build
         shell: bash
@@ -934,6 +936,10 @@ jobs:
             if [[ -n "${verify_log}" ]]; then
               status_message="${status_message}"$'\n'"win_verify_log=${verify_log}"
             fi
+          fi
+          if [[ "${CWA_CONFIGURE_RESULT}" == "failure" ]]; then
+            configure_log="$(grep -Ei 'CMake (Error|Deprecation Error)|Could NOT find|not found|does not exist|unknown argument' configure-output.log 2>/dev/null | tail -n 40 | tr '\r\n' '  ' | tail -c 3000)"
+            status_message="${status_message}"$'\n'"configure_log=${configure_log:-unavailable}"
           fi
           if [[ "${CWA_BUILD_RESULT}" == "failure" ]]; then
             build_errors="$(grep -Ei 'error (C|LNK)[0-9]+:|fatal error:|CMake Error|undefined reference|ninja: build stopped|MSB[0-9]+: error' build-output.log 2>/dev/null | tail -n 24 | tr '\r\n' '  ' | tail -c 3000 || true)"
