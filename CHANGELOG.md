@@ -15,8 +15,9 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 - Portable Linux SDR packaging now follows Ubuntu 24.04's `librtlsdr.so.2`
   package ABI and carries libudev's libcap dependency. Windows pinned-runtime
-  diagnostics no longer fail while parsing a native-command error message and
-  both packaging steps retain bounded failure logs in their SSH status tags.
+  builds explicitly enable the supported legacy policy floor required by the
+  hosted CMake version; diagnostics no longer fail while parsing a native-command
+  error message, and both package steps retain bounded logs in SSH status tags.
 
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby

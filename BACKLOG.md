@@ -13,7 +13,9 @@ and staged-package smoke tests load the RTL factory before publication. The
 SDRplay API remains an operator-installed proprietary prerequisite. The first
 hosted runs exposed and corrected a Windows shell parse error plus Ubuntu
 24.04's `librtlsdr.so.2`/libcap closure requirements without relaxing package
-validation; bounded package-step diagnostics are retained in CI status tags.
+validation. Windows also declares the supported legacy CMake policy floor for
+the pinned upstream source; bounded package-step diagnostics are retained in CI
+status tags.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

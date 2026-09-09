@@ -230,7 +230,9 @@ permissions.
 Both package forms execute a backend/module smoke test before publication; that
 test proves the driver factory loads, not that a physical dongle is accessible.
 If an SDR runtime assembly step fails, the release is withheld and the bounded
-package-step diagnostic is retained with that platform's CI status record.
+package-step diagnostic is retained with that platform's CI status record. The
+Windows dependency build pins both upstream revisions and their accepted CMake
+policy compatibility floor.
 
 SDRplay is intentionally different: install a compatible SDRplay API/service
 and SoapySDRPlay3 module from their respective providers. CW Buddy neither

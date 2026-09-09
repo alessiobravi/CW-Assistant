@@ -156,6 +156,7 @@ jobs:
           Invoke-Checked 'cmake' '-S' $env:CWA_SOAPYSDR_SOURCE '-B' '.dependencies/soapysdr-build' `
             '-A' 'x64' '-DENABLE_APPS=OFF' '-DENABLE_TESTS=OFF' `
             '-DENABLE_PYTHON=OFF' '-DENABLE_PYTHON3=OFF' `
+            '-DCMAKE_POLICY_VERSION_MINIMUM=3.5' `
             "-DCMAKE_INSTALL_PREFIX=$env:CWA_SOAPYSDR_ROOT"
           Invoke-Checked 'cmake' '--build' '.dependencies/soapysdr-build' `
             '--config' 'Release' '--target' 'install' '--parallel' '2'
@@ -919,7 +920,7 @@ jobs:
             fi
           fi
           if [[ "${CWA_WINDOWS_SDR_BUILD_RESULT}" == "failure" ]]; then
-            windows_sdr_log="$(tail -n 80 windows-sdr-build.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            windows_sdr_log="$(grep -Ei 'CMake (Error|Deprecation Error)|error C[0-9]+:|fatal error:|Native command failed' windows-sdr-build.log 2>/dev/null | tail -n 40 | tr '\r\n' '  ' | tail -c 3000)"
             status_message="${status_message}"$'\n'"windows_sdr_log=${windows_sdr_log:-unavailable}"
           fi
           if [[ "${CWA_LINUX_SDR_BUNDLE_RESULT}" == "failure" ]]; then
