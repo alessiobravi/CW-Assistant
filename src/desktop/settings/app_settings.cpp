@@ -998,6 +998,9 @@ const QString& AppSettings::keyingPort() const noexcept { return keying_port_; }
 bool AppSettings::directKeyingEnabled() const noexcept {
   return direct_keying_enabled_;
 }
+bool AppSettings::directKeyingValidated() const noexcept {
+  return direct_keying_validated_;
+}
 int AppSettings::pttLineIndex() const noexcept { return ptt_line_index_; }
 int AppSettings::keyLineIndex() const noexcept { return key_line_index_; }
 bool AppSettings::pttActiveHigh() const noexcept { return ptt_active_high_; }
@@ -1129,12 +1132,39 @@ CWA_SETTER(setSplitEnabled, split_enabled_, bool)
 CWA_SETTER(setRxTransverterOffsetHz, rx_transverter_offset_hz_, qint64)
 CWA_SETTER(setTxTransverterOffsetHz, tx_transverter_offset_hz_, qint64)
 CWA_SETTER(setCwToneSidebandIndex, cw_tone_sideband_index_, int)
-CWA_SETTER(setKeyingPort, keying_port_, const QString&)
-CWA_SETTER(setDirectKeyingEnabled, direct_keying_enabled_, bool)
-CWA_SETTER(setPttLineIndex, ptt_line_index_, int)
-CWA_SETTER(setKeyLineIndex, key_line_index_, int)
-CWA_SETTER(setPttActiveHigh, ptt_active_high_, bool)
-CWA_SETTER(setKeyActiveHigh, key_active_high_, bool)
+void AppSettings::setKeyingPort(const QString& value) {
+  if (!assign_if_changed(keying_port_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
+void AppSettings::setDirectKeyingEnabled(const bool value) {
+  if (!assign_if_changed(direct_keying_enabled_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
+void AppSettings::setDirectKeyingValidated(const bool value) {
+  if (assign_if_changed(direct_keying_validated_, value)) emit settingsChanged();
+}
+void AppSettings::setPttLineIndex(const int value) {
+  if (!assign_if_changed(ptt_line_index_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
+void AppSettings::setKeyLineIndex(const int value) {
+  if (!assign_if_changed(key_line_index_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
+void AppSettings::setPttActiveHigh(const bool value) {
+  if (!assign_if_changed(ptt_active_high_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
+void AppSettings::setKeyActiveHigh(const bool value) {
+  if (!assign_if_changed(key_active_high_, value)) return;
+  direct_keying_validated_ = false;
+  emit settingsChanged();
+}
 void AppSettings::setTxSpeedMode(const int value) {
   if (assign_if_changed(tx_speed_mode_, std::clamp(value, 0, 1)))
     emit settingsChanged();
@@ -1331,6 +1361,7 @@ void AppSettings::applyReferenceDefaults(const int index) {
     return;
   }
   const auto& profile = profiles[static_cast<std::size_t>(index)];
+  direct_keying_validated_ = false;
   cat_baud_rate_ = static_cast<int>(profile.cat.baud_rate);
   cat_data_bits_ = static_cast<int>(profile.cat.data_bits);
   cat_parity_index_ = static_cast<int>(profile.cat.parity);
@@ -1621,6 +1652,8 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("keying/port")), keying_port_.trimmed());
   settings.setValue(storageKey(QStringLiteral("keying/directEnabled")),
                     direct_keying_enabled_);
+  settings.setValue(storageKey(QStringLiteral("keying/directValidated")),
+                    direct_keying_validated_);
   settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_);
   settings.setValue(storageKey(QStringLiteral("keying/pttActiveHigh")), ptt_active_high_);
@@ -1762,6 +1795,9 @@ void AppSettings::load() {
   keying_port_ = settings.value(storageKey(QStringLiteral("keying/port"))).toString();
   direct_keying_enabled_ = settings
       .value(storageKey(QStringLiteral("keying/directEnabled")), false)
+      .toBool();
+  direct_keying_validated_ = settings
+      .value(storageKey(QStringLiteral("keying/directValidated")), false)
       .toBool();
   ptt_line_index_ = settings.value(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_).toInt();
   key_line_index_ = settings.value(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_).toInt();
@@ -1993,6 +2029,7 @@ void AppSettings::resetInMemorySettings() {
   cat_port_.clear();
   keying_port_.clear();
   direct_keying_enabled_ = false;
+  direct_keying_validated_ = false;
   tx_speed_mode_ = 0;
   fixed_tx_wpm_ = 20;
   split_enabled_ = false;

@@ -255,15 +255,17 @@ int main() {
   const std::string spectrum_panel = qml.substr(
       spectrum_start, display_start - spectrum_start);
   const std::size_t vfo_editor_start = qml.find("id: vfoRxEditor");
-  const std::size_t vfo_badge_start = qml.find("objectName: \"vfoSplitBadge\"",
-                                               vfo_editor_start);
   const std::size_t rx_mode_start =
       qml.find("objectName: \"vfoRxModeBadge\"", vfo_editor_start);
-  const std::size_t sync_start =
-      qml.find("objectName: \"vfoFrequencySyncButton\"", vfo_badge_start);
-  const std::size_t tx_editor_start = qml.find("id: vfoTxEditor", sync_start);
+  const std::size_t tx_editor_start = qml.find("id: vfoTxEditor", rx_mode_start);
   const std::size_t tx_mode_start =
       qml.find("objectName: \"vfoTxModeBadge\"", tx_editor_start);
+  const std::size_t vfo_badge_start = qml.find("objectName: \"vfoSplitBadge\"",
+                                               tx_mode_start);
+  const std::size_t sync_start =
+      qml.find("objectName: \"vfoFrequencySyncButton\"", vfo_badge_start);
+  const std::size_t tune_start =
+      qml.find("objectName: \"radioTuneButton\"", sync_start);
   const std::size_t radio_heading_start = qml.find("text: \"Radio Control\"");
   const std::size_t decoder_heading_start =
       qml.find("text: \"CW Decoder\"", radio_heading_start);
@@ -273,19 +275,20 @@ int main() {
       vfo_badge_start == std::string::npos ||
       rx_mode_start == std::string::npos || sync_start == std::string::npos ||
       tx_editor_start == std::string::npos ||
-      tx_mode_start == std::string::npos ||
+      tx_mode_start == std::string::npos || tune_start == std::string::npos ||
       radio_heading_start == std::string::npos ||
       decoder_heading_start == std::string::npos ||
       diagnostics_start == std::string::npos ||
-      rx_mode_start >= vfo_badge_start || vfo_badge_start >= sync_start ||
-      sync_start >= tx_editor_start || tx_editor_start >= tx_mode_start ||
+      rx_mode_start >= tx_editor_start || tx_editor_start >= tx_mode_start ||
+      tx_mode_start >= vfo_badge_start || vfo_badge_start >= sync_start ||
+      sync_start >= tune_start ||
       radio_heading_start >= vfo_editor_start ||
-      tx_mode_start >= decoder_heading_start ||
+      tune_start >= decoder_heading_start ||
       decoder_heading_start >= diagnostics_start) {
     return 8;
   }
   const std::string vfo_editor = qml.substr(
-      vfo_editor_start, vfo_badge_start - vfo_editor_start);
+      vfo_editor_start, tx_editor_start - vfo_editor_start);
   if (!contains(toolbar, "z: 20") ||
       !contains(toolbar, "objectName: \"startLiveAudioButton\"") ||
       !contains(toolbar, "z: 21") ||
@@ -312,9 +315,14 @@ int main() {
       !contains(qml, "function formatRigFrequency(hz)") ||
       !contains(qml, "objectName: \"vfoRxModeBadge\"") ||
       !contains(qml, "objectName: \"onAirIndicator\"") ||
+      !contains(qml, "color: \"transparent\"") ||
+      !contains(qml, "border.width: 0") ||
       !contains(qml, "objectName: \"radioTuneButton\"") ||
       !contains(qml, "onClicked: transmitController.toggleTune()") ||
       !contains(qml, "hard 15-second watchdog") ||
+      !contains(qml, "objectName: \"cancelTransmissionButton\"") ||
+      !contains(qml, "transmitController.cancelTransmission()") ||
+      !contains(qml, "objectName: \"txReportField\"") ||
       !contains(qml, "objectName: \"vfoTxLabel\"") ||
       !contains(qml, "objectName: \"vfoTxModeBadge\"") ||
       !contains(qml, "objectName: \"vfoTxFrequencyField\"") ||
@@ -325,6 +333,7 @@ int main() {
       !contains(qml, "? \"CONFIRMED\" : \"TARGET\"") ||
       !contains(qml, "objectName: \"vfoFrequencySyncButton\"") ||
       !contains(qml, "property int controlButtonSize: 52") ||
+      !contains(qml, "anchors.rightMargin: vfoDisplay.controlButtonSize + 5") ||
       !contains(qml, "text: \"A=B\"") ||
       !contains(qml, "width: 28") ||
       !contains(qml, "Layout.minimumWidth: 150") ||
@@ -427,6 +436,13 @@ int main() {
                 "appSettings.radioTuningStepHz = Math.round(value * 1000)")) {
     return 10;
   }
+  if (!contains(settings_qml,
+                "objectName: \"directKeyingValidatedCheck\"") ||
+      !contains(settings_qml, "appSettings.directKeyingValidated") ||
+      !contains(settings_qml,
+                "Disconnected lines and physical loopback passed")) {
+    return 18;
+  }
 
   std::ifstream main_source(CWA_DESKTOP_MAIN_CPP_PATH, std::ios::binary);
   if (!main_source) return 12;
@@ -449,7 +465,10 @@ int main() {
                 "!parser.isSet(smoke_test_option) &&\n"
                 "      callsign_database_updater.managedEnabled()") ||
       !contains(main_cpp,
-                "callsign_database_updater.checkAndInstallIfDue()")) {
+                "callsign_database_updater.checkAndInstallIfDue()") ||
+      !contains(main_cpp, "transmit_controller.configureHardware(") ||
+      !contains(main_cpp, "settings.directKeyingValidated()") ||
+      !contains(main_cpp, "transmit_controller.configureRadioSafety(")) {
     return 13;
   }
   return 0;

@@ -17,6 +17,7 @@ namespace cwassistant::desktop {
 struct DirectTransmitEngineConfig {
   DirectKeyingConfig keying;
   cwassistant::core::CwTransmitSchedulerConfig scheduler;
+  std::uint64_t maximum_tune_duration_ns{15'000'000'000ULL};
 };
 
 class DirectTransmitWorker;
@@ -48,6 +49,11 @@ class DirectTransmitEngine final : public QObject {
   // exact-preview result. The worker always takes its own immutable plan copy.
   [[nodiscard]] bool start(const cwassistant::core::CwTransmitPlan& plan,
                            bool exact_preview_confirmed);
+  // Cancellation and TUNE are completed synchronously. Both return only after
+  // KEY then PTT have been commanded inactive (or a fault has been latched).
+  [[nodiscard]] bool cancel();
+  [[nodiscard]] bool startTune(bool operator_authorized);
+  [[nodiscard]] bool stopTune();
   // Both operations block until KEY then PTT release has been attempted.
   void emergencyRelease();
   void close();
@@ -65,8 +71,9 @@ class DirectTransmitEngine final : public QObject {
 
  private:
   void initializeWorker(BackendFactory backend_factory);
-  void updateCachedState(bool available, bool open_safe, bool busy, bool ptt,
-                         bool key, bool fault, QString status);
+  void updateCachedState(std::uint64_t revision, bool available,
+                         bool open_safe, bool busy, bool ptt, bool key,
+                         bool fault, QString status);
 
   QThread* thread_{nullptr};
   DirectTransmitWorker* worker_{nullptr};
@@ -77,6 +84,7 @@ class DirectTransmitEngine final : public QObject {
   bool key_{false};
   bool fault_{false};
   QString status_{QStringLiteral("Direct transmit adapter is not configured")};
+  std::uint64_t cached_revision_{0U};
 };
 
 }  // namespace cwassistant::desktop

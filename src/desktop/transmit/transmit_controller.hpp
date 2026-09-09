@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QString>
 #include <QVariantList>
 
@@ -38,6 +39,7 @@ class TransmitController final : public QObject {
   Q_PROPERTY(QString proposedMessage READ proposedMessage NOTIFY changed)
   Q_PROPERTY(QString proposedReason READ proposedReason NOTIFY changed)
   Q_PROPERTY(bool hardwareAvailable READ hardwareAvailable NOTIFY changed)
+  Q_PROPERTY(bool stationReady READ stationReady NOTIFY changed)
   Q_PROPERTY(bool transmitting READ transmitting NOTIFY changed)
   Q_PROPERTY(QString hardwareStatus READ hardwareStatus NOTIFY changed)
   Q_PROPERTY(bool onAir READ onAir NOTIFY changed)
@@ -45,6 +47,9 @@ class TransmitController final : public QObject {
 
  public:
   explicit TransmitController(QObject* parent = nullptr);
+  explicit TransmitController(DirectTransmitEngine::BackendFactory backend_factory,
+                              QObject* parent = nullptr);
+  ~TransmitController() override;
 
   [[nodiscard]] QString state() const;
   [[nodiscard]] const QString& status() const noexcept;
@@ -62,6 +67,7 @@ class TransmitController final : public QObject {
   [[nodiscard]] const QString& proposedMessage() const noexcept;
   [[nodiscard]] const QString& proposedReason() const noexcept;
   [[nodiscard]] bool hardwareAvailable() const noexcept;
+  [[nodiscard]] bool stationReady() const noexcept;
   [[nodiscard]] bool transmitting() const noexcept;
   [[nodiscard]] const QString& hardwareStatus() const noexcept;
   [[nodiscard]] bool onAir() const noexcept;
@@ -71,8 +77,13 @@ class TransmitController final : public QObject {
   void configureHardware(bool enabled, const QString& port_name,
                          int ptt_line_index, int key_line_index,
                          bool ptt_active_high, bool key_active_high,
-                         const QString& cat_port_name);
+                         const QString& cat_port_name,
+                         bool loopback_validated);
   void configureTxSpeed(int mode, int fixed_wpm);
+  void configureRadioSafety(bool radio_enabled, qulonglong tx_rf_hz,
+                            const QString& tx_mode_target,
+                            bool tx_mode_confirmed, bool split_known,
+                            bool split_active);
   void setWordsPerMinute(int value);
   void setReport(const QString& value);
   void setAutoQsoEnabled(bool enabled);
@@ -91,6 +102,7 @@ class TransmitController final : public QObject {
   Q_INVOKABLE bool acceptProposal();
   Q_INVOKABLE bool confirmPreview(const QString& exact_preview);
   Q_INVOKABLE bool transmitPrepared();
+  Q_INVOKABLE bool cancelTransmission();
   Q_INVOKABLE bool toggleTune();
   Q_INVOKABLE bool endQso();
   Q_INVOKABLE void emergencyRelease();
@@ -104,6 +116,7 @@ class TransmitController final : public QObject {
   void clearPrepared();
   void setStatus(QString status);
   void handleHardwareChanged();
+  [[nodiscard]] bool radioSafetyStillConfirmed() const noexcept;
 
   cwassistant::core::CallsignPolicy callsign_policy_;
   cwassistant::core::TransmitGuard guard_;
@@ -125,8 +138,18 @@ class TransmitController final : public QObject {
   bool auto_qso_enabled_{false};
   bool hardware_enabled_{false};
   bool hardware_was_busy_{false};
+  bool handling_hardware_change_{false};
+  bool radio_tx_ready_{false};
+  bool radio_split_active_{false};
+  bool armed_radio_split_active_{false};
+  qulonglong radio_tx_rf_hz_{0};
+  qulonglong armed_radio_tx_rf_hz_{0};
+  QString radio_tx_mode_;
+  QString armed_radio_tx_mode_;
+  DirectTransmitEngineConfig hardware_config_{};
   QString hardware_configuration_key_;
   QElapsedTimer hardware_clock_;
+  QTimer hardware_watchdog_;
 };
 
 }  // namespace cwassistant::desktop

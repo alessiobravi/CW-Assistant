@@ -120,6 +120,25 @@ int main(int argc, char* argv[]) {
     replay_controller.setDebugCaptureMaximumSeconds(
         settings.debugCaptureMaximumSeconds());
   };
+  const auto apply_transmit_hardware = [&settings, &transmit_controller] {
+    transmit_controller.configureHardware(
+        settings.radioEnabled() && settings.directKeyingEnabled(),
+        settings.keyingPort(), settings.pttLineIndex(), settings.keyLineIndex(),
+        settings.pttActiveHigh(), settings.keyActiveHigh(), settings.catPort(),
+        settings.directKeyingValidated());
+  };
+  const auto apply_transmit_speed = [&settings, &transmit_controller] {
+    transmit_controller.configureTxSpeed(settings.txSpeedMode(),
+                                         settings.fixedTxWpm());
+  };
+  const auto apply_transmit_radio_safety = [&settings, &transmit_controller] {
+    const auto tx_rf_hz = settings.controlledTxRfHz();
+    transmit_controller.configureRadioSafety(
+        settings.radioEnabled(),
+        tx_rf_hz ? static_cast<qulonglong>(*tx_rf_hz) : 0U,
+        settings.radioTxModeTarget(), settings.radioTxModeConfirmed(),
+        settings.radioSplitKnown(), settings.controlledSplitActive());
+  };
   const auto apply_offline_callsign_database =
       [&settings, &replay_controller, &callsign_database_updater] {
     if (callsign_database_updater.managedEnabled()) {
@@ -143,6 +162,9 @@ int main(int argc, char* argv[]) {
   apply_debug_capture_limit();
   apply_own_callsign();
   apply_offline_callsign_database();
+  apply_transmit_hardware();
+  apply_transmit_speed();
+  apply_transmit_radio_safety();
   replay_controller.setAudioInputSelection(settings.audioInputId(),
                                            settings.audioInputDisplayName());
   replay_controller.setMonitorOutputSelection(settings.audioOutputId());
@@ -176,6 +198,23 @@ int main(int argc, char* argv[]) {
       [&settings, &transmit_controller] {
         transmit_controller.setOwnCallsign(settings.ownCallsign());
       });
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &transmit_controller, apply_transmit_hardware);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &transmit_controller, apply_transmit_speed);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &transmit_controller, apply_transmit_radio_safety);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::radioFrequencyChanged,
+      &transmit_controller, apply_transmit_radio_safety);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
+      &transmit_controller, apply_transmit_radio_safety);
+  QObject::connect(&application, &QCoreApplication::aboutToQuit,
+                   &transmit_controller, &cwassistant::desktop::TransmitController::disarm);
   QObject::connect(
       &replay_controller, &cwassistant::desktop::ReplayController::decoderChanged,
       &transmit_controller,

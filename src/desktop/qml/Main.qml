@@ -1099,8 +1099,8 @@ ApplicationWindow {
                     visible: replayController.radioFrequencyAvailable
                              && replayController.sourceMode === 0
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    Layout.minimumHeight: 150
+                    Layout.preferredHeight: 188
+                    Layout.minimumHeight: 188
                     radius: 8
                     color: "#111821"
                     border.color: "#3b5267"
@@ -1113,7 +1113,7 @@ ApplicationWindow {
                         spacing: 8
                         ColumnLayout {
                             Layout.preferredWidth: vfoDisplay.controlButtonSize
-                            Layout.alignment: Qt.AlignVCenter
+                            Layout.alignment: Qt.AlignTop
                             spacing: 5
                             Rectangle {
                                 id: onAirIndicator
@@ -1122,10 +1122,8 @@ ApplicationWindow {
                                 property bool active: transmitController.onAir
                                 Layout.preferredWidth: vfoDisplay.controlButtonSize
                                 Layout.preferredHeight: vfoDisplay.controlButtonSize
-                                radius: 5
-                                color: active ? "#4d0d18" : "#171e27"
-                                border.color: active ? "#ff3b30" : "#3a4552"
-                                border.width: 1
+                                color: "transparent"
+                                border.width: 0
                                 Image {
                                     anchors.centerIn: parent
                                     source: "qrc:/icons/on-air-active.png"
@@ -1145,41 +1143,6 @@ ApplicationWindow {
                                     hoverEnabled: true
                                 }
                             }
-                            Rectangle {
-                                objectName: "radioTuneButton"
-                                Layout.preferredWidth: vfoDisplay.controlButtonSize
-                                Layout.preferredHeight: vfoDisplay.controlButtonSize
-                                radius: 5
-                                color: transmitController.tuning ? "#7b241f"
-                                       : radioTuneMouse.containsMouse
-                                         ? "#3b3022" : "#211d19"
-                                border.color: transmitController.tuning ? "#ff5a4f"
-                                              : transmitController.armed
-                                                ? "#d59a4a" : "#433b34"
-                                border.width: transmitController.tuning ? 2 : 1
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: transmitController.tuning ? "STOP" : "TUNE"
-                                    color: transmitController.armed
-                                           ? "#ffc26e" : "#6e665f"
-                                    font.pixelSize: 10
-                                    font.weight: Font.Bold
-                                }
-                                MouseArea {
-                                    id: radioTuneMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    enabled: transmitController.armed
-                                    cursorShape: enabled ? Qt.PointingHandCursor
-                                                         : Qt.ArrowCursor
-                                    onClicked: transmitController.toggleTune()
-                                }
-                                ToolTip.visible: radioTuneMouse.containsMouse
-                                ToolTip.delay: 300
-                                ToolTip.text: transmitController.armed
-                                    ? "Operator-only KEY/tone toggle with a hard 15-second watchdog"
-                                    : "Arm TX in the QSO panel before using TUNE"
-                            }
                         }
 
                         ColumnLayout {
@@ -1196,8 +1159,8 @@ ApplicationWindow {
                                 property string inputUnitLabel: inputUnitHz === 1000000
                                                                 ? "MHz" : "kHz"
                                 Layout.fillWidth: true
-                                Layout.preferredHeight: 72
-                                Layout.minimumHeight: 72
+                                Layout.preferredHeight: 60
+                                Layout.minimumHeight: 60
                                 function beginEdit() {
                                     if (!appSettings.radioFrequencyWritable)
                                         return
@@ -1233,7 +1196,11 @@ ApplicationWindow {
                                     }
                                 }
                                 Rectangle {
-                                    anchors.fill: parent
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: vfoDisplay.controlButtonSize + 5
                                     radius: 3
                                     color: "#050b10"
                                     border.color: vfoRxEditor.invalidEntry
@@ -1276,7 +1243,7 @@ ApplicationWindow {
                                     objectName: "vfoRxModeBadge"
                                     z: 2
                                     anchors.right: parent.right
-                                    anchors.rightMargin: 7
+                                    anchors.rightMargin: 0
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: vfoDisplay.controlButtonSize
                                     height: vfoDisplay.controlButtonSize
@@ -1413,76 +1380,6 @@ ApplicationWindow {
                                 Layout.preferredHeight: vfoDisplay.controlButtonSize
                                 Layout.minimumHeight: vfoDisplay.controlButtonSize
                                 spacing: 5
-                                Rectangle {
-                                    objectName: "vfoSplitBadge"
-                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
-                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
-                                    radius: 5
-                                    color: replayController.radioSplitActive
-                                           ? (splitModeMouse.containsMouse
-                                              ? "#ffff4c" : "#f0f21c")
-                                           : (splitModeMouse.containsMouse
-                                              ? "#414a55" : "#353b43")
-                                    Label {
-                                        id: splitBadgeLabel
-                                        anchors.centerIn: parent
-                                        text: !appSettings.radioSplitKnown ? "SPLIT ?"
-                                              : replayController.radioSplitActive
-                                                ? "SPLIT" : "SIMPLEX"
-                                        color: replayController.radioSplitActive
-                                               ? "#111318" : "#7b8794"
-                                        font.pixelSize: 9
-                                        font.weight: Font.Bold
-                                    }
-                                    MouseArea {
-                                        id: splitModeMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        enabled: appSettings.radioSplitWritable
-                                        cursorShape: enabled ? Qt.PointingHandCursor
-                                                             : Qt.ArrowCursor
-                                        onClicked: appSettings.setControlledSplit(
-                                                       !replayController.radioSplitActive)
-                                    }
-                                    ToolTip.visible: splitModeMouse.containsMouse
-                                    ToolTip.text: appSettings.radioSplitWritable
-                                        ? (replayController.radioSplitActive
-                                           ? "Click to return the radio to simplex"
-                                           : "Click to enable independent RX/TX VFO split")
-                                        : "Split state is provider read-only or unavailable"
-                                }
-                                Rectangle {
-                                    objectName: "vfoFrequencySyncButton"
-                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
-                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
-                                    radius: 5
-                                    color: syncFrequencyMouse.containsMouse
-                                           ? "#243746" : "#1d2833"
-                                    border.color: appSettings.radioTxFrequencySyncAvailable
-                                                  ? "#6d91a8" : "#394550"
-                                    border.width: 1
-                                    Label {
-                                        anchors.centerIn: parent
-                                        text: "A=B"
-                                        color: appSettings.radioTxFrequencySyncAvailable
-                                               ? "#d8edf7" : "#65727e"
-                                        font.pixelSize: 12
-                                        font.weight: Font.Bold
-                                    }
-                                    MouseArea {
-                                        id: syncFrequencyMouse
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        enabled: appSettings.radioTxFrequencySyncAvailable
-                                        cursorShape: enabled ? Qt.PointingHandCursor
-                                                             : Qt.ArrowCursor
-                                        onClicked: appSettings.syncControlledTxFrequencyToRx()
-                                    }
-                                    ToolTip.visible: syncFrequencyMouse.containsMouse
-                                    ToolTip.text: appSettings.radioTxFrequencySyncAvailable
-                                        ? "Copy VFO A / RX frequency to VFO B / TX; TX mode is not copied"
-                                        : "Frequency sync requires known RX state plus writable TX frequency and split control"
-                                }
                                 Item {
                                     id: vfoTxEditor
                                     objectName: "vfoTxEditor"
@@ -1671,6 +1568,118 @@ ApplicationWindow {
                                         onClicked: appSettings.toggleControlledTxMode()
                                     }
                                 }
+                            }
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: vfoDisplay.controlButtonSize
+                                Layout.minimumHeight: vfoDisplay.controlButtonSize
+                                spacing: 5
+                                Rectangle {
+                                    objectName: "vfoSplitBadge"
+                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
+                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
+                                    radius: 5
+                                    color: replayController.radioSplitActive
+                                           ? (splitModeMouse.containsMouse
+                                              ? "#ffff4c" : "#f0f21c")
+                                           : (splitModeMouse.containsMouse
+                                              ? "#414a55" : "#353b43")
+                                    Label {
+                                        id: splitBadgeLabel
+                                        anchors.centerIn: parent
+                                        text: !appSettings.radioSplitKnown ? "SPLIT ?"
+                                              : replayController.radioSplitActive
+                                                ? "SPLIT" : "SIMPLEX"
+                                        color: replayController.radioSplitActive
+                                               ? "#111318" : "#7b8794"
+                                        font.pixelSize: 9
+                                        font.weight: Font.Bold
+                                    }
+                                    MouseArea {
+                                        id: splitModeMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: appSettings.radioSplitWritable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.setControlledSplit(
+                                                       !replayController.radioSplitActive)
+                                    }
+                                    ToolTip.visible: splitModeMouse.containsMouse
+                                    ToolTip.text: appSettings.radioSplitWritable
+                                        ? (replayController.radioSplitActive
+                                           ? "Click to return the radio to simplex"
+                                           : "Click to enable independent RX/TX VFO split")
+                                        : "Split state is provider read-only or unavailable"
+                                }
+                                Rectangle {
+                                    objectName: "vfoFrequencySyncButton"
+                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
+                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
+                                    radius: 5
+                                    color: syncFrequencyMouse.containsMouse
+                                           ? "#243746" : "#1d2833"
+                                    border.color: appSettings.radioTxFrequencySyncAvailable
+                                                  ? "#6d91a8" : "#394550"
+                                    border.width: 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: "A=B"
+                                        color: appSettings.radioTxFrequencySyncAvailable
+                                               ? "#d8edf7" : "#65727e"
+                                        font.pixelSize: 12
+                                        font.weight: Font.Bold
+                                    }
+                                    MouseArea {
+                                        id: syncFrequencyMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: appSettings.radioTxFrequencySyncAvailable
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: appSettings.syncControlledTxFrequencyToRx()
+                                    }
+                                    ToolTip.visible: syncFrequencyMouse.containsMouse
+                                    ToolTip.text: appSettings.radioTxFrequencySyncAvailable
+                                        ? "Copy VFO A / RX frequency to VFO B / TX; TX mode is not copied"
+                                        : "Frequency sync requires known RX state plus writable TX frequency and split control"
+                                }
+                                Rectangle {
+                                    objectName: "radioTuneButton"
+                                    Layout.preferredWidth: vfoDisplay.controlButtonSize
+                                    Layout.preferredHeight: vfoDisplay.controlButtonSize
+                                    radius: 5
+                                    color: transmitController.tuning ? "#7b241f"
+                                           : radioTuneMouse.containsMouse
+                                             ? "#3b3022" : "#211d19"
+                                    border.color: transmitController.tuning ? "#ff5a4f"
+                                                  : transmitController.armed
+                                                    ? "#d59a4a" : "#433b34"
+                                    border.width: transmitController.tuning ? 2 : 1
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: transmitController.tuning ? "STOP" : "TUNE"
+                                        color: transmitController.armed
+                                               ? "#ffc26e" : "#6e665f"
+                                        font.pixelSize: 10
+                                        font.weight: Font.Bold
+                                    }
+                                    MouseArea {
+                                        id: radioTuneMouse
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        enabled: transmitController.armed
+                                        cursorShape: enabled ? Qt.PointingHandCursor
+                                                             : Qt.ArrowCursor
+                                        onClicked: transmitController.toggleTune()
+                                    }
+                                    ToolTip.visible: radioTuneMouse.containsMouse
+                                    ToolTip.delay: 300
+                                    ToolTip.text: transmitController.armed
+                                        ? "Operator-only KEY/PTT tune with a hard 15-second watchdog"
+                                        : "Arm TX in the QSO panel before using TUNE"
+                                }
+                                Item { Layout.fillWidth: true }
                             }
                         }
                     }
@@ -2544,6 +2553,12 @@ ApplicationWindow {
                            ? "#ff7b84" : "#f3bd55"
                     text: transmitController.status
                 }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: transmitController.stationReady ? "#62ffa2" : "#91a0b1"
+                    text: "Hardware: " + transmitController.hardwareStatus
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     visible: transmitController.state === "fault"
@@ -2591,10 +2606,20 @@ ApplicationWindow {
                         ToolTip.text: "Prepare your configured callsign for exact preview confirmation"
                     }
                     Button {
-                        text: "Send report " + transmitController.report
+                        text: "Prepare report"
                         onClicked: transmitController.prepareReport()
                         ToolTip.visible: hovered
                         ToolTip.text: "Prepare the displayed signal report for exact preview confirmation"
+                    }
+                    TextField {
+                        objectName: "txReportField"
+                        Layout.preferredWidth: 90
+                        text: transmitController.report
+                        maximumLength: 32
+                        selectByMouse: true
+                        onEditingFinished: transmitController.report = text
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Edit the operator-authored report or exchange before preparing it"
                     }
                     Button {
                         text: "End QSO"
@@ -2714,19 +2739,32 @@ ApplicationWindow {
                         }
                     }
                 }
-                Button {
-                    objectName: "transmitPreparedButton"
+                RowLayout {
                     Layout.fillWidth: true
-                    text: transmitController.hardwareAvailable
-                          ? "TRANSMIT PREPARED MESSAGE"
-                          : "KEY/PTT ADAPTER NOT YET AVAILABLE"
-                    enabled: transmitController.messageConfirmed
-                             && transmitController.hardwareAvailable
-                    onClicked: transmitController.transmitPrepared()
-                    ToolTip.visible: hovered
-                    ToolTip.text: transmitController.hardwareAvailable
-                        ? "Transmit the exactly confirmed message through the guarded adapter"
-                        : "No tested KEY/PTT hardware adapter is available in this build"
+                    Button {
+                        objectName: "transmitPreparedButton"
+                        Layout.fillWidth: true
+                        text: transmitController.stationReady
+                              ? "TRANSMIT PREPARED MESSAGE"
+                              : "TX HARDWARE / RADIO NOT CONFIRMED"
+                        enabled: transmitController.messageConfirmed
+                                 && transmitController.stationReady
+                                 && !transmitController.transmitting
+                        onClicked: transmitController.transmitPrepared()
+                        ToolTip.visible: hovered
+                        ToolTip.text: transmitController.stationReady
+                            ? "Transmit the exactly confirmed message through the guarded adapter"
+                            : "Requires direct KEY/PTT plus confirmed TX frequency, CW mode, and split state"
+                    }
+                    Button {
+                        objectName: "cancelTransmissionButton"
+                        visible: transmitController.transmitting
+                        text: "CANCEL TX"
+                        highlighted: true
+                        onClicked: transmitController.cancelTransmission()
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Stop the message and synchronously release KEY before PTT"
+                    }
                 }
             }
         }

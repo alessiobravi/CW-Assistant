@@ -245,12 +245,39 @@ moving the cursor or viewport; scroll back to the bottom to resume following.
 
 ## Guarded TX preparation
 
-Open **QSO** to use the first transmit-workflow preview. Configure your own
-callsign, select **Arm TX**, then choose **TX** on a decoder card whose callsign
-was decoded exactly. Retype that station before preparing **Send my call**, the
-default `599` report, or operator-authored free text. CW Buddy normalizes the
-message to uppercase Morse-compatible text and shows its duration at the
-selected 5–80 WPM; retype that exact preview as a separate confirmation.
+Open **QSO** to use guarded direct serial CW transmission. Before **Arm TX** can
+be used, all of the following must be true:
+
+1. **Settings → Keying** names a dedicated serial port, assigns separate PTT
+   and KEY lines, and uses an electrically verified active-high interface.
+2. With the radio disconnected, both lines have been confirmed inactive; a
+   physical loopback test has then confirmed the selected line assignments.
+   Record that result with **Disconnected lines and physical loopback passed**.
+   Changing any keying detail clears this acknowledgement.
+3. The radio-control provider confirms the exact TX frequency, split state,
+   and a CW or CW-R TX mode. A target that the provider cannot read back is not
+   sufficient to arm.
+4. Your own callsign is configured under **Settings → Station**.
+
+Arming opens the named keying port in its inactive state and snapshots the
+confirmed radio state. A later TX-frequency, TX-mode, split, port, line, or
+polarity change disarms before keying; a change observed while KEY/PTT is active
+causes an emergency release and latched fault.
+
+Choose **TX** on a decoder card whose callsign was decoded exactly. Retype that
+station before preparing **Send my call**, the editable report, or
+operator-authored free text. CW Buddy normalizes the message to uppercase
+Morse-compatible text and shows its duration at the selected 5–80 WPM; retype
+that exact preview as a separate confirmation. **Transmit confirmed message**
+then schedules the immutable Morse plan on the direct adapter. **Cancel
+transmission** and **EMERGENCY RELEASE** synchronously release KEY before PTT;
+emergency release also latches a fault and requires an explicit reset.
+
+For initial hardware acceptance, connect the transceiver to a dummy load, use
+minimum power, keep an independent means of removing power available, and
+verify line order and watchdog release before any on-air use. The software
+acknowledgement records an operator-performed test; it does not electrically
+measure or certify the interface.
 
 **Auto-QSO suggestions** only prepares an operator-visible suggestion when the
 selected stream contains a listening cue such as `CQ`, `QRZ`, or `UP`, or when
@@ -267,12 +294,11 @@ read-only/unlinked provider. It is not yet a quiet-slot TX selector.
 **EMERGENCY RELEASE** clears pending transmission state and latches a fault;
 resetting that fault leaves TX disarmed.
 
-**TUNE** is specified as an armed, operator-only KEY/tone toggle: press once to
-start, press again to release, with a non-extendable 15-second watchdog. The
-current build deliberately disables actual messages and TUNE at the hardware
-boundary because the cross-platform serial KEY/PTT adapter has not completed
-loopback acceptance. The controls therefore prepare and test the safe workflow
-without asserting a radio line.
+**TUNE** is an armed, operator-only PTT/KEY toggle: press once to start and
+again to release. It cannot be restarted to extend the interval and releases
+automatically at the independent 15-second hardware deadline. The Radio
+Control and QSO controls invoke the same guarded action. Decoder output and
+Auto-QSO suggestions have no route to TUNE or direct keying.
 New characters are appended to the existing text rather than replacing it, so
 the view stays where it is instead of shifting as each one arrives, and when
 the transcript is following the tail it stays pinned to the bottom in the same

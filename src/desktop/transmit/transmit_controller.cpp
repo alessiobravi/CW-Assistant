@@ -46,7 +46,29 @@ bool resemblesCallsign(const QString& token) {
 }  // namespace
 
 TransmitController::TransmitController(QObject* parent)
-    : QObject(parent), guard_(callsign_policy_) {}
+    : TransmitController(DirectTransmitEngine::BackendFactory{}, parent) {}
+
+TransmitController::TransmitController(
+    DirectTransmitEngine::BackendFactory backend_factory, QObject* parent)
+    : QObject(parent), guard_(callsign_policy_),
+      hardware_(std::make_unique<DirectTransmitEngine>(
+          std::move(backend_factory), this)) {
+  hardware_clock_.start();
+  connect(hardware_.get(), &DirectTransmitEngine::changed, this,
+          &TransmitController::handleHardwareChanged);
+  hardware_watchdog_.setInterval(25);
+  hardware_watchdog_.setTimerType(Qt::PreciseTimer);
+  connect(&hardware_watchdog_, &QTimer::timeout, this,
+          &TransmitController::handleHardwareChanged);
+}
+
+TransmitController::~TransmitController() {
+  hardware_watchdog_.stop();
+  if (!hardware_) return;
+  disconnect(hardware_.get(), nullptr, this, nullptr);
+  hardware_->close();
+  hardware_.reset();
+}
 
 QString TransmitController::state() const {
   return QString::fromLatin1(guard_.state_name().data(),
@@ -96,7 +118,7 @@ bool TransmitController::tuning() const noexcept {
   return guard_.state() == cwassistant::core::TransmitState::Tuning;
 }
 bool TransmitController::onAir() const noexcept {
-  return guard_.key_down();
+  return hardware_ && hardware_->key();
 }
 const QString& TransmitController::proposedMessage() const noexcept {
   return proposed_message_;
@@ -107,8 +129,11 @@ const QString& TransmitController::proposedReason() const noexcept {
 bool TransmitController::hardwareAvailable() const noexcept {
   return hardware_enabled_ && hardware_ && hardware_->available();
 }
+bool TransmitController::stationReady() const noexcept {
+  return hardwareAvailable() && radio_tx_ready_;
+}
 bool TransmitController::transmitting() const noexcept {
-  return hardware_ && hardware_->busy();
+  return guard_.state() == cwassistant::core::TransmitState::Transmitting;
 }
 const QString& TransmitController::hardwareStatus() const noexcept {
   static const QString unavailable =
@@ -127,6 +152,121 @@ void TransmitController::setOwnCallsign(const QString& callsign) {
   own_callsign_ = normalized ? QString::fromStdString(*normalized) : QString{};
   if (own_callsign_.isEmpty() && armed()) disarm();
   emit changed();
+}
+
+void TransmitController::configureHardware(
+    const bool enabled, const QString& port_name, const int ptt_line_index,
+    const int key_line_index, const bool ptt_active_high,
+    const bool key_active_high, const QString& cat_port_name,
+    const bool loopback_validated) {
+  const QString port = port_name.trimmed();
+  const QString cat_port = cat_port_name.trimmed();
+  const QString configuration_key = QStringLiteral("%1|%2|%3|%4|%5|%6|%7|%8")
+      .arg(enabled ? 1 : 0).arg(port).arg(ptt_line_index).arg(key_line_index)
+      .arg(ptt_active_high ? 1 : 0).arg(key_active_high ? 1 : 0).arg(cat_port)
+      .arg(loopback_validated ? 1 : 0);
+  if (configuration_key == hardware_configuration_key_) return;
+
+  const bool was_active = armed() || (hardware_ &&
+      (hardware_->busy() || hardware_->ptt() || hardware_->key()));
+  if (was_active) hardware_watchdog_.stop();
+  if (was_active && hardware_) hardware_->emergencyRelease();
+  if (was_active) guard_.trip_fault();
+  else guard_.disarm();
+
+  hardware_configuration_key_ = configuration_key;
+  const bool line_indices_valid =
+      (ptt_line_index == 0 || ptt_line_index == 1) &&
+      (key_line_index == 0 || key_line_index == 1);
+  hardware_enabled_ = enabled && !port.isEmpty() && line_indices_valid &&
+      ptt_line_index != key_line_index && ptt_active_high && key_active_high &&
+      loopback_validated &&
+      (cat_port.isEmpty() || port.compare(cat_port, Qt::CaseInsensitive) != 0);
+  hardware_config_ = {
+      .keying = {
+          .port_name = port,
+          .ptt_line = ptt_line_index == 0 ? DirectKeyingLine::Rts
+                                         : DirectKeyingLine::Dtr,
+          .key_line = key_line_index == 0 ? DirectKeyingLine::Rts
+                                         : DirectKeyingLine::Dtr,
+          .ptt_active_high = ptt_active_high,
+          .key_active_high = key_active_high,
+      },
+  };
+  if (hardware_) {
+    if (hardware_enabled_) hardware_->configure(hardware_config_);
+    else hardware_->close();
+  }
+  hardware_was_busy_ = false;
+
+  if (!enabled) {
+    setStatus(QStringLiteral("Direct KEY/PTT hardware is disabled"));
+  } else if (port.isEmpty()) {
+    setStatus(QStringLiteral("Select an explicit direct KEY/PTT port"));
+  } else if (!cat_port.isEmpty() &&
+             port.compare(cat_port, Qt::CaseInsensitive) == 0) {
+    setStatus(QStringLiteral(
+        "Direct KEY/PTT and CAT must use physically separate ports"));
+  } else if (!line_indices_valid) {
+    setStatus(QStringLiteral("PTT and KEY must each select RTS or DTR"));
+  } else if (ptt_line_index == key_line_index) {
+    setStatus(QStringLiteral("PTT and KEY must use different control lines"));
+  } else if (!ptt_active_high || !key_active_high) {
+    setStatus(QStringLiteral(
+        "This guarded hardware slice accepts verified active-high interfaces only"));
+  } else if (!loopback_validated) {
+    setStatus(QStringLiteral(
+        "Complete disconnected-line and physical-loopback validation before arming"));
+  } else if (was_active) {
+    setStatus(QStringLiteral(
+        "Hardware configuration changed; emergency release is latched"));
+  } else {
+    setStatus(QStringLiteral(
+        "Direct KEY/PTT configured and closed; arming will verify inactive lines"));
+  }
+}
+
+void TransmitController::configureRadioSafety(
+    const bool radio_enabled, const qulonglong tx_rf_hz,
+    const QString& tx_mode_target, const bool tx_mode_confirmed,
+    const bool split_known, const bool split_active) {
+  const QString mode = tx_mode_target.trimmed().toUpper();
+  const bool ready = radio_enabled && tx_rf_hz > 0U &&
+      tx_rf_hz <= 99'999'999'999ULL &&
+      (mode == QStringLiteral("CW") || mode == QStringLiteral("CW-R")) &&
+      tx_mode_confirmed && split_known;
+  const bool identity_changed = radio_tx_ready_ != ready ||
+      radio_tx_rf_hz_ != tx_rf_hz || radio_tx_mode_ != mode ||
+      radio_split_active_ != split_active;
+  radio_tx_ready_ = ready;
+  radio_tx_rf_hz_ = tx_rf_hz;
+  radio_tx_mode_ = mode;
+  radio_split_active_ = split_active;
+
+  if (armed() && identity_changed && !radioSafetyStillConfirmed()) {
+    hardware_watchdog_.stop();
+    if (hardware_ &&
+        (hardware_->busy() || hardware_->ptt() || hardware_->key())) {
+      hardware_->emergencyRelease();
+      guard_.trip_fault();
+      setStatus(QStringLiteral(
+          "Confirmed TX radio state changed on air; emergency release is latched"));
+    } else {
+      if (hardware_) hardware_->close();
+      guard_.disarm();
+      setStatus(QStringLiteral(
+          "Confirmed TX radio state changed; TX is disarmed and must be re-armed"));
+    }
+    hardware_was_busy_ = false;
+    return;
+  }
+  if (identity_changed) emit changed();
+}
+
+bool TransmitController::radioSafetyStillConfirmed() const noexcept {
+  return radio_tx_ready_ && radio_tx_rf_hz_ == armed_radio_tx_rf_hz_ &&
+      radio_tx_mode_ == armed_radio_tx_mode_ &&
+      radio_split_active_ == armed_radio_split_active_;
 }
 
 void TransmitController::configureTxSpeed(const int mode,
@@ -183,15 +323,37 @@ bool TransmitController::arm() {
     setStatus(QStringLiteral("Configure and save your callsign before arming TX"));
     return false;
   }
+  if (!hardwareAvailable()) {
+    setStatus(QStringLiteral(
+        "Configure a dedicated, supported direct KEY/PTT adapter before arming"));
+    return false;
+  }
+  if (!radio_tx_ready_) {
+    setStatus(QStringLiteral(
+        "TX frequency, CW/CW-R mode, and simplex/split state must all be confirmed by the radio provider"));
+    return false;
+  }
+  if (!hardware_->openSafe()) {
+    setStatus(QStringLiteral("Cannot arm: %1").arg(hardware_->status()));
+    return false;
+  }
   if (!guard_.arm()) {
+    hardware_->close();
     setStatus(QStringLiteral("TX can be armed only from the disarmed state"));
     return false;
   }
-  setStatus(QStringLiteral("TX armed; select and exactly confirm a station"));
+  armed_radio_tx_rf_hz_ = radio_tx_rf_hz_;
+  armed_radio_tx_mode_ = radio_tx_mode_;
+  armed_radio_split_active_ = radio_split_active_;
+  setStatus(QStringLiteral(
+      "TX armed at %1 Hz %2; select and exactly confirm a station")
+                .arg(radio_tx_rf_hz_).arg(radio_tx_mode_));
   return true;
 }
 
 void TransmitController::disarm() {
+  hardware_watchdog_.stop();
+  if (hardware_) hardware_->close();
   guard_.disarm();
   target_channel_id_ = 0;
   target_rf_hz_ = 0;
@@ -277,7 +439,7 @@ bool TransmitController::confirmPreview(const QString& exact_preview) {
     return false;
   }
   setStatus(QStringLiteral(
-      "Message is guard-confirmed; no hardware keying adapter is installed yet"));
+      "Message is exactly confirmed and ready for guarded transmission"));
   return true;
 }
 
@@ -286,14 +448,55 @@ bool TransmitController::transmitPrepared() {
     setStatus(QStringLiteral("Confirm the exact message preview first"));
     return false;
   }
-  setStatus(QStringLiteral(
-      "Transmission blocked safely: no tested local KEY/PTT adapter is installed"));
-  return false;
+  if (!plan_ || !stationReady() || !radioSafetyStillConfirmed() ||
+      !hardware_->openSafeState() || hardware_->busy()) {
+    setStatus(QStringLiteral(
+        "Transmission blocked: hardware and confirmed TX radio state must remain ready"));
+    return false;
+  }
+  if (!guard_.begin_transmission()) {
+    setStatus(QStringLiteral("The TX safety guard rejected the message"));
+    return false;
+  }
+  if (!hardware_->start(*plan_, true)) {
+    hardware_->emergencyRelease();
+    guard_.trip_fault();
+    setStatus(QStringLiteral("Transmit start failed; emergency release is latched: %1")
+                  .arg(hardware_->status()));
+    return false;
+  }
+  hardware_watchdog_.start();
+  setStatus(QStringLiteral("Transmitting exactly confirmed CW at %1 WPM")
+                .arg(words_per_minute_));
+  return true;
+}
+
+bool TransmitController::cancelTransmission() {
+  if (!transmitting() || !hardware_) return false;
+  if (!hardware_->cancel()) {
+    hardware_->emergencyRelease();
+    guard_.trip_fault();
+    setStatus(QStringLiteral("Cancellation failed; emergency release is latched"));
+    return false;
+  }
+  hardware_watchdog_.stop();
+  if (guard_.state() == cwassistant::core::TransmitState::Transmitting)
+    static_cast<void>(guard_.finish_transmission());
+  setStatus(QStringLiteral("Transmission cancelled; KEY and PTT are inactive"));
+  return true;
 }
 
 bool TransmitController::toggleTune() {
   if (tuning()) {
-    static_cast<void>(guard_.finish_tune());
+    if (!hardware_ || !hardware_->stopTune()) {
+      if (hardware_) hardware_->emergencyRelease();
+      guard_.trip_fault();
+      setStatus(QStringLiteral("TUNE release failed; emergency release is latched"));
+      return false;
+    }
+    hardware_watchdog_.stop();
+    if (guard_.state() == cwassistant::core::TransmitState::Tuning)
+      static_cast<void>(guard_.finish_tune());
     setStatus(QStringLiteral("TUNE released"));
     return true;
   }
@@ -301,11 +504,21 @@ bool TransmitController::toggleTune() {
     setStatus(QStringLiteral("Arm TX before using TUNE"));
     return false;
   }
-  // Do not enter the guard's tuning state until an adapter exists: doing so
-  // would make the UI claim that KEY is asserted when no line can be driven.
-  setStatus(QStringLiteral(
-      "TUNE blocked safely: no tested local KEY adapter is installed"));
-  return false;
+  if (!stationReady() || !radioSafetyStillConfirmed() || !hardware_ ||
+      !hardware_->openSafeState() || hardware_->busy()) {
+    setStatus(QStringLiteral(
+        "TUNE blocked: hardware and confirmed TX radio state must remain ready"));
+    return false;
+  }
+  if (!guard_.begin_tune() || !hardware_->startTune(true)) {
+    if (hardware_) hardware_->emergencyRelease();
+    guard_.trip_fault();
+    setStatus(QStringLiteral("TUNE start failed; emergency release is latched"));
+    return false;
+  }
+  hardware_watchdog_.start();
+  setStatus(QStringLiteral("TUNE active; press again to stop (15-second maximum)"));
+  return true;
 }
 
 bool TransmitController::endQso() {
@@ -320,6 +533,8 @@ bool TransmitController::endQso() {
 }
 
 void TransmitController::emergencyRelease() {
+  hardware_watchdog_.stop();
+  if (hardware_) hardware_->emergencyRelease();
   guard_.emergency_release();
   target_channel_id_ = 0;
   target_rf_hz_ = 0;
@@ -333,8 +548,62 @@ void TransmitController::emergencyRelease() {
 
 bool TransmitController::resetFault() {
   if (!guard_.reset_fault()) return false;
-  setStatus(QStringLiteral("Fault reset; transmit is disarmed"));
+  if (hardware_) {
+    if (hardware_enabled_) hardware_->configure(hardware_config_);
+    else hardware_->close();
+  }
+  hardware_was_busy_ = false;
+  hardware_watchdog_.stop();
+  setStatus(QStringLiteral("Fault reset; hardware is closed and transmit is disarmed"));
   return true;
+}
+
+void TransmitController::handleHardwareChanged() {
+  if (handling_hardware_change_ || !hardware_) return;
+  handling_hardware_change_ = true;
+
+  const auto state = guard_.state();
+  const bool guarded_output =
+      state == cwassistant::core::TransmitState::Transmitting ||
+      state == cwassistant::core::TransmitState::Tuning;
+  if (hardware_->fault() && (armed() || hardware_->ptt() || hardware_->key())) {
+    hardware_watchdog_.stop();
+    guard_.trip_fault();
+    setStatus(QStringLiteral("Hardware fault; KEY/PTT release is latched: %1")
+                  .arg(hardware_->status()));
+  } else if ((hardware_->ptt() || hardware_->key()) && !guarded_output) {
+    hardware_watchdog_.stop();
+    hardware_->emergencyRelease();
+    guard_.trip_fault();
+    setStatus(QStringLiteral(
+        "Unexpected transmit line assertion; emergency release is latched"));
+  } else if (guarded_output) {
+    const qint64 elapsed_ns = hardware_clock_.isValid()
+        ? hardware_clock_.nsecsElapsed() : -1;
+    const auto timestamp_ns = elapsed_ns >= 0
+        ? static_cast<std::uint64_t>(elapsed_ns) : 0U;
+    if (!guard_.observe_key_state(hardware_->key(), timestamp_ns)) {
+      hardware_watchdog_.stop();
+      hardware_->emergencyRelease();
+      setStatus(QStringLiteral(
+          "Independent KEY watchdog rejected hardware state; emergency release is latched"));
+    } else if (hardware_was_busy_ && !hardware_->busy()) {
+      if (state == cwassistant::core::TransmitState::Transmitting) {
+        hardware_watchdog_.stop();
+        static_cast<void>(guard_.finish_transmission());
+        setStatus(QStringLiteral(
+            "Confirmed CW message completed; KEY and PTT are inactive"));
+      } else if (state == cwassistant::core::TransmitState::Tuning &&
+                 !hardware_->fault()) {
+        hardware_watchdog_.stop();
+        static_cast<void>(guard_.finish_tune());
+        setStatus(QStringLiteral("TUNE released; KEY and PTT are inactive"));
+      }
+    }
+  }
+  hardware_was_busy_ = hardware_->busy();
+  handling_hardware_change_ = false;
+  emit changed();
 }
 
 void TransmitController::observeDecoderChannels(const QVariantList& channels) {

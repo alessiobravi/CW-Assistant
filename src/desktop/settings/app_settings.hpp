@@ -87,6 +87,7 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE setCwToneSidebandIndex NOTIFY settingsChanged)
   Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY settingsChanged)
   Q_PROPERTY(bool directKeyingEnabled READ directKeyingEnabled WRITE setDirectKeyingEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(bool directKeyingValidated READ directKeyingValidated WRITE setDirectKeyingValidated NOTIFY settingsChanged)
   Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY settingsChanged)
   Q_PROPERTY(bool pttActiveHigh READ pttActiveHigh WRITE setPttActiveHigh NOTIFY settingsChanged)
@@ -199,6 +200,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool controlledSplitActive() const noexcept;
   [[nodiscard]] const QString& keyingPort() const noexcept;
   [[nodiscard]] bool directKeyingEnabled() const noexcept;
+  [[nodiscard]] bool directKeyingValidated() const noexcept;
   [[nodiscard]] int pttLineIndex() const noexcept;
   [[nodiscard]] int keyLineIndex() const noexcept;
   [[nodiscard]] bool pttActiveHigh() const noexcept;
@@ -265,6 +267,7 @@ class AppSettings final : public QObject {
   void setCwToneSidebandIndex(int value);
   void setKeyingPort(const QString& value);
   void setDirectKeyingEnabled(bool value);
+  void setDirectKeyingValidated(bool value);
   void setPttLineIndex(int value);
   void setKeyLineIndex(int value);
   void setPttActiveHigh(bool value);
@@ -423,6 +426,7 @@ class AppSettings final : public QObject {
   int cw_tone_sideband_index_{0};
   QString keying_port_;
   bool direct_keying_enabled_{false};
+  bool direct_keying_validated_{false};
   int ptt_line_index_{0};
   int key_line_index_{1};
   bool ptt_active_high_{true};

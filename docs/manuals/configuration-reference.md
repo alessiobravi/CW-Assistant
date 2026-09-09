@@ -495,18 +495,28 @@ Select a dedicated serial port and assign different lines to PTT and KEY.
 Defaults are RTS for PTT and DTR for KEY, both active high. Change polarity only
 to match an electrically verified interface. Port enumeration is passive.
 
-The direct serial adapter and worker-thread Morse scheduler have deterministic
-fake-backend coverage, including safe inactive initialization, ordered release,
-watchdog, and fault handling. They are not yet connected to the application TX
-controller, so no profile can transmit through this path in the current build.
+**Disconnected lines and physical loopback passed** is an explicit safety gate,
+not an automatic test. Before selecting it, disconnect the radio, verify both
+configured lines are inactive, then prove the PTT and KEY assignments with a
+physical loopback. Changing enablement, port, line assignment, or polarity
+clears the acknowledgement. The application will not open the keying port or
+arm direct TX without it. CAT and keying ports must be different.
 
-The **QSO** drawer is a hardware-inert preview of the guarded workflow. It
-requires explicit arming, an exactly decoded and retyped target callsign, and a
-second exact confirmation of the normalized outgoing message. Own-call,
-`599`-report, and free-text actions all use the same boundary. **Auto-QSO** can
-propose one of those messages from decoded context but cannot confirm or send
-it. **TUNE** is reserved for an operator-only toggle with a hard 15-second KEY
-watchdog; it remains blocked until a tested adapter is available.
+The direct serial adapter and worker-thread Morse scheduler are connected to
+the guarded application controller. Opening initializes KEY and then PTT to
+inactive. Transmission asserts PTT before KEY; cancellation, error, shutdown,
+and emergency release deassert KEY before PTT. The scheduler uses the fixed TX
+speed when configured, otherwise the selected stream's bounded RX estimate.
+
+The **QSO** drawer requires explicit arming, an exactly decoded and retyped
+target callsign, and a second exact confirmation of the normalized outgoing
+message. Own-call, editable-report, and free-text actions all use the same
+boundary. **Auto-QSO** can propose one of those messages from decoded context
+but cannot confirm or send it. **TUNE** is an operator-only toggle with a hard,
+non-extendable 15-second hardware deadline. Ordinary Morse elements have a
+separate three-second continuous-KEY guard. Always complete first acceptance
+into a dummy load at minimum power; the checkbox is not a substitute for that
+test.
 
 ## Display page
 

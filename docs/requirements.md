@@ -264,6 +264,13 @@ decoding hints rather than sharing one assumed contest sequence.
   overflow/zero results, and show both before satellite transmission.
 - Support selecting RTS or DTR and active polarity independently for PTT and
   KEY. A profile may use one or two physical serial ports.
+- Require an explicit disconnected-line and physical-loopback acknowledgement
+  before direct keying can be armed. Clear it whenever port, line assignment,
+  polarity, or direct-keying enablement changes; never treat the acknowledgement
+  as an electrical measurement or a replacement for dummy-load acceptance.
+- Require authoritative provider readback of the exact TX frequency, CW/CW-R
+  target mode, and known split state before arming. Snapshot that state and
+  disarm while idle or emergency-release while active if it changes.
 - Start disarmed on every launch and after every device reconnect.
 - Require operator confirmation of the exact selected callsign before the first
   transmission in a QSO.

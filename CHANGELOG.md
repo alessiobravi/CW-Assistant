@@ -21,7 +21,26 @@ All notable changes to CW Buddy are recorded here. The format follows
   leave the target visibly unconfirmed instead of copying RX state or claiming
   a hardware change.
 
+- Direct-keying worker notifications now carry monotonic revisions, preventing
+  a delayed queued snapshot from replacing newer synchronous KEY/PTT state and
+  prematurely completing or faulting a transmission.
+
 ### Added
+
+- Guarded direct CW transmission now connects the operator-confirmed QSO flow
+  to the dedicated RTS/DTR adapter. Arming requires an explicit physical-
+  loopback acknowledgement plus provider-confirmed TX frequency, CW/CW-R mode,
+  and split state; changing any captured station or keying condition disarms or
+  emergency-releases. Confirmed own-call, editable-report, and free-text plans
+  run at fixed or selected-stream RX-adaptive WPM, remain synchronously
+  cancellable, and preserve KEY-before-PTT release ordering. Operator TUNE uses
+  the same boundary with an independent, non-extendable 15-second deadline.
+  Hardware remains opt-in and first acceptance is documented for a dummy load.
+
+- The radio faceplate aligns both frequency displays against equal-sized,
+  fixed right-hand RX/TX mode controls. TUNE now sits beside SIMPLEX and A=B as
+  an equal 52-pixel action tile, while ON AIR remains in the upper-left as a
+  borderless status lamp driven only by authoritative KEY state.
 
 - A provider-neutral **A=B** control copies the checked VFO A/RX actual-RF
   frequency to VFO B/TX through advertised TX-frequency and split

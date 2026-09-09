@@ -415,19 +415,25 @@ stateDiagram-v2
   FAULT --> DISARMED: explicit reset
 ```
 
-Message transmission is reached only through disarmed, armed, awaiting
-confirmation, exact target confirmation, staged text, and exact message
-confirmation, in that order. Completing one message preserves the confirmed
-target; explicitly ending the QSO returns to armed. Operator-only TUNE may start
-from armed or confirmed and returns to its prior state on the second press.
-Disarming or restarting returns to disarmed. Any state can enter fault, which
-is left only by an explicit reset back to disarmed.
+Message transmission is reached only through validated direct-keying
+configuration, provider-confirmed TX frequency/mode/split, disarmed, armed,
+awaiting confirmation, exact target confirmation, staged text, and exact
+message confirmation, in that order. Arming opens the adapter safely inactive
+and snapshots the confirmed station state. A later station or keying
+configuration change disarms while idle or forces emergency release while
+active. Completing one message preserves the confirmed target; explicitly
+ending the QSO returns to armed. Operator-only TUNE may start from armed or
+confirmed and returns to its prior state on the second press. Disarming or
+restarting returns to disarmed. Any state can enter fault, which is left only
+by an explicit reset back to disarmed.
 
 The application state machine grants permission and independently checks
 continuous KEY evidence: ordinary elements have a three-second hard bound and
 TUNE has a non-extendable 15-second bound. The serial adapter additionally
 owns a monotonic deadline and best-effort KEY-then-PTT release on close, device
-error, or process shutdown. Callsign confidence may enable the confirmation
+error, cancellation, or process shutdown. Worker snapshots carry a monotonic
+revision, so a delayed queued notification cannot overwrite newer synchronous
+KEY/PTT state in the UI/controller safety boundary. Callsign confidence may enable the confirmation
 button but cannot bypass it. Decoder evidence may prepare an inert suggestion
 only; it has no path to arming, confirmation, TUNE, PTT, or KEY.
 

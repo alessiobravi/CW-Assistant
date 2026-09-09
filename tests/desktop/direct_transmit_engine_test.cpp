@@ -112,6 +112,17 @@ int main(int argc, char** argv) {
     expect(waitUntil([&engine] { return !engine.busy(); }, 1'000) &&
                !engine.ptt() && !engine.key() && !engine.fault(),
            "dedicated timer completes with both lines inactive");
+    expect(engine.start(*plan, true) && engine.cancel() && !engine.busy() &&
+               !engine.ptt() && !engine.key() && !engine.fault(),
+           "operator cancellation synchronously releases KEY before PTT");
+    expect(!engine.startTune(false),
+           "TUNE rejects a request without explicit operator authorization");
+    expect(engine.startTune(true) && engine.busy() && engine.ptt() &&
+               engine.key() && !engine.startTune(true),
+           "authorized TUNE asserts PTT then KEY and cannot extend itself");
+    expect(engine.stopTune() && !engine.busy() && !engine.ptt() &&
+               !engine.key() && !engine.fault(),
+           "stopping TUNE synchronously releases KEY then PTT");
   }
 
   {
@@ -158,5 +169,19 @@ int main(int argc, char** argv) {
              !failed_engine.busy() && !failed_engine.openSafeState() &&
              !failed_engine.ptt() && !failed_engine.key(),
          "adapter KEY failure faults the engine and drains/closes the output");
+
+  auto watchdog_record = std::make_shared<BackendRecord>();
+  cwassistant::desktop::DirectTransmitEngine watchdog_engine(
+      [watchdog_record] { return std::make_unique<FakeBackend>(watchdog_record); });
+  watchdog_engine.configure({
+      .keying = {.port_name = QStringLiteral("watchdog-port")},
+      .maximum_tune_duration_ns = 20'000'000ULL,
+  });
+  expect(watchdog_engine.openSafe() && watchdog_engine.startTune(true),
+         "short deterministic TUNE-watchdog fixture starts safely");
+  expect(waitUntil([&watchdog_engine] { return watchdog_engine.fault(); }, 1'000) &&
+             !watchdog_engine.busy() && !watchdog_engine.openSafeState() &&
+             !watchdog_engine.ptt() && !watchdog_engine.key(),
+         "TUNE watchdog is non-extendable and releases both lines on expiry");
   return failures == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

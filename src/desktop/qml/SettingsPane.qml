@@ -722,6 +722,17 @@ Pane {
                     CheckBox { text: checked ? "Active high" : "Active low"; checked: appSettings.pttActiveHigh; onToggled: appSettings.pttActiveHigh = checked }
                     Label { text: "KEY polarity" }
                     CheckBox { text: checked ? "Active high" : "Active low"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
+                    Label { text: "Hardware validation" }
+                    CheckBox {
+                        objectName: "directKeyingValidatedCheck"
+                        text: "Disconnected lines and physical loopback passed"
+                        checked: appSettings.directKeyingValidated
+                        enabled: appSettings.directKeyingEnabled
+                                 && appSettings.keyingPort.length > 0
+                        onToggled: appSettings.directKeyingValidated = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Required before TX can arm; changing keying hardware settings clears this acknowledgement"
+                    }
                     Label { text: "TX speed" }
                     ComboBox {
                         model: ["Match selected RX", "Fixed"]

@@ -306,6 +306,17 @@ Dialog {
                     ComboBox { model: ["RTS", "DTR"]; currentIndex: appSettings.keyLineIndex; onActivated: appSettings.keyLineIndex = currentIndex }
                     CheckBox { text: "Active high"; checked: appSettings.keyActiveHigh; onToggled: appSettings.keyActiveHigh = checked }
                 }
+                Label { text: "Hardware validation" }
+                CheckBox {
+                    objectName: "setupDirectKeyingValidatedCheck"
+                    text: "Disconnected lines and physical loopback passed"
+                    checked: appSettings.directKeyingValidated
+                    enabled: appSettings.directKeyingEnabled
+                             && appSettings.keyingPort.length > 0
+                    onToggled: appSettings.directKeyingValidated = checked
+                    ToolTip.visible: hovered
+                    ToolTip.text: "Required before CW Buddy can open the keying port or arm TX"
+                }
                 Label { text: "TX speed" }
                 ComboBox {
                     model: ["Match selected RX", "Fixed"]
