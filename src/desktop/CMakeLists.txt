@@ -325,6 +325,15 @@ if(CWA_BUILD_TESTS)
   set_tests_properties(cwa_desktop_qml_startup_smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software"
     TIMEOUT 15)
+  if(WIN32 AND CWA_HAVE_SOAPY_SDR)
+    if(NOT CWA_SOAPY_SDR_RUNTIME_ROOT)
+      message(FATAL_ERROR
+        "Windows SDR-enabled tests require CWA_SOAPY_SDR_RUNTIME_ROOT")
+    endif()
+    set_tests_properties(cwa_desktop_qml_startup_smoke PROPERTIES
+      ENVIRONMENT_MODIFICATION
+        "PATH=path_list_prepend:${CWA_SOAPY_SDR_RUNTIME_ROOT}/bin")
+  endif()
 
   qt_add_executable(cwa_update_checker_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/update_checker_test.cpp

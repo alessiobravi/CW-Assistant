@@ -17,6 +17,10 @@ All notable changes to CW Buddy are recorded here. The format follows
   hardware. Direct receiver discovery starts only from the explicit **Refresh
   devices** action in Settings > SDR; live audio remains immediately usable.
 
+- The Windows build-tree UI smoke test now loads the pinned SDR DLL closure
+  from its prepared runtime directory. This prevents a missing-DLL loader dialog
+  from blocking CTest before the independently verified package-staging step.
+
 - Portable Linux SDR packaging now follows Ubuntu 24.04's `librtlsdr.so.2`
   package ABI and carries libudev's libcap dependency. Windows pinned-runtime
   builds explicitly enable the supported legacy policy floor required by the

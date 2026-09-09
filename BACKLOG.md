@@ -22,6 +22,8 @@ platform-specific `<runtime>/cmake` directory, keeping hosted builds independent
 of CMake's transient user registry.
 SDR hardware enumeration is operator-triggered rather than blocking application
 or profile startup; physical hot-plug and reconnect acceptance remains open.
+The Windows build-tree UI smoke uses the same pinned runtime root later copied
+and independently loaded from the staged installer layout.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

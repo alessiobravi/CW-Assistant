@@ -236,6 +236,9 @@ policy compatibility floor. Configure-stage CMake failures use the same bounded
 status diagnostic path, and the application configure resolves SoapySDR from
 the verified platform-specific CMake directory in the prepared runtime root
 rather than a build-machine package registry.
+Before package staging, the Windows UI smoke resolves its linked SDR DLLs from
+that same prepared root. The later staged smoke then proves the installer layout
+is self-contained rather than inheriting this build-only path.
 
 SDRplay is intentionally different: install a compatible SDRplay API/service
 and SoapySDRPlay3 module from their respective providers. CW Buddy neither
