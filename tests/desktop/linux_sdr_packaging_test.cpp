@@ -46,7 +46,8 @@ int main() {
   // USB dependencies, and the corresponding distribution copyright records.
   for (const std::string_view required : {
            "librtlsdrSupport.so", "librtlsdr.so.0", "libusb-1.0.so.0",
-           "libudev.so.1", "third-party", "--sdr-backend-smoke-test",
+           "libudev.so.1", "libcap.so.2", "libcap2", "third-party",
+           "--sdr-backend-smoke-test",
            "ci-portable-sdr-smoke",
            "Unexpected external SDR runtime dependency",
            "isolated_soapy_root", "cp -L \"${module_path}\""}) {

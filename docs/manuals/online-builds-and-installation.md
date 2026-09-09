@@ -223,8 +223,10 @@ archive instead includes the SDR-specific SoapySDR/RTL-SDR ELF closure and
 launches through a package-relative wrapper, so it does not depend on a
 separately running SDR application. Keep the archive layout intact when moving
 or extracting it; invoking its launcher through a symbolic link is supported.
-The archive remains an x86-64 Linux build against the Ubuntu 24.04 system ABI,
-and it cannot bundle kernel drivers, device-access rules, or USB permissions.
+The archive includes the USB-side libudev/libcap dependency closure and its
+license records. It remains an x86-64 Linux build against the Ubuntu 24.04
+system ABI, and it cannot bundle kernel drivers, device-access rules, or USB
+permissions.
 Both package forms execute a backend/module smoke test before publication; that
 test proves the driver factory loads, not that a physical dongle is accessible.
 

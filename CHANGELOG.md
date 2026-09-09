@@ -13,6 +13,10 @@ All notable changes to CW Buddy are recorded here. The format follows
   or launching the macOS bundle from Finder therefore does not hide its bundled
   RTL-SDR module or a separately installed vendor module.
 
+- Portable Linux SDR packaging now carries libudev's libcap dependency, and
+  the Windows pinned-runtime build no longer fails while parsing a native
+  command error message.
+
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby
   stream markers.

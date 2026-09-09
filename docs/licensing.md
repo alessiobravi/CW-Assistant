@@ -24,7 +24,9 @@ not bundle, download, or redistribute a model or model metadata.
 Hosted desktop distributions provide the receive-only SoapySDR runtime under
 the Boost Software License 1.0, the SoapyRTLSDR module under the MIT license,
 and the redistributable librtlsdr/libusb runtime closure under their applicable
-licenses. Portable packages bundle those components and their license records;
+licenses. The Linux portable closure also includes libudev and libcap with the
+distribution copyright records for both. Portable packages bundle those
+components and their license records;
 the Linux `.deb` declares the distribution module dependency, whose package
 manager supplies its runtime and notices. Package construction records exact
 versions or pinned source commits where components are bundled. SDRplay's API,

@@ -133,7 +133,7 @@ jobs:
             )
             & $Executable @Arguments
             if ($LASTEXITCODE -ne 0) {
-              throw "Native command failed with exit code $LASTEXITCODE: $Executable $($Arguments -join ' ')"
+              throw "Native command failed with exit code ${LASTEXITCODE}: $Executable $($Arguments -join ' ')"
             }
           }
 
@@ -716,10 +716,11 @@ jobs:
           copy_linked_library "${module_path}" '^librtlsdr\.so'
           copy_linked_library "${module_path}" '^libusb-1\.0\.so'
           copy_linked_library "${runtime_dir}/libusb-1.0.so.0" '^libudev\.so'
+          copy_linked_library "${runtime_dir}/libudev.so.1" '^libcap\.so'
 
           notice_root="${portable_root}/share/doc/cw-buddy/third-party"
           for package in libsoapysdr0.8 soapysdr0.8-module-rtlsdr \
-                         librtlsdr0 libusb-1.0-0 libudev1; do
+                         librtlsdr0 libusb-1.0-0 libudev1 libcap2; do
             copyright="/usr/share/doc/${package}/copyright"
             test -s "${copyright}"
             cmake -E make_directory "${notice_root}/${package}"
@@ -733,6 +734,7 @@ jobs:
           test -s "${runtime_dir}/librtlsdr.so.0"
           test -s "${runtime_dir}/libusb-1.0.so.0"
           test -s "${runtime_dir}/libudev.so.1"
+          test -s "${runtime_dir}/libcap.so.2"
           readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
             | grep -F 'librtlsdr.so.0'
           readelf -d "${bundled_module_dir}/librtlsdrSupport.so" \
@@ -741,6 +743,8 @@ jobs:
             | grep -F 'libusb-1.0.so.0'
           readelf -d "${runtime_dir}/libusb-1.0.so.0" \
             | grep -F 'libudev.so.1'
+          readelf -d "${runtime_dir}/libudev.so.1" \
+            | grep -F 'libcap.so.2'
           : > portable-linux-ldd.log
           : > portable-linux-sdr-ldd.log
           LD_LIBRARY_PATH="${runtime_dir}" ldd "${app}.bin" \
@@ -750,7 +754,8 @@ jobs:
             "${runtime_dir}/libSoapySDR.so.0.8" \
             "${runtime_dir}/librtlsdr.so.0" \
             "${runtime_dir}/libusb-1.0.so.0" \
-            "${runtime_dir}/libudev.so.1"; do
+            "${runtime_dir}/libudev.so.1" \
+            "${runtime_dir}/libcap.so.2"; do
             LD_LIBRARY_PATH="${runtime_dir}" ldd "${elf}" \
               >> portable-linux-sdr-ldd.log
           done
@@ -907,6 +912,15 @@ jobs:
             wix_log="$(tail -n 30 cpack-wix.log 2>/dev/null | tr '\r\n' '  ' | tail -c 1800)"
             if [[ -n "${wix_log}" ]]; then
               status_message="${status_message}"$'\n'"wix_log=${wix_log}"
+            fi
+          fi
+          if [[ "${CWA_WINDOWS_SDR_BUILD_RESULT}" == "failure" ]]; then
+            status_message="${status_message}"$'\n'"windows_sdr_build_failed=inspect the pinned SDR runtime build step"
+          fi
+          if [[ "${CWA_LINUX_SDR_BUNDLE_RESULT}" == "failure" ]]; then
+            linux_sdr_log="$(tail -n 80 portable-linux-sdr-ldd.log 2>/dev/null | tr '\r\n' '  ' | tail -c 3000)"
+            if [[ -n "${linux_sdr_log}" ]]; then
+              status_message="${status_message}"$'\n'"linux_sdr_log=${linux_sdr_log}"
             fi
           fi
           if [[ "${CWA_WINDOWS_VERIFY_RESULT}" == "failure" ]]; then
