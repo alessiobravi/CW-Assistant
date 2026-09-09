@@ -234,9 +234,17 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
+          ubuntu_sources=/etc/apt/sources.list.d/ubuntu.sources
+          test -s "${ubuntu_sources}"
+          grep -Eq '^URIs: .*archive\.ubuntu\.com/ubuntu' "${ubuntu_sources}"
+          apt_source_options=(
+            -o "Dir::Etc::sourcelist=${ubuntu_sources}"
+            -o 'Dir::Etc::sourceparts=-'
+            -o 'Acquire::Retries=5'
+          )
           {
-            sudo apt-get -o Acquire::Retries=5 update
-            sudo apt-get -o Acquire::Retries=5 install --yes --no-install-recommends \
+            sudo apt-get "${apt_source_options[@]}" update
+            sudo apt-get "${apt_source_options[@]}" install --yes --no-install-recommends \
               libsoapysdr-dev soapysdr-module-rtlsdr
           } 2>&1 | tee linux-sdr-install.log
       - name: Restore pinned ONNX Runtime CPU build

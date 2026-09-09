@@ -25,7 +25,8 @@ or profile startup; physical hot-plug and reconnect acceptance remains open.
 The Windows build-tree UI smoke uses the same pinned runtime root later copied
 and independently loaded from the staged installer layout.
 Linux package acquisition uses bounded APT retries and retains failures in the
-same CI status channel; package and runtime validation remains unchanged.
+same CI status channel. It is scoped to the runner's signed Ubuntu source file,
+so unrelated preinstalled repositories cannot affect SDR package validation.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

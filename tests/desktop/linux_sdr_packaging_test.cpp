@@ -29,6 +29,7 @@ int main() {
   if (!contains(workflow,
                 "sdr_configure_arguments: -DCWA_ENABLE_SOAPY_SDR=ON") ||
       !contains(workflow, "libsoapysdr-dev soapysdr-module-rtlsdr") ||
+      !contains(workflow, "/etc/apt/sources.list.d/ubuntu.sources") ||
       !contains(workflow, "readelf -d stage/bin/cw-buddy-desktop") ||
       !contains(workflow, "libSoapySDR.so.0.8")) {
     return 2;

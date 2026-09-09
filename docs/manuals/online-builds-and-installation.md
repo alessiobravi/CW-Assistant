@@ -232,7 +232,9 @@ test proves the driver factory loads, not that a physical dongle is accessible.
 If an SDR runtime assembly step fails, the release is withheld and the bounded
 package-step diagnostic is retained with that platform's CI status record. The
 hosted Linux dependency step retries transient repository downloads a bounded
-number of times but still withholds the release if installation cannot finish.
+number of times and uses only the runner's signed Ubuntu source definition;
+unrelated preinstalled third-party repositories are excluded from this package
+build. The release is still withheld if installation cannot finish.
 The Windows dependency build pins both upstream revisions and their accepted CMake
 policy compatibility floor. Configure-stage CMake failures use the same bounded
 status diagnostic path, and the application configure resolves SoapySDR from
