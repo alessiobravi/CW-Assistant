@@ -20,6 +20,8 @@ All notable changes to CW Buddy are recorded here. The format follows
   error message, and both package steps retain bounded logs in SSH status tags.
   Configure-stage failures retain bounded CMake diagnostics through the same
   status channel.
+  Windows now resolves the pinned SoapySDR CMake package from its actual
+  installed `lib/cmake` location rather than relying on a transient registry.
 
 - Hovering a detected-stream label now applies a smaller, less intrusive text
   enlargement, preserving frequency context and reducing overlap with nearby

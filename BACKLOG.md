@@ -17,6 +17,8 @@ validation. Windows also declares the supported legacy CMake policy floor for
 the pinned upstream source; bounded package-step diagnostics are retained in CI
 status tags.
 Configure-stage CMake failures are retained through the same bounded channel.
+The Windows build resolves the pinned package only from its installed runtime
+root, keeping hosted builds independent of CMake's transient user registry.
 Physical RTL-SDR and SDRplay acceptance, IQ recording, and complete telemetry
 remain active work.
 

@@ -164,7 +164,8 @@ jobs:
           $tripletRoot = Join-Path $env:CWA_VCPKG_INSTALLED 'x64-windows'
           Invoke-Checked 'cmake' '-S' $env:CWA_SOAPYRTLSDR_SOURCE `
             '-B' '.dependencies/soapyrtlsdr-build' '-A' 'x64' `
-            "-DSoapySDR_DIR=$env:CWA_SOAPYSDR_ROOT/share/cmake/SoapySDR" `
+            "-DSoapySDR_DIR=$env:CWA_SOAPYSDR_ROOT/lib/cmake/SoapySDR" `
+            '-DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE' `
             "-DRTLSDR_INCLUDE_DIR=$tripletRoot/include" `
             "-DRTLSDR_LIBRARY=$tripletRoot/lib/rtlsdr.lib" `
             '-DCMAKE_POLICY_VERSION_MINIMUM=3.5' `
@@ -543,7 +544,8 @@ jobs:
             -DCWA_BUILD_TESTS=ON \
             -DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON \
             -DCWA_ENABLE_SOAPY_SDR=${{ matrix.windows_installer }} \
-            -DSoapySDR_DIR="${{ env.CWA_SOAPYSDR_ROOT }}/share/cmake/SoapySDR" \
+            -DSoapySDR_DIR="${{ env.CWA_SOAPYSDR_ROOT }}/lib/cmake/SoapySDR" \
+            -DCMAKE_FIND_USE_PACKAGE_REGISTRY=FALSE \
             -DCWA_SOAPY_SDR_RUNTIME_ROOT="${{ env.CWA_SOAPYSDR_ROOT }}" \
             -DCWA_ONNXRUNTIME_ROOT="${{ env.CWA_ONNXRUNTIME_ROOT }}" \
             -DCWA_PACKAGE_REVISION=${{ github.run_number }} \
