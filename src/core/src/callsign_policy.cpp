@@ -1,4 +1,5 @@
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_vocabulary.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -237,10 +238,11 @@ std::optional<std::string> CallsignPolicy::best_complete_in_text(
       // when what follows the prosign is itself a plausible callsign, so a
       // genuine DE-prefixed German call is untouched -- stripping DE from
       // DE1ABC leaves 1ABC, which is not a callsign, and the token stands.
-      static constexpr std::string_view kGluedPrefixes[]{"DE", "CQ", "TU",
-                                                          "QRZ"};
+      // The same set the context rescorer splits on, from
+      // dictionaries/cw-word-gap-prefixes.txt: two copies of this list is how
+      // the two paths come to disagree about the same text.
       bool split = false;
-      for (const std::string_view prefix : kGluedPrefixes) {
+      for (const std::string_view prefix : cwSharedVocabulary().wordGapPrefixes()) {
         if (token.size() <= prefix.size() ||
             token.compare(0, prefix.size(), prefix) != 0) {
           continue;

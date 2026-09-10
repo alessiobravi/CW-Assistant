@@ -689,6 +689,12 @@ holds the smaller set that may run straight into a callsign, which is what turns
 a run-together `CQDE` reading into `CQ DE`; every entry there must also appear in
 the abbreviations file.
 
+`cw-distinctive-tokens.txt` is a much shorter list, and it is not a place to
+add favourites. A track carrying one of these is accepted as real CW on that
+evidence alone, which works only while a match stays harder to counterfeit than
+the checks it stands in for. `CQ` and `599` belong there; a single letter, or
+anything noise assembles often, does not.
+
 `morse-alphabet.txt` in the same directory holds the alphabet itself: the
 element pattern on the left, the symbol it produces on the right. Extend it if
 you work stations sending accented letters or a prosign the decoder does not yet

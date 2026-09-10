@@ -6,7 +6,29 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-eighth entry) -- the Morse alphabet is one
+Last reviewed: 2026-09-11 (thirty-ninth entry) -- the remaining duplicate
+vocabularies are resolved, and one of the three was not a duplicate. Callsign
+attribution's glued-prosign list and the context rescorer's word-gap prefixes
+were the same idea maintained twice, at four tokens against six, and both now
+read `dictionaries/cw-word-gap-prefixes.txt`. Track verification's distinctive
+tokens moved to their own file rather than the shared vocabulary, because that
+gate accepts a single match as proof of real CW and only works while a match is
+harder to counterfeit than the checks it replaces; the test guards that
+property -- `CQ` and `599` admitted, `K`, `R`, `ES` and `QSO` refused -- rather
+than the contents.
+
+The third site the audit flagged, the prosigns inlined through
+`callsign_policy.cpp`, is not a vocabulary at all. Those are positional rules:
+`CQ` before `DE` means self-identification, `K`/`KN`/`AR`/`SK` after a call
+means closing and carries its own weight. Membership lookup cannot express that
+and replacing them would have destroyed the grammar. Left alone deliberately.
+
+Both shared dictionaries now recover from `CWA_DICTIONARY_DIR` when a caller
+never loaded them, the vocabulary's fallback wrapped so a noexcept verification
+path cannot terminate on an unreadable file. Corpus recovery unchanged at 8 of
+9, suite 46 of 46.
+
+Previous review: 2026-09-10 (thirty-eighth entry) -- the Morse alphabet is one
 copy and it is data. It was two byte-identical tables in `cw_decoder.cpp` and
 `cw_event_lattice.cpp`; both now read `dictionaries/morse-alphabet.txt`, which
 is bundled and extensible for accented characters and unnamed prosigns. Because

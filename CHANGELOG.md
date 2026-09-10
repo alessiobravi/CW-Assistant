@@ -8,6 +8,19 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Two more copies of the CW vocabulary are gone. Callsign attribution split a
+  run-together prosign using its own list of four tokens while the context
+  rescorer used another of six, so the two paths could disagree about the
+  same text; both now read the one file. Track verification kept a third
+  list, of the tokens distinctive enough that a single match is accepted as
+  evidence of real CW, and that is now `cw-distinctive-tokens.txt`. It is
+  deliberately not the whole vocabulary and is tested for the property
+  rather than the contents: the gate works only while a match stays harder
+  to counterfeit than the checks it replaces, so a single letter admitted
+  there would quietly stop it meaning anything. The positional rules that
+  weigh a callsign by what precedes and follows it are unchanged; naming a
+  token in a grammar rule is not a duplicate vocabulary.
+
 - The Morse alphabet existed twice, as two verbatim copies in separate
   translation units, which is exactly the arrangement that drifts without
   anyone noticing. There is now one copy and it is data: `morse-alphabet.txt`

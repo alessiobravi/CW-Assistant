@@ -2106,9 +2106,12 @@ bool loadShippedDictionaries() {
       read(directory + "/cw-abbreviations.txt"));
   const auto prefixes = vocabulary.importWordGapPrefixes(
       read(directory + "/cw-word-gap-prefixes.txt"));
+  const auto distinctive = vocabulary.importDistinctiveTokens(
+      read(directory + "/cw-distinctive-tokens.txt"));
   return words.inserted_tokens > 0 && words.ignored_lines == 0 &&
       prefixes.inserted_tokens > 0 && prefixes.ignored_lines == 0 &&
-      prefixes.duplicate_tokens == 0;
+      prefixes.duplicate_tokens == 0 && distinctive.inserted_tokens > 0 &&
+      distinctive.ignored_lines == 0 && distinctive.duplicate_tokens == 0;
 }
 
 }  // namespace
@@ -2146,6 +2149,24 @@ void test_cw_context_rescorer() {
          "the shipped CW dictionaries load without a rejected line");
   expect(cwassistant::core::cwSharedVocabulary().exchangeWordCount() >= 60U,
          "the shipped abbreviation dictionary carries the expected vocabulary");
+  // The verification gate stands in for stronger evidence, so it works only
+  // while a match stays hard to counterfeit. Guard the property rather than
+  // the contents: if this list ever grows toward the whole vocabulary, or
+  // admits a single letter, the gate quietly stops meaning anything.
+  const auto& shipped = cwassistant::core::cwSharedVocabulary();
+  expect(shipped.isDistinctiveToken("CQ") && shipped.isDistinctiveToken("599"),
+         "the distinctive-token gate recognises a calling station");
+  expect(!shipped.isDistinctiveToken("K") && !shipped.isDistinctiveToken("R") &&
+             !shipped.isDistinctiveToken("ES"),
+         "the distinctive-token gate rejects tokens noise assembles easily");
+  expect(!shipped.isDistinctiveToken("QSO"),
+         "the distinctive-token gate is a subset, not the whole vocabulary");
+
+  cwassistant::core::CwVocabulary subset;
+  static_cast<void>(subset.importExchangeWords("CQ\nTU\n"));
+  const auto refused = subset.importDistinctiveTokens("CQ\nNOTAWORD\nCQ\n");
+  expect(refused.inserted_tokens == 1U && refused.duplicate_tokens == 2U,
+         "a distinctive token must already be an exchange word");
   using cwassistant::core::CwContextAlternative;
   using cwassistant::core::selectCwContextAlternative;
   const std::array alternatives{

@@ -38,7 +38,14 @@ class CwVocabulary {
   // "CQDESV7BIO". Every entry must also be an exchange word.
   CwVocabularyImportResult importWordGapPrefixes(std::string_view text);
 
+  // Tokens distinctive enough that one is accepted as evidence of real CW on
+  // its own. Deliberately a small subset: the evidence is worth having only
+  // while a match stays harder to counterfeit than the gates it replaces, so
+  // this must never be filled with the whole vocabulary.
+  CwVocabularyImportResult importDistinctiveTokens(std::string_view text);
+
   [[nodiscard]] bool containsExchangeWord(std::string_view token) const;
+  [[nodiscard]] bool isDistinctiveToken(std::string_view token) const noexcept;
   [[nodiscard]] const std::vector<std::string>& wordGapPrefixes() const noexcept;
   [[nodiscard]] std::size_t exchangeWordCount() const noexcept;
   void clear() noexcept;
@@ -46,6 +53,9 @@ class CwVocabulary {
  private:
   std::unordered_set<std::string> exchange_words_;
   std::vector<std::string> word_gap_prefixes_;
+  // A vector rather than a set: the lookup is called from a noexcept
+  // path, and comparing against string_view here allocates nothing.
+  std::vector<std::string> distinctive_tokens_;
 };
 
 // The vocabulary the decoder consults when no other is supplied. The host

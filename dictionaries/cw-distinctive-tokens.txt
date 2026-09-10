@@ -1,0 +1,21 @@
+# Tokens distinctive enough to stand as evidence of real CW
+#
+# A track carrying one of these is accepted as a genuine transmission on that
+# evidence alone. This list is therefore not the whole vocabulary and must not
+# become it: it works only while a match stays harder to counterfeit than the
+# gates it stands in for. A single letter, or anything that noise assembles
+# often, belongs in cw-abbreviations.txt and not here.
+#
+# Matched as whole tokens only. A CQ inside a longer run of letters is far more
+# likely to be three noise elements that landed together than a station
+# calling.
+#
+# Every entry must also appear in cw-abbreviations.txt.
+
+CQ
+TEST
+QRZ
+TU
+UP
+599
+5NN

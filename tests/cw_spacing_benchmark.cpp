@@ -290,6 +290,8 @@ bool loadShippedVocabulary(CwVocabulary& vocabulary) {
       read(directory + "/cw-abbreviations.txt"));
   static_cast<void>(vocabulary.importWordGapPrefixes(
       read(directory + "/cw-word-gap-prefixes.txt")));
+  static_cast<void>(vocabulary.importDistinctiveTokens(
+      read(directory + "/cw-distinctive-tokens.txt")));
   return words.inserted_tokens > 0;
 }
 

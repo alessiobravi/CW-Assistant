@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
+#include <fstream>
+#include <sstream>
 
 namespace cwassistant::core {
 namespace {
@@ -81,6 +84,27 @@ CwVocabularyImportResult CwVocabulary::importWordGapPrefixes(
   });
 }
 
+CwVocabularyImportResult CwVocabulary::importDistinctiveTokens(
+    const std::string_view text) {
+  return importLines(text, [this](const std::string& token) {
+    // Same rule as the word-gap prefixes: a token the scorer does not know is
+    // refused rather than quietly becoming verification evidence.
+    if (!exchange_words_.contains(token)) return false;
+    if (std::ranges::find(distinctive_tokens_, token) !=
+        distinctive_tokens_.end()) {
+      return false;
+    }
+    distinctive_tokens_.push_back(token);
+    return true;
+  });
+}
+
+bool CwVocabulary::isDistinctiveToken(
+    const std::string_view token) const noexcept {
+  return std::ranges::find(distinctive_tokens_, token) !=
+      distinctive_tokens_.end();
+}
+
 bool CwVocabulary::containsExchangeWord(const std::string_view token) const {
   return exchange_words_.contains(std::string(token));
 }
@@ -96,10 +120,40 @@ std::size_t CwVocabulary::exchangeWordCount() const noexcept {
 void CwVocabulary::clear() noexcept {
   exchange_words_.clear();
   word_gap_prefixes_.clear();
+  distinctive_tokens_.clear();
 }
 
 CwVocabulary& cwSharedVocabulary() noexcept {
   static CwVocabulary vocabulary;
+  // The distinctive-token subset gates track verification, so a caller that
+  // never loaded the dictionaries would quietly weaken that gate rather than
+  // fail. Recover the same way the Morse alphabet does. This is noexcept and
+  // reached from a noexcept path, so a failure here must stay a failure to
+  // load rather than become a terminate.
+  static const bool attempted = [&]() noexcept {
+    const char* directory = std::getenv("CWA_DICTIONARY_DIR");
+    if (directory == nullptr) return true;
+    try {
+      const auto read = [directory](const char* name) {
+        std::ifstream input(std::string(directory) + "/" + name,
+                            std::ios::binary);
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        return buffer.str();
+      };
+      static_cast<void>(
+          vocabulary.importExchangeWords(read("cw-abbreviations.txt")));
+      static_cast<void>(
+          vocabulary.importWordGapPrefixes(read("cw-word-gap-prefixes.txt")));
+      static_cast<void>(
+          vocabulary.importDistinctiveTokens(read("cw-distinctive-tokens.txt")));
+    } catch (...) {
+      // An unreadable dictionary leaves the vocabulary empty, which every
+      // consumer already treats as "no context evidence".
+    }
+    return true;
+  }();
+  static_cast<void>(attempted);
   return vocabulary;
 }
 

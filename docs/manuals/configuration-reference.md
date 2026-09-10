@@ -661,6 +661,7 @@ seeded there from copies carried inside the application the first time it runs.
 | --- | --- |
 | `cw-abbreviations.txt` | Abbreviations, Q-codes, prosigns and signal reports the decoder recognises. One token per line; letters, digits and `/` only; case is not significant. |
 | `cw-word-gap-prefixes.txt` | The subset that may precede a callsign with no gap. Each entry must also appear in the abbreviations file, or it is refused at load. |
+| `cw-distinctive-tokens.txt` | The small subset distinctive enough that one match is accepted as evidence of real CW. Deliberately much narrower than the abbreviation list, and each entry must also appear there. |
 | `morse-alphabet.txt` | The element pattern the decoder recognises and the symbol it produces. One entry per line: dots and dashes, whitespace, then the symbol. A symbol may be several characters, which is how prosigns such as `<SK>` are represented. |
 
 The alphabet is receive-only. What may be transmitted is fixed in the

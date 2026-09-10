@@ -1,4 +1,5 @@
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include "cwassistant/core/cw_vocabulary.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -69,16 +70,15 @@ bool cwTextContainsDistinctiveToken(const std::string_view text) noexcept {
   // likely to be three noise elements that happened to land together than a
   // station calling, and this evidence is only worth having while it stays
   // harder to counterfeit than the gates it stands in for.
-  static constexpr std::string_view kDistinctive[]{"CQ",  "TEST", "599", "5NN",
-                                                   "QRZ", "TU",   "UP"};
+  // The set lives in dictionaries/cw-distinctive-tokens.txt, deliberately
+  // narrower than the exchange vocabulary; see the note there.
+  const auto& vocabulary = cwSharedVocabulary();
   std::size_t begin = 0;
   while (begin <= text.size()) {
     const std::size_t end = std::min(text.find(' ', begin), text.size());
     const std::string_view token = text.substr(begin, end - begin);
     if (!token.empty()) {
-      for (const std::string_view candidate : kDistinctive) {
-        if (token == candidate) return true;
-      }
+      if (vocabulary.isDistinctiveToken(token)) return true;
     }
     if (end == text.size()) break;
     begin = end + 1;
