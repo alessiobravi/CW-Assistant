@@ -259,16 +259,18 @@ probabilities into Morse alternatives. This keeps timing, UNKNOWN decisions,
 stable-prefix rules, and callsign/context policy outside the model and avoids a
 second opaque text decoder.
 
-The first experimental vertical slice is implemented as reproducible local
-tooling. It generates checksummed synthetic PCM and exact key runs from scratch,
-uses profile-grouped train/validation/test splits, trains a small stateful causal
-GRU, reports frame calibration plus transition excess and implausibly short
-runs, checks streaming ONNX export equivalence, and can infer from resampled
-mono PCM16 WAV input. Early experiments proved that aggregate frame metrics can
-hide unusable envelope fragmentation, so temporal topology and downstream
-character accuracy are mandatory gates. No learned-likelihood artifact is
-bundled with the application; the generic optional runtime below carries no
-model.
+A first experimental vertical slice was built as reproducible local tooling and
+has since been removed from this repository. It generated checksummed synthetic
+PCM and exact key runs from scratch, used profile-grouped train/validation/test
+splits, trained a small stateful causal GRU, reported frame calibration plus
+transition excess and implausibly short runs, checked streaming ONNX export
+equivalence, and could infer from resampled mono PCM16 WAV input. Its durable
+result is a constraint on any successor rather than an artifact: aggregate frame
+metrics were shown to hide unusable envelope fragmentation, so temporal topology
+and downstream character accuracy are mandatory gates and not optional
+reporting. No training pipeline ships in this tree today, and no
+learned-likelihood artifact is bundled with the application; the generic
+optional runtime below carries no model.
 The first target is at most two million INT8 parameters, a bounded state cache,
 and CPU-only operation. This is a design budget to benchmark, not a performance
 claim. Model choice will be made from the character-error-rate/resource Pareto
@@ -590,7 +592,7 @@ gain is repeatable and its resource cost is within the published budget.
 4. Extend the delivered bounded recent evidence and continuous fixed-anchor
    evaluation with safe mid-segment consensus switching and multi-pass
    refinement.
-5. Extend the delivered learned-likelihood experiment, compare compact causal
+5. Re-establish the learned-likelihood experiment, compare compact causal
    candidates, and ship one only after receiver character gain, hard-negative,
    license, provenance, checksum, fallback, and resource checks pass.
 6. Add conservative strongest-track cancellation and optional diversity input.

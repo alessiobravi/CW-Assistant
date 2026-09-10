@@ -25,10 +25,23 @@ QVector<float> WaterfallConditioner::process(
   }
 
   const double usable_bin_width = std::max(0.25, bin_width_hz);
+  // The offsets are specified in hertz so the window always clears a normal CW
+  // filter's skirts, but a wide SDR span makes bins coarse enough that the
+  // hertz figures stop describing a usable window: 1 MS/s across 16'384 bins
+  // is 61 Hz per bin, which collapses 55/180 Hz to offsets 2..4, so the
+  // reference is the median of six samples that are exactly as noisy as the
+  // bin under test. Such a reference jitters by several dB per frame and
+  // manufactures the speckle it is meant to remove. Floor the window in bins
+  // as well, so at least 26 samples reach every median whatever the
+  // resolution; the median stays immune to the handful of samples an
+  // interfering carrier occupies.
+  constexpr qsizetype kMinimumInnerOffsetBins = 3;
+  constexpr qsizetype kMinimumWindowWidthBins = 12;
   const qsizetype inner = std::max<qsizetype>(
-      2, static_cast<qsizetype>(std::ceil(55.0 / usable_bin_width)));
+      kMinimumInnerOffsetBins,
+      static_cast<qsizetype>(std::ceil(55.0 / usable_bin_width)));
   const qsizetype outer = std::max<qsizetype>(
-      inner + 2,
+      inner + kMinimumWindowWidthBins,
       static_cast<qsizetype>(std::ceil(180.0 / usable_bin_width)));
   const double margin = std::max(1.0, noise_margin_db);
   const double muted = lower_display_db;

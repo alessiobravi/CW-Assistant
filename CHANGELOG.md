@@ -6,6 +6,118 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The wide SDR spectrum and waterfall showed noise rather than signals. The
+  overview produces 16384 frequency bins and the display is around 1500 pixels
+  wide, and every bin was being drawn: the trace connected all of them, so each
+  pixel column was rasterised as a bar spanning the entire spread of its
+  eleven-or-so bins, and the waterfall built a texture one pixel wide per *bin*
+  before letting bilinear minification pick an arbitrary two of every eleven.
+  Both showed the raw scatter of the measurement instead of what was received.
+  Each column is now reduced to the strongest bin it covers -- the peak rather
+  than an average, because a CW carrier occupies one or two bins of the eleven
+  and averaging would bury it by around ten decibels, while the noise between
+  carriers is already smoothed over time. The waterfall texture rebuilt every
+  frame falls from roughly forty megabytes to about three.
+
+- The waterfall palette was spending most of its range on noise. Its floor was
+  derived from the twentieth percentile of the bins and then lowered a further
+  eight decibels; for the exponential distribution that bin powers follow, that
+  percentile already sits six and a half decibels below the mean, so the palette
+  bottom ended up about fourteen decibels beneath the actual noise floor and the
+  noise itself straddled the blue-to-green transition. The floor now comes from
+  the median with a two-decibel margin, which moves mean noise from roughly a
+  quarter of the way up the palette to near its bottom and hands the range back
+  to signals.
+
+- Noise suppression stopped suppressing at wide bin spacings. Its local
+  reference window was sized in hertz, so at a megasample per second it
+  collapsed to a median of six neighbouring bins, each carrying the same
+  scatter -- comparing noise against noise, which adds speckle rather than
+  removing it. The window now has a floor in bins as well, so the reference
+  always has enough samples to be a reference.
+
+- Zooming into the SDR spectrum and then moving the VFO threw the zoom away and
+  returned to full span. SDR frames are described in absolute radio frequency,
+  so retuning genuinely moves the axis, and any axis change was treated as a new
+  source. An operator's zoom is now preserved and re-centred on the new
+  frequency. Audio never showed this because its axis is fixed regardless of
+  tuning. The waterfall history is also cleared on a frequency change: it was
+  only being cleared when the number of bins changed, which a retune does not
+  do, so old rows were redrawn against the new axis under the wrong labels.
+
+- The centre bin of a direct-SDR spectrum is no longer allowed to distort the
+  display. Local-oscillator leakage sits exactly at the centre of the span and
+  was feeding the automatic range as though it were a signal. It is interpolated
+  across for display only; detection is unaffected.
+
+### Added
+
+- Direct SDR reception can be recorded as interoperable IQ. Recording previously
+  refused to run at all on an SDR source, and the writer behind it kept only the
+  real half of each complex sample -- which discards the distinction between the
+  two sidebands and cannot be used for analysis afterwards. Captures are now
+  written as SigMF: interleaved complex samples in a `.sigmf-data` file with a
+  `.sigmf-meta` sidecar carrying sample rate, centre frequency, datatype and
+  start time, so recordings open in other software. The default datatype is
+  `ci16_le`, which halves the file against 32-bit floats and loses nothing on
+  hardware whose converters are fourteen bits or fewer; a bit-exact float option
+  remains. Recording is bounded by a byte budget as well as a duration, because
+  a limit expressed in samples was written for audio rates and would be reached
+  in about twenty seconds at eight megasamples per second.
+
+- Each IQ recording carries the receiver's gain state and its own level
+  measurements -- peak magnitude, how many samples approached full scale, and
+  the residual direct-current offset -- per block and cumulatively. A recording
+  that documents a symptom without recording the gain that produced it cannot
+  settle whether the receiver was over- or under-driven, and the application has
+  no other overload indication.
+
+- The waterfall frequency scale is legible: larger, brighter, and drawn on a
+  plate so it is not competing with the waterfall behind it.
+
+- The decode window stays findable when it is off screen. Zoom and the decode
+  window are deliberately independent, so an operator can be looking somewhere
+  the decoder is not; an edge indicator now points to the decode window and
+  names its centre frequency when it is outside the visible span.
+
+- The spectrum snapshot can now describe a noise floor independent of
+  transform size. Bins stay calibrated to the window's coherent gain, which is
+  what a tone's dBFS reading needs and keeps a full-scale carrier at 0 dBFS at
+  any transform size, but that same calibration makes bin noise power grow
+  with bin bandwidth, so an unchanged floor reads about nine decibels lower
+  when the transform grows from 2,048 to 16,384 bins, and no single factor can
+  hold a tone and a noise floor constant at once. The snapshot now also
+  publishes the equivalent noise bandwidth of a bin, in hertz, so a consumer
+  judging a floor rather than a tone can subtract it out and compare noise
+  density in dBFS per hertz across transform sizes and sample rates.
+
+- The selectable keying model can be measured. Every benchmark constructed a
+  decoder and left the model at its default, so the alternative available in
+  Settings had no coverage and a regression in it would have been invisible.
+  The accuracy surface now accepts `--semi-markov`, and the two models measure
+  as follows on the full surface: mean character error 0.2579 against 0.2591 --
+  level, against a spread across seed sets of about 0.08 -- while callsign
+  recovery differs materially, 150 correct against 136, for 33 and 31 wrong
+  respectively. The per-frame threshold remains the default on that evidence.
+
+### Changed
+
+- The SDR faceplate follows the same visual language as the radio faceplate
+  beside it. Sync is a square tile that turns green when it is engaged, rather
+  than a wide pill whose only active-state feedback was the colour of its text.
+  No control clips its own label any more; the operating mode, antenna,
+  bandwidth and tuning step showed truncated text because each was given a fixed
+  width narrower than the space its own contents needed. Stream markers show
+  frequencies in the same grouped form as the tuning readout instead of a bare
+  digit string.
+
+- The decimation badge is gone. It displayed a fixed caption with no value
+  behind it and no means of ever acquiring one; the effective sample rate shown
+  beside it already determines decimation, and the explanation it carried has
+  moved onto that control.
+
 ### Changed
 
 - Direct SDR operation now has its own compact **SDR Radio Control** above the

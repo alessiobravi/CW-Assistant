@@ -51,6 +51,45 @@ class DisplayNode final : public QSGNode {
   QSGGeometryNode* spectrum{nullptr};
 };
 
+// ReplayController::sourceMode() reports 2 for the direct SDR path, the only
+// source that delivers centre-shifted complex IQ to this item.
+constexpr int kDirectIqSourceMode = 2;
+
+// A wide SDR overview carries far more bins than the display has pixel
+// columns: 16'384 bins across a ~1'500 px item is about eleven bins per
+// column. One vertex per bin makes every column rasterise as a bar spanning
+// the minimum to the maximum of its eleven bins, which is the spiky trace,
+// and it forces an ~11x bilinear minification of the waterfall raster with no
+// mipmaps, which is the speckle. Both disappear once the reduction to columns
+// happens here, before geometry and image are built, instead of in the
+// rasteriser.
+void columnBinRange(const qsizetype column, const qsizetype column_count,
+                    const qsizetype first_bin, const qsizetype visible_bins,
+                    qsizetype& begin, qsizetype& end) noexcept {
+  begin = first_bin + (column * visible_bins) / column_count;
+  end = first_bin + ((column + 1) * visible_bins) / column_count;
+  // column_count never exceeds visible_bins, so every column already owns at
+  // least one bin; the guard only keeps a degenerate range impossible.
+  if (end <= begin) end = begin + 1;
+}
+
+// Peak, not mean. A CW carrier occupies one or two of the eleven bins that
+// share a column, so averaging them would bury it about 10 dB below its true
+// level and hide weak signals the operator is looking for. The analyzer
+// already averages each bin over time, so the peak of averaged bins is a
+// stable reading rather than the noisiest sample in the group.
+double columnPeakDb(const QVector<float>& bins, const qsizetype begin,
+                    const qsizetype end) {
+  double peak = -std::numeric_limits<double>::infinity();
+  const qsizetype first = std::max<qsizetype>(0, begin);
+  const qsizetype last = std::min(end, bins.size());
+  for (qsizetype index = first; index < last; ++index) {
+    const double value = static_cast<double>(bins[index]);
+    if (std::isfinite(value) && value > peak) peak = value;
+  }
+  return peak;
+}
+
 QRgb waterfallColor(const float value) {
   const float t = std::clamp(value, 0.0F, 1.0F);
   if (t < 0.35F) {
@@ -280,22 +319,55 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
     has_row_timestamp_ = false;
   }
   latest_bins_ = frame.bins_dbfs;
+  suppressLocalOscillatorBin(latest_bins_);
   const QVector<float>& waterfall_bins =
       display_mode_ == 1 &&
               frame.instantaneous_bins_dbfs.size() == frame.bins_dbfs.size()
           ? frame.instantaneous_bins_dbfs
-          : frame.bins_dbfs;
+          : latest_bins_;
   const bool source_changed =
       !qFuzzyCompare(source_lower_frequency_hz_, frame.lower_frequency_hz) ||
       !qFuzzyCompare(source_upper_frequency_hz_, frame.upper_frequency_hz);
+  // A retune moves the absolute RF bounds of every SDR frame. Snapping back to
+  // the full span there threw away the operator's zoom on each frequency
+  // change; audio frames sit on a tuning-invariant axis and never reach this
+  // path. Read the current zoom before the bounds move under it.
+  const bool preserve_zoom = source_changed && zoomed() &&
+      frame.upper_frequency_hz > frame.lower_frequency_hz;
+  const double previous_source_center_hz =
+      0.5 * (source_lower_frequency_hz_ + source_upper_frequency_hz_);
+  const double previous_view_span_hz =
+      upper_frequency_hz_ - lower_frequency_hz_;
   if (source_changed) {
     source_lower_frequency_hz_ = frame.lower_frequency_hz;
     source_upper_frequency_hz_ = frame.upper_frequency_hz;
+    // Stored rows were conditioned against the old axis, and the conditioner's
+    // per-bin baseline is a per-frequency history. Both are meaningless once
+    // the receiver moves, and the bin count is unchanged by a retune, so the
+    // size check above never catches it: drop them here instead of scrolling
+    // an old band's traces under a new one's labels.
+    waterfall_rows_.clear();
+    has_row_timestamp_ = false;
+    conditioner_.reset();
   }
-  if (!view_initialized_ || source_changed) {
+  if (!view_initialized_ || !preserve_zoom) {
     lower_frequency_hz_ = frame.lower_frequency_hz;
     upper_frequency_hz_ = frame.upper_frequency_hz;
     view_initialized_ = true;
+    emit frequencyRangeChanged();
+  } else {
+    const double source_span_hz =
+        source_upper_frequency_hz_ - source_lower_frequency_hz_;
+    const double next_span_hz =
+        std::clamp(previous_view_span_hz, 0.0, source_span_hz);
+    const double retune_shift_hz =
+        0.5 * (source_lower_frequency_hz_ + source_upper_frequency_hz_) -
+        previous_source_center_hz;
+    const double next_lower_hz = std::clamp(
+        lower_frequency_hz_ + retune_shift_hz, source_lower_frequency_hz_,
+        source_upper_frequency_hz_ - next_span_hz);
+    lower_frequency_hz_ = next_lower_hz;
+    upper_frequency_hz_ = next_lower_hz + next_span_hz;
     emit frequencyRangeChanged();
   }
   if (has_sequence_ && frame.sequence > last_sequence_ + 1) {
@@ -420,7 +492,15 @@ void SpectrumWaterfallItem::updateAutomaticRange(const QVector<float>& bins) {
   std::sort(finite.begin(), finite.end());
   const qsizetype high_index = static_cast<qsizetype>(
       (static_cast<quint64>(finite.size() - 1) * 99ULL) / 100ULL);
-  double low = std::clamp(estimated_noise_floor_db_ - 8.0, -200.0, 20.0);
+  // Keep the palette bottom just under the real noise, not far below it. The
+  // estimate is now a median, which sits ~1.6 dB below the mean noise power,
+  // so a 2 dB margin puts the mean floor ~3.6 dB up a 60 dB palette (t=0.06)
+  // and its p99 tail (+6.6 dB on a single look) at t=0.17, both safely inside
+  // the dark blue leg. The previous p20-minus-8 dB bottom sat 14.5 dB below
+  // the mean, which spent 40% of the palette on noise and pushed that same
+  // tail onto the blue-to-green breakpoint at t=0.35, so quiet bins flickered
+  // green.
+  double low = std::clamp(estimated_noise_floor_db_ - 2.0, -200.0, 20.0);
   double high = std::max(static_cast<double>(finite[high_index]) + 3.0,
                          low + automatic_range_span_db_);
   high = std::clamp(high, -190.0, 50.0);
@@ -458,7 +538,15 @@ void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
     if (std::isfinite(bin)) finite.push_back(bin);
   }
   if (finite.isEmpty()) return;
-  const qsizetype index = static_cast<qsizetype>(finite.size() / 5);
+  // Median, not the 20th percentile. Bin power is exponentially distributed
+  // around the true noise power, so on a single look the p20 sits
+  // 10*log10(-ln(0.8)) = -6.5 dB under the mean while the median sits only
+  // 10*log10(ln 2) = -1.6 dB under it. The p20 offset also moves with the
+  // averaging setting (about -2.9 dB after three looks) whereas the median
+  // offset shrinks towards zero, so the palette floor no longer walks when
+  // the operator changes averaging. A median still ignores carriers as long
+  // as signals occupy under half the span, which any real band does.
+  const qsizetype index = static_cast<qsizetype>(finite.size() / 2);
   std::nth_element(finite.begin(), finite.begin() + index, finite.end());
   const double observed = static_cast<double>(finite[index]);
   const double previous = estimated_noise_floor_db_;
@@ -475,6 +563,44 @@ void SpectrumWaterfallItem::updateNoiseFloor(const QVector<float>& bins) {
   }
   if (std::abs(previous - estimated_noise_floor_db_) > 0.02) {
     emit noiseFloorChanged();
+  }
+}
+
+bool SpectrumWaterfallItem::directIqSource() const {
+  auto* replay = qobject_cast<ReplayController*>(source_);
+  return replay != nullptr && replay->sourceMode() == kDirectIqSourceMode;
+}
+
+void SpectrumWaterfallItem::suppressLocalOscillatorBin(
+    QVector<float>& bins) const {
+  // Nothing removes DC on the IQ path: the analyzer's mean subtraction is
+  // gated on audio streams, so the receiver's LO leakage arrives as a
+  // permanent spike in the centre bin, tens of dB above the band. Left in, it
+  // pins the p99 that sets the palette ceiling and draws a carrier that is not
+  // on the air. Only this display copy is repaired. Detection is fed straight
+  // from the analyzer's unaveraged bins inside the capture worker and never
+  // reads this array, so which signals are found does not change.
+  constexpr qsizetype kMinimumIqBins = 64;
+  // A Hann main lobe is four bins wide, so the leakage reaches centre +/- 2.
+  constexpr qsizetype kHalfWidth = 2;
+  // A complex spectrum carries one bin per transform point, always a power of
+  // two, and puts DC at the exact middle; an audio spectrum is a half-band
+  // slice. Require both signals so a channelized audio view can never lose
+  // the bins at the middle of its passband.
+  const qsizetype bin_count = bins.size();
+  if (bin_count < kMinimumIqBins || (bin_count & (bin_count - 1)) != 0) return;
+  if (!directIqSource()) return;
+  const qsizetype center = bin_count / 2;
+  const qsizetype begin = center - kHalfWidth;
+  const qsizetype end = center + kHalfWidth;
+  const double left = static_cast<double>(bins[begin - 1]);
+  const double right = static_cast<double>(bins[end + 1]);
+  if (!std::isfinite(left) || !std::isfinite(right)) return;
+  const double steps = static_cast<double>(2 * kHalfWidth + 2);
+  for (qsizetype index = begin; index <= end; ++index) {
+    const double fraction =
+        static_cast<double>(index - begin + 1) / steps;
+    bins[index] = static_cast<float>(left + fraction * (right - left));
   }
 }
 
@@ -548,24 +674,33 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   }
   const qsizetype visible_bins = last_bin >= first_bin
       ? last_bin - first_bin + 1 : 0;
-  auto* spectrum_geometry = root->spectrum->geometry();
-  spectrum_geometry->allocate(visible_bins);
-  auto* vertices = spectrum_geometry->vertexDataAsPoint2D();
   const double span = std::max(1.0, effective_upper_bound_db_ -
                                        effective_lower_bound_db_);
-  for (qsizetype i = 0; i < visible_bins; ++i) {
-    const qsizetype source_index = first_bin + i;
-    const float x = visible_bins > 1
-                        ? width * static_cast<float>(i) /
-                              static_cast<float>(visible_bins - 1)
+  // One vertex and one raster column per pixel column, never per source bin.
+  // Zooming in stops the reduction at one column per bin, so a narrow view is
+  // still drawn at full resolution.
+  const qsizetype column_count = visible_bins > 0
+      ? std::clamp<qsizetype>(static_cast<qsizetype>(std::lround(width)), 1,
+                              visible_bins)
+      : 0;
+  auto* spectrum_geometry = root->spectrum->geometry();
+  spectrum_geometry->allocate(static_cast<int>(column_count));
+  auto* vertices = spectrum_geometry->vertexDataAsPoint2D();
+  for (qsizetype column = 0; column < column_count; ++column) {
+    qsizetype bin_begin = 0;
+    qsizetype bin_end = 0;
+    columnBinRange(column, column_count, first_bin, visible_bins, bin_begin,
+                   bin_end);
+    const float x = column_count > 1
+                        ? width * static_cast<float>(column) /
+                              static_cast<float>(column_count - 1)
                         : 0.0F;
-    const double normalized =
-        std::clamp((static_cast<double>(latest_bins_[source_index]) -
-                    effective_lower_bound_db_) /
-                       span,
-                   0.0, 1.0);
-    vertices[i].set(x, spectrum_height *
-                           static_cast<float>(1.0 - normalized));
+    const double normalized = std::clamp(
+        (columnPeakDb(latest_bins_, bin_begin, bin_end) -
+         effective_lower_bound_db_) / span,
+        0.0, 1.0);
+    vertices[column].set(x, spectrum_height *
+                                static_cast<float>(1.0 - normalized));
   }
   root->spectrum->markDirty(QSGNode::DirtyGeometry);
 
@@ -590,8 +725,11 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
   }
   root->grid->markDirty(QSGNode::DirtyGeometry);
 
-  if (visible_bins > 0 && window() != nullptr) {
-    const int image_width = static_cast<int>(visible_bins);
+  if (column_count > 0 && window() != nullptr) {
+    // Sized in columns, not bins: at 16'384 bins the per-frame raster was
+    // ~39 MB and had to be minified ~11x on upload. One texel per pixel
+    // column keeps it around 3 MB and lands close to 1:1 on screen.
+    const int image_width = static_cast<int>(column_count);
     const int image_height = waterfallRowCapacity();
     QImage image(image_width, image_height, QImage::Format_RGB32);
     const QRgb blank_color = waterfallColor(0.0F);
@@ -603,9 +741,13 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
       }
       const auto& row = waterfall_rows_[static_cast<std::size_t>(y)];
       for (int x = 0; x < image_width; ++x) {
-        const qsizetype source_index = first_bin + x;
+        qsizetype bin_begin = 0;
+        qsizetype bin_end = 0;
+        columnBinRange(x, column_count, first_bin, visible_bins, bin_begin,
+                       bin_end);
         const float normalized = static_cast<float>(std::clamp(
-            (static_cast<double>(row[source_index]) - effective_lower_bound_db_) / span,
+            (columnPeakDb(row, bin_begin, bin_end) -
+             effective_lower_bound_db_) / span,
             0.0, 1.0));
         scanline[x] = waterfallColor(normalized);
       }

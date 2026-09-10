@@ -139,6 +139,13 @@ struct Decoded {
   std::string callsign;
 };
 
+// Which keying technique the surface is being measured for. The decoder ships
+// two selectable models, and until now every benchmark constructed a bank and
+// never called setKeyingModel, so all of them measured the default only: a
+// regression in the model an operator can actually select in Settings would
+// have been invisible to the whole suite.
+CwKeyingModel g_keying_model = CwKeyingModel::AdaptiveThreshold;
+
 Decoded decodeChannel(const std::vector<float>& audio,
                       const double sample_rate,
                       const bool robust_level_history = true) {
@@ -146,6 +153,7 @@ Decoded decodeChannel(const std::vector<float>& audio,
   CwChannelBankConfig config;
   config.robust_keying_level_history = robust_level_history;
   CwChannelBank bank(config);
+  bank.setKeyingModel(g_keying_model);
   RealtimeSampleBlock block;
   block.stream.sample_rate_hz = sample_rate;
   Decoded best;
@@ -179,7 +187,17 @@ Decoded decodeChannel(const std::vector<float>& audio,
 }  // namespace
 
 int main(int argc, char** argv) {
-  const bool full = argc > 1 && std::strcmp(argv[1], "--full") == 0;
+  bool full = false;
+  for (int argument = 1; argument < argc; ++argument) {
+    if (std::strcmp(argv[argument], "--full") == 0) full = true;
+    // The paired robust-history gate below still compares like with like: both
+    // sides of the pair use whichever model is selected here.
+    if (std::strcmp(argv[argument], "--semi-markov") == 0)
+      g_keying_model = CwKeyingModel::SemiMarkov;
+  }
+  std::printf("keying model: %.*s\n",
+              static_cast<int>(cwKeyingModelName(g_keying_model).size()),
+              cwKeyingModelName(g_keying_model).data());
   const std::string message = "CQ CQ DE IU0LFQ IU0LFQ K";
   const double sample_rate = 48'000.0;
   const std::vector<std::vector<unsigned>> seed_sets{

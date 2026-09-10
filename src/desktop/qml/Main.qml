@@ -47,6 +47,19 @@ ApplicationWindow {
         return grouped.join(".")
     }
 
+    // The controller composes frequencyLabel from raw hertz ("14019655 Hz RF"),
+    // which no operator reads at a glance. Present an RF stream the way the VFO
+    // readout presents a frequency, and leave an audio tone in plain hertz,
+    // where grouping would only invent structure that is not there.
+    function formatStreamFrequency(channel) {
+        var hz = Number(channel.displayFrequencyHz)
+        if (!Number.isFinite(hz))
+            return channel.frequencyLabel
+        return channel.frequencyKind === "RF"
+                ? formatRigFrequency(hz) + " RF"
+                : hz.toFixed(0) + " Hz AF"
+    }
+
     function formatVfoInput(hz, unitHz) {
         var decimals = unitHz === 1000000 ? 6 : 3
         return (hz / unitHz).toFixed(decimals)
@@ -416,22 +429,112 @@ ApplicationWindow {
                     }
                 }
 
+                // Zoom and the decode window are deliberately independent
+                // controls, so an operator can zoom somewhere the decoder is
+                // not. sdrDecoderWindowOverlay disappears completely in that
+                // state, which silently reads as "nothing is being decoded".
+                // This edge tab is the persistent proof that decoding
+                // continues off-screen, and it points the way back.
+                Rectangle {
+                    id: sdrDecoderWindowEdgeIndicator
+                    objectName: "sdrDecoderWindowEdgeIndicator"
+                    readonly property bool below:
+                        sdrDecoderWindowOverlay.upperHz
+                        < spectrumDisplay.lowerFrequencyHz
+                    visible: replayController.sourceMode === 2
+                             && spectrumDisplay.upperFrequencyHz
+                                > spectrumDisplay.lowerFrequencyHz
+                             && (below
+                                 || sdrDecoderWindowOverlay.lowerHz
+                                    > spectrumDisplay.upperFrequencyHz)
+                    width: 26
+                    height: 54
+                    x: below ? spectrumDisplay.x + 4
+                             : spectrumDisplay.x + spectrumDisplay.width
+                               - width - 4
+                    y: spectrumDisplay.y
+                       + (spectrumDisplay.height - height) / 2
+                    radius: 4
+                    color: edgeIndicatorMouse.containsMouse
+                           ? "#d4123028" : "#c00e2220"
+                    border.color: "#43c6ac"
+                    border.width: 1
+                    // Above manualSliceHitArea (z 6), which otherwise covers
+                    // the whole spectrum and would swallow the hover.
+                    z: 7
+                    Column {
+                        anchors.centerIn: parent
+                        spacing: 0
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: sdrDecoderWindowEdgeIndicator.below ? "‹" : "›"
+                            color: "#7fffe7"
+                            font.pixelSize: 22
+                            font.weight: Font.Bold
+                        }
+                        Label {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: "CW"
+                            color: "#7fffe7"
+                            font.pixelSize: 9
+                            font.weight: Font.Bold
+                        }
+                    }
+                    MouseArea {
+                        id: edgeIndicatorMouse
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        // Pan rather than zoom: the operator chose this span
+                        // width, so only the centre is moved. panBy clamps to
+                        // the acquired span and is inert when not zoomed.
+                        onClicked: spectrumDisplay.panBy(
+                                       appSettings.sdrDecoderCenterFrequencyHz
+                                       - (spectrumDisplay.lowerFrequencyHz
+                                          + spectrumDisplay.upperFrequencyHz) / 2)
+                    }
+                    ToolTip.visible: edgeIndicatorMouse.containsMouse
+                    ToolTip.text: "CW decoding continues "
+                                  + (sdrDecoderWindowEdgeIndicator.below
+                                     ? "below " : "above ")
+                                  + "the visible span, centred on "
+                                  + window.formatRigFrequency(
+                                      appSettings.sdrDecoderCenterFrequencyHz)
+                                  + " Hz. Click to bring it back into view."
+                }
+
+                // Every axis label on this panel is drawn straight over live
+                // waterfall speckle, so each one carries its own semi-opaque
+                // plate. Without it the glyphs disappear into whatever colour
+                // the waterfall happens to paint underneath.
                 Label {
                     anchors.left: parent.left
                     anchors.top: parent.top
-                    anchors.margins: 14
+                    anchors.margins: 10
+                    leftPadding: 5
+                    rightPadding: 5
+                    topPadding: 1
+                    bottomPadding: 1
                     text: spectrumDisplay.effectiveUpperBoundDb.toFixed(0) + " dBFS"
-                    color: "#8394a6"
-                    font.pixelSize: 11
+                    color: "#c6d4e2"
+                    font.pixelSize: 12
+                    z: 4
+                    background: Rectangle { color: "#c8080f16"; radius: 3 }
                 }
                 Label {
                     anchors.left: parent.left
                     anchors.top: parent.top
                     anchors.topMargin: parent.height * 0.34
-                    anchors.leftMargin: 14
+                    anchors.leftMargin: 10
+                    leftPadding: 5
+                    rightPadding: 5
+                    topPadding: 1
+                    bottomPadding: 1
                     text: spectrumDisplay.effectiveLowerBoundDb.toFixed(0) + " dBFS"
-                    color: "#8394a6"
-                    font.pixelSize: 11
+                    color: "#c6d4e2"
+                    font.pixelSize: 12
+                    z: 4
+                    background: Rectangle { color: "#c8080f16"; radius: 3 }
                 }
                 Repeater {
                     model: 7
@@ -443,26 +546,34 @@ ApplicationWindow {
                         visible: spectrumDisplay.upperFrequencyHz
                                  > spectrumDisplay.lowerFrequencyHz
                         x: tickX
-                        y: spectrumDisplay.y + spectrumDisplay.height - 22
+                        // 28 px, not 22: the larger plated label needs the
+                        // extra room to stay inside the waterfall.
+                        y: spectrumDisplay.y + spectrumDisplay.height - 28
                         z: 4
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: 1
                             height: 6
-                            color: "#75879a"
+                            color: "#a3b4c6"
                         }
                         Label {
                             x: index === 0 ? 2
                                : (index === 6 ? -implicitWidth - 2
                                   : -implicitWidth / 2)
                             y: 5
+                            leftPadding: 5
+                            rightPadding: 5
+                            topPadding: 1
+                            bottomPadding: 1
                             text: window.formatFrequency(
                                       spectrumDisplay.lowerFrequencyHz
                                       + fraction
                                         * (spectrumDisplay.upperFrequencyHz
                                            - spectrumDisplay.lowerFrequencyHz))
-                            color: "#9cabb9"
-                            font.pixelSize: 10
+                            color: "#dce7f2"
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            background: Rectangle { color: "#c8080f16"; radius: 3 }
                         }
                     }
                 }
@@ -912,13 +1023,14 @@ ApplicationWindow {
                             text: modelData.callingOwnStation
                                   ? "\u25CF CALLING YOU"
                                   : !modelData.verifiedCw
-                                  ? modelData.frequencyLabel + " • manual"
+                                  ? window.formatStreamFrequency(modelData)
+                                    + " • manual"
                                   : modelData.callsign.length > 0
                                   ? (modelData.callsign
                                      + (modelData.callsignInDatabase ? " \u2713" : ""))
                                   : modelData.callsignSuggestion.length > 0
                                   ? "≈ " + modelData.callsignSuggestion
-                                  : modelData.frequencyLabel
+                                  : window.formatStreamFrequency(modelData)
                             color: modelData.color
                             font.pixelSize: channelMarker.pointerHovered ? 22 : 18
                             font.weight: Font.Bold
@@ -978,7 +1090,8 @@ ApplicationWindow {
                                             + " from "
                                             + modelData.callsignSuggestionRawSpan
                                             + "\n" : ""))
-                                      + modelData.frequencyLabel + "\n"
+                                      + window.formatStreamFrequency(modelData)
+                                        + "\n"
                                       + (!modelData.verifiedCw
                                          ? "Manual slice • awaiting ordinary CW verification\n"
                                          : "")
@@ -1351,6 +1464,9 @@ ApplicationWindow {
                     objectName: "sdrRadioDisplay"
                     property bool frequencyEditing: false
                     property bool invalidFrequency: false
+                    // Radio Control's tile geometry, mirrored here so both
+                    // faceplates draw the same square hand-drawn controls.
+                    readonly property int controlButtonSize: 52
                     readonly property var rateModel: appSettings.sdrSampleRateOptions.length > 0
                                                      ? appSettings.sdrSampleRateOptions
                                                      : [62500, 96000, 125000,
@@ -1372,6 +1488,15 @@ ApplicationWindow {
                     border.color: "#326875"
                     border.width: 1
                     clip: true
+
+                    // A faceplate tile has room for a magnitude, not for
+                    // six digits: 1536000 reads as "1.54M", not "1536k". The
+                    // exact value stays in each control's tooltip.
+                    function compactHz(hz) {
+                        return hz >= 1000000
+                                ? Number((hz / 1000000).toFixed(2)) + "M"
+                                : Number((hz / 1000).toFixed(1)) + "k"
+                    }
 
                     function beginFrequencyEdit() {
                         sdrFrequencyField.text = window.formatVfoInput(
@@ -1539,92 +1664,219 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 40
+                            // Radio Sync is a square Radio Control tile, so
+                            // this row is one tile tall. 62 + 52 + 40 plus two
+                            // 5 px gaps still fits the 174 px of faceplate
+                            // height left inside the 188 px panel.
+                            Layout.preferredHeight: sdrRadioDisplay.controlButtonSize
                             spacing: 5
                             ComboBox {
                                 id: sdrModeCombo
                                 objectName: "sdrOperatingModeCombo"
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 120
+                                // No Layout.preferredWidth: setting one below
+                                // the implicit width is exactly what elided
+                                // these boxes. Material keeps the drop
+                                // indicator inside the right padding, so
+                                // roughly 58 px of every combo is never
+                                // available to glyphs; only a minimum width
+                                // floors that. The minimums in this faceplate
+                                // are budgeted against the narrowest panel
+                                // (Layout.minimumWidth 430, less 32 px of panel
+                                // margins and 14 px of faceplate margins,
+                                // leaves 384 px per row): 132 + 150 + 52 tile
+                                // + 10 px of gaps = 344. 132 also holds the
+                                // widest fallback the driver can name, a mode
+                                // with no code at all ("MODE Default").
+                                Layout.minimumWidth: 132
+                                // The dense faceplate font buys back the glyph
+                                // room the drop indicator takes away, and
+                                // matches the 9-13 px Radio Control tiles.
+                                font.pixelSize: 11
                                 model: appSettings.sdrOperatingModeNames
                                 currentIndex: appSettings.sdrOperatingModeIndex
                                 visible: model.length > 1
+                                // The driver names a mode
+                                // "ST — Single tuner (recommended)". Only the
+                                // code fits a faceplate, so the full name stays
+                                // in the popup and the tooltip. The model
+                                // itself is untouched.
+                                displayText: "MODE " + currentText.split(" — ")[0]
+                                // A short display text must not shrink the
+                                // popup that carries the full mode names.
+                                Component.onCompleted: popup.width = Qt.binding(
+                                    function() {
+                                        return Math.max(sdrModeCombo.width, 260)
+                                    })
                                 onActivated: appSettings.selectSdrOperatingMode(
                                                  currentIndex)
                                 ToolTip.visible: hovered
-                                ToolTip.text: "Receiver operating mode exposed by the SDR driver"
+                                ToolTip.text: "Receiver operating mode exposed by the SDR driver: "
+                                              + currentText
                             }
                             ComboBox {
+                                id: sdrAntennaCombo
                                 objectName: "sdrControlAntennaCombo"
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 150
+                                Layout.minimumWidth: 150
+                                font.pixelSize: 11
                                 model: appSettings.sdrAntennaNames
                                 currentIndex: appSettings.sdrAntennaIndex
                                 visible: model.length > 0
+                                // Antenna, port and tuner-input names are free
+                                // text from the driver and are routinely wider
+                                // than the control, so the popup is widened
+                                // rather than the selection being guessed at.
+                                Component.onCompleted: popup.width = Qt.binding(
+                                    function() {
+                                        return Math.max(sdrAntennaCombo.width, 220)
+                                    })
                                 onActivated: appSettings.selectSdrAntenna(
                                                  currentIndex)
                                 ToolTip.visible: hovered
-                                ToolTip.text: "Select the SDR antenna, port, or tuner input"
+                                ToolTip.text: "Select the SDR antenna, port, or tuner input: "
+                                              + currentText
                             }
-                            Button {
+                            Rectangle {
+                                id: sdrSyncTile
                                 objectName: "sdrCatSyncButton"
-                                Layout.preferredWidth: 86
-                                Layout.preferredHeight: 40
-                                checkable: true
-                                checked: appSettings.sdrFollowRadioVfo
-                                enabled: appSettings.radioEnabled
-                                text: !checked ? "SYNC OFF"
-                                      : appSettings.sdrRadioSyncStatus
-                                        .indexOf("waiting") >= 0
-                                        ? "SYNC …"
-                                        : appSettings.sdrRadioSyncStatus
-                                          .indexOf("bidirectional") >= 0
-                                          ? "SYNC ↔" : "SYNC ←"
-                                onToggled: appSettings.sdrFollowRadioVfo = checked
-                                ToolTip.visible: hovered
-                                ToolTip.text: appSettings.sdrRadioSyncStatus
+                                Layout.preferredWidth: sdrRadioDisplay.controlButtonSize
+                                Layout.preferredHeight: sdrRadioDisplay.controlButtonSize
+                                radius: 5
+                                // Hand-drawn like every Radio Control tile
+                                // instead of a Material Button: a checked
+                                // Button keeps its pill shape and repaints only
+                                // its label, so an engaged sync read as
+                                // disengaged. Colour now carries the state and
+                                // the sub-label carries the direction, which
+                                // also removes the baked-in ellipsis of the old
+                                // "SYNC …" caption.
+                                readonly property bool engaged: appSettings.sdrFollowRadioVfo
+                                readonly property bool waiting:
+                                    appSettings.sdrRadioSyncStatus
+                                    .indexOf("waiting") >= 0
+                                readonly property bool bidirectional:
+                                    appSettings.sdrRadioSyncStatus
+                                    .indexOf("bidirectional") >= 0
+                                color: !engaged
+                                       ? (sdrSyncMouse.containsMouse
+                                          ? "#414a55" : "#353b43")
+                                       // Engaged but not yet locked onto the
+                                       // radio stays a step down the same
+                                       // green, so the tile never claims a
+                                       // sync it does not have.
+                                       : waiting
+                                         ? (sdrSyncMouse.containsMouse
+                                            ? "#36a08d" : "#2b8474")
+                                         : (sdrSyncMouse.containsMouse
+                                            ? "#63e0c7" : "#43c6ac")
+                                Column {
+                                    anchors.centerIn: parent
+                                    spacing: 1
+                                    Label {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: "SYNC"
+                                        color: sdrSyncTile.engaged
+                                               ? "#111318"
+                                               : (appSettings.radioEnabled
+                                                  ? "#7b8794" : "#5a636d")
+                                        font.pixelSize: 13
+                                        font.weight: Font.Bold
+                                    }
+                                    Label {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        text: !sdrSyncTile.engaged
+                                              ? "OFF"
+                                              : sdrSyncTile.waiting
+                                                ? "WAIT"
+                                                : sdrSyncTile.bidirectional
+                                                  ? "↔" : "←"
+                                        color: sdrSyncTile.engaged
+                                               ? "#123f38"
+                                               : (appSettings.radioEnabled
+                                                  ? "#5f6b78" : "#4a525b")
+                                        font.pixelSize: 9
+                                        font.weight: Font.DemiBold
+                                    }
+                                }
+                                MouseArea {
+                                    id: sdrSyncMouse
+                                    anchors.fill: parent
+                                    // Hover stays live while CAT is off so the
+                                    // tooltip can say why the tile is inert;
+                                    // only the click itself is gated.
+                                    hoverEnabled: true
+                                    cursorShape: appSettings.radioEnabled
+                                                 ? Qt.PointingHandCursor
+                                                 : Qt.ArrowCursor
+                                    onClicked: {
+                                        if (!appSettings.radioEnabled)
+                                            return
+                                        appSettings.sdrFollowRadioVfo =
+                                                !appSettings.sdrFollowRadioVfo
+                                    }
+                                }
+                                ToolTip.visible: sdrSyncMouse.containsMouse
+                                ToolTip.text: !appSettings.radioEnabled
+                                    ? "Radio Sync needs CAT radio control enabled in Settings"
+                                    : appSettings.sdrRadioSyncStatus
+                                      + (sdrSyncTile.engaged
+                                         ? "\nClick to stop following the radio VFO"
+                                         : "\nClick to follow the radio VFO")
                             }
                         }
                         RowLayout {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 40
                             spacing: 5
+                            // Three controls share the 384 px this row has in
+                            // the narrowest panel; their minimums total 342.
                             ComboBox {
                                 objectName: "sdrControlSampleRateCombo"
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 105
+                                Layout.minimumWidth: 112
+                                font.pixelSize: 11
                                 model: sdrRadioDisplay.rateModel
                                 currentIndex: model.indexOf(
                                                   appSettings.sdrSampleRateHz)
-                                displayText: appSettings.sdrSampleRateHz >= 1000000
-                                             ? (appSettings.sdrSampleRateHz / 1000000)
-                                               + " MS/s"
-                                             : (appSettings.sdrSampleRateHz / 1000)
-                                               + " kS/s"
+                                displayText: sdrRadioDisplay.compactHz(
+                                                 appSettings.sdrSampleRateHz)
+                                             + "S/s"
                                 onActivated: appSettings.sdrSampleRateHz = currentValue
                                 ToolTip.visible: hovered
-                                ToolTip.text: "Effective IQ sample rate; changing it may restart SDR reception"
+                                // The removed decimation badge only ever
+                                // carried this sentence, and it belongs on the
+                                // control that actually decides decimation.
+                                ToolTip.text: "Effective IQ sample rate ("
+                                              + appSettings.sdrSampleRateHz
+                                              + " Hz); changing it may restart SDR reception. The driver derives hardware decimation from the selected effective IQ rate; SoapySDR exposes no independent decimation control"
                             }
                             ComboBox {
                                 objectName: "sdrControlBandwidthCombo"
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 105
+                                Layout.minimumWidth: 112
+                                font.pixelSize: 11
                                 model: sdrRadioDisplay.bandwidthModel
                                 currentIndex: model.indexOf(
                                                   appSettings.sdrBandwidthHz)
                                 displayText: appSettings.sdrBandwidthHz === 0
                                              ? "RF BW AUTO"
                                              : "RF BW "
-                                               + (appSettings.sdrBandwidthHz / 1000)
-                                               + "k"
+                                               + sdrRadioDisplay.compactHz(
+                                                   appSettings.sdrBandwidthHz)
                                 onActivated: appSettings.sdrBandwidthHz = currentValue
                                 ToolTip.visible: hovered
-                                ToolTip.text: "Hardware RF filter bandwidth; changing it may restart reception"
+                                ToolTip.text: appSettings.sdrBandwidthHz === 0
+                                    ? "Hardware RF filter bandwidth, chosen by the driver; changing it may restart reception"
+                                    : "Hardware RF filter bandwidth ("
+                                      + appSettings.sdrBandwidthHz
+                                      + " Hz); changing it may restart reception"
                             }
                             ComboBox {
                                 objectName: "sdrTuningStepCombo"
                                 Layout.fillWidth: true
-                                Layout.preferredWidth: 95
+                                Layout.minimumWidth: 118
+                                font.pixelSize: 11
                                 model: [100, 500, 1000, 2500, 5000, 10000,
                                         25000, 50000, 100000]
                                 currentIndex: model.indexOf(
@@ -1637,28 +1889,6 @@ ApplicationWindow {
                                 onActivated: appSettings.sdrTuningStepHz = currentValue
                                 ToolTip.visible: hovered
                                 ToolTip.text: "Frequency step used by the SDR < and > controls"
-                            }
-                            Rectangle {
-                                objectName: "sdrDecimationBadge"
-                                Layout.preferredWidth: 70
-                                Layout.preferredHeight: 38
-                                radius: 4
-                                color: "#18252b"
-                                border.color: "#36525a"
-                                Label {
-                                    anchors.centerIn: parent
-                                    text: "DEC RATE"
-                                    color: "#8ecbc4"
-                                    font.pixelSize: 9
-                                    font.weight: Font.DemiBold
-                                }
-                                ToolTip.visible: sdrDecimationMouse.containsMouse
-                                ToolTip.text: "The driver derives hardware decimation from the selected effective IQ rate; SoapySDR exposes no independent decimation control"
-                                MouseArea {
-                                    id: sdrDecimationMouse
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                }
                             }
                         }
                     }
@@ -2707,7 +2937,7 @@ ApplicationWindow {
                             Label {
                                 objectName: "decoderSessionFrequencyLabel"
                                 Layout.fillWidth: true
-                                text: modelData.frequencyLabel
+                                text: window.formatStreamFrequency(modelData)
                                 color: "#91a0b1"
                                 font.pixelSize: 11
                                 font.family: "monospace"

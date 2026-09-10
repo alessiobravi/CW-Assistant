@@ -6,6 +6,10 @@ add_executable(cwa_iq_receive_tests iq_receive_tests.cpp)
 target_link_libraries(cwa_iq_receive_tests PRIVATE cwa_core)
 add_test(NAME cwa_iq_receive_tests COMMAND cwa_iq_receive_tests)
 
+add_executable(cwa_iq_writer_tests iq_writer_tests.cpp)
+target_link_libraries(cwa_iq_writer_tests PRIVATE cwa_core)
+add_test(NAME cwa_iq_writer_tests COMMAND cwa_iq_writer_tests)
+
 add_executable(cwa_radio_control_tests radio_control_tests.cpp)
 target_link_libraries(cwa_radio_control_tests PRIVATE cwa_core)
 add_test(NAME cwa_radio_control_tests COMMAND cwa_radio_control_tests)

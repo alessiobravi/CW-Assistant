@@ -8,6 +8,7 @@
 #include <QByteArray>
 #include <QDateTime>
 #include <QDir>
+#include <QFileInfo>
 #include <QIODevice>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -311,11 +312,16 @@ void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
         QStringLiteral("Could not open capture diagnostics file"));
     return;
   }
-  // The WAV file is opened lazily on the first block in drain(), once the
-  // input's actual sample rate is known; opening it here with a guessed
-  // rate could write a file that plays back at the wrong pitch/speed.
+  // The recording file is opened lazily on the first block in drain(), once
+  // the input's actual kind and sample rate are known; opening it here with a
+  // guessed rate could write a file that plays back at the wrong pitch/speed,
+  // and the source mode alone does not say what the samples really are.
   capture_base_path_ = capture_dir;
   capture_wav_path_ = QDir(capture_dir).filePath(QStringLiteral("audio.wav"));
+  capture_iq_path_ =
+      QDir(capture_dir).filePath(QStringLiteral("iq.sigmf-data"));
+  capture_iq_sample_rate_hz_ = 0.0;
+  capture_iq_center_frequency_hz_ = 0.0;
   capture_writer_pending_ = true;
   capture_start_ns_ = 0;
   capture_last_snapshot_ns_ = 0;
@@ -338,7 +344,22 @@ void LiveAudioDspWorker::setPresentationDiagnostics(
 }
 
 void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
+  // A SigMF recording is two files, so an operator told only "capture
+  // stopped" cannot tell what was produced or whether it is worth keeping.
+  // Name the payload and its size while the writer still reports them.
+  QString detail = note;
+  if (capture_iq_writer_.isOpen()) {
+    detail = QStringLiteral("%1 • %2 (%3 MB, %4 s IQ)")
+                 .arg(note, QFileInfo(capture_iq_path_).fileName(),
+                      QString::number(
+                          static_cast<double>(capture_iq_writer_.bytesWritten()) /
+                              (1024.0 * 1024.0),
+                          'f', 1),
+                      QString::number(capture_iq_writer_.secondsWritten(), 'f',
+                                      1));
+  }
   capture_writer_.close();
+  capture_iq_writer_.close();
   if (capture_diagnostics_log_.is_open()) {
     capture_diagnostics_log_.flush();
     capture_diagnostics_log_.close();
@@ -352,7 +373,7 @@ void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
   capture_writer_pending_ = false;
   capture_have_start_ = false;
   emit debugCaptureStateChanged(false, capture_base_path_, elapsed_seconds,
-                                note);
+                                detail);
 }
 
 void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
@@ -399,6 +420,55 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
                static_cast<double>(radio_tx_rf_hz_));
   radio.insert(QStringLiteral("splitActive"), radio_split_active_);
   root.insert(QStringLiteral("radio"), radio);
+
+  // Receiver level telemetry rides with every snapshot so a reviewer can see
+  // when the front end started clipping, not merely that it did somewhere in
+  // the recording. Gain state is repeated here because the sidecar records
+  // only the value at the moment the capture began.
+  if (capture_iq_writer_.isOpen()) {
+    const auto block_levels = capture_iq_writer_.lastBlockLevels();
+    const auto capture_totals = capture_iq_writer_.captureLevels();
+    QJsonObject iq;
+    iq.insert(QStringLiteral("dataFile"),
+              QFileInfo(capture_iq_path_).fileName());
+    iq.insert(QStringLiteral("metadataFile"),
+              QFileInfo(QString::fromStdString(
+                            capture_iq_writer_.metadataPath()))
+                  .fileName());
+    const auto datatype =
+        cwassistant::core::IqWriter::datatypeName(capture_iq_format_);
+    iq.insert(QStringLiteral("datatype"),
+              QString::fromLatin1(datatype.data(),
+                                  static_cast<qsizetype>(datatype.size())));
+    iq.insert(QStringLiteral("sampleRateHz"), capture_iq_sample_rate_hz_);
+    iq.insert(QStringLiteral("centerFrequencyHz"),
+              capture_iq_center_frequency_hz_);
+    iq.insert(QStringLiteral("sampleCount"),
+              static_cast<qint64>(capture_iq_writer_.samplesWritten()));
+    iq.insert(QStringLiteral("dataBytes"),
+              static_cast<qint64>(capture_iq_writer_.bytesWritten()));
+    iq.insert(QStringLiteral("recordedSeconds"),
+              capture_iq_writer_.secondsWritten());
+    iq.insert(QStringLiteral("automaticGainKnown"), sdr_gain_state_known_);
+    iq.insert(QStringLiteral("automaticGain"), sdr_automatic_gain_);
+    iq.insert(QStringLiteral("gainDb"), sdr_gain_db_);
+    iq.insert(QStringLiteral("nearFullScaleThreshold"),
+              cwassistant::core::IqWriter::kNearFullScale);
+    iq.insert(QStringLiteral("blockPeakMagnitude"),
+              block_levels.peak_magnitude);
+    iq.insert(QStringLiteral("blockNearFullScaleSamples"),
+              static_cast<qint64>(block_levels.near_full_scale_samples));
+    iq.insert(QStringLiteral("blockDcReal"), block_levels.mean_real);
+    iq.insert(QStringLiteral("blockDcImaginary"), block_levels.mean_imaginary);
+    iq.insert(QStringLiteral("capturePeakMagnitude"),
+              capture_totals.peak_magnitude);
+    iq.insert(QStringLiteral("captureNearFullScaleSamples"),
+              static_cast<qint64>(capture_totals.near_full_scale_samples));
+    iq.insert(QStringLiteral("captureDcReal"), capture_totals.mean_real);
+    iq.insert(QStringLiteral("captureDcImaginary"),
+              capture_totals.mean_imaginary);
+    root.insert(QStringLiteral("iq"), iq);
+  }
 
   QJsonArray tracks;
   const auto published_channels = decoder_.channels();
@@ -698,23 +768,104 @@ void LiveAudioDspWorker::setRadioFrequencyContext(const bool available,
   radio_split_active_ = split_active;
 }
 
+void LiveAudioDspWorker::setSdrCaptureContext(const QString& receiver_label,
+                                              const QString& antenna,
+                                              const bool automatic_gain,
+                                              const double gain_db) {
+  sdr_receiver_label_ = receiver_label;
+  sdr_antenna_ = antenna;
+  sdr_automatic_gain_ = automatic_gain;
+  sdr_gain_db_ = gain_db;
+  // Distinguish "no SDR has reported its gain" from "gain is 0 dB": a
+  // recording that silently claims 0 dB when nothing was known would send a
+  // later analysis after a front-end fault that never existed.
+  sdr_gain_state_known_ = true;
+}
+
+bool LiveAudioDspWorker::openIqCapture(
+    const cwassistant::core::RealtimeSampleBlock& block) {
+  // Everything the recording needs to be interpretable later comes from the
+  // descriptor that produced these very samples, not from UI state that may
+  // have moved on since the operator pressed the button.
+  cwassistant::core::IqCaptureMetadata metadata;
+  metadata.format = capture_iq_format_;
+  metadata.sample_rate_hz = block.stream.sample_rate_hz;
+  metadata.center_frequency_hz = block.stream.center_frequency_hz;
+  metadata.hardware =
+      (sdr_receiver_label_.isEmpty()
+           ? QStringLiteral("Direct SDR receiver")
+           : (sdr_antenna_.isEmpty()
+                  ? sdr_receiver_label_
+                  : QStringLiteral("%1 (input %2)")
+                        .arg(sdr_receiver_label_, sdr_antenna_)))
+          .toStdString();
+  metadata.description =
+      QStringLiteral(
+          "CW Buddy operator debug capture; decoder window %1 Hz wide at %2 Hz")
+          .arg(sdr_decoder_bandwidth_hz_, 0, 'f', 0)
+          .arg(sdr_decoder_center_frequency_hz_, 0, 'f', 0)
+          .toStdString();
+  metadata.automatic_gain_known = sdr_gain_state_known_;
+  metadata.automatic_gain = sdr_automatic_gain_;
+  metadata.gain_db = sdr_gain_db_;
+  if (!capture_iq_writer_.open(
+          capture_iq_path_.toStdString(), metadata,
+          {.maximum_data_bytes = kMaximumIqCaptureBytes,
+           .maximum_seconds = maximum_capture_seconds_})) {
+    finishDebugCapture(
+        QStringLiteral("Could not open IQ capture file: %1")
+            .arg(QString::fromStdString(capture_iq_writer_.lastError())));
+    return false;
+  }
+  capture_iq_sample_rate_hz_ = block.stream.sample_rate_hz;
+  capture_iq_center_frequency_hz_ = block.stream.center_frequency_hz;
+  capture_writer_pending_ = false;
+  return true;
+}
+
 void LiveAudioDspWorker::captureBlock(
     const cwassistant::core::RealtimeSampleBlock& block) {
-  if (capture_active_ && capture_writer_pending_) {
-    if (capture_writer_.open(capture_wav_path_.toStdString(),
-                             block.stream.sample_rate_hz)) {
+  if (!capture_active_) return;
+  // The recorder is chosen from the block descriptor rather than from the
+  // configured source mode, because the descriptor is what the samples
+  // actually are. Complex IQ goes to SigMF with both components intact;
+  // audio keeps the existing, unchanged WAV path.
+  const bool complex_iq =
+      block.stream.kind == cwassistant::core::StreamKind::ComplexIq;
+  if (capture_writer_pending_) {
+    if (complex_iq) {
+      if (!openIqCapture(block)) return;
+    } else if (capture_writer_.open(capture_wav_path_.toStdString(),
+                                    block.stream.sample_rate_hz)) {
       capture_writer_pending_ = false;
     } else {
       finishDebugCapture(QStringLiteral("Could not open capture audio file"));
+      return;
     }
   }
-  if (!capture_active_ || capture_writer_pending_) return;
+  // Switching receivers mid-capture would append samples of one kind to a file
+  // describing the other. End the recording instead of corrupting it.
+  if (complex_iq != capture_iq_writer_.isOpen()) {
+    finishDebugCapture(
+        QStringLiteral("The receiver source changed during capture"));
+    return;
+  }
   if (!capture_have_start_) {
     capture_start_ns_ = block.timestamp_ns;
     capture_last_snapshot_ns_ = block.timestamp_ns;
     capture_have_start_ = true;
   }
-  if (!capture_writer_.writeBlock(block)) {
+  if (complex_iq) {
+    capture_iq_center_frequency_hz_ = block.stream.center_frequency_hz;
+    if (!capture_iq_writer_.writeBlock(block)) {
+      // The writer stops for a configured bound as readily as for a fault, so
+      // report its own reason rather than assuming the capture filled up.
+      const auto reason = capture_iq_writer_.stopReasonText();
+      finishDebugCapture(QString::fromUtf8(
+          reason.data(), static_cast<qsizetype>(reason.size())));
+      return;
+    }
+  } else if (!capture_writer_.writeBlock(block)) {
     finishDebugCapture(QStringLiteral("Capture reached its maximum size"));
     return;
   }

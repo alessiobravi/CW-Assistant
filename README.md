@@ -9,14 +9,19 @@ visualizing, decoding, and operator-assisted replying to amateur-radio CW. The
 target platforms are Windows 11 or newer on x64, macOS Sonoma 14 or newer on
 Apple silicon and Intel x64, and Linux; Windows is the first packaging target.
 
-The project is at foundation stage. The current code provides dependency-free
-core primitives and tests plus an optional Qt Quick desktop shell with a
-profile chooser, guided setup, persistent radio/keying/display settings, and
-native live audio-input discovery/capture through a bounded queue and dedicated
-DSP worker. WAV replay remains a separate deterministic source for the real 2D
-spectrum and waterfall. Immediate controls below the spectrum provide signal
-gain/bandwidth, constant-time high-resolution history, a CW frequency guide,
-and stable noise-suppressed display tuning. A receive-only full-passband channel
+The project is in active pre-release development, and unsigned desktop builds
+are published for every supported platform on each green run. A dependency-free
+core supplies the primitives and their tests. The Qt Quick desktop application
+above it runs the whole receive path: a profile chooser, guided setup,
+persistent radio/keying/display settings, native live audio-input
+discovery/capture through a bounded queue and dedicated DSP worker, direct SDR
+reception, radio frequency control, and a guarded transmit and QSO panel that
+cannot be armed by the decoder. WAV replay remains a separate deterministic
+source for the real 2D spectrum and waterfall, and a direct SDR source can be
+recorded as an interoperable SigMF IQ pair for later analysis. Immediate
+controls below the spectrum provide signal gain/bandwidth, constant-time
+high-resolution history, a CW frequency guide, and stable noise-suppressed
+display tuning. A receive-only full-passband channel
 bank detects multiple spectral peaks, then derives independent keying evidence
 from the original samples through a phase-continuous narrowband filter for each
 frequency. It evaluates bounded 8–60 WPM timing hypotheses, maintains adaptive
@@ -35,6 +40,8 @@ active implementation.
   module. Physical-device qualification remains in progress.
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
+- Debug capture of a direct SDR source as an interoperable SigMF IQ pair
+  (`ci16_le` by default), bounded by an explicit byte and duration budget
 - Live-source and WAV-replay spectrum with scrolling waterfall
 - Alternative-width/drift refinement of the implemented raw-sample narrowband
   full-passband multi-channel decoder

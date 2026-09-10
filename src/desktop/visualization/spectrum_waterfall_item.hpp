@@ -99,6 +99,10 @@ class SpectrumWaterfallItem : public QQuickItem {
  private:
   void updateAutomaticRange(const QVector<float>& bins);
   void updateNoiseFloor(const QVector<float>& bins);
+  [[nodiscard]] bool directIqSource() const;
+  // Repairs the display copy of a complex-IQ spectrum in place. The decoder is
+  // fed elsewhere, from the analyzer directly, and is unaffected.
+  void suppressLocalOscillatorBin(QVector<float>& bins) const;
   [[nodiscard]] QVector<float> conditionedWaterfallRow(
       const QVector<float>& bins);
   [[nodiscard]] QVector<float> blankWaterfallRow(qsizetype width) const;

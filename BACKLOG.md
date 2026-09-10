@@ -6,7 +6,47 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-third entry) -- direct-SDR operation now has
+Last reviewed: 2026-09-10 (thirty-fourth entry) -- the wide SDR display was
+showing the measurement rather than the signal. All 16384 overview bins were
+being drawn into around 1500 pixels with no reduction, so the trace rendered
+each column as the full spread of its bins and the waterfall texture was built
+one pixel per bin and then minified by roughly eleven; the palette floor sat
+about fourteen decibels below the real noise floor because it used the twentieth
+percentile of an exponential distribution and then subtracted eight more; and
+the local noise reference collapsed to six bins at wide spacings, adding speckle
+instead of removing it. Reducing bins to display columns also cuts the
+per-frame waterfall texture from roughly forty megabytes to three, which is
+`PERF-002` territory reached from the quality side.
+
+Zoom is now preserved when the SDR is retuned. SDR frames are described in
+absolute radio frequency, so a retune moves the axis and any axis change was
+treated as a new source; the audio path never showed this because its axis does
+not move with tuning. Stale waterfall history is cleared on a frequency change,
+which the previous bin-count check could not catch.
+
+Interoperable IQ recording exists (`REC-001`, `SDR-001`). Recording refused to
+run on an SDR source, and the writer behind it kept only the real component of
+each complex sample, which discards the sideband distinction; its cap was
+expressed in samples at an audio rate and would have been reached in about
+twenty seconds at eight megasamples per second. Captures are now SigMF with a
+metadata sidecar, bounded by bytes as well as duration, and carry the receiver
+gain state plus per-block level and direct-current telemetry -- without which a
+recording cannot answer whether the front end was over- or under-driven, since
+the application still has no overload indicator (`SDR-001` remaining).
+
+The selectable keying model is measurable for the first time. Every benchmark
+left the model at its default, so the alternative offered in Settings had no
+coverage at all. Measured on the full surface at this commit: mean character
+error 0.2579 for the per-frame threshold against 0.2591 for the duration model,
+level against a seed-set spread near 0.08, but callsign recovery 150 correct
+against 136, for 33 and 31 wrong. The threshold remains the default on that
+evidence, and the duration model's advantage stays confined to weighted and
+Farnsworth fists on the keying-style bench.
+
+Two counts corrected: the private capture corpus holds **22** recordings, not
+the 24 quoted in recent entries, and all 22 replay cleanly.
+
+Previous review: 2026-09-10 (thirty-third entry) -- direct-SDR operation now has
 one physical-device selector plus a separate driver operating-mode selector,
 so the RSPduo's ST/DT/MA/MA8 configurations no longer look like four receivers.
 An operational SDR faceplate provides center-frequency stepping/editing,
@@ -1080,6 +1120,7 @@ translucent band rather than two signal-like lines.
 | SDR-001 | active | Add SoapySDR stream adapter | The RX-only adapter and official-package integration enumerate modules/devices, query standard sample-rate/RF-bandwidth/antenna/gain capabilities, choose supported values, read CF32 channel 0, preserve absolute RF, and produce validated timestamped IQ blocks with distinct telemetry. Discovery groups operating variants by stable physical receiver identity while retaining the selected opaque driver mode. A bounded-rate overview retains the complete acquired passband; a separate shared DDC, anti-alias filter and decimator feeds only the configured 6–96 kHz CW decoder window instead of processing every track at the hardware rate. Wheel zoom, middle-button pan, full-span reset, right-click window recenter/probe, Shift+left-drag decoder-window selection, waterfall-edge SDR stepping, and the operational SDR faceplate make the wide view operable without returning to Settings. Center-only changes retune the active RX stream without reopening it. Optional bidirectional radio synchronization uses provider-neutral command/observation separation and a bounded signed SDR LO offset without touching TX. Windows/macOS packages carry the redistributable runtime; Linux packages bundle it or declare the module dependency. Every staged package must load the RTL factory without hardware. Remaining: expose complete telemetry and overload state in Diagnostics, add only capability-backed driver-specific controls, capture IQ under REC-001, measure wide-passband CPU limits, and complete physical-device acceptance. |
 | SDR-002 | active | Validate RTL-SDR | RTL-SDR is supported through the common SoapySDR RX boundary without another SDR application. Official packages now provide the SoapySDR/SoapyRTLSDR/librtlsdr/libusb closure with license provenance and module-load tests. Remaining: pass live RTL-SDR acceptance on Windows, macOS, and Linux, including USB-driver guidance, frequency accuracy, sustained overflow behavior, hot-unplug, reconnect, and selected-stream monitoring. |
 | SDR-003 | active | Validate SDRplay 3 | SDRplay uses the common SoapySDR RX boundary. Windows packages now carry a pinned MIT-licensed SoapySDRPlay3 bridge and locate the registered external SDRplay Hardware API 3.15 runtime; the proprietary API/service/driver remain operator-installed and are never redistributed. macOS and Linux still require a compatible external SoapySDRPlay3 module. Discovery reports module dependency failures rather than silently hiding them. One physical RSPduo/serial is shown once, with Single Tuner as the recommended one-channel operating mode and Dual Tuner/Master variants available separately as advanced configurations; CW Buddy currently consumes channel 0 only. Its exposed antenna selector chooses the tuner/input supported by that mode. Supported effective low sample rates delegate hardware decimation to the SDRplay driver. Remaining: pass live RSP acceptance on Windows, macOS, and Linux, including live retuning, operating-mode/input matrix, service/version mismatch, minimum sample rate, overload, reconnect, and selected-stream monitoring. |
+| SDR-005 | todo | Bridge software-defined receivers that do not present as a driver | Some vendor receiver applications own the hardware themselves and expose no enumerable driver, so the device cannot be discovered the way a directly supported receiver is. Reaching one requires a plugin installed into that application plus a local IQ and control transport, which is a different integration shape from the driver-enumeration path everything else uses. Scope the transport, the plugin boundary, and whether the vendor's terms permit distribution before committing to it. Requested by the repository owner after confirming the hardware itself works under its vendor application; note that both cannot own the same receiver simultaneously. |
 | SDR-004 | todo | Add Analog Devices PlutoSDR receive support | Discover local or remote ADALM-Pluto contexts through the official cross-platform libiio API, select the RX streaming channel, configure center frequency/sample rate/RF bandwidth/gain without assuming TX ownership, and feed timestamped complex-IQ blocks with overflow and reconnect diagnostics into the shared SDR source boundary. Package or locate libiio per platform with license/runtime validation; test against a mock IIO context and a documented USB/IP hardware fixture before declaring support. A future explicitly armed Pluto TX path is separate and must pass the normal transmit safety gates. |
 | NET-001 | todo | Implement cached network receiver directory | Normalized entries filter by band/frequency, location, protocol, and availability; provider terms and refresh limits are documented. |
 | NET-002 | todo | Implement KiwiSDR WebSocket sample source | Receives permitted audio/IQ/waterfall with identity, capacity handling, sequence telemetry, and bounded reconnect. |

@@ -14,8 +14,11 @@ filter over the original audio rather than the display spectrum. Bounded
 multi-speed acquisition is active, and the technique that decides keying is
 selectable between two: an adaptive threshold, which suits hand and bug
 sending, and a duration model that suits machine-sent, weighted and Farnsworth
-keying. Weak-signal refinement, direct keying output, logging connection, SDR
-capture, and remote-station runtime remain under implementation.
+keying. Direct reception from a software-defined receiver and guarded direct
+keying are both implemented and documented below; keying requires a measured
+electrical loopback before it will arm, and on-air use additionally requires the
+operator-performed dummy-load procedure. Weak-signal refinement, logging
+connection, and remote-station runtime remain under implementation.
 A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
@@ -364,6 +367,48 @@ verification.
 Scroll upward or select text to inspect earlier output without live updates
 moving the cursor or viewport; scroll back to the bottom to resume following.
 
+### Reading the SDR faceplate
+
+**SYNC** is the square tile on the SDR Radio Control. It turns green when
+frequency synchronisation with a configured radio is engaged, and stays dark
+when it is off or unavailable — a dimmer green means engaged but not yet
+confirmed by the radio. Sync only ever exchanges receive frequency; it never
+touches transmit, split, mode, PTT or keying.
+
+Zoom and the decode window are **independent**. Zooming and panning change only
+what you are looking at; the decode window is set in **Settings → Decoder** and
+by shift-dragging across the plot. Because of that you can be looking somewhere
+the decoder is not, so when the decode window is off screen a chevron appears at
+the edge of the plot pointing towards it and naming its centre frequency. Click
+it to bring the window back into view without changing your zoom.
+
+Retuning keeps your zoom. Moving the tuned frequency re-centres the display at
+the span you chose rather than returning to full span.
+
+### Recording receiver IQ for later analysis
+
+**Debug capture** records a direct SDR source as interoperable IQ. The result is
+a SigMF pair — a `.sigmf-data` file of interleaved complex samples and a
+`.sigmf-meta` sidecar describing sample rate, centre frequency, sample format
+and start time — so the recording can be replayed in other software rather than
+only in this application.
+
+Two limits apply, and at receiver sample rates the size limit usually reaches
+first: recording stops at whichever of the byte budget or the **Stop
+automatically after** duration is reached, and the reason is reported when it
+finishes. A megasample per second produces roughly a quarter of a gigabyte per
+minute, so plan captures in tens of seconds rather than minutes unless you have
+reduced the sample rate.
+
+Each recording also stores the receiver's gain state and its own level
+measurements — peak magnitude, how often samples approached full scale, and the
+residual direct-current offset. If you are investigating whether the receiver is
+set up well, keep those: a recording without them shows the symptom but cannot
+show whether the front end was being over- or under-driven.
+
+Review a capture before sharing it. It contains whatever the receiver was
+hearing across the whole acquired passband.
+
 ## Guarded TX preparation
 
 Open **QSO** to use guarded direct serial CW transmission. Before **Arm TX** can
@@ -604,13 +649,13 @@ carriers may produce `?` or incorrect text. Changing the audio source or
 processing bandwidth clears decoder state. Decoder output cannot arm TX, key a
 radio, or initiate a QSO.
 
-Development tooling includes an experimental independently trained acoustic
-likelihood model, but released applications do not load that model yet. The
-live primary path continues to use the deterministic narrowband envelope and
-timing decoder. A learned likelihood model will be enabled only after it
-improves locked receiver recordings at character level, preserves no-CW safety,
-fits the CPU/memory budget on every packaged architecture, and keeps the
-deterministic path available as fallback.
+An independently trained acoustic likelihood model was explored during
+development and is not part of the project today, so no released application
+loads one. The live primary path uses the deterministic narrowband envelope and
+timing decoder. Such a model would be enabled only after it improves locked
+receiver recordings at character level, preserves no-CW safety, fits the
+CPU/memory budget on every packaged architecture, and keeps the deterministic
+path available as fallback.
 
 Builds with the optional local character backend can additionally run an
 operator-supplied ONNX character model selected under **Settings → Decoder**.

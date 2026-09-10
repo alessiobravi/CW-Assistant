@@ -19,6 +19,7 @@
 #include "../visualization/spectrum_frame.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/iq_receive.hpp"
+#include "cwassistant/core/iq_writer.hpp"
 #include "cwassistant/core/sample_block.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_writer.hpp"
@@ -111,6 +112,14 @@ class LiveAudioDspWorker final : public QObject {
   // split) dial frequency moved during the capture window.
   void setRadioFrequencyContext(bool available, qulonglong rx_rf_hz,
                                 qulonglong tx_rf_hz, bool split_active);
+  // Receive-only description of the SDR front end, mirrored here purely so a
+  // debug capture can record the gain state alongside the samples. A recording
+  // without it documents the symptom and not the cause: an overloaded front
+  // end and a starved one look very different in the same spectrum, and the
+  // application has no other overload indicator.
+  void setSdrCaptureContext(const QString& receiver_label,
+                            const QString& antenna, bool automatic_gain,
+                            double gain_db);
   void setPresentationDiagnostics(const QVariantMap& diagnostics);
   // Operator-started, bounded diagnostic capture (OBS-003): records the raw
   // audio feeding the decoder plus periodic per-track private diagnostic
@@ -137,6 +146,8 @@ class LiveAudioDspWorker final : public QObject {
 
  private:
   void captureBlock(const cwassistant::core::RealtimeSampleBlock& block);
+  [[nodiscard]] bool openIqCapture(
+      const cwassistant::core::RealtimeSampleBlock& block);
   void writeDebugCaptureSnapshot();
   void finishDebugCapture(const QString& note);
 
@@ -155,9 +166,26 @@ class LiveAudioDspWorker final : public QObject {
   LocalCharacterFrontendBank character_frontends_;
 
   cwassistant::core::WavWriter capture_writer_;
+  // Complex IQ needs its own recorder: WavWriter is hard-wired to mono PCM16
+  // and keeps only the real component, which throws away the sideband
+  // distinction that is the entire point of recording a complex receiver.
+  cwassistant::core::IqWriter capture_iq_writer_;
   std::ofstream capture_diagnostics_log_;
   QString capture_base_path_;
   QString capture_wav_path_;
+  QString capture_iq_path_;
+  // ci16_le is lossless for both supported receivers (the RSPduo is 14-bit,
+  // the RTL-SDR 8-bit) and halves the file against cf32_le, which at
+  // megasample rates decides whether a capture is usable at all.
+  cwassistant::core::IqSampleFormat capture_iq_format_{
+      cwassistant::core::IqSampleFormat::Ci16Le};
+  double capture_iq_sample_rate_hz_{0.0};
+  double capture_iq_center_frequency_hz_{0.0};
+  QString sdr_receiver_label_;
+  QString sdr_antenna_;
+  bool sdr_gain_state_known_{false};
+  bool sdr_automatic_gain_{false};
+  double sdr_gain_db_{0.0};
   std::uint64_t capture_start_ns_{0};
   std::uint64_t capture_last_snapshot_ns_{0};
   std::size_t capture_existing_track_count_{0};
@@ -181,6 +209,13 @@ class LiveAudioDspWorker final : public QObject {
   // a needlessly large audio file to review before sharing it.
   static constexpr double kDefaultMaximumCaptureSeconds = 300.0;
   double maximum_capture_seconds_{kDefaultMaximumCaptureSeconds};
+  // A wide IQ recording dwarfs an audio one: at 8 MS/s the ci16 stream is
+  // 32 MB/s, so the operator's duration setting on its own is not a usable
+  // bound. 4 GiB is roughly 134 seconds at that rate -- a generous forensic
+  // window -- and is also the largest single file a FAT32 removable drive
+  // accepts, which is where these recordings usually end up.
+  static constexpr std::uint64_t kMaximumIqCaptureBytes =
+      4ULL * 1024ULL * 1024ULL * 1024ULL;
   static constexpr double kSnapshotIntervalSeconds = 1.0;
 };
 

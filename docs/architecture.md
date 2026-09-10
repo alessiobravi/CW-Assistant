@@ -28,7 +28,7 @@ flowchart TB
   end
   subgraph ADP["adapters"]
     A1["Qt Multimedia input / WAV replay"]
-    A2["SoapySDR input / SigMF replay"]
+    A2["SoapySDR input / SigMF IQ recording"]
     A3["receiver directory and KiwiSDR WebSocket source"]
     A4["remote control, event and Opus receive-media transports"]
     A5["Hamlib CAT"]
@@ -91,6 +91,17 @@ and rational decimator extracts the configured decoder window at a bounded
 every per-track filter consume only that bounded branch. Only selected filtered
 carriers are converted to 48 kHz monitor audio. Raw IQ is never routed to the
 loudspeaker.
+
+An operator-started debug capture on a direct SDR source records the acquired
+complex blocks before that decimating branch, so the recording holds the
+complete passband rather than the decoder window. It is written as a SigMF pair,
+an interleaved `.sigmf-data` payload with a `.sigmf-meta` sidecar, defaulting to
+`ci16_le` because the receivers this application records digitize well inside
+16 bits and the file is half the size of `cf32_le`. The recorder is chosen from
+the block descriptor rather than the configured source mode, and a source change
+mid-capture ends the recording instead of appending samples of one kind to a
+file describing the other. Both a byte budget and a duration budget bound the
+capture, and the reason it stopped is reported.
 
 Optional RX-VFO following consumes authoritative radio-controller readback at
 the application boundary, independent of the concrete OmniRig, CAT4OM, direct
@@ -642,13 +653,24 @@ security boundary and the
 the normative protocol, multi-client, authorization, resource-limit, failure,
 verification, and staged implementation requirements.
 
-## Planned external libraries
+## External libraries
 
-- Qt 6 Quick/QML: UI and hardware-accelerated scene graph.
-- Qt 6 Multimedia: cross-platform audio device discovery and capture.
-- Hamlib: multi-vendor CAT model abstraction.
-- SoapySDR plus device modules: RTL-SDR and SDRplay IQ input.
+- Qt 6, in the Core, Gui, Qml, Quick, Quick Controls, Quick Dialogs, Multimedia,
+  Network, SerialPort, and WebSockets components: the interface and its
+  hardware-accelerated scene graph, cross-platform audio device discovery and
+  capture, serial keying lines, and the network transports.
+- SoapySDR plus device modules: RTL-SDR and SDRplay IQ input. This is a build
+  option rather than a hard requirement, enabled in official packages and by
+  `CWA_ENABLE_SOAPY_SDR` in a source build.
+- ONNX Runtime: the optional character-refinement adapter described above,
+  compiled in only when `CWA_ENABLE_ONNX_CHARACTER_DECODER` is set.
 
-All are linked only into their owning adapter or desktop target. Dependency
-versions will be pinned in packaging manifests after the open-source license and
-minimum OS versions are selected.
+Hamlib is deliberately absent from that list. Its multi-vendor CAT model
+abstraction is reached over the `rigctld` text protocol described above, which
+keeps it in a separate process and keeps its headers and license obligations out
+of this build.
+
+Each library is linked only into its owning adapter or desktop target, and the
+dependency-free core links none of them. Bundled component versions, pinned
+source commits, and license records are fixed by the packaging described in the
+[dependency licensing policy](licensing.md).

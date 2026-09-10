@@ -313,6 +313,11 @@ class ReplayController final : public QObject {
   void liveRadioFrequencyContextRequested(bool available, qulonglong rx_rf_hz,
                                           qulonglong tx_rf_hz,
                                           bool split_active);
+  // Receive-only front-end description forwarded to the DSP worker so a debug
+  // capture records the gain state that produced its samples.
+  void liveSdrCaptureContextRequested(const QString& receiver_label,
+                                      const QString& antenna,
+                                      bool automatic_gain, double gain_db);
   void debugCaptureChanged();
   void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);

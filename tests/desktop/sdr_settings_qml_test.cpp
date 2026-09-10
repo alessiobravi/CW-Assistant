@@ -124,7 +124,6 @@ int main() {
       !contains(main_qml, "objectName: \"sdrControlAntennaCombo\"") ||
       !contains(main_qml, "objectName: \"sdrControlSampleRateCombo\"") ||
       !contains(main_qml, "objectName: \"sdrControlBandwidthCombo\"") ||
-      !contains(main_qml, "objectName: \"sdrDecimationBadge\"") ||
       !contains(main_qml, "objectName: \"sdrTuningStepCombo\"") ||
       !contains(main_qml, "objectName: \"sdrCatSyncButton\"") ||
       contains(qml, "objectName: \"sdrFollowRadioVfoCheck\"") ||
@@ -140,6 +139,37 @@ int main() {
       !contains(main_qml, "? appSettings.stepSdrRxFrequency(-1)") ||
       !contains(main_qml, "? appSettings.stepSdrRxFrequency(1)")) {
     return 13;
+  }
+
+  // The SDR faceplate is styled like the CAT Radio Control faceplate: Radio
+  // Sync is a square hand-drawn tile whose colour carries its state, not a
+  // Material pill whose caption had to bake in an ellipsis to fit. Nothing on
+  // the faceplate may be sized below its own implicit width, which is what
+  // truncated the combo boxes, and the DEC RATE badge is gone because it had
+  // no value binding and could never populate; its explanation now belongs to
+  // the effective-IQ-rate control that actually determines decimation.
+  if (!contains(main_qml, "id: sdrSyncTile") ||
+      !contains(main_qml,
+                "Layout.preferredWidth: sdrRadioDisplay.controlButtonSize") ||
+      !contains(main_qml, "text: \"SYNC\"") ||
+      contains(main_qml, "SYNC OFF") ||
+      contains(main_qml, "objectName: \"sdrDecimationBadge\"") ||
+      contains(main_qml, "DEC RATE") ||
+      !contains(main_qml,
+                "SoapySDR exposes no independent decimation control") ||
+      contains(main_qml, "Layout.preferredWidth: 105") ||
+      contains(main_qml, "Layout.preferredWidth: 95")) {
+    return 14;
+  }
+
+  // Zoom and the decode window are independent controls, so the operator must
+  // still be told where decoding is happening after zooming away from it.
+  // Decoded streams report their frequency the way the VFO readout does
+  // instead of as raw hertz.
+  if (!contains(main_qml, "objectName: \"sdrDecoderWindowEdgeIndicator\"") ||
+      !contains(main_qml, "function formatStreamFrequency(channel)") ||
+      contains(main_qml, "modelData.frequencyLabel")) {
+    return 15;
   }
 
   // Radio control remains visible with direct SDR reception so an independent

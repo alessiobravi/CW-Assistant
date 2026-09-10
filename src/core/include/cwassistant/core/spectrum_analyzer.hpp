@@ -28,6 +28,25 @@ struct SpectrumSnapshot {
   double lower_frequency_hz{0.0};
   double upper_frequency_hz{0.0};
   double bin_width_hz{0.0};
+  // Equivalent noise bandwidth of one bin, in hertz: the width of the ideal
+  // rectangular filter that would collect the same noise power this analysis
+  // window collects at one bin. It carries the Hann window's 1.5-bin noise
+  // bandwidth (1.76 dB) as well as the bin spacing.
+  //
+  // The bins themselves stay calibrated with the window's coherent gain
+  // (1/sum(w)), which is what a signal-level readout needs and what keeps a
+  // full-scale carrier at 0 dBFS at every transform size. That calibration
+  // cannot also make a noise reading size-independent: bin noise power is
+  // proportional to bin bandwidth, so an unchanged floor reads
+  // 10*log10(8) = 9 dB lower when the transform grows 2'048 -> 16'384, and no
+  // single scale factor can hold a tone and a noise floor constant at once
+  // (one requires a factor independent of the transform size, the other a
+  // factor proportional to it). The choice made here is to keep the tone
+  // calibration, which detection and every dBFS readout depend on, and to
+  // publish the noise bandwidth so a consumer that judges a *floor* can
+  // subtract 10*log10(noise_bandwidth_hz) and compare densities in dBFS/Hz
+  // across transform sizes and sample rates.
+  double noise_bandwidth_hz{0.0};
   std::vector<float> bins_dbfs;
   // Unaveraged bins from the same FFT. The decoder continues to use the
   // averaged spectrum for stable carrier tracking; the UI can select these
@@ -54,6 +73,8 @@ class SpectrumAnalyzer {
   StreamDescriptor stream_{};
   std::vector<float> window_;
   float window_sum_{0.0F};
+  // Equivalent noise bandwidth of the window, expressed in bins.
+  float noise_bandwidth_bins_{1.0F};
   std::vector<std::complex<float>> accumulator_;
   std::vector<std::complex<float>> workspace_;
   std::vector<float> averaged_power_;

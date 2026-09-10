@@ -178,13 +178,32 @@ std::size_t SpectrumAnalyzer::hopSize() const noexcept {
 void SpectrumAnalyzer::rebuild() {
   window_.resize(config_.fft_size);
   window_sum_ = 0.0F;
+  double coherent_sum = 0.0;
+  double power_sum = 0.0;
   for (std::size_t index = 0; index < config_.fft_size; ++index) {
     window_[index] =
         0.5F - 0.5F * std::cos(2.0F * std::numbers::pi_v<float> *
                               static_cast<float>(index) /
                               static_cast<float>(config_.fft_size - 1U));
     window_sum_ += window_[index];
+    coherent_sum += static_cast<double>(window_[index]);
+    power_sum += static_cast<double>(window_[index]) *
+                 static_cast<double>(window_[index]);
   }
+  // Noise bandwidth of the window in bins, N*sum(w^2)/sum(w)^2. The closed
+  // form for this symmetric Hann is 1.5N/(N-1), but measuring the window that
+  // is actually in use keeps the figure honest if the window ever changes.
+  // Bin scaling below stays coherent-gain, so a tone keeps reading its true
+  // dBFS at any transform size; this number is what a consumer needs to turn
+  // a per-bin level into a bandwidth-independent noise density. Accumulate in
+  // double: 16'384 float additions would otherwise lose several digits of the
+  // ratio. window_sum_ keeps its original float accumulation so the published
+  // tone calibration is bit-for-bit unchanged.
+  noise_bandwidth_bins_ =
+      coherent_sum > 0.0
+          ? static_cast<float>(static_cast<double>(config_.fft_size) *
+                               power_sum / (coherent_sum * coherent_sum))
+          : 1.0F;
   workspace_.resize(config_.fft_size);
   reset();
 }
@@ -290,6 +309,11 @@ SpectrumSnapshot SpectrumAnalyzer::transform(const std::uint64_t timestamp_ns) {
           audio ? static_cast<double>(last_bin) * bin_width_hz
                 : stream_.center_frequency_hz + stream_.sample_rate_hz / 2.0,
       .bin_width_hz = bin_width_hz,
+      // Audio bins fold the negative frequencies into the positive ones, so
+      // this is a one-sided density reference there and a two-sided one for
+      // complex IQ, matching how each set of bins is scaled.
+      .noise_bandwidth_hz =
+          static_cast<double>(noise_bandwidth_bins_) * bin_width_hz,
       .bins_dbfs = std::vector<float>(last_bin - first_bin + 1U),
       .instantaneous_bins_dbfs =
           std::vector<float>(last_bin - first_bin + 1U),

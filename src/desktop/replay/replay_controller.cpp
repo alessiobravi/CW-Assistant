@@ -950,6 +950,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           dsp_worker, &LiveAudioDspWorker::selectDecoderFrequency);
   connect(this, &ReplayController::liveRadioFrequencyContextRequested,
           dsp_worker, &LiveAudioDspWorker::setRadioFrequencyContext);
+  connect(this, &ReplayController::liveSdrCaptureContextRequested, dsp_worker,
+          &LiveAudioDspWorker::setSdrCaptureContext);
   connect(this, &ReplayController::liveDebugCaptureStartRequested, dsp_worker,
           &LiveAudioDspWorker::startDebugCapture);
   connect(this, &ReplayController::liveDebugCaptureStopRequested, dsp_worker,
@@ -1010,6 +1012,11 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           [this](const QString&, const double center_frequency_hz,
                  const double sample_rate_hz, const double bandwidth_hz,
                  const bool automatic_gain, const double gain_db) {
+            // Forward the gain the hardware actually applied, not the value
+            // that was requested, so a later IQ capture documents the real
+            // front-end state.
+            emit liveSdrCaptureContextRequested(sdr_device_name_, sdr_antenna_,
+                                                automatic_gain, gain_db);
             source_name_ = sdr_device_name_;
             sample_rate_ = sample_rate_hz;
             duration_seconds_ = 0.0;
@@ -2095,11 +2102,6 @@ void ReplayController::beginLiveSdrCapture() {
 }
 
 void ReplayController::startDebugCapture() {
-  if (source_mode_ == 2) {
-    setStatus(QStringLiteral(
-        "SDR IQ capture is not available yet; use audio debug capture or an external SigMF recorder."));
-    return;
-  }
   if (!live_capturing_) {
     setStatus(QStringLiteral(
         "Debug capture requires live RX to be running."));
@@ -2114,6 +2116,16 @@ void ReplayController::startDebugCapture() {
   // callsign decision without resetting the live decoder.
   publishLivePresentationDiagnostics(true);
   emit liveDebugCaptureStartRequested(directory);
+  // Name the files that are about to appear. Direct SDR reception records true
+  // complex IQ as a SigMF pair; the audio path is unchanged. The worker picks
+  // the recorder from the first block's descriptor, so this reflects the
+  // selected source rather than deciding it.
+  setStatus(source_mode_ == 2
+                ? QStringLiteral(
+                      "Debug capture: recording SDR IQ to iq.sigmf-data with "
+                      "an iq.sigmf-meta sidecar…")
+                : QStringLiteral(
+                      "Debug capture: recording receiver audio to audio.wav…"));
 }
 
 void ReplayController::stopDebugCapture() {

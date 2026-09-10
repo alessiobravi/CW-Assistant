@@ -365,6 +365,19 @@ so it survives future additions to the list.
 
 ### Debug capture
 
+On a direct SDR source, capture is written as **SigMF IQ** (`.sigmf-data` plus a
+`.sigmf-meta` sidecar) rather than audio, preserving both components of the
+complex signal so the recording is usable for later analysis and in other
+software. Sound-card sources continue to record audio as before.
+
+Recording stops at whichever comes first: the **Stop automatically after**
+duration below, or an internal byte budget. At receiver sample rates the byte
+budget normally binds first — roughly a quarter of a gigabyte per minute at one
+megasample per second — and the finish message names which limit was reached and
+the file written. Gain state and level telemetry are stored with every IQ
+recording.
+
+
 The **Debug capture** control also appears here, not only in the decoder panel
 header, together with a button that opens the capture folder in the file
 manager and a **Stop automatically after** value between 30 and 1800 seconds
