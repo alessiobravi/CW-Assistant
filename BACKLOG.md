@@ -6,7 +6,40 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (thirty-ninth entry) -- the remaining duplicate
+Last reviewed: 2026-09-11 (fortieth entry) -- two attempts at the per-frame
+keying likelihood, both measured on the full surface against 0.2579 with 150
+correct and 33 wrong callsigns, both reverted.
+
+The first was the missing normalizing term. The Gaussian ratio in
+`cw_channel_bank.cpp` computes only the half-difference of squared standardized
+offsets; with unequal scatter the true ratio also carries
+log(sigma_space/sigma_mark), and because the pair is ordered so a mark never
+scatters less than a space that omitted term is always negative. Restoring it
+made every seed set worse -- 0.2604/0.2163/0.2971 became 0.2857/0.2326/0.3254,
+overall 0.2579 to 0.2812, callsigns 150/33 to 146/34. Consistent in sign across
+all three sets, so it is a result and not spread. The incomplete formula is
+compensating for the two-level Gaussian being a fitted approximation rather than
+the real densities; correcting one term of a wrong model is not an improvement.
+
+The second replaced the model with the exact envelope densities: Rayleigh under
+noise alone, Rician under tone plus noise, whose ratio reduces to
+log I0(r*nu/sigma^2) - nu^2/(2*sigma^2) with both parameters available from the
+levels already tracked. It measured 0.3175 with 136/46. That number should not
+be believed, because the experiment was invalid: at 20 dB the statistic reaches
+about 96 nats for a mark and -82 for a space, and `cwEvidenceBoundNats` clamps
+at 3. Every sample saturated, so the run measured a hard slicer -- the exact
+failure the surrounding comments describe as fragmenting weak elements -- rather
+than the model.
+
+That invalidity is the finding worth keeping. The evidence chain is calibrated
+to the heuristic's scale and not to nats: bound 3, midpoint 4.5 dB, scale 1.5,
+against key-on 6 dB and key-off 3 dB. A statistic in true nats cannot be dropped
+into it, so replacing the likelihood means recalibrating the chain -- bound,
+scale, and both thresholds -- as one piece of work, and the research direction
+that recommends the exact densities is not the small slice it appeared to be.
+Prerequisite for any further attempt.
+
+Previous review: 2026-09-11 (thirty-ninth entry) -- the remaining duplicate
 vocabularies are resolved, and one of the three was not a duplicate. Callsign
 attribution's glued-prosign list and the context rescorer's word-gap prefixes
 were the same idea maintained twice, at four tokens against six, and both now
