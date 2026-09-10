@@ -350,12 +350,16 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
     has_row_timestamp_ = false;
     conditioner_.reset();
   }
-  if (!view_initialized_ || !preserve_zoom) {
+  // Only a source change may move the view. Testing `!preserve_zoom` here
+  // instead reset the view on every ordinary frame, because preservation is
+  // predicated on a source change and is therefore false in the steady state:
+  // a zoom survived only until the next frame arrived.
+  if (!view_initialized_ || (source_changed && !preserve_zoom)) {
     lower_frequency_hz_ = frame.lower_frequency_hz;
     upper_frequency_hz_ = frame.upper_frequency_hz;
     view_initialized_ = true;
     emit frequencyRangeChanged();
-  } else {
+  } else if (preserve_zoom) {
     const double source_span_hz =
         source_upper_frequency_hz_ - source_lower_frequency_hz_;
     const double next_span_hz =

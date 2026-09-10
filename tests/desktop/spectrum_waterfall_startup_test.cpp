@@ -201,8 +201,63 @@ bool testLocalCharacterFrontendBank() {
 
 }  // namespace
 
+// A zoom must survive the ordinary frames that follow it. Preservation across a
+// retune is predicated on the source bounds changing, so testing that condition
+// alone in acceptFrame reset the view on every steady-state frame and a zoom
+// lasted until the next frame arrived. Returns a nonzero code on failure.
+int testZoomSurvivesFrames() {
+  constexpr double kLowerHz = 7'000'000.0;
+  constexpr double kUpperHz = 7'100'000.0;
+  cwassistant::desktop::SpectrumWaterfallItem item;
+  cwassistant::desktop::SpectrumFrame frame;
+  frame.bins_dbfs = QVector<float>(1024, -90.0F);
+  frame.lower_frequency_hz = kLowerHz;
+  frame.upper_frequency_hz = kUpperHz;
+  frame.sequence = 1;
+  item.acceptFrame(frame);
+  if (std::abs(item.lowerFrequencyHz() - kLowerHz) > 0.5 ||
+      std::abs(item.upperFrequencyHz() - kUpperHz) > 0.5) {
+    return 55;
+  }
+
+  item.zoomAt(0.5 * (kLowerHz + kUpperHz), 0.25);
+  const double zoomed_lower = item.lowerFrequencyHz();
+  const double zoomed_upper = item.upperFrequencyHz();
+  const double zoomed_span = zoomed_upper - zoomed_lower;
+  if (zoomed_span >= (kUpperHz - kLowerHz) - 0.5 || zoomed_span <= 0.0) {
+    return 56;
+  }
+
+  // The regression: further frames on an unchanged source must not move it.
+  for (quint64 sequence = 2; sequence <= 5; ++sequence) {
+    frame.sequence = sequence;
+    item.acceptFrame(frame);
+    if (std::abs(item.lowerFrequencyHz() - zoomed_lower) > 0.5 ||
+        std::abs(item.upperFrequencyHz() - zoomed_upper) > 0.5) {
+      return 57;
+    }
+  }
+
+  // A retune keeps the zoom width and carries it with the receiver.
+  constexpr double kShiftHz = 50'000.0;
+  frame.sequence = 6;
+  frame.lower_frequency_hz = kLowerHz + kShiftHz;
+  frame.upper_frequency_hz = kUpperHz + kShiftHz;
+  item.acceptFrame(frame);
+  if (std::abs((item.upperFrequencyHz() - item.lowerFrequencyHz()) -
+               zoomed_span) > 0.5 ||
+      std::abs(item.lowerFrequencyHz() - (zoomed_lower + kShiftHz)) > 0.5) {
+    return 58;
+  }
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  if (const int zoom_failure = testZoomSurvivesFrames();
+      zoom_failure != 0) {
+    return zoom_failure;
+  }
   if (!testLocalCharacterFrontendBank()) return 21;
   cwassistant::desktop::ReplayController frequency_mapping;
   frequency_mapping.setSourceMode(0);

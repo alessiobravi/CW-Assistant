@@ -8,6 +8,14 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Zoom on the wide SDR display was discarded by the next spectrum frame. The
+  view was rebuilt from the frame bounds unless the zoom was being carried
+  across a retune, but carrying it is by definition a response to the source
+  bounds moving, so the condition was false for every ordinary frame and the
+  view snapped back to full span as soon as one arrived. Only a source change
+  may move the view now, and a regression test zooms, feeds further frames on
+  unchanged bounds, and requires the span to survive them.
+
 - The wide SDR spectrum and waterfall showed noise rather than signals. The
   overview produces 16384 frequency bins and the display is around 1500 pixels
   wide, and every bin was being drawn: the trace connected all of them, so each

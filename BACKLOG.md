@@ -6,7 +6,22 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-fourth entry) -- the wide SDR display was
+Last reviewed: 2026-09-10 (thirty-fifth entry) -- zoom on the wide SDR display
+was released broken and is fixed. Preserving a zoom across a retune was gated on
+the receiver's bounds having moved, and the same condition was then used to
+decide whether to rebuild the view at all, so every ordinary frame took the
+rebuild path and reset the span. The display could be zoomed but not kept there.
+Only a source change may move the view now.
+
+The gap that let this ship is the more useful finding: `SpectrumWaterfallItem`
+had no behavioural coverage at all. The one test naming zoom asserts that a
+string appears in `Main.qml`, which a broken implementation satisfies. The item
+is now exercised directly in the offscreen desktop render test -- accept a
+frame, zoom, accept further frames on unchanged bounds, require the span to
+survive, then retune and require it to be carried. Verified to fail on the
+released code with a distinct exit status and pass on the fix.
+
+Previous review: 2026-09-10 (thirty-fourth entry) -- the wide SDR display was
 showing the measurement rather than the signal. All 16384 overview bins were
 being drawn into around 1500 pixels with no reduction, so the trace rendered
 each column as the full spread of its bins and the waterfall texture was built

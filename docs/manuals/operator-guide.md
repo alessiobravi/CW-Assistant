@@ -382,8 +382,10 @@ the decoder is not, so when the decode window is off screen a chevron appears at
 the edge of the plot pointing towards it and naming its centre frequency. Click
 it to bring the window back into view without changing your zoom.
 
-Retuning keeps your zoom. Moving the tuned frequency re-centres the display at
-the span you chose rather than returning to full span.
+Your zoom persists until you change it. Incoming spectrum frames redraw inside
+the span you chose and never widen it back out on their own. Retuning keeps it
+too: moving the tuned frequency re-centres the display at that same span
+rather than returning to full span.
 
 ### Recording receiver IQ for later analysis
 
