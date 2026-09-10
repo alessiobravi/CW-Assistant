@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <span>
@@ -12,6 +13,33 @@
 #include "cwassistant/core/sample_block.hpp"
 
 namespace cwassistant::core {
+
+inline constexpr std::array<std::uint32_t, 8> kSupportedSerialBaudRates{
+    1'200, 2'400, 4'800, 9'600, 19'200, 38'400, 57'600, 115'200};
+
+[[nodiscard]] constexpr bool is_supported_serial_baud_rate(
+    const std::uint32_t value) noexcept {
+  for (const auto baud_rate : kSupportedSerialBaudRates) {
+    if (baud_rate == value) return true;
+  }
+  return false;
+}
+
+[[nodiscard]] constexpr std::uint32_t nearest_supported_serial_baud_rate(
+    const std::uint32_t value) noexcept {
+  auto selected = kSupportedSerialBaudRates.front();
+  auto selected_distance =
+      value > selected ? value - selected : selected - value;
+  for (const auto baud_rate : kSupportedSerialBaudRates) {
+    const auto distance =
+        value > baud_rate ? value - baud_rate : baud_rate - value;
+    if (distance < selected_distance) {
+      selected = baud_rate;
+      selected_distance = distance;
+    }
+  }
+  return selected;
+}
 
 struct DeviceInfo {
   std::string id;
@@ -49,7 +77,8 @@ class INetworkReceiverDirectory {
  public:
   virtual ~INetworkReceiverDirectory() = default;
   [[nodiscard]] virtual std::string_view name() const noexcept = 0;
-  [[nodiscard]] virtual std::vector<NetworkReceiverInfo> cached_entries() const = 0;
+  [[nodiscard]] virtual std::vector<NetworkReceiverInfo> cached_entries()
+      const = 0;
   // Refresh is a user/control-plane operation and must implement provider
   // caching, rate limits, and terms of use.
   virtual bool refresh() = 0;

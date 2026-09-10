@@ -402,6 +402,15 @@ transport encryption, CW Buddy accepts only loopback endpoints; remote access
 must terminate an authenticated encrypted tunnel locally. The adapter exposes
 no PTT or KEY operation.
 
+Provider configuration follows the same capability boundary as runtime radio
+control. OmniRig projects only slot selection and a native-configuration action;
+rigctld projects only its loopback endpoint, VFO mapping and write permission;
+CAT4OM projects only its service identity and connection controls. The desktop
+does not duplicate physical serial settings owned by those integrations. The
+retained direct-serial schema validates a conventional discrete baud set plus
+bounded data bits, parity, stop bits and flow control, but those controls remain
+hidden until an in-process direct-CAT provider consumes them.
+
 The operating panel expresses tuning requests in displayed actual RX RF. A
 dependency-free checked inverse removes the configured RX transverter offset
 before any provider sees a dial frequency. The UI calls one provider-neutral

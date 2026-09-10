@@ -43,6 +43,16 @@ target_compile_definitions(cwa_action_tooltip_qml_test PRIVATE
 add_test(NAME cwa_action_tooltip_qml_test
   COMMAND cwa_action_tooltip_qml_test)
 
+add_executable(cwa_radio_provider_settings_qml_test
+  desktop/radio_provider_settings_qml_test.cpp)
+target_compile_definitions(cwa_radio_provider_settings_qml_test PRIVATE
+  CWA_SETTINGS_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SettingsPane.qml"
+  CWA_SETUP_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SetupWizard.qml"
+  CWA_APP_SETTINGS_HPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.hpp"
+  CWA_APP_SETTINGS_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.cpp")
+add_test(NAME cwa_radio_provider_settings_qml_test
+  COMMAND cwa_radio_provider_settings_qml_test)
+
 add_executable(cwa_sdr_settings_qml_test
   desktop/sdr_settings_qml_test.cpp)
 target_compile_definitions(cwa_sdr_settings_qml_test PRIVATE

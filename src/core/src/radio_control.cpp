@@ -23,8 +23,8 @@ bool mode_state_is_valid(const RadioModeState& state) noexcept {
 }
 
 bool vfo_state_is_valid(const RadioVfoState& state) noexcept {
-  return observation_is_valid(
-      state.observation, radio_vfo_identifier_is_valid(state.identifier));
+  return observation_is_valid(state.observation,
+                              radio_vfo_identifier_is_valid(state.identifier));
 }
 
 bool split_state_is_valid(const RadioSplitState& state) noexcept {
@@ -92,18 +92,16 @@ RadioMode radio_mode_from_token(const std::string_view token) noexcept {
                  });
   if (normalized == "CW" || normalized == "CWU" || normalized == "CW-U")
     return RadioMode::Cw;
-  if (normalized == "CWR" || normalized == "CWL" ||
-      normalized == "CW-R" || normalized == "CW-L")
+  if (normalized == "CWR" || normalized == "CWL" || normalized == "CW-R" ||
+      normalized == "CW-L")
     return RadioMode::CwReverse;
   if (normalized == "LSB") return RadioMode::LowerSideband;
   if (normalized == "USB") return RadioMode::UpperSideband;
   if (normalized == "AM") return RadioMode::Am;
   if (normalized == "FM") return RadioMode::Fm;
-  if (normalized == "DIGL" || normalized == "DIG-L" ||
-      normalized == "PKTLSB")
+  if (normalized == "DIGL" || normalized == "DIG-L" || normalized == "PKTLSB")
     return RadioMode::DigitalLower;
-  if (normalized == "DIGU" || normalized == "DIG-U" ||
-      normalized == "PKTUSB")
+  if (normalized == "DIGU" || normalized == "DIG-U" || normalized == "PKTUSB")
     return RadioMode::DigitalUpper;
   if (normalized == "RTTY") return RadioMode::Rtty;
   if (normalized == "RTTYR" || normalized == "RTTY-R")
@@ -132,8 +130,8 @@ bool radio_tx_mode_target_is_valid(const RadioMode mode) noexcept {
   return mode == RadioMode::Cw || mode == RadioMode::CwReverse;
 }
 
-bool radio_mode_target_is_confirmed(
-    const RadioModeState& observation, const RadioMode target) noexcept {
+bool radio_mode_target_is_confirmed(const RadioModeState& observation,
+                                    const RadioMode target) noexcept {
   return radio_tx_mode_target_is_valid(target) &&
          observation.observation == RadioObservation::Known &&
          observation.mode == target;
@@ -151,13 +149,25 @@ bool radio_tx_frequency_sync_is_available(const RadioState& state) noexcept {
          radio_has_capability(state.capabilities, RadioCapability::SetSplit);
 }
 
+bool radio_pointed_tx_frequency_is_available(const RadioState& state) noexcept {
+  if (!radio_state_is_valid(state) ||
+      state.availability != RadioObservation::Known ||
+      !radio_has_capability(state.capabilities,
+                            RadioCapability::SetTxFrequency)) {
+    return false;
+  }
+  return state.split.split == RadioSplit::Enabled ||
+         radio_has_capability(state.capabilities, RadioCapability::SetSplit);
+}
+
 bool radio_vfo_identifier_is_valid(const std::string& identifier) noexcept {
   return !identifier.empty() &&
          identifier.size() <= kMaximumRadioVfoIdentifierLength &&
-         std::all_of(identifier.begin(), identifier.end(), [](const char value) {
-           const auto character = static_cast<unsigned char>(value);
-           return character >= 0x21U && character <= 0x7EU;
-         });
+         std::all_of(identifier.begin(), identifier.end(),
+                     [](const char value) {
+                       const auto character = static_cast<unsigned char>(value);
+                       return character >= 0x21U && character <= 0x7EU;
+                     });
 }
 
 bool radio_state_is_valid(const RadioState& state) noexcept {
@@ -170,8 +180,7 @@ bool radio_state_is_valid(const RadioState& state) noexcept {
       !frequency_state_is_valid(state.tx_frequency) ||
       !mode_state_is_valid(state.rx_mode) ||
       !mode_state_is_valid(state.tx_mode) ||
-      !vfo_state_is_valid(state.rx_vfo) ||
-      !vfo_state_is_valid(state.tx_vfo) ||
+      !vfo_state_is_valid(state.rx_vfo) || !vfo_state_is_valid(state.tx_vfo) ||
       !split_state_is_valid(state.split)) {
     return false;
   }

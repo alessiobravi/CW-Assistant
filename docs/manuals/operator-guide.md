@@ -77,13 +77,17 @@ not create a second frequency marker or infer a sender from frequency alone.
    waterfall frames now come from that device.
 5. Select **Stop live RX** before changing cables or audio routing.
 
-Hover over the spectrum or waterfall to see its pointer legend: left-click
+Hover over the spectrum or waterfall to see its brief pointer legend: left-click
 opens the decoder card for an already detected stream without changing audio
 monitoring, while right-click starts a neutral manual probe at that audio
 frequency. When the linked provider supports TX-frequency and split writes,
 Ctrl+left-click requests the pointed RF on VFO B/TX and enables split if
 needed. The TX guide moves only after provider readback confirms the change;
-the gesture never arms or starts transmission. Action buttons
+the gesture never arms or starts transmission. Each pointer gesture is
+exclusive, so combining modifiers cannot also open or probe a stream. The
+legend hides after ten seconds and is offered no more than once every five
+minutes. Disable **Show brief spectrum gesture hints** under Settings → Display
+to suppress that overlay while retaining ordinary button tooltips. Action buttons
 throughout the receiver, settings, setup, and profile views explain their
 effect and any disabled state when hovered.
 
@@ -169,15 +173,19 @@ device.
    passband. A translucent region shows which part is currently eligible for
    CW detection and decoding.
 6. Place the pointer over the SDR spectrum or waterfall and use the wheel to
-   zoom around it. Middle-button drag pans the visible view. Double-click or
-   select **Full span** to return to the complete acquired passband. Right-click
+   zoom around it. Middle-button drag pans the visible view. Select **Full
+   span** to return to the complete acquired passband. Right-click
    moves the decoder window to that RF and starts a normal manual probe; a
    qualified probe promotes through the same verification path as an
-   automatically found stream.
+   automatically found stream. Shift+left-drag draws and applies the decoder
+   span directly; a short Shift+click recentres the current span. The selected
+   width is rounded to 1 kHz and bounded to 6–96 kHz.
 7. Global **RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
    are not loudspeaker audio. Open a decoder card and enable its speaker to hear
    that carrier through the narrow, carrier-following CW filter. Several card
-   speakers may still be mixed.
+   speakers may still be mixed. Selected-stream audio is re-pitched to the
+   configured CW reference tone and level-normalized after filtering; the
+   toolbar level remains the final listening-volume control.
 
 Radio Control remains available while Live SDR is selected. The SDR can own the
 RX path while a separately configured CAT radio supplies authoritative VFO
@@ -817,8 +825,10 @@ replaces its validated local data cache.
    installed OmniRig service; it does not send probe commands to arbitrary COM
    ports.
 5. If the radio cannot be identified, select **Set up a radio manually**, choose
-   the nearest reference template, then edit every value to match the radio and
-   cable.
+   the nearest reference template, then choose the frequency provider. Configure
+   the physical COM/framing values in OmniRig, `rigctld`, or CAT4OM itself; the
+   wizard shows only the slot, endpoint, VFO, identity, and permission fields
+   that CW Buddy actually consumes.
 6. On **Audio**, select the sound-card input carrying receiver audio. **System
    default input** follows the operating-system default when devices change.
    This step is always present for radio and SWL profiles. For a controlled

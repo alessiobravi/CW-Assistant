@@ -38,10 +38,11 @@ int main() {
   const std::size_t start = qml.find("id: transcriptScroll");
   // Delimited by the metrics label's stable object name rather than by the
   // text expression inside it, which changes whenever the line is reworded.
-  const std::size_t end = qml.find("objectName: \"decoderMetricsLabel\"", start);
+  const std::size_t end =
+      qml.find("objectName: \"decoderMetricsLabel\"", start);
   const std::size_t session_card_start = qml.find("id: sessionCard");
-  const std::size_t local_panel_start = qml.find(
-      "id: localModelTranscriptPanel", start);
+  const std::size_t local_panel_start =
+      qml.find("id: localModelTranscriptPanel", start);
   if (start == std::string::npos || end == std::string::npos ||
       session_card_start == std::string::npos ||
       local_panel_start == std::string::npos || session_card_start >= start ||
@@ -49,14 +50,14 @@ int main() {
     return 2;
   }
   const std::string transcript = qml.substr(start, end - start);
-  const std::string session_header = qml.substr(
-      session_card_start, start - session_card_start);
-  const std::string local_panel = qml.substr(
-      local_panel_start, end - local_panel_start);
-  const std::size_t callsign_start = qml.find(
-      "property string callsignEvidenceText:");
-  const std::size_t callsign_end = qml.find(
-      "property string ownCallEvidenceText:", callsign_start);
+  const std::string session_header =
+      qml.substr(session_card_start, start - session_card_start);
+  const std::string local_panel =
+      qml.substr(local_panel_start, end - local_panel_start);
+  const std::size_t callsign_start =
+      qml.find("property string callsignEvidenceText:");
+  const std::size_t callsign_end =
+      qml.find("property string ownCallEvidenceText:", callsign_start);
 
   // An append must not rebuild the text document. Reassigning the whole
   // string discards the layout and resets the viewport, so the card showed a
@@ -105,8 +106,7 @@ int main() {
       !contains(qml, "id: localModelTranscriptScroll") ||
       !contains(qml, "property string localModelStableText:") ||
       !contains(qml, "property string ownCallEvidenceText:") ||
-      !contains(qml,
-                "callsignEvidenceText + \" \" + localModelStableText") ||
+      !contains(qml, "callsignEvidenceText + \" \" + localModelStableText") ||
       !contains(qml, "property string localModelCallsign:") ||
       !contains(qml, "text: \"MODEL\"") ||
       !contains(qml, "objectName: \"advisoryCallsignSuggestionBadge\"") ||
@@ -163,8 +163,7 @@ int main() {
   if (!contains(qml, "objectName: \"callsignDatabaseBadge\"") ||
       !contains(qml, "modelData.callsignInDatabase") ||
       !contains(qml, "modelData.callsignDatabaseLoaded") ||
-      !contains(qml, "\\u2713 LISTED") ||
-      !contains(qml, "\"DECODED\"")) {
+      !contains(qml, "\\u2713 LISTED") || !contains(qml, "\"DECODED\"")) {
     return 12;
   }
 
@@ -207,22 +206,21 @@ int main() {
     return 4;
   }
 
-  const std::size_t action_row_start = qml.find(
-      "objectName: \"decoderSessionActionRow\"");
-  const std::size_t action_row_end = qml.find(
-      "id: txDrawer", action_row_start);
+  const std::size_t action_row_start =
+      qml.find("objectName: \"decoderSessionActionRow\"");
+  const std::size_t action_row_end = qml.find("id: txDrawer", action_row_start);
   if (action_row_start == std::string::npos ||
       action_row_end == std::string::npos) {
     return 18;
   }
-  const std::string action_row = qml.substr(
-      action_row_start, action_row_end - action_row_start);
-  const std::size_t tx_action = action_row.find(
-      "objectName: \"decoderSessionTxButton\"");
-  const std::size_t monitor_action = action_row.find(
-      "objectName: \"decoderSessionMonitorButton\"");
-  const std::size_t action_spacer = action_row.find(
-      "Item { Layout.fillWidth: true }");
+  const std::string action_row =
+      qml.substr(action_row_start, action_row_end - action_row_start);
+  const std::size_t tx_action =
+      action_row.find("objectName: \"decoderSessionTxButton\"");
+  const std::size_t monitor_action =
+      action_row.find("objectName: \"decoderSessionMonitorButton\"");
+  const std::size_t action_spacer =
+      action_row.find("Item { Layout.fillWidth: true }");
   if (tx_action == std::string::npos || monitor_action == std::string::npos ||
       action_spacer == std::string::npos || tx_action >= action_spacer ||
       action_spacer >= monitor_action ||
@@ -241,39 +239,61 @@ int main() {
   const std::size_t marker_end = qml.find("ToolTip.text:", marker_start);
   if (manual_start == std::string::npos ||
       tune_down_start == std::string::npos ||
-      tune_up_start == std::string::npos ||
-      marker_start == std::string::npos ||
+      tune_up_start == std::string::npos || marker_start == std::string::npos ||
       marker_end == std::string::npos || manual_start >= tune_down_start ||
       tune_down_start >= tune_up_start || tune_up_start >= marker_start) {
     return 5;
   }
-  const std::string manual = qml.substr(manual_start,
-                                        marker_start - manual_start);
-  const std::string marker = qml.substr(marker_start,
-                                        marker_end - marker_start);
-  const std::string tune_down = qml.substr(
-      tune_down_start, tune_up_start - tune_down_start);
-  const std::string tune_up = qml.substr(tune_up_start,
-                                         marker_start - tune_up_start);
+  const std::string manual =
+      qml.substr(manual_start, marker_start - manual_start);
+  const std::string marker =
+      qml.substr(marker_start, marker_end - marker_start);
+  const std::string tune_down =
+      qml.substr(tune_down_start, tune_up_start - tune_down_start);
+  const std::string tune_up =
+      qml.substr(tune_up_start, marker_start - tune_up_start);
   if (!contains(manual, "objectName: \"manualSliceHitArea\"") ||
       !contains(manual, "z: 6") ||
       !contains(manual, "enabled: replayController.activeSource") ||
       !contains(manual, "acceptedButtons: Qt.LeftButton | Qt.RightButton") ||
       !contains(manual, "function streamIdAtX(positionX)") ||
       !contains(manual, "replayController.openDecoderSession(streamId)") ||
-      !contains(manual, "mouse.modifiers & Qt.ControlModifier") ||
-      !contains(manual, "appSettings.radioTxFrequencySyncAvailable") ||
+      !contains(manual, "function hasExactModifiers(mouse, required)") ||
+      !contains(manual,
+                "hasExactModifiers(mouse,\n                            "
+                "                         "
+                "Qt.ControlModifier)") ||
+      !contains(manual,
+                "hasExactModifiers(mouse,\n                            "
+                "                         "
+                "Qt.ShiftModifier)") ||
+      !contains(manual,
+                "hasExactModifiers(mouse,\n                            "
+                "                         "
+                "Qt.NoModifier)") ||
+      !contains(manual, "decoderSelectionActive") ||
+      !contains(manual, "appSettings.setSdrDecoderWindow(selectedCenterHz,") ||
+      !contains(manual, "replayController.openManualDecoderSession(") ||
+      !contains(manual, "objectName: \"sdrDecoderDragSelection\"") ||
+      !contains(manual, "appSettings.radioPointedTxFrequencyAvailable") ||
       !contains(manual, "replayController.displayFrequencyToRfHz(") ||
       !contains(manual, "appSettings.setControlledTxFrequencyHz(txRfHz)") ||
       !contains(manual, "mouse.button === Qt.LeftButton") ||
       !contains(manual, "onClicked: function(mouse)") ||
+      contains(manual, "onDoubleClicked:") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
-      !contains(manual, "replayController.openManualDecoderSession(frequencyHz)") ||
+      !contains(manual,
+                "replayController.openManualDecoderSession(frequencyHz)") ||
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
-      !contains(manual, "LEFT: open decoder") ||
-      !contains(manual, "RIGHT: manual probe") ||
-      !contains(manual, "CTRL+LEFT: set TX VFO") ||
+      !contains(manual, "appSettings.showSpectrumGestureHints") ||
+      !contains(manual, "id: pointerHintLifetime") ||
+      !contains(manual, "interval: 10000") ||
+      !contains(manual, "id: pointerHintCooldown") ||
+      !contains(manual, "interval: 300000") ||
+      !contains(manual, "LEFT: open") || !contains(manual, "RIGHT: probe") ||
+      !contains(manual, "SHIFT+DRAG: decoder span") ||
+      !contains(manual, "CTRL+LEFT: TX") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
       !contains(tune_down, "appSettings.radioFrequencyWritable") ||
       !contains(tune_down, "z: 8") ||
@@ -284,37 +304,36 @@ int main() {
       !contains(tune_up, "z: 8") ||
       !contains(tune_up, "appSettings.stepControlledRxFrequency(1)") ||
       !contains(tune_up, "Accessible.name: \"Tune RX up\"") ||
-      !contains(marker, "z: 5") ||
-      contains(marker, "id: channelHitArea") ||
+      !contains(marker, "z: 5") || contains(marker, "id: channelHitArea") ||
       !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
     return 6;
   }
   const std::size_t toolbar_start = qml.find("id: receiverToolbar");
   const std::size_t spectrum_start = qml.find("id: spectrumPanel");
-  const std::size_t display_start = qml.find("id: spectrumDisplay",
-                                              spectrum_start);
+  const std::size_t display_start =
+      qml.find("id: spectrumDisplay", spectrum_start);
   if (toolbar_start == std::string::npos ||
       spectrum_start == std::string::npos ||
-      display_start == std::string::npos ||
-      toolbar_start >= spectrum_start || spectrum_start >= display_start) {
+      display_start == std::string::npos || toolbar_start >= spectrum_start ||
+      spectrum_start >= display_start) {
     return 7;
   }
-  const std::string toolbar = qml.substr(toolbar_start,
-                                         spectrum_start - toolbar_start);
-  const std::string spectrum_panel = qml.substr(
-      spectrum_start, display_start - spectrum_start);
+  const std::string toolbar =
+      qml.substr(toolbar_start, spectrum_start - toolbar_start);
+  const std::string spectrum_panel =
+      qml.substr(spectrum_start, display_start - spectrum_start);
   const std::size_t vfo_editor_start = qml.find("id: vfoRxEditor");
-  const std::size_t on_air_start =
-      qml.find("objectName: \"onAirIndicator\"");
+  const std::size_t on_air_start = qml.find("objectName: \"onAirIndicator\"");
   const std::size_t tune_start =
       qml.find("objectName: \"radioTuneButton\"", on_air_start);
   const std::size_t rx_mode_start =
       qml.find("objectName: \"vfoRxModeBadge\"", vfo_editor_start);
-  const std::size_t tx_editor_start = qml.find("id: vfoTxEditor", rx_mode_start);
+  const std::size_t tx_editor_start =
+      qml.find("id: vfoTxEditor", rx_mode_start);
   const std::size_t tx_mode_start =
       qml.find("objectName: \"vfoTxModeBadge\"", tx_editor_start);
-  const std::size_t vfo_badge_start = qml.find("objectName: \"vfoSplitBadge\"",
-                                               tx_mode_start);
+  const std::size_t vfo_badge_start =
+      qml.find("objectName: \"vfoSplitBadge\"", tx_mode_start);
   const std::size_t sync_start =
       qml.find("objectName: \"vfoFrequencySyncButton\"", vfo_badge_start);
   const std::size_t radio_heading_start = qml.find("text: \"Radio Control\"");
@@ -330,21 +349,20 @@ int main() {
       tx_mode_start == std::string::npos || tune_start == std::string::npos ||
       radio_heading_start == std::string::npos ||
       decoder_heading_start == std::string::npos ||
-      diagnostics_start == std::string::npos ||
-      on_air_start >= tune_start || tune_start >= vfo_editor_start ||
-      rx_mode_start >= tx_editor_start || tx_editor_start >= tx_mode_start ||
-      tx_mode_start >= vfo_badge_start || vfo_badge_start >= sync_start ||
+      diagnostics_start == std::string::npos || on_air_start >= tune_start ||
+      tune_start >= vfo_editor_start || rx_mode_start >= tx_editor_start ||
+      tx_editor_start >= tx_mode_start || tx_mode_start >= vfo_badge_start ||
+      vfo_badge_start >= sync_start ||
       radio_heading_start >= vfo_editor_start ||
       sync_start >= decoder_heading_start ||
       decoder_heading_start >= diagnostics_start) {
     return 8;
   }
-  const std::string vfo_editor = qml.substr(
-      vfo_editor_start, tx_editor_start - vfo_editor_start);
+  const std::string vfo_editor =
+      qml.substr(vfo_editor_start, tx_editor_start - vfo_editor_start);
   if (!contains(toolbar, "z: 20") ||
       !contains(toolbar, "objectName: \"startLiveAudioButton\"") ||
-      !contains(toolbar, "z: 21") ||
-      !contains(spectrum_panel, "clip: true") ||
+      !contains(toolbar, "z: 21") || !contains(spectrum_panel, "clip: true") ||
       !contains(spectrum_panel, "z: 0") ||
       !contains(qml, "objectName: \"emptyStateStartButton\"") ||
       !contains(vfo_editor, "objectName: \"vfoRxEditor\"") ||
@@ -401,8 +419,7 @@ int main() {
       !contains(qml, "objectName: \"vfoFrequencySyncButton\"") ||
       !contains(qml, "property int controlButtonSize: 52") ||
       !contains(qml, "anchors.rightMargin: vfoDisplay.controlButtonSize + 5") ||
-      !contains(qml, "text: \"A=B\"") ||
-      !contains(qml, "width: 28") ||
+      !contains(qml, "text: \"A=B\"") || !contains(qml, "width: 28") ||
       !contains(qml, "Layout.minimumWidth: 150") ||
       !contains(qml, "fontSizeMode: Text.Fit") ||
       !contains(qml, "elide: Text.ElideNone") ||
@@ -449,8 +466,7 @@ int main() {
   if (!contains(settings_qml, "TabButton { text: \"Decoder\" }") ||
       !contains(settings_qml,
                 "objectName: \"keyingModelAdaptiveThresholdRadio\"") ||
-      !contains(settings_qml,
-                "objectName: \"keyingModelSemiMarkovRadio\"") ||
+      !contains(settings_qml, "objectName: \"keyingModelSemiMarkovRadio\"") ||
       // Stored by name, so the preference survives another technique being
       // added to the list or the list being reordered.
       !contains(settings_qml,
@@ -461,8 +477,7 @@ int main() {
       !contains(settings_qml, "objectName: \"operatorRoleRunnerRadio\"") ||
       !contains(settings_qml,
                 "appSettings.operatorRole = \"search-and-pounce\"") ||
-      !contains(settings_qml,
-                "objectName: \"settingsDebugCaptureButton\"") ||
+      !contains(settings_qml, "objectName: \"settingsDebugCaptureButton\"") ||
       !contains(settings_qml,
                 "objectName: \"settingsDebugCaptureFolderButton\"") ||
       !contains(settings_qml, "replayController.openDebugCaptureFolder()") ||
@@ -473,19 +488,27 @@ int main() {
       !contains(settings_qml, "objectName: \"localDecoderEnabledCheck\"") ||
       !contains(settings_qml, "appSettings.localDecoderBackendAvailable") ||
       !contains(settings_qml, "objectName: \"localDecoderModelDialog\"") ||
-      !contains(settings_qml, "appSettings.selectLocalDecoderModel(selectedFile)") ||
+      !contains(settings_qml,
+                "appSettings.selectLocalDecoderModel(selectedFile)") ||
       !contains(settings_qml, "objectName: \"localDecoderMetadataDialog\"") ||
-      !contains(settings_qml, "appSettings.selectLocalDecoderMetadata(selectedFile)") ||
+      !contains(settings_qml,
+                "appSettings.selectLocalDecoderMetadata(selectedFile)") ||
       !contains(settings_qml, "objectName: \"localDecoderStatusLabel\"") ||
       !contains(settings_qml, "appSettings.localDecoderStatus") ||
-      !contains(settings_qml, "objectName: \"localCallsignDatabaseEnabledCheck\"") ||
-      !contains(settings_qml, "objectName: \"localCallsignDatabasePathField\"") ||
-      !contains(settings_qml, "objectName: \"reloadLocalCallsignDatabaseButton\"") ||
+      !contains(settings_qml,
+                "objectName: \"localCallsignDatabaseEnabledCheck\"") ||
+      !contains(settings_qml,
+                "objectName: \"localCallsignDatabasePathField\"") ||
+      !contains(settings_qml,
+                "objectName: \"reloadLocalCallsignDatabaseButton\"") ||
       !contains(settings_qml, "appSettings.reloadLocalCallsignDatabase()") ||
-      !contains(settings_qml, "objectName: \"localCallsignDatabaseStatusLabel\"") ||
-      !contains(settings_qml, "replayController.offlineCallsignDatabaseStatus") ||
+      !contains(settings_qml,
+                "objectName: \"localCallsignDatabaseStatusLabel\"") ||
+      !contains(settings_qml,
+                "replayController.offlineCallsignDatabaseStatus") ||
       !contains(settings_qml, "objectName: \"localCallsignDatabaseDialog\"") ||
-      !contains(settings_qml, "appSettings.selectLocalCallsignDatabase(selectedFile)") ||
+      !contains(settings_qml,
+                "appSettings.selectLocalCallsignDatabase(selectedFile)") ||
       !contains(settings_qml,
                 "objectName: \"managedCallsignDatabaseEnabledCheck\"") ||
       !contains(settings_qml,
@@ -494,12 +517,9 @@ int main() {
                 "objectName: \"managedCallsignDatabaseUpdateButton\"") ||
       !contains(settings_qml,
                 "objectName: \"managedCallsignDatabaseStatusLabel\"") ||
-      !contains(settings_qml,
-                "callsignDatabaseUpdater.checkForUpdates()") ||
-      !contains(settings_qml,
-                "callsignDatabaseUpdater.updateDatabase()") ||
-      !contains(settings_qml,
-                "never confirm a stream, replace decoded text") ||
+      !contains(settings_qml, "callsignDatabaseUpdater.checkForUpdates()") ||
+      !contains(settings_qml, "callsignDatabaseUpdater.updateDatabase()") ||
+      !contains(settings_qml, "never confirm a stream, replace decoded text") ||
       !contains(settings_qml, "replayController.localCharacterStatus") ||
       !contains(settings_qml, "replayController.localCharacterState") ||
       !contains(settings_qml, "objectName: \"radioTuningStepSlider\"") ||
@@ -520,26 +540,20 @@ int main() {
 
   std::ifstream main_source(CWA_DESKTOP_MAIN_CPP_PATH, std::ios::binary);
   if (!main_source) return 12;
-  std::string main_cpp{
-      std::istreambuf_iterator<char>{main_source},
-      std::istreambuf_iterator<char>{}};
+  std::string main_cpp{std::istreambuf_iterator<char>{main_source},
+                       std::istreambuf_iterator<char>{}};
   normalizeLineEndings(main_cpp);
   std::string crlf_probe{"guard\r\ncheck\r\n"};
   normalizeLineEndings(crlf_probe);
   if (crlf_probe != "guard\ncheck\n") return 14;
-  if (!contains(main_cpp,
-                "QStringLiteral(\"callsignDatabaseUpdater\")") ||
-      !contains(main_cpp,
-                "CallsignDatabaseUpdater::databaseInstalled") ||
-      !contains(main_cpp,
-                "callsign_database_updater.installedFilePath()") ||
-      !contains(main_cpp,
-                "smoke_test = parser.isSet(smoke_test_option)") ||
+  if (!contains(main_cpp, "QStringLiteral(\"callsignDatabaseUpdater\")") ||
+      !contains(main_cpp, "CallsignDatabaseUpdater::databaseInstalled") ||
+      !contains(main_cpp, "callsign_database_updater.installedFilePath()") ||
+      !contains(main_cpp, "smoke_test = parser.isSet(smoke_test_option)") ||
       !contains(main_cpp,
                 "!parser.isSet(smoke_test_option) &&\n"
                 "      callsign_database_updater.managedEnabled()") ||
-      !contains(main_cpp,
-                "callsign_database_updater.checkAndInstallIfDue()") ||
+      !contains(main_cpp, "callsign_database_updater.checkAndInstallIfDue()") ||
       !contains(main_cpp, "transmit_controller.configureHardware(") ||
       !contains(main_cpp, "settings.directKeyingValidated()") ||
       !contains(main_cpp, "transmit_controller.configureRadioSafety(")) {
@@ -561,12 +575,14 @@ int main() {
       !contains(app_settings_cpp,
                 "hamlib_client_->setTxFrequency(dial_frequency_hz)") ||
       !contains(app_settings_cpp, "hamlib_client_->setSplit(enabled)") ||
-      !contains(app_settings_cpp, "probe.run(configuration, radio_disconnected_confirmed)") ||
+      !contains(app_settings_cpp,
+                "probe.run(configuration, radio_disconnected_confirmed)") ||
       !contains(app_settings_cpp,
                 "directKeyingConfigurationSha256(configuration)") ||
       !contains(app_settings_cpp, "acceptanceConfigurationSha256") ||
-      contains(app_settings_cpp,
-               ".value(storageKey(QStringLiteral(\"keying/directValidated\"))")) {
+      contains(
+          app_settings_cpp,
+          ".value(storageKey(QStringLiteral(\"keying/directValidated\"))")) {
     return 20;
   }
   return 0;

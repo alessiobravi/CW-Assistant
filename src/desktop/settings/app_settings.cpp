@@ -1,13 +1,13 @@
 #include "app_settings.hpp"
 
-#include <QSettings>
-#include <QSerialPortInfo>
 #include <QAudioDevice>
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QMediaDevices>
 #include <QRegularExpression>
+#include <QSerialPortInfo>
+#include <QSettings>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -16,17 +16,17 @@
 #include <utility>
 
 #ifdef Q_OS_WIN
-#include <Windows.h>
 #include <OleAuto.h>
+#include <Windows.h>
 #endif
 
-#include "cwassistant/core/reference_rig_profiles.hpp"
-#include "cwassistant/core/callsign_policy.hpp"
-#include "cwassistant/core/frequency_plan.hpp"
 #include "../radio/cat4om_client.hpp"
 #include "../radio/hamlib_rigctld_client.hpp"
 #include "../sdr/sdr_receiver.hpp"
 #include "../transmit/direct_keying_acceptance_probe.hpp"
+#include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/frequency_plan.hpp"
+#include "cwassistant/core/reference_rig_profiles.hpp"
 
 namespace cwassistant::desktop {
 namespace {
@@ -84,41 +84,38 @@ std::optional<std::uint64_t> automation_frequency(const VARIANT& value) {
   switch (value.vt) {
     case VT_I4:
     case VT_INT:
-      return value.lVal > 0
-          ? std::optional<std::uint64_t>(value.lVal) : std::nullopt;
+      return value.lVal > 0 ? std::optional<std::uint64_t>(value.lVal)
+                            : std::nullopt;
     case VT_UI4:
     case VT_UINT:
-      return value.ulVal > 0
-          ? std::optional<std::uint64_t>(value.ulVal) : std::nullopt;
+      return value.ulVal > 0 ? std::optional<std::uint64_t>(value.ulVal)
+                             : std::nullopt;
     case VT_I8:
-      return value.llVal > 0
-          ? std::optional<std::uint64_t>(value.llVal) : std::nullopt;
+      return value.llVal > 0 ? std::optional<std::uint64_t>(value.llVal)
+                             : std::nullopt;
     case VT_UI8:
-      return value.ullVal > 0
-          ? std::optional<std::uint64_t>(value.ullVal) : std::nullopt;
+      return value.ullVal > 0 ? std::optional<std::uint64_t>(value.ullVal)
+                              : std::nullopt;
     case VT_R8:
       return value.dblVal > 0.0 && std::isfinite(value.dblVal)
-          ? std::optional<std::uint64_t>(
-                static_cast<std::uint64_t>(std::llround(value.dblVal)))
-          : std::nullopt;
-    default:
-      return std::nullopt;
+                 ? std::optional<std::uint64_t>(
+                       static_cast<std::uint64_t>(std::llround(value.dblVal)))
+                 : std::nullopt;
+    default: return std::nullopt;
   }
 }
 
 std::optional<long> automation_integer(const VARIANT& value) {
   switch (value.vt) {
     case VT_I4:
-    case VT_INT:
-      return value.lVal;
+    case VT_INT: return value.lVal;
     case VT_UI4:
     case VT_UINT:
-      return value.ulVal <=
-                     static_cast<unsigned long>(std::numeric_limits<LONG>::max())
+      return value.ulVal <= static_cast<unsigned long>(
+                                std::numeric_limits<LONG>::max())
                  ? std::optional<long>(static_cast<long>(value.ulVal))
                  : std::nullopt;
-    default:
-      return std::nullopt;
+    default: return std::nullopt;
   }
 }
 
@@ -133,10 +130,10 @@ cwassistant::core::OmniRigRxFrequencyTarget omni_rig_rx_write_target(
       automation_property(rig, L"WriteableParams", &writable_value);
   const bool has_vfo = automation_property(rig, L"Vfo", &vfo_value);
   const bool has_tx = automation_property(rig, L"Tx", &tx_value);
-  const auto status = has_status ? automation_integer(status_value)
-                                 : std::nullopt;
-  const auto writable = has_writable ? automation_integer(writable_value)
-                                     : std::nullopt;
+  const auto status =
+      has_status ? automation_integer(status_value) : std::nullopt;
+  const auto writable =
+      has_writable ? automation_integer(writable_value) : std::nullopt;
   const auto vfo = has_vfo ? automation_integer(vfo_value) : std::nullopt;
   const auto tx = has_tx ? automation_integer(tx_value) : std::nullopt;
   if (has_status) VariantClear(&status_value);
@@ -227,12 +224,12 @@ std::optional<long> omni_rig_mode_value(
 
 const wchar_t* omni_rig_frequency_property(const long vfo,
                                            const bool tx) noexcept {
-  const bool uses_a = tx
-      ? vfo == kOmniRigVfoAa || vfo == kOmniRigVfoBa || vfo == kOmniRigVfoA
-      : vfo == kOmniRigVfoAa || vfo == kOmniRigVfoAb || vfo == kOmniRigVfoA;
-  const bool uses_b = tx
-      ? vfo == kOmniRigVfoAb || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB
-      : vfo == kOmniRigVfoBa || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB;
+  const bool uses_a =
+      tx ? vfo == kOmniRigVfoAa || vfo == kOmniRigVfoBa || vfo == kOmniRigVfoA
+         : vfo == kOmniRigVfoAa || vfo == kOmniRigVfoAb || vfo == kOmniRigVfoA;
+  const bool uses_b =
+      tx ? vfo == kOmniRigVfoAb || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB
+         : vfo == kOmniRigVfoBa || vfo == kOmniRigVfoBb || vfo == kOmniRigVfoB;
   return uses_a ? L"FreqA" : uses_b ? L"FreqB" : nullptr;
 }
 
@@ -272,7 +269,8 @@ AppSettings::AppSettings(QString profile_name, const bool profile_was_explicit,
   applyReferenceDefaults(0);
   load();
   refreshProfiles();
-  profile_selection_required_ = !profile_was_explicit && available_profiles_.size() > 1;
+  profile_selection_required_ =
+      !profile_was_explicit && available_profiles_.size() > 1;
   refreshSerialPorts();
   media_devices_ = std::make_unique<QMediaDevices>();
   connect(media_devices_.get(), &QMediaDevices::audioInputsChanged, this,
@@ -341,12 +339,20 @@ QStringList AppSettings::referenceRigNames() const {
   return names;
 }
 
-const QString& AppSettings::profileName() const noexcept { return profile_name_; }
-const QStringList& AppSettings::availableProfiles() const noexcept { return available_profiles_; }
-bool AppSettings::profileSelectionRequired() const noexcept { return profile_selection_required_; }
+const QString& AppSettings::profileName() const noexcept {
+  return profile_name_;
+}
+const QStringList& AppSettings::availableProfiles() const noexcept {
+  return available_profiles_;
+}
+bool AppSettings::profileSelectionRequired() const noexcept {
+  return profile_selection_required_;
+}
 bool AppSettings::setupComplete() const noexcept { return setup_complete_; }
 
-const QStringList& AppSettings::serialPorts() const noexcept { return serial_ports_; }
+const QStringList& AppSettings::serialPorts() const noexcept {
+  return serial_ports_;
+}
 
 const QStringList& AppSettings::audioInputNames() const noexcept {
   return audio_input_names_;
@@ -357,9 +363,8 @@ int AppSettings::audioInputIndex() const noexcept {
 }
 
 QString AppSettings::audioInputDisplayName() const {
-  return audio_input_id_.isEmpty()
-             ? QStringLiteral("System default input")
-             : audio_input_name_;
+  return audio_input_id_.isEmpty() ? QStringLiteral("System default input")
+                                   : audio_input_name_;
 }
 
 const QString& AppSettings::audioInputId() const noexcept {
@@ -369,14 +374,14 @@ const QStringList& AppSettings::audioOutputNames() const noexcept {
   return audio_output_names_;
 }
 int AppSettings::audioOutputIndex() const noexcept {
-  return static_cast<int>(std::max<qsizetype>(
-      0, audio_output_ids_.indexOf(audio_output_id_)));
+  return static_cast<int>(
+      std::max<qsizetype>(0, audio_output_ids_.indexOf(audio_output_id_)));
 }
 QString AppSettings::audioOutputDisplayName() const {
   const int index = audioOutputIndex();
   return index > 0 && index < audio_output_names_.size()
-      ? audio_output_names_.at(index)
-      : QStringLiteral("System default output");
+             ? audio_output_names_.at(index)
+             : QStringLiteral("System default output");
 }
 const QString& AppSettings::audioOutputId() const noexcept {
   return audio_output_id_;
@@ -409,9 +414,9 @@ const QString& AppSettings::sdrDeviceId() const noexcept {
 QString AppSettings::sdrDeviceDisplayName() const {
   const int index = sdrDeviceIndex();
   return index >= 0 && index < sdr_device_names_.size()
-      ? sdr_device_names_.at(index)
-      : (sdr_device_name_.isEmpty() ? QStringLiteral("No SDR selected")
-                                    : sdr_device_name_);
+             ? sdr_device_names_.at(index)
+             : (sdr_device_name_.isEmpty() ? QStringLiteral("No SDR selected")
+                                           : sdr_device_name_);
 }
 const QString& AppSettings::sdrDiagnostic() const noexcept {
   return sdr_diagnostic_;
@@ -463,14 +468,12 @@ double AppSettings::sdrMaximumGainDb() const noexcept {
 }
 QString AppSettings::sdrWidePassbandSummary() const {
   const double bandwidth_mhz = static_cast<double>(sdr_sample_rate_hz_) / 1e6;
-  const double lower_mhz =
-      (static_cast<double>(sdr_center_frequency_hz_) -
-       static_cast<double>(sdr_sample_rate_hz_) * 0.5) /
-      1e6;
-  const double upper_mhz =
-      (static_cast<double>(sdr_center_frequency_hz_) +
-       static_cast<double>(sdr_sample_rate_hz_) * 0.5) /
-      1e6;
+  const double lower_mhz = (static_cast<double>(sdr_center_frequency_hz_) -
+                            static_cast<double>(sdr_sample_rate_hz_) * 0.5) /
+                           1e6;
+  const double upper_mhz = (static_cast<double>(sdr_center_frequency_hz_) +
+                            static_cast<double>(sdr_sample_rate_hz_) * 0.5) /
+                           1e6;
   return QStringLiteral("%1 MHz visible passband (%2–%3 MHz RF)")
       .arg(bandwidth_mhz, 0, 'f', 3)
       .arg(lower_mhz, 0, 'f', 6)
@@ -523,7 +526,8 @@ QString AppSettings::radioDisplayName() const {
     return detected_radio_names_.at(detected_index);
   }
   const auto names = referenceRigNames();
-  return names.value(reference_rig_index_, QStringLiteral("Manually configured radio"));
+  return names.value(reference_rig_index_,
+                     QStringLiteral("Manually configured radio"));
 }
 
 const QStringList& AppSettings::detectedRadioNames() const noexcept {
@@ -534,8 +538,12 @@ int AppSettings::detectedRadioIndex() const noexcept {
   return detected_radio_slots_.indexOf(omnirig_slot_);
 }
 
-int AppSettings::referenceRigIndex() const noexcept { return reference_rig_index_; }
-int AppSettings::frequencyBackendIndex() const noexcept { return frequency_backend_index_; }
+int AppSettings::referenceRigIndex() const noexcept {
+  return reference_rig_index_;
+}
+int AppSettings::frequencyBackendIndex() const noexcept {
+  return frequency_backend_index_;
+}
 int AppSettings::radioTuningStepHz() const noexcept {
   return radio_tuning_step_hz_;
 }
@@ -553,6 +561,10 @@ bool AppSettings::radioTxFrequencyWritable() const noexcept {
 bool AppSettings::radioTxFrequencySyncAvailable() const noexcept {
   return controlledRxRfHz().has_value() &&
          cwassistant::core::radio_tx_frequency_sync_is_available(radio_state_);
+}
+bool AppSettings::radioPointedTxFrequencyAvailable() const noexcept {
+  return cwassistant::core::radio_pointed_tx_frequency_is_available(
+      radio_state_);
 }
 bool AppSettings::radioRxModeWritable() const noexcept {
   return cwassistant::core::radio_has_capability(
@@ -579,8 +591,7 @@ QString AppSettings::radioTxMode() const {
                              static_cast<qsizetype>(token.size()));
 }
 QString AppSettings::radioTxModeTarget() const {
-  const auto token =
-      cwassistant::core::radio_mode_token(radio_tx_mode_target_);
+  const auto token = cwassistant::core::radio_mode_token(radio_tx_mode_target_);
   return QString::fromLatin1(token.data(),
                              static_cast<qsizetype>(token.size()));
 }
@@ -591,14 +602,14 @@ bool AppSettings::radioTxModeConfirmed() const noexcept {
 QString AppSettings::radioRxVfo() const {
   return radio_state_.rx_vfo.observation ==
                  cwassistant::core::RadioObservation::Known
-      ? QString::fromStdString(radio_state_.rx_vfo.identifier)
-      : QStringLiteral("?");
+             ? QString::fromStdString(radio_state_.rx_vfo.identifier)
+             : QStringLiteral("?");
 }
 QString AppSettings::radioTxVfo() const {
   return radio_state_.tx_vfo.observation ==
                  cwassistant::core::RadioObservation::Known
-      ? QString::fromStdString(radio_state_.tx_vfo.identifier)
-      : QStringLiteral("?");
+             ? QString::fromStdString(radio_state_.tx_vfo.identifier)
+             : QStringLiteral("?");
 }
 qulonglong AppSettings::radioTxVfoFrequencyHz() const noexcept {
   if (radio_state_.tx_frequency.observation !=
@@ -635,8 +646,12 @@ bool AppSettings::hamlibCanWrite() const noexcept {
   return hamlib_client_ && hamlib_client_->canWrite();
 }
 const QString& AppSettings::cat4omUrl() const noexcept { return cat4om_url_; }
-const QString& AppSettings::cat4omRadioId() const noexcept { return cat4om_radio_id_; }
-const QString& AppSettings::cat4omPassword() const noexcept { return cat4om_password_; }
+const QString& AppSettings::cat4omRadioId() const noexcept {
+  return cat4om_radio_id_;
+}
+const QString& AppSettings::cat4omPassword() const noexcept {
+  return cat4om_password_;
+}
 QString AppSettings::cat4omState() const {
   return cat4om_client_ ? cat4om_client_->statusText()
                         : QStringLiteral("Disconnected");
@@ -660,16 +675,31 @@ bool AppSettings::cat4omCanWrite() const noexcept {
   return cat4om_client_ && cat4om_client_->canWrite();
 }
 const QString& AppSettings::catPort() const noexcept { return cat_port_; }
+QVariantList AppSettings::supportedCatBaudRates() const {
+  QVariantList values;
+  values.reserve(static_cast<qsizetype>(
+      cwassistant::core::kSupportedSerialBaudRates.size()));
+  for (const auto baud_rate : cwassistant::core::kSupportedSerialBaudRates) {
+    values.append(static_cast<int>(baud_rate));
+  }
+  return values;
+}
 int AppSettings::catBaudRate() const noexcept { return cat_baud_rate_; }
 int AppSettings::catDataBits() const noexcept { return cat_data_bits_; }
 int AppSettings::catParityIndex() const noexcept { return cat_parity_index_; }
 int AppSettings::catStopBits() const noexcept { return cat_stop_bits_; }
-int AppSettings::catFlowControlIndex() const noexcept { return cat_flow_control_index_; }
+int AppSettings::catFlowControlIndex() const noexcept {
+  return cat_flow_control_index_;
+}
 int AppSettings::pollIntervalMs() const noexcept { return poll_interval_ms_; }
 int AppSettings::timeoutMs() const noexcept { return timeout_ms_; }
 bool AppSettings::splitEnabled() const noexcept { return split_enabled_; }
-qint64 AppSettings::rxTransverterOffsetHz() const noexcept { return rx_transverter_offset_hz_; }
-qint64 AppSettings::txTransverterOffsetHz() const noexcept { return tx_transverter_offset_hz_; }
+qint64 AppSettings::rxTransverterOffsetHz() const noexcept {
+  return rx_transverter_offset_hz_;
+}
+qint64 AppSettings::txTransverterOffsetHz() const noexcept {
+  return tx_transverter_offset_hz_;
+}
 int AppSettings::cwToneSidebandIndex() const noexcept {
   return cw_tone_sideband_index_;
 }
@@ -689,11 +719,11 @@ AppSettings::resolvedControlledFrequencies() const noexcept {
   const cwassistant::core::VfoFrequencyPlan plan{
       .rx_dial_hz = radio_state_.rx_frequency.hz,
       .tx_dial_hz = radio_state_.tx_frequency.hz,
-      .split_enabled = radio_state_.split.split ==
-                       cwassistant::core::RadioSplit::Enabled};
+      .split_enabled =
+          radio_state_.split.split == cwassistant::core::RadioSplit::Enabled};
   return cwassistant::core::resolve_frequencies(
       plan, {.rx_offset_hz = rx_transverter_offset_hz_,
-              .tx_offset_hz = tx_transverter_offset_hz_});
+             .tx_offset_hz = tx_transverter_offset_hz_});
 }
 
 std::optional<std::uint64_t> AppSettings::controlledRxRfHz() const noexcept {
@@ -718,14 +748,22 @@ void AppSettings::refreshControlledFrequency() {
   auto write_target = cwassistant::core::OmniRigRxFrequencyTarget::None;
   cwassistant::core::RadioState next_state;
   next_state.availability = cwassistant::core::RadioObservation::Unavailable;
-  next_state.rx_frequency.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.tx_frequency.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.rx_mode.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.tx_mode.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.rx_vfo.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.tx_vfo.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.split.observation = cwassistant::core::RadioObservation::Unavailable;
-  next_state.capabilities.observation = cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_frequency.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_frequency.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_mode.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_mode.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.rx_vfo.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.tx_vfo.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.split.observation =
+      cwassistant::core::RadioObservation::Unavailable;
+  next_state.capabilities.observation =
+      cwassistant::core::RadioObservation::Unavailable;
 #ifdef Q_OS_WIN
   if (radio_enabled_ && audio_input_radio_linked_ &&
       frequency_backend_index_ == 0 && ensureOmniRigAutomation()) {
@@ -733,8 +771,8 @@ void AppSettings::refreshControlledFrequency() {
     VARIANT rig_value;
     const auto property = omnirig_slot_ == 2 ? L"Rig2" : L"Rig1";
     if (automation_property(automation, property, &rig_value)) {
-      IDispatch* rig = rig_value.vt == VT_DISPATCH
-          ? rig_value.pdispVal : nullptr;
+      IDispatch* rig =
+          rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
       if (rig != nullptr) {
         // Frequency readback stays responsive at 5 Hz. Capability/VFO
         // discovery crosses the out-of-process COM boundary four more times,
@@ -750,14 +788,16 @@ void AppSettings::refreshControlledFrequency() {
         const auto integer_property = [rig](const wchar_t* name) {
           VARIANT value;
           const bool present = automation_property(rig, name, &value);
-          const auto result = present ? automation_integer(value) : std::nullopt;
+          const auto result =
+              present ? automation_integer(value) : std::nullopt;
           if (present) VariantClear(&value);
           return result;
         };
         const auto frequency_property = [rig](const wchar_t* name) {
           VARIANT value;
           const bool present = automation_property(rig, name, &value);
-          const auto result = present ? automation_frequency(value) : std::nullopt;
+          const auto result =
+              present ? automation_frequency(value) : std::nullopt;
           if (present) VariantClear(&value);
           return result;
         };
@@ -777,12 +817,14 @@ void AppSettings::refreshControlledFrequency() {
           // In simplex the effective transmitter is the RX VFO, but the
           // second faceplate row represents the standby VFO the operator will
           // use for split. Read that VFO independently instead of cloning RX.
-          const wchar_t* tx_property = split_on
-              ? (vfo ? omni_rig_frequency_property(*vfo, true) : nullptr)
-              : omni_rig_other_frequency_property(rx_property);
+          const wchar_t* tx_property =
+              split_on
+                  ? (vfo ? omni_rig_frequency_property(*vfo, true) : nullptr)
+                  : omni_rig_other_frequency_property(rx_property);
           auto rx = rx_property ? frequency_property(rx_property)
                                 : frequency_property(L"Freq");
-          auto tx = tx_property ? frequency_property(tx_property) : std::nullopt;
+          auto tx =
+              tx_property ? frequency_property(tx_property) : std::nullopt;
           if (rx) {
             frequency = rx;
             next_state.rx_frequency = {RadioObservation::Known, *rx};
@@ -796,11 +838,11 @@ void AppSettings::refreshControlledFrequency() {
             next_state.tx_vfo = {RadioObservation::Known,
                                  omni_rig_vfo_label(tx_property).toStdString()};
           }
-          if (split && (*split == kOmniRigSplitOn ||
-                        *split == kOmniRigSplitOff)) {
-            next_state.split = {RadioObservation::Known,
-                                split_on ? RadioSplit::Enabled
-                                         : RadioSplit::Disabled};
+          if (split &&
+              (*split == kOmniRigSplitOn || *split == kOmniRigSplitOff)) {
+            next_state.split = {
+                RadioObservation::Known,
+                split_on ? RadioSplit::Enabled : RadioSplit::Disabled};
           }
           if (mode) {
             const auto mapped = omni_rig_mode(*mode);
@@ -818,8 +860,8 @@ void AppSettings::refreshControlledFrequency() {
             const std::size_t slot_index =
                 static_cast<std::size_t>(std::clamp(omnirig_slot_, 1, 2) - 1);
             const auto tx_mode = tx_property[4] == L'A'
-                ? omnirig_vfo_a_modes_[slot_index]
-                : omnirig_vfo_b_modes_[slot_index];
+                                     ? omnirig_vfo_a_modes_[slot_index]
+                                     : omnirig_vfo_b_modes_[slot_index];
             if (tx_mode != RadioMode::Unknown)
               next_state.tx_mode = {RadioObservation::Known, tx_mode};
           }
@@ -832,9 +874,10 @@ void AppSettings::refreshControlledFrequency() {
               next_state.capabilities.bits |=
                   radio_capability_bit(RadioCapability::SetTxFrequency);
           }
-          constexpr long kModeBits = kOmniRigCwUpper | kOmniRigCwLower |
-              kOmniRigSsbUpper | kOmniRigSsbLower | kOmniRigDigitalUpper |
-              kOmniRigDigitalLower | kOmniRigAm | kOmniRigFm;
+          constexpr long kModeBits =
+              kOmniRigCwUpper | kOmniRigCwLower | kOmniRigSsbUpper |
+              kOmniRigSsbLower | kOmniRigDigitalUpper | kOmniRigDigitalLower |
+              kOmniRigAm | kOmniRigFm;
           if (writable && (*writable & kModeBits) != 0)
             next_state.capabilities.bits |=
                 radio_capability_bit(RadioCapability::SetRxMode);
@@ -882,8 +925,7 @@ void AppSettings::reconcilePendingRxFrequency() {
   }
 }
 
-void AppSettings::rememberPendingRxFrequency(
-    const std::uint64_t frequency_hz) {
+void AppSettings::rememberPendingRxFrequency(const std::uint64_t frequency_hz) {
   pending_rx_rf_hz_ = frequency_hz;
   pending_frequency_backend_index_ = frequency_backend_index_;
   radio_frequency_request_timer_.start();
@@ -906,17 +948,19 @@ bool AppSettings::setControlledRxFrequency(const QString& value,
   const auto requested_rf = cwassistant::core::parse_frequency_value(
       value.toStdString(), static_cast<std::uint64_t>(unit_hz));
   if (!requested_rf) {
-    setStatusMessage(
-        unit_hz == 1'000
-            ? QStringLiteral("Enter a positive frequency in kHz, with at most three decimal places.")
-            : QStringLiteral("Enter a positive frequency in MHz, with at most six decimal places."));
+    setStatusMessage(unit_hz == 1'000
+                         ? QStringLiteral("Enter a positive frequency in kHz, "
+                                          "with at most three decimal places.")
+                         : QStringLiteral("Enter a positive frequency in MHz, "
+                                          "with at most six decimal places."));
     return false;
   }
   const auto dial_frequency = cwassistant::core::resolve_dial_frequency(
       *requested_rf, rx_transverter_offset_hz_);
   if (!dial_frequency) {
-    setStatusMessage(QStringLiteral(
-        "That actual RF frequency cannot be represented with the configured RX transverter offset."));
+    setStatusMessage(
+        QStringLiteral("That actual RF frequency cannot be represented with "
+                       "the configured RX transverter offset."));
     return false;
   }
   if (!writeControlledRxDialFrequency(*dial_frequency)) {
@@ -924,67 +968,78 @@ bool AppSettings::setControlledRxFrequency(const QString& value,
   }
   rememberPendingRxFrequency(*requested_rf);
   setStatusMessage(QStringLiteral(
-      "RX frequency requested; provider readback remains authoritative. Split TX frequency and mode were not changed."));
+      "RX frequency requested; provider readback remains authoritative. Split "
+      "TX frequency and mode were not changed."));
   return true;
 }
 
 bool AppSettings::stepControlledRxFrequency(const int direction) {
   if (direction != -1 && direction != 1) {
-    setStatusMessage(QStringLiteral("Frequency step direction must be down or up."));
+    setStatusMessage(
+        QStringLiteral("Frequency step direction must be down or up."));
     return false;
   }
   const auto current_rf = controlledRxRfHz();
   if (!current_rf || !radioFrequencyWritable()) {
-    setStatusMessage(QStringLiteral(
-        "RX frequency control requires a linked, online, writable radio provider."));
+    setStatusMessage(
+        QStringLiteral("RX frequency control requires a linked, "
+                       "online, writable radio provider."));
     return false;
   }
-  const auto pending = pending_frequency_backend_index_ ==
-                               frequency_backend_index_
-                           ? pending_rx_rf_hz_
-                           : std::nullopt;
+  const auto pending =
+      pending_frequency_backend_index_ == frequency_backend_index_
+          ? pending_rx_rf_hz_
+          : std::nullopt;
   const auto requested_rf = cwassistant::core::step_rx_frequency(
-      *current_rf, pending,
-      static_cast<std::uint64_t>(radio_tuning_step_hz_), direction);
+      *current_rf, pending, static_cast<std::uint64_t>(radio_tuning_step_hz_),
+      direction);
   if (!requested_rf) {
-    setStatusMessage(direction < 0
-                         ? QStringLiteral("The requested RX step would reach or cross zero hertz.")
-                         : QStringLiteral("The requested RX step exceeds the supported frequency range."));
+    setStatusMessage(
+        direction < 0
+            ? QStringLiteral(
+                  "The requested RX step would reach or cross zero hertz.")
+            : QStringLiteral("The requested RX step exceeds the supported "
+                             "frequency range."));
     return false;
   }
   const auto dial_frequency = cwassistant::core::resolve_dial_frequency(
       *requested_rf, rx_transverter_offset_hz_);
   if (!dial_frequency || !writeControlledRxDialFrequency(*dial_frequency)) {
     if (!dial_frequency) {
-      setStatusMessage(QStringLiteral(
-          "That RX step cannot be represented with the configured transverter offset."));
+      setStatusMessage(
+          QStringLiteral("That RX step cannot be represented with "
+                         "the configured transverter offset."));
     }
     return false;
   }
   rememberPendingRxFrequency(*requested_rf);
-  setStatusMessage(QStringLiteral(
-      "RX stepped by %1 kHz; provider readback remains authoritative and split TX was not changed.")
-                       .arg(radio_tuning_step_hz_ / 1'000));
+  setStatusMessage(
+      QStringLiteral("RX stepped by %1 kHz; provider readback remains "
+                     "authoritative and split TX was not changed.")
+          .arg(radio_tuning_step_hz_ / 1'000));
   return true;
 }
 
 bool AppSettings::writeControlledRxDialFrequency(
     const std::uint64_t dial_frequency_hz) {
   if (!radioFrequencyWritable()) {
-    setStatusMessage(QStringLiteral(
-        "RX frequency control requires a linked, online, writable radio provider."));
+    setStatusMessage(
+        QStringLiteral("RX frequency control requires a linked, "
+                       "online, writable radio provider."));
     return false;
   }
   if (frequency_backend_index_ == 0) {
 #ifdef Q_OS_WIN
     if (!writeOmniRigRxFrequency(dial_frequency_hz)) {
       setStatusMessage(QStringLiteral(
-          "OmniRig did not accept the RX-frequency request. Confirm that the radio is online, receiving, and exposes a writable RX VFO."));
+          "OmniRig did not accept the RX-frequency request. Confirm that the "
+          "radio is online, receiving, and exposes a writable RX VFO."));
       return false;
     }
     return true;
 #else
-    setStatusMessage(QStringLiteral("OmniRig frequency control is available only on Windows."));
+    setStatusMessage(QStringLiteral(
+        "OmniRig frequency control is available only on Windows."));
     return false;
 #endif
   }
@@ -996,7 +1051,8 @@ bool AppSettings::writeControlledRxDialFrequency(
       hamlib_client_->setRxFrequency(dial_frequency_hz)) {
     return true;
   }
-  setStatusMessage(QStringLiteral("The radio provider did not accept the RX-frequency request."));
+  setStatusMessage(QStringLiteral(
+      "The radio provider did not accept the RX-frequency request."));
   return false;
 }
 
@@ -1025,8 +1081,9 @@ bool AppSettings::requestControlledTxRfFrequency(
   const auto dial = cwassistant::core::resolve_dial_frequency(
       rf_frequency_hz, tx_transverter_offset_hz_);
   if (!dial) {
-    setStatusMessage(QStringLiteral(
-        "That TX frequency cannot be represented with the configured transverter offset."));
+    setStatusMessage(
+        QStringLiteral("That TX frequency cannot be represented "
+                       "with the configured transverter offset."));
     return false;
   }
   // A deliberate TX-frequency edit is the operator action that establishes
@@ -1037,24 +1094,27 @@ bool AppSettings::requestControlledTxRfFrequency(
   }
   if (!writeControlledTxDialFrequency(*dial)) return false;
   setStatusMessage(QStringLiteral(
-      "TX frequency requested on the provider's TX VFO; split remains enabled and provider readback is authoritative."));
+      "TX frequency requested on the provider's TX VFO; split remains enabled "
+      "and provider readback is authoritative."));
   return true;
 }
 
 bool AppSettings::cycleControlledRxMode() {
   using cwassistant::core::RadioMode;
   const auto current = radio_state_.rx_mode.mode;
-  const auto next = current == RadioMode::UpperSideband ? RadioMode::LowerSideband
-      : current == RadioMode::LowerSideband ? RadioMode::Cw
-      : current == RadioMode::Cw ? RadioMode::CwReverse
-                                 : RadioMode::UpperSideband;
+  const auto next = current == RadioMode::UpperSideband
+                        ? RadioMode::LowerSideband
+                    : current == RadioMode::LowerSideband ? RadioMode::Cw
+                    : current == RadioMode::Cw            ? RadioMode::CwReverse
+                                               : RadioMode::UpperSideband;
   return writeControlledMode(next, false);
 }
 
 bool AppSettings::toggleControlledTxMode() {
   using cwassistant::core::RadioMode;
   const auto next = radio_tx_mode_target_ == RadioMode::Cw
-                        ? RadioMode::CwReverse : RadioMode::Cw;
+                        ? RadioMode::CwReverse
+                        : RadioMode::Cw;
   radio_tx_mode_target_ = next;
   QSettings settings;
   settings.setValue(storageKey(QStringLiteral("radio/txModeTarget")),
@@ -1062,14 +1122,15 @@ bool AppSettings::toggleControlledTxMode() {
   emit radioFrequencyChanged();
 
   if (!radioTxModeWritable()) {
-    setStatusMessage(QStringLiteral(
-        "TX target set to %1. The selected provider cannot apply or confirm the TX-VFO mode.")
-                         .arg(radioTxModeTarget()));
+    setStatusMessage(
+        QStringLiteral("TX target set to %1. The selected provider cannot "
+                       "apply or confirm the TX-VFO mode.")
+            .arg(radioTxModeTarget()));
     return true;
   }
   if (!writeControlledMode(next, true)) {
-    setStatusMessage(QStringLiteral(
-        "TX target remains %1, but the provider did not accept the mode request.")
+    setStatusMessage(QStringLiteral("TX target remains %1, but the provider "
+                                    "did not accept the mode request.")
                          .arg(radioTxModeTarget()));
     return true;
   }
@@ -1105,11 +1166,14 @@ bool AppSettings::setControlledSplit(const bool enabled) {
     accepted = hamlib_client_->setSplit(enabled);
   }
   if (!accepted) {
-    setStatusMessage(QStringLiteral("The provider did not accept the split request."));
+    setStatusMessage(
+        QStringLiteral("The provider did not accept the split request."));
     return false;
   }
-  setStatusMessage(enabled ? QStringLiteral("Split requested; awaiting provider readback.")
-                           : QStringLiteral("Simplex requested; awaiting provider readback."));
+  setStatusMessage(
+      enabled
+          ? QStringLiteral("Split requested; awaiting provider readback.")
+          : QStringLiteral("Simplex requested; awaiting provider readback."));
   return true;
 }
 
@@ -1136,13 +1200,14 @@ bool AppSettings::writeControlledTxDialFrequency(
 
 bool AppSettings::writeControlledMode(const cwassistant::core::RadioMode mode,
                                       const bool tx) {
-  const cwassistant::core::RadioCommand command = tx
-      ? cwassistant::core::RadioCommand(cwassistant::core::SetTxMode{mode})
-      : cwassistant::core::RadioCommand(cwassistant::core::SetRxMode{mode});
+  const cwassistant::core::RadioCommand command =
+      tx ? cwassistant::core::RadioCommand(cwassistant::core::SetTxMode{mode})
+         : cwassistant::core::RadioCommand(cwassistant::core::SetRxMode{mode});
   if (cwassistant::core::validate_radio_command(radio_state_, command) !=
       cwassistant::core::RadioCommandValidation::Valid) {
-    setStatusMessage(QStringLiteral("%1-mode control is unavailable from this provider.")
-                         .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
+    setStatusMessage(
+        QStringLiteral("%1-mode control is unavailable from this provider.")
+            .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
     return false;
   }
   bool accepted = false;
@@ -1155,15 +1220,17 @@ bool AppSettings::writeControlledMode(const cwassistant::core::RadioMode mode,
     accepted = cat4om_client_->setMode(
         mode, QString::fromStdString(vfo.identifier), tx);
   } else if (frequency_backend_index_ == 1 && hamlib_client_) {
-    accepted = tx ? hamlib_client_->setTxMode(mode)
-                  : hamlib_client_->setRxMode(mode);
+    accepted =
+        tx ? hamlib_client_->setTxMode(mode) : hamlib_client_->setRxMode(mode);
   }
   if (!accepted) {
-    setStatusMessage(QStringLiteral("The provider did not accept the mode request."));
+    setStatusMessage(
+        QStringLiteral("The provider did not accept the mode request."));
     return false;
   }
-  setStatusMessage(QStringLiteral("%1 mode requested; awaiting provider readback.")
-                       .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
+  setStatusMessage(
+      QStringLiteral("%1 mode requested; awaiting provider readback.")
+          .arg(tx ? QStringLiteral("TX") : QStringLiteral("RX")));
   return true;
 }
 
@@ -1216,6 +1283,9 @@ double AppSettings::cwGuideWidthHz() const noexcept {
 }
 int AppSettings::averagingFrames() const noexcept { return averaging_frames_; }
 bool AppSettings::showGrid() const noexcept { return show_grid_; }
+bool AppSettings::showSpectrumGestureHints() const noexcept {
+  return show_spectrum_gesture_hints_;
+}
 int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
   return decoded_signal_timeout_seconds_;
 }
@@ -1251,7 +1321,8 @@ bool AppSettings::localDecoderBackendAvailable() const noexcept {
 QString AppSettings::localDecoderStatus() const {
   if (!localDecoderBackendAvailable()) {
     return QStringLiteral(
-        "Local model support is unavailable in this build. Deterministic decoding remains active.");
+        "Local model support is unavailable in this build. "
+        "Deterministic decoding remains active.");
   }
   if (!local_decoder_enabled_) return QStringLiteral("Local model disabled.");
   if (local_decoder_model_path_.isEmpty() ||
@@ -1269,13 +1340,15 @@ const QString& AppSettings::localCallsignDatabasePath() const noexcept {
 const QString& AppSettings::localCallsignDatabaseStatus() const noexcept {
   return local_callsign_database_status_;
 }
-const QString& AppSettings::statusMessage() const noexcept { return status_message_; }
+const QString& AppSettings::statusMessage() const noexcept {
+  return status_message_;
+}
 
-#define CWA_SETTER(Method, Member, Type)            \
-  void AppSettings::Method(Type value) {            \
-    if (assign_if_changed(Member, value)) {         \
-      emit settingsChanged();                       \
-    }                                               \
+#define CWA_SETTER(Method, Member, Type)    \
+  void AppSettings::Method(Type value) {    \
+    if (assign_if_changed(Member, value)) { \
+      emit settingsChanged();               \
+    }                                       \
   }
 
 void AppSettings::setFrequencyBackendIndex(const int value) {
@@ -1292,13 +1365,15 @@ void AppSettings::setFrequencyBackendIndex(const int value) {
 }
 void AppSettings::setReceiverInputTypeIndex(const int value) {
   const int requested = std::clamp(value, 0, 1);
-  if (requested == 1 &&
-      (!sdr_backend_available_ || sdrDeviceIndex() < 0)) {
+  if (requested == 1 && (!sdr_backend_available_ || sdrDeviceIndex() < 0)) {
     const bool changed = receiver_input_type_index_ != 0;
     receiver_input_type_index_ = 0;
-    setStatusMessage(sdr_backend_available_
-        ? QStringLiteral("Select a discovered SDR device first. Sound-card audio remains selected.")
-        : QStringLiteral("This build has no SoapySDR support. Sound-card audio remains selected."));
+    setStatusMessage(
+        sdr_backend_available_
+            ? QStringLiteral("Select a discovered SDR device first. Sound-card "
+                             "audio remains selected.")
+            : QStringLiteral("This build has no SoapySDR support. Sound-card "
+                             "audio remains selected."));
     emit sdrSettingsChanged();
     if (changed) emit receiverInputTypeChanged();
     return;
@@ -1336,13 +1411,29 @@ void AppSettings::setSdrBandwidthHz(const int value) {
   }
 }
 void AppSettings::setSdrDecoderCenterFrequencyHz(const qulonglong value) {
-  if (assign_if_changed(sdr_decoder_center_frequency_hz_, value)) {
+  const auto bounded = std::clamp<qulonglong>(value, 1ULL, 99'000'000'000ULL);
+  if (assign_if_changed(sdr_decoder_center_frequency_hz_, bounded)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
   }
 }
 void AppSettings::setSdrDecoderBandwidthHz(const int value) {
-  if (assign_if_changed(sdr_decoder_bandwidth_hz_, value)) {
+  const int bounded = std::clamp(value, 6'000, 96'000);
+  if (assign_if_changed(sdr_decoder_bandwidth_hz_, bounded)) {
+    emit sdrSettingsChanged();
+    emit settingsChanged();
+  }
+}
+void AppSettings::setSdrDecoderWindow(const qulonglong center_frequency_hz,
+                                      const int bandwidth_hz) {
+  const auto bounded_center =
+      std::clamp<qulonglong>(center_frequency_hz, 1ULL, 99'000'000'000ULL);
+  const int bounded_bandwidth = std::clamp(bandwidth_hz, 6'000, 96'000);
+  const bool center_changed =
+      assign_if_changed(sdr_decoder_center_frequency_hz_, bounded_center);
+  const bool bandwidth_changed =
+      assign_if_changed(sdr_decoder_bandwidth_hz_, bounded_bandwidth);
+  if (center_changed || bandwidth_changed) {
     emit sdrSettingsChanged();
     emit settingsChanged();
   }
@@ -1374,8 +1465,8 @@ void AppSettings::setSdrGainDb(const double value) {
 CWA_SETTER(setAudioDcRejection, audio_dc_rejection_, bool)
 CWA_SETTER(setAudioAutomaticGain, audio_automatic_gain_, bool)
 CWA_SETTER(setAudioGainDb, audio_gain_db_, double)
-CWA_SETTER(setAudioAutomaticGainTargetDbfs,
-           audio_automatic_gain_target_dbfs_, double)
+CWA_SETTER(setAudioAutomaticGainTargetDbfs, audio_automatic_gain_target_dbfs_,
+           double)
 CWA_SETTER(setAudioAutomaticBandwidth, audio_automatic_bandwidth_, bool)
 CWA_SETTER(setAudioLowerFrequencyHz, audio_lower_frequency_hz_, double)
 CWA_SETTER(setAudioUpperFrequencyHz, audio_upper_frequency_hz_, double)
@@ -1391,10 +1482,24 @@ CWA_SETTER(setCat4omUrl, cat4om_url_, const QString&)
 CWA_SETTER(setCat4omRadioId, cat4om_radio_id_, const QString&)
 CWA_SETTER(setCat4omPassword, cat4om_password_, const QString&)
 CWA_SETTER(setCatPort, cat_port_, const QString&)
-CWA_SETTER(setCatBaudRate, cat_baud_rate_, int)
-CWA_SETTER(setCatDataBits, cat_data_bits_, int)
-CWA_SETTER(setCatParityIndex, cat_parity_index_, int)
-CWA_SETTER(setCatStopBits, cat_stop_bits_, int)
+void AppSettings::setCatBaudRate(const int value) {
+  const auto bounded = static_cast<std::uint32_t>(std::max(value, 0));
+  const int normalized = static_cast<int>(
+      cwassistant::core::nearest_supported_serial_baud_rate(bounded));
+  if (assign_if_changed(cat_baud_rate_, normalized)) emit settingsChanged();
+}
+void AppSettings::setCatDataBits(const int value) {
+  if (assign_if_changed(cat_data_bits_, std::clamp(value, 5, 8)))
+    emit settingsChanged();
+}
+void AppSettings::setCatParityIndex(const int value) {
+  if (assign_if_changed(cat_parity_index_, std::clamp(value, 0, 2)))
+    emit settingsChanged();
+}
+void AppSettings::setCatStopBits(const int value) {
+  if (assign_if_changed(cat_stop_bits_, std::clamp(value, 1, 2)))
+    emit settingsChanged();
+}
 CWA_SETTER(setCatFlowControlIndex, cat_flow_control_index_, int)
 CWA_SETTER(setPollIntervalMs, poll_interval_ms_, int)
 CWA_SETTER(setTimeoutMs, timeout_ms_, int)
@@ -1411,8 +1516,10 @@ void AppSettings::setKeyingPort(const QString& value) {
 void AppSettings::setDirectKeyingEnabled(const bool value) {
   if (!assign_if_changed(direct_keying_enabled_, value)) return;
   invalidateDirectKeyingAcceptance(
-      value ? QStringLiteral("Direct keying enabled; run the physical loopback.")
-            : QStringLiteral("Direct keying disabled; prior acceptance was cleared."));
+      value
+          ? QStringLiteral("Direct keying enabled; run the physical loopback.")
+          : QStringLiteral(
+                "Direct keying disabled; prior acceptance was cleared."));
   emit settingsChanged();
 }
 void AppSettings::setPttLineIndex(const int value) {
@@ -1478,6 +1585,7 @@ CWA_SETTER(setCwGuideCenterHz, cw_guide_center_hz_, double)
 CWA_SETTER(setCwGuideWidthHz, cw_guide_width_hz_, double)
 CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
+CWA_SETTER(setShowSpectrumGestureHints, show_spectrum_gesture_hints_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
 CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
@@ -1488,11 +1596,13 @@ CWA_SETTER(setOperatorRole, operator_role_, const QString&)
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
-  local_callsign_database_status_ = value
-      ? (local_callsign_database_path_.isEmpty()
-             ? QStringLiteral("Select a local master.scp or Call History text file.")
-             : QStringLiteral("Loading the selected local callsign list."))
-      : QStringLiteral("Disabled. No local callsign list is in use.");
+  local_callsign_database_status_ =
+      value
+          ? (local_callsign_database_path_.isEmpty()
+                 ? QStringLiteral(
+                       "Select a local master.scp or Call History text file.")
+                 : QStringLiteral("Loading the selected local callsign list."))
+          : QStringLiteral("Disabled. No local callsign list is in use.");
   emit settingsChanged();
   emit localCallsignDatabaseChanged();
   emit localCallsignDatabaseConfigurationCommitted(
@@ -1519,13 +1629,15 @@ void AppSettings::setOwnCallsign(const QString& value) {
   const auto normalized =
       cwassistant::core::CallsignPolicy::normalize(trimmed.toStdString());
   if (!normalized.has_value()) {
-    setStatusMessage(QStringLiteral(
-        "Enter a valid callsign containing letters and digits; portable suffixes may use a single slash."));
+    setStatusMessage(
+        QStringLiteral("Enter a valid callsign containing letters and digits; "
+                       "portable suffixes may use a single slash."));
     emit settingsChanged();
     return;
   }
   if (assign_if_changed(own_callsign_, QString::fromStdString(*normalized))) {
-    setStatusMessage(QStringLiteral("Own callsign normalized and ready to save."));
+    setStatusMessage(
+        QStringLiteral("Own callsign normalized and ready to save."));
     emit settingsChanged();
   }
 }
@@ -1548,7 +1660,8 @@ bool AppSettings::selectLocalDecoderModel(const QUrl& url) {
     setStatusMessage(QStringLiteral("Select a readable local model file."));
     return false;
   }
-  if (assign_if_changed(local_decoder_model_path_, path)) emit settingsChanged();
+  if (assign_if_changed(local_decoder_model_path_, path))
+    emit settingsChanged();
   setStatusMessage(QStringLiteral("Local model selected. Apply to save."));
   return true;
 }
@@ -1561,7 +1674,8 @@ bool AppSettings::selectLocalDecoderMetadata(const QUrl& url) {
   }
   if (assign_if_changed(local_decoder_metadata_path_, path))
     emit settingsChanged();
-  setStatusMessage(QStringLiteral("Local model metadata selected. Apply to save."));
+  setStatusMessage(
+      QStringLiteral("Local model metadata selected. Apply to save."));
   return true;
 }
 
@@ -1593,16 +1707,19 @@ bool AppSettings::selectLocalCallsignDatabase(const QUrl& url) {
     emit localCallsignDatabaseConfigurationCommitted(
         true, local_callsign_database_path_);
   }
-  setStatusMessage(QStringLiteral("Local callsign-list file selected. Apply to save."));
+  setStatusMessage(
+      QStringLiteral("Local callsign-list file selected. Apply to save."));
   return true;
 }
 
 void AppSettings::clearLocalCallsignDatabase() {
   if (assign_if_changed(local_callsign_database_path_, QString{}))
     emit settingsChanged();
-  local_callsign_database_status_ = local_callsign_database_enabled_
-      ? QStringLiteral("Select a local master.scp or Call History text file.")
-      : QStringLiteral("Disabled. No local callsign list is in use.");
+  local_callsign_database_status_ =
+      local_callsign_database_enabled_
+          ? QStringLiteral(
+                "Select a local master.scp or Call History text file.")
+          : QStringLiteral("Disabled. No local callsign list is in use.");
   emit localCallsignDatabaseChanged();
   emit localCallsignDatabaseConfigurationCommitted(
       local_callsign_database_enabled_, QString{});
@@ -1610,18 +1727,19 @@ void AppSettings::clearLocalCallsignDatabase() {
 
 bool AppSettings::reloadLocalCallsignDatabase() {
   if (!local_callsign_database_enabled_) {
-    local_callsign_database_status_ =
-        QStringLiteral("Enable the local callsign suggestion source before reloading it.");
+    local_callsign_database_status_ = QStringLiteral(
+        "Enable the local callsign suggestion source before reloading it.");
     emit localCallsignDatabaseChanged();
     return false;
   }
   if (local_callsign_database_path_.isEmpty()) {
-    local_callsign_database_status_ = QStringLiteral(
-        "Select a local callsign-list file before reloading.");
+    local_callsign_database_status_ =
+        QStringLiteral("Select a local callsign-list file before reloading.");
     emit localCallsignDatabaseChanged();
     return false;
   }
-  local_callsign_database_status_ = QStringLiteral("Reloading local callsign list.");
+  local_callsign_database_status_ =
+      QStringLiteral("Reloading local callsign list.");
   emit localCallsignDatabaseChanged();
   emit localCallsignDatabaseConfigurationCommitted(
       true, local_callsign_database_path_);
@@ -1635,13 +1753,15 @@ void AppSettings::selectReferenceRig(const int index) {
   }
   reference_rig_index_ = index;
   applyReferenceDefaults(index);
-  setStatusMessage(QStringLiteral("Reference defaults loaded; all fields remain editable."));
+  setStatusMessage(
+      QStringLiteral("Reference defaults loaded; all fields remain editable."));
   emit settingsChanged();
 }
 
 void AppSettings::resetToReferenceDefaults() {
   applyReferenceDefaults(reference_rig_index_);
-  setStatusMessage(QStringLiteral("Radio defaults restored. Select Apply to persist them."));
+  setStatusMessage(
+      QStringLiteral("Radio defaults restored. Select Apply to persist them."));
   emit settingsChanged();
 }
 
@@ -1676,16 +1796,16 @@ void AppSettings::refreshSerialPorts() {
     serial_ports_ = ports;
     emit serialPortsChanged();
   }
-  setStatusMessage(QStringLiteral("Serial ports refreshed without opening or toggling them."));
+  setStatusMessage(QStringLiteral(
+      "Serial ports refreshed without opening or toggling them."));
 }
 
 void AppSettings::refreshAudioInputs() {
   QStringList names{QStringLiteral("System default input (recommended)")};
   QStringList ids{QString{}};
   for (const auto& device : QMediaDevices::audioInputs()) {
-    const QString id = QString::fromLatin1(
-        device.id().toBase64(QByteArray::Base64UrlEncoding |
-                             QByteArray::OmitTrailingEquals));
+    const QString id = QString::fromLatin1(device.id().toBase64(
+        QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
     if (id.isEmpty() || ids.contains(id)) {
       continue;
     }
@@ -1702,8 +1822,9 @@ void AppSettings::refreshAudioInputs() {
 
   if (!audio_input_id_.isEmpty() && !ids.contains(audio_input_id_)) {
     const QString unavailable_name =
-        audio_input_name_.isEmpty() ? QStringLiteral("Previously selected input")
-                                    : audio_input_name_;
+        audio_input_name_.isEmpty()
+            ? QStringLiteral("Previously selected input")
+            : audio_input_name_;
     names.push_back(unavailable_name + QStringLiteral(" (unavailable)"));
     ids.push_back(audio_input_id_);
   }
@@ -1733,7 +1854,9 @@ void AppSettings::selectAudioInput(const int index) {
   if (audio_input_name_.endsWith(QStringLiteral(" (unavailable)"))) {
     audio_input_name_.chop(QStringLiteral(" (unavailable)").size());
   }
-  setStatusMessage(QStringLiteral("Audio input selected. Live capture remains disarmed until started by the operator."));
+  setStatusMessage(
+      QStringLiteral("Audio input selected. Live capture remains "
+                     "disarmed until started by the operator."));
   emit audioInputsChanged();
   emit settingsChanged();
 }
@@ -1750,10 +1873,10 @@ void AppSettings::refreshSdrDevices() {
     QString label = QString::fromStdString(device.label).trimmed();
     if (label.isEmpty()) label = QStringLiteral("Unnamed SDR device");
     if (label.contains(QStringLiteral("RSPduo"), Qt::CaseInsensitive)) {
-      label += label.contains(QStringLiteral("Single Tuner"),
-                              Qt::CaseInsensitive)
-          ? QStringLiteral("  •  Recommended")
-          : QStringLiteral("  •  Advanced mode");
+      label +=
+          label.contains(QStringLiteral("Single Tuner"), Qt::CaseInsensitive)
+              ? QStringLiteral("  •  Recommended")
+              : QStringLiteral("  •  Advanced mode");
     }
     const QString driver = QString::fromStdString(device.driver).trimmed();
     const QString serial = QString::fromStdString(device.serial).trimmed();
@@ -1770,26 +1893,33 @@ void AppSettings::refreshSdrDevices() {
     QString name = QDir::cleanPath(QString::fromStdString(module).trimmed());
     const QString canonical_name = QFileInfo(name).canonicalFilePath();
     if (!canonical_name.isEmpty()) name = canonical_name;
-    const bool already_listed = std::any_of(
-        sdr_module_names_.cbegin(), sdr_module_names_.cend(),
-        [&name](const QString& existing) {
-          return existing.compare(name, Qt::CaseInsensitive) == 0;
-        });
-    if (!name.isEmpty() && !already_listed)
-      sdr_module_names_.push_back(name);
+    const bool already_listed =
+        std::any_of(sdr_module_names_.cbegin(), sdr_module_names_.cend(),
+                    [&name](const QString& existing) {
+                      return existing.compare(name, Qt::CaseInsensitive) == 0;
+                    });
+    if (!name.isEmpty() && !already_listed) sdr_module_names_.push_back(name);
   }
   sdr_module_names_.sort(Qt::CaseInsensitive);
   sdr_device_names_ = std::move(names);
   sdr_device_ids_ = std::move(ids);
   sdr_diagnostic_ = QString::fromStdString(report.diagnostic).trimmed();
   if (sdr_diagnostic_.isEmpty()) {
-    sdr_diagnostic_ = !sdr_backend_available_
-        ? QStringLiteral("SoapySDR is unavailable in this build. Install SoapySDR and the receiver module, then install a CW Buddy SDR-enabled build.")
-        : (sdr_device_ids_.isEmpty()
-               ? QStringLiteral("SoapySDR is ready, but no receiver was found. Connect the SDR, install its Soapy module, then refresh.")
-               : QStringLiteral("SDR discovery complete. Reception remains stopped until explicitly started."));
+    sdr_diagnostic_ =
+        !sdr_backend_available_
+            ? QStringLiteral(
+                  "SoapySDR is unavailable in this build. Install "
+                  "SoapySDR and the receiver module, then install a "
+                  "CW Buddy SDR-enabled build.")
+            : (sdr_device_ids_.isEmpty()
+                   ? QStringLiteral("SoapySDR is ready, but no receiver was "
+                                    "found. Connect the SDR, install its Soapy "
+                                    "module, then refresh.")
+                   : QStringLiteral("SDR discovery complete. Reception remains "
+                                    "stopped until explicitly started."));
   }
-  const bool reset_receiver_source = receiver_input_type_index_ == 1 &&
+  const bool reset_receiver_source =
+      receiver_input_type_index_ == 1 &&
       (!sdr_backend_available_ || sdrDeviceIndex() < 0);
   if (reset_receiver_source) {
     receiver_input_type_index_ = 0;
@@ -1804,8 +1934,9 @@ void AppSettings::selectSdrDevice(const int index) {
   sdr_device_id_ = sdr_device_ids_.at(index);
   sdr_device_name_ = sdr_device_names_.at(index);
   refreshSelectedSdrCapabilities();
-  setStatusMessage(QStringLiteral(
-      "SDR receiver selected. This receive-only source remains stopped until started by the operator."));
+  setStatusMessage(
+      QStringLiteral("SDR receiver selected. This receive-only source remains "
+                     "stopped until started by the operator."));
   emit sdrSettingsChanged();
   emit settingsChanged();
 }
@@ -1826,8 +1957,7 @@ void AppSettings::refreshSelectedSdrCapabilities() {
   const auto append_values = [](const std::vector<double>& source,
                                 QVariantList& destination) {
     for (const double value : source) {
-      if (!std::isfinite(value) || value < 0.0 ||
-          value > 64'000'000.0)
+      if (!std::isfinite(value) || value < 0.0 || value > 64'000'000.0)
         continue;
       const int rounded = static_cast<int>(std::llround(value));
       if (!destination.contains(rounded)) destination.push_back(rounded);
@@ -1843,7 +1973,8 @@ void AppSettings::refreshSelectedSdrCapabilities() {
   }
   if (!sdr_antenna_names_.contains(sdr_antenna_)) {
     sdr_antenna_ = sdr_antenna_names_.isEmpty()
-        ? QString{} : sdr_antenna_names_.constFirst();
+                       ? QString{}
+                       : sdr_antenna_names_.constFirst();
   }
   sdr_automatic_gain_available_ = capabilities.automatic_gain_available;
   if (std::isfinite(capabilities.minimum_gain_db) &&
@@ -1851,8 +1982,8 @@ void AppSettings::refreshSelectedSdrCapabilities() {
       capabilities.minimum_gain_db <= capabilities.maximum_gain_db) {
     sdr_minimum_gain_db_ = capabilities.minimum_gain_db;
     sdr_maximum_gain_db_ = capabilities.maximum_gain_db;
-    sdr_gain_db_ = std::clamp(sdr_gain_db_, sdr_minimum_gain_db_,
-                              sdr_maximum_gain_db_);
+    sdr_gain_db_ =
+        std::clamp(sdr_gain_db_, sdr_minimum_gain_db_, sdr_maximum_gain_db_);
   }
   if (!sdr_automatic_gain_available_ && sdr_automatic_gain_)
     sdr_automatic_gain_ = false;
@@ -1873,19 +2004,21 @@ void AppSettings::refreshAudioOutputs() {
   QStringList names{QStringLiteral("System default output (recommended)")};
   QStringList ids{QString{}};
   for (const auto& device : QMediaDevices::audioOutputs()) {
-    const QString id = QString::fromLatin1(
-        device.id().toBase64(QByteArray::Base64UrlEncoding |
-                             QByteArray::OmitTrailingEquals));
+    const QString id = QString::fromLatin1(device.id().toBase64(
+        QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
     if (id.isEmpty() || ids.contains(id)) continue;
     QString name = device.description().trimmed();
-    if (name.isEmpty()) name = QStringLiteral("Audio output %1").arg(ids.size());
+    if (name.isEmpty())
+      name = QStringLiteral("Audio output %1").arg(ids.size());
     if (device.isDefault()) name += QStringLiteral(" (current default)");
     names.push_back(name);
     ids.push_back(id);
   }
   if (!audio_output_id_.isEmpty() && !ids.contains(audio_output_id_)) {
-    const QString unavailable_name = audio_output_name_.isEmpty()
-        ? QStringLiteral("Previously selected output") : audio_output_name_;
+    const QString unavailable_name =
+        audio_output_name_.isEmpty()
+            ? QStringLiteral("Previously selected output")
+            : audio_output_name_;
     names.push_back(unavailable_name + QStringLiteral(" (unavailable)"));
     ids.push_back(audio_output_id_);
   }
@@ -1909,8 +2042,9 @@ void AppSettings::selectAudioOutput(const int index) {
                                   : audio_output_names_.at(index);
   if (audio_output_name_.endsWith(QStringLiteral(" (unavailable)")))
     audio_output_name_.chop(QStringLiteral(" (unavailable)").size());
-  setStatusMessage(QStringLiteral(
-      "Monitor output selected. Monitoring remains off until the operator enables it."));
+  setStatusMessage(
+      QStringLiteral("Monitor output selected. Monitoring remains "
+                     "off until the operator enables it."));
   emit audioOutputsChanged();
   emit settingsChanged();
 }
@@ -1927,7 +2061,8 @@ void AppSettings::refreshDetectedRadios() {
       if (!automation_property(automation, rig_property, &rig_value)) {
         continue;
       }
-      IDispatch* rig = rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
+      IDispatch* rig =
+          rig_value.vt == VT_DISPATCH ? rig_value.pdispVal : nullptr;
       if (rig == nullptr) {
         VariantClear(&rig_value);
         continue;
@@ -1936,7 +2071,8 @@ void AppSettings::refreshDetectedRadios() {
       VARIANT type_value;
       VARIANT status_value;
       const bool has_type = automation_property(rig, L"RigType", &type_value);
-      const bool has_status = automation_property(rig, L"Status", &status_value);
+      const bool has_status =
+          automation_property(rig, L"Status", &status_value);
       const QString rig_type =
           has_type && type_value.vt == VT_BSTR
               ? QString::fromWCharArray(type_value.bstrVal).trimmed()
@@ -1946,7 +2082,8 @@ void AppSettings::refreshDetectedRadios() {
               ? status_value.lVal
               : -1;
       if (!rig_type.isEmpty() && status == kOmniRigOnlineStatus) {
-        names.push_back(QStringLiteral("OmniRig %1 — %2").arg(slot).arg(rig_type));
+        names.push_back(
+            QStringLiteral("OmniRig %1 — %2").arg(slot).arg(rig_type));
         detected_slots.push_back(slot);
       }
       if (has_type) {
@@ -1959,17 +2096,20 @@ void AppSettings::refreshDetectedRadios() {
     }
   }
 #endif
-  const bool changed = names != detected_radio_names_ ||
-                       detected_slots != detected_radio_slots_;
+  const bool changed =
+      names != detected_radio_names_ || detected_slots != detected_radio_slots_;
   detected_radio_names_ = std::move(names);
   detected_radio_slots_ = std::move(detected_slots);
   if (changed) {
     emit detectedRadiosChanged();
     emit settingsChanged();
   }
-  setStatusMessage(detected_radio_names_.isEmpty()
-                       ? QStringLiteral("No positively identified online radio was found. SWL and manual setup remain available.")
-                       : QStringLiteral("Online radios refreshed without probing arbitrary serial ports."));
+  setStatusMessage(
+      detected_radio_names_.isEmpty()
+          ? QStringLiteral("No positively identified online radio was found. "
+                           "SWL and manual setup remain available.")
+          : QStringLiteral("Online radios refreshed without probing arbitrary "
+                           "serial ports."));
 }
 
 void AppSettings::selectDetectedRadio(const int index) {
@@ -1979,7 +2119,8 @@ void AppSettings::selectDetectedRadio(const int index) {
   radio_enabled_ = true;
   frequency_backend_index_ = 0;
   omnirig_slot_ = detected_radio_slots_.at(index);
-  setStatusMessage(QStringLiteral("Detected radio selected. Transmit remains disarmed."));
+  setStatusMessage(
+      QStringLiteral("Detected radio selected. Transmit remains disarmed."));
   emit settingsChanged();
 }
 
@@ -1988,19 +2129,15 @@ bool AppSettings::apply() {
   if (!sdr_backend_available_ || sdrDeviceIndex() < 0)
     receiver_input_type_index_ = 0;
   sdr_center_frequency_hz_ =
-      std::clamp<qulonglong>(sdr_center_frequency_hz_, 1ULL,
-                             99'000'000'000ULL);
-  sdr_sample_rate_hz_ =
-      std::clamp(sdr_sample_rate_hz_, 25'000, 64'000'000);
-  sdr_bandwidth_hz_ =
-      std::clamp(sdr_bandwidth_hz_, 0, 64'000'000);
+      std::clamp<qulonglong>(sdr_center_frequency_hz_, 1ULL, 99'000'000'000ULL);
+  sdr_sample_rate_hz_ = std::clamp(sdr_sample_rate_hz_, 25'000, 64'000'000);
+  sdr_bandwidth_hz_ = std::clamp(sdr_bandwidth_hz_, 0, 64'000'000);
   sdr_decoder_bandwidth_hz_ =
       std::clamp(sdr_decoder_bandwidth_hz_, 6'000, 96'000);
   sdr_decoder_center_frequency_hz_ = std::clamp<qulonglong>(
       sdr_decoder_center_frequency_hz_, 1ULL, 99'000'000'000ULL);
   sdr_radio_lo_offset_hz_ =
-      std::clamp<qint64>(sdr_radio_lo_offset_hz_, -10'000'000LL,
-                         10'000'000LL);
+      std::clamp<qint64>(sdr_radio_lo_offset_hz_, -10'000'000LL, 10'000'000LL);
   sdr_gain_db_ = std::clamp(sdr_gain_db_, -100.0, 100.0);
   audio_gain_db_ = std::clamp(audio_gain_db_, -40.0, 40.0);
   audio_automatic_gain_target_dbfs_ =
@@ -2016,14 +2153,15 @@ bool AppSettings::apply() {
         std::min(audio_lower_frequency_hz_, audio_upper_frequency_hz_ - 50.0);
   }
   frequency_backend_index_ = std::clamp(frequency_backend_index_, 0, 2);
-  radio_tuning_step_hz_ =
-      std::clamp(radio_tuning_step_hz_, 1'000, 100'000);
+  radio_tuning_step_hz_ = std::clamp(radio_tuning_step_hz_, 1'000, 100'000);
   omnirig_slot_ = std::clamp(omnirig_slot_, 1, 2);
   hamlib_host_ = hamlib_host_.trimmed();
   hamlib_port_ = std::clamp(hamlib_port_, 1, 65'535);
   hamlib_rx_vfo_ = hamlib_rx_vfo_.trimmed().toUpper();
   hamlib_tx_vfo_ = hamlib_tx_vfo_.trimmed().toUpper();
-  cat_baud_rate_ = std::clamp(cat_baud_rate_, 300, 1'000'000);
+  cat_baud_rate_ =
+      static_cast<int>(cwassistant::core::nearest_supported_serial_baud_rate(
+          static_cast<std::uint32_t>(std::max(cat_baud_rate_, 0))));
   cat_data_bits_ = std::clamp(cat_data_bits_, 5, 8);
   cat_parity_index_ = std::clamp(cat_parity_index_, 0, 2);
   cat_stop_bits_ = std::clamp(cat_stop_bits_, 1, 2);
@@ -2040,8 +2178,7 @@ bool AppSettings::apply() {
       std::clamp(waterfall_time_span_seconds_, 5, 30);
   spectrum_display_mode_ = std::clamp(spectrum_display_mode_, 0, 1);
   averaging_frames_ = std::clamp(averaging_frames_, 1, 32);
-  automatic_range_span_db_ =
-      std::clamp(automatic_range_span_db_, 30.0, 100.0);
+  automatic_range_span_db_ = std::clamp(automatic_range_span_db_, 30.0, 100.0);
   waterfall_noise_margin_db_ =
       std::clamp(waterfall_noise_margin_db_, 0.0, 30.0);
   cw_guide_center_hz_ = std::clamp(cw_guide_center_hz_, 0.0, 96'000.0);
@@ -2053,30 +2190,45 @@ bool AppSettings::apply() {
   }
 
   if (radio_enabled_ && ptt_line_index_ == key_line_index_) {
-    setStatusMessage(QStringLiteral("PTT and KEY must use different COM control lines."));
+    setStatusMessage(
+        QStringLiteral("PTT and KEY must use different COM control lines."));
     emit settingsChanged();
     return false;
   }
 
   QSettings settings;
-  settings.setValue(storageKey(QStringLiteral("configuration/schemaVersion")), kSchemaVersion);
-  settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
-  settings.setValue(storageKey(QStringLiteral("audio/inputId")), audio_input_id_);
-  settings.setValue(storageKey(QStringLiteral("audio/inputName")), audio_input_name_);
-  settings.setValue(storageKey(QStringLiteral("audio/outputId")), audio_output_id_);
-  settings.setValue(storageKey(QStringLiteral("audio/outputName")), audio_output_name_);
-  settings.setValue(storageKey(QStringLiteral("audio/dcRejection")), audio_dc_rejection_);
-  settings.setValue(storageKey(QStringLiteral("audio/automaticGain")), audio_automatic_gain_);
+  settings.setValue(storageKey(QStringLiteral("configuration/schemaVersion")),
+                    kSchemaVersion);
+  settings.setValue(storageKey(QStringLiteral("configuration/displayName")),
+                    profile_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputId")),
+                    audio_input_id_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputName")),
+                    audio_input_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/outputId")),
+                    audio_output_id_);
+  settings.setValue(storageKey(QStringLiteral("audio/outputName")),
+                    audio_output_name_);
+  settings.setValue(storageKey(QStringLiteral("audio/dcRejection")),
+                    audio_dc_rejection_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticGain")),
+                    audio_automatic_gain_);
   settings.setValue(storageKey(QStringLiteral("audio/gainDb")), audio_gain_db_);
-  settings.setValue(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")), audio_automatic_gain_target_dbfs_);
-  settings.setValue(storageKey(QStringLiteral("audio/automaticBandwidth")), audio_automatic_bandwidth_);
-  settings.setValue(storageKey(QStringLiteral("audio/lowerFrequencyHz")), audio_lower_frequency_hz_);
-  settings.setValue(storageKey(QStringLiteral("audio/upperFrequencyHz")), audio_upper_frequency_hz_);
-  settings.setValue(storageKey(QStringLiteral("audio/inputRadioLinked")), audio_input_radio_linked_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")),
+                    audio_automatic_gain_target_dbfs_);
+  settings.setValue(storageKey(QStringLiteral("audio/automaticBandwidth")),
+                    audio_automatic_bandwidth_);
+  settings.setValue(storageKey(QStringLiteral("audio/lowerFrequencyHz")),
+                    audio_lower_frequency_hz_);
+  settings.setValue(storageKey(QStringLiteral("audio/upperFrequencyHz")),
+                    audio_upper_frequency_hz_);
+  settings.setValue(storageKey(QStringLiteral("audio/inputRadioLinked")),
+                    audio_input_radio_linked_);
   settings.setValue(storageKey(QStringLiteral("receiver/inputType")),
                     receiver_input_type_index_);
   settings.setValue(storageKey(QStringLiteral("sdr/deviceId")), sdr_device_id_);
-  settings.setValue(storageKey(QStringLiteral("sdr/deviceName")), sdr_device_name_);
+  settings.setValue(storageKey(QStringLiteral("sdr/deviceName")),
+                    sdr_device_name_);
   settings.setValue(storageKey(QStringLiteral("sdr/centerFrequencyHz")),
                     QVariant::fromValue(sdr_center_frequency_hz_));
   settings.setValue(storageKey(QStringLiteral("sdr/sampleRateHz")),
@@ -2095,15 +2247,20 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("sdr/automaticGain")),
                     sdr_automatic_gain_);
   settings.setValue(storageKey(QStringLiteral("sdr/gainDb")), sdr_gain_db_);
-  settings.setValue(storageKey(QStringLiteral("station/ownCallsign")), own_callsign_);
-  settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")), reference_rig_index_);
-  settings.setValue(storageKey(QStringLiteral("radio/enabled")), radio_enabled_);
-  settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")), frequency_backend_index_);
+  settings.setValue(storageKey(QStringLiteral("station/ownCallsign")),
+                    own_callsign_);
+  settings.setValue(storageKey(QStringLiteral("radio/referenceRigIndex")),
+                    reference_rig_index_);
+  settings.setValue(storageKey(QStringLiteral("radio/enabled")),
+                    radio_enabled_);
+  settings.setValue(storageKey(QStringLiteral("radio/frequencyBackendIndex")),
+                    frequency_backend_index_);
   settings.setValue(storageKey(QStringLiteral("radio/tuningStepHz")),
                     radio_tuning_step_hz_);
   settings.setValue(storageKey(QStringLiteral("radio/txModeTarget")),
                     radioTxModeTarget());
-  settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")), omnirig_slot_);
+  settings.setValue(storageKey(QStringLiteral("radio/omniRigSlot")),
+                    omnirig_slot_);
   settings.setValue(storageKey(QStringLiteral("radio/hamlibHost")),
                     hamlib_host_);
   settings.setValue(storageKey(QStringLiteral("radio/hamlibPort")),
@@ -2114,21 +2271,35 @@ bool AppSettings::apply() {
                     hamlib_tx_vfo_);
   settings.setValue(storageKey(QStringLiteral("radio/hamlibWritable")),
                     hamlib_writable_);
-  settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")), cat4om_url_.trimmed());
-  settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")), cat4om_radio_id_.trimmed());
-  settings.setValue(storageKey(QStringLiteral("radio/catPort")), cat_port_.trimmed());
-  settings.setValue(storageKey(QStringLiteral("radio/catBaudRate")), cat_baud_rate_);
-  settings.setValue(storageKey(QStringLiteral("radio/catDataBits")), cat_data_bits_);
-  settings.setValue(storageKey(QStringLiteral("radio/catParityIndex")), cat_parity_index_);
-  settings.setValue(storageKey(QStringLiteral("radio/catStopBits")), cat_stop_bits_);
-  settings.setValue(storageKey(QStringLiteral("radio/catFlowControlIndex")), cat_flow_control_index_);
-  settings.setValue(storageKey(QStringLiteral("radio/pollIntervalMs")), poll_interval_ms_);
+  settings.setValue(storageKey(QStringLiteral("radio/cat4omUrl")),
+                    cat4om_url_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("radio/cat4omRadioId")),
+                    cat4om_radio_id_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("radio/catPort")),
+                    cat_port_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("radio/catBaudRate")),
+                    cat_baud_rate_);
+  settings.setValue(storageKey(QStringLiteral("radio/catDataBits")),
+                    cat_data_bits_);
+  settings.setValue(storageKey(QStringLiteral("radio/catParityIndex")),
+                    cat_parity_index_);
+  settings.setValue(storageKey(QStringLiteral("radio/catStopBits")),
+                    cat_stop_bits_);
+  settings.setValue(storageKey(QStringLiteral("radio/catFlowControlIndex")),
+                    cat_flow_control_index_);
+  settings.setValue(storageKey(QStringLiteral("radio/pollIntervalMs")),
+                    poll_interval_ms_);
   settings.setValue(storageKey(QStringLiteral("radio/timeoutMs")), timeout_ms_);
-  settings.setValue(storageKey(QStringLiteral("radio/splitEnabled")), split_enabled_);
-  settings.setValue(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")), rx_transverter_offset_hz_);
-  settings.setValue(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), tx_transverter_offset_hz_);
-  settings.setValue(storageKey(QStringLiteral("radio/cwToneSidebandIndex")), cw_tone_sideband_index_);
-  settings.setValue(storageKey(QStringLiteral("keying/port")), keying_port_.trimmed());
+  settings.setValue(storageKey(QStringLiteral("radio/splitEnabled")),
+                    split_enabled_);
+  settings.setValue(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")),
+                    rx_transverter_offset_hz_);
+  settings.setValue(storageKey(QStringLiteral("radio/txTransverterOffsetHz")),
+                    tx_transverter_offset_hz_);
+  settings.setValue(storageKey(QStringLiteral("radio/cwToneSidebandIndex")),
+                    cw_tone_sideband_index_);
+  settings.setValue(storageKey(QStringLiteral("keying/port")),
+                    keying_port_.trimmed());
   settings.setValue(storageKey(QStringLiteral("keying/directEnabled")),
                     direct_keying_enabled_);
   settings.remove(storageKey(QStringLiteral("keying/directValidated")));
@@ -2139,10 +2310,14 @@ bool AppSettings::apply() {
                     direct_keying_acceptance_platform_);
   settings.setValue(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")),
                     direct_keying_acceptance_utc_seconds_);
-  settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_);
-  settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_);
-  settings.setValue(storageKey(QStringLiteral("keying/pttActiveHigh")), ptt_active_high_);
-  settings.setValue(storageKey(QStringLiteral("keying/keyActiveHigh")), key_active_high_);
+  settings.setValue(storageKey(QStringLiteral("keying/pttLineIndex")),
+                    ptt_line_index_);
+  settings.setValue(storageKey(QStringLiteral("keying/keyLineIndex")),
+                    key_line_index_);
+  settings.setValue(storageKey(QStringLiteral("keying/pttActiveHigh")),
+                    ptt_active_high_);
+  settings.setValue(storageKey(QStringLiteral("keying/keyActiveHigh")),
+                    key_active_high_);
   settings.setValue(storageKey(QStringLiteral("keying/txSpeedMode")),
                     tx_speed_mode_);
   settings.setValue(storageKey(QStringLiteral("keying/fixedTxWpm")),
@@ -2151,23 +2326,44 @@ bool AppSettings::apply() {
   settings.setValue(storageKey(QStringLiteral("keying/txMacro2")), tx_macro_2_);
   settings.setValue(storageKey(QStringLiteral("keying/txMacro3")), tx_macro_3_);
   settings.setValue(storageKey(QStringLiteral("keying/txMacro4")), tx_macro_4_);
-  settings.setValue(storageKey(QStringLiteral("display/targetFps")), target_fps_);
-  settings.setValue(storageKey(QStringLiteral("display/waterfallRate")), waterfall_rate_);
-  settings.setValue(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), waterfall_time_span_seconds_);
-  settings.setValue(storageKey(QStringLiteral("display/spectrumDisplayMode")), spectrum_display_mode_);
-  settings.setValue(storageKey(QStringLiteral("display/automaticRange")), automatic_range_);
-  settings.setValue(storageKey(QStringLiteral("display/lowerBoundDb")), lower_bound_db_);
-  settings.setValue(storageKey(QStringLiteral("display/upperBoundDb")), upper_bound_db_);
-  settings.setValue(storageKey(QStringLiteral("display/automaticRangeSpanDb")), automatic_range_span_db_);
-  settings.setValue(storageKey(QStringLiteral("display/waterfallNoiseSuppression")), waterfall_noise_suppression_);
-  settings.setValue(storageKey(QStringLiteral("display/waterfallNoiseMarginDb")), waterfall_noise_margin_db_);
-  settings.setValue(storageKey(QStringLiteral("display/showCwGuide")), show_cw_guide_);
-  settings.setValue(storageKey(QStringLiteral("display/cwGuideCenterHz")), cw_guide_center_hz_);
-  settings.setValue(storageKey(QStringLiteral("display/cwGuideWidthHz")), cw_guide_width_hz_);
-  settings.setValue(storageKey(QStringLiteral("display/averagingFrames")), averaging_frames_);
+  settings.setValue(storageKey(QStringLiteral("display/targetFps")),
+                    target_fps_);
+  settings.setValue(storageKey(QStringLiteral("display/waterfallRate")),
+                    waterfall_rate_);
+  settings.setValue(
+      storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")),
+      waterfall_time_span_seconds_);
+  settings.setValue(storageKey(QStringLiteral("display/spectrumDisplayMode")),
+                    spectrum_display_mode_);
+  settings.setValue(storageKey(QStringLiteral("display/automaticRange")),
+                    automatic_range_);
+  settings.setValue(storageKey(QStringLiteral("display/lowerBoundDb")),
+                    lower_bound_db_);
+  settings.setValue(storageKey(QStringLiteral("display/upperBoundDb")),
+                    upper_bound_db_);
+  settings.setValue(storageKey(QStringLiteral("display/automaticRangeSpanDb")),
+                    automatic_range_span_db_);
+  settings.setValue(
+      storageKey(QStringLiteral("display/waterfallNoiseSuppression")),
+      waterfall_noise_suppression_);
+  settings.setValue(
+      storageKey(QStringLiteral("display/waterfallNoiseMarginDb")),
+      waterfall_noise_margin_db_);
+  settings.setValue(storageKey(QStringLiteral("display/showCwGuide")),
+                    show_cw_guide_);
+  settings.setValue(storageKey(QStringLiteral("display/cwGuideCenterHz")),
+                    cw_guide_center_hz_);
+  settings.setValue(storageKey(QStringLiteral("display/cwGuideWidthHz")),
+                    cw_guide_width_hz_);
+  settings.setValue(storageKey(QStringLiteral("display/averagingFrames")),
+                    averaging_frames_);
   settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
-  settings.setValue(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
-                    decoded_signal_timeout_seconds_);
+  settings.setValue(
+      storageKey(QStringLiteral("display/showSpectrumGestureHints")),
+      show_spectrum_gesture_hints_);
+  settings.setValue(
+      storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
+      decoded_signal_timeout_seconds_);
   settings.setValue(storageKey(QStringLiteral("decoder/localEnabled")),
                     local_decoder_enabled_);
   settings.setValue(
@@ -2184,27 +2380,34 @@ bool AppSettings::apply() {
                     local_decoder_model_path_);
   settings.setValue(storageKey(QStringLiteral("decoder/localMetadataPath")),
                     local_decoder_metadata_path_);
-  settings.setValue(storageKey(QStringLiteral("decoder/localCallsignDatabaseEnabled")),
-                    local_callsign_database_enabled_);
-  settings.setValue(storageKey(QStringLiteral("decoder/localCallsignDatabasePath")),
-                    local_callsign_database_path_);
+  settings.setValue(
+      storageKey(QStringLiteral("decoder/localCallsignDatabaseEnabled")),
+      local_callsign_database_enabled_);
+  settings.setValue(
+      storageKey(QStringLiteral("decoder/localCallsignDatabasePath")),
+      local_callsign_database_path_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
     return false;
   }
   emit settingsChanged();
-  emit localDecoderConfigurationCommitted(
-      local_decoder_enabled_, local_decoder_model_path_,
-      local_decoder_metadata_path_);
-  setStatusMessage(QStringLiteral("Settings saved. Transmit remains disarmed."));
+  emit localDecoderConfigurationCommitted(local_decoder_enabled_,
+                                          local_decoder_model_path_,
+                                          local_decoder_metadata_path_);
+  setStatusMessage(
+      QStringLiteral("Settings saved. Transmit remains disarmed."));
   refreshProfiles();
   return true;
 }
 
 void AppSettings::load() {
   QSettings settings;
-  setup_complete_ = settings.value(storageKey(QStringLiteral("configuration/setupComplete")), false).toBool();
+  setup_complete_ =
+      settings
+          .value(storageKey(QStringLiteral("configuration/setupComplete")),
+                 false)
+          .toBool();
   audio_input_id_ =
       settings.value(storageKey(QStringLiteral("audio/inputId"))).toString();
   audio_input_name_ = settings
@@ -2213,27 +2416,41 @@ void AppSettings::load() {
                           .toString();
   audio_output_id_ =
       settings.value(storageKey(QStringLiteral("audio/outputId"))).toString();
-  audio_output_name_ = settings
-                           .value(storageKey(QStringLiteral("audio/outputName")),
-                                  QStringLiteral("System default output"))
-                           .toString();
+  audio_output_name_ =
+      settings
+          .value(storageKey(QStringLiteral("audio/outputName")),
+                 QStringLiteral("System default output"))
+          .toString();
   audio_dc_rejection_ =
-      settings.value(storageKey(QStringLiteral("audio/dcRejection")), true).toBool();
+      settings.value(storageKey(QStringLiteral("audio/dcRejection")), true)
+          .toBool();
   audio_automatic_gain_ =
-      settings.value(storageKey(QStringLiteral("audio/automaticGain")), false).toBool();
+      settings.value(storageKey(QStringLiteral("audio/automaticGain")), false)
+          .toBool();
   audio_gain_db_ =
-      settings.value(storageKey(QStringLiteral("audio/gainDb")), 0.0).toDouble();
+      settings.value(storageKey(QStringLiteral("audio/gainDb")), 0.0)
+          .toDouble();
   audio_automatic_gain_target_dbfs_ =
-      settings.value(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")), -12.0).toDouble();
+      settings
+          .value(storageKey(QStringLiteral("audio/automaticGainTargetDbfs")),
+                 -12.0)
+          .toDouble();
   audio_automatic_bandwidth_ =
-      settings.value(storageKey(QStringLiteral("audio/automaticBandwidth")), true).toBool();
+      settings
+          .value(storageKey(QStringLiteral("audio/automaticBandwidth")), true)
+          .toBool();
   audio_lower_frequency_hz_ =
-      settings.value(storageKey(QStringLiteral("audio/lowerFrequencyHz")), 100.0).toDouble();
+      settings
+          .value(storageKey(QStringLiteral("audio/lowerFrequencyHz")), 100.0)
+          .toDouble();
   audio_upper_frequency_hz_ =
-      settings.value(storageKey(QStringLiteral("audio/upperFrequencyHz")), 3'000.0).toDouble();
-  audio_input_radio_linked_ = settings
-      .value(storageKey(QStringLiteral("audio/inputRadioLinked")), false)
-      .toBool();
+      settings
+          .value(storageKey(QStringLiteral("audio/upperFrequencyHz")), 3'000.0)
+          .toDouble();
+  audio_input_radio_linked_ =
+      settings
+          .value(storageKey(QStringLiteral("audio/inputRadioLinked")), false)
+          .toBool();
   receiver_input_type_index_ = std::clamp(
       settings.value(storageKey(QStringLiteral("receiver/inputType")), 0)
           .toInt(),
@@ -2243,205 +2460,327 @@ void AppSettings::load() {
   sdr_device_name_ =
       settings.value(storageKey(QStringLiteral("sdr/deviceName"))).toString();
   sdr_center_frequency_hz_ = std::clamp<qulonglong>(
-      settings.value(storageKey(QStringLiteral("sdr/centerFrequencyHz")),
-                     QVariant::fromValue<qulonglong>(14'050'000ULL))
+      settings
+          .value(storageKey(QStringLiteral("sdr/centerFrequencyHz")),
+                 QVariant::fromValue<qulonglong>(14'050'000ULL))
           .toULongLong(),
       1ULL, 99'000'000'000ULL);
   sdr_sample_rate_hz_ = std::clamp(
-      settings.value(storageKey(QStringLiteral("sdr/sampleRateHz")),
-                     250'000)
+      settings.value(storageKey(QStringLiteral("sdr/sampleRateHz")), 250'000)
           .toInt(),
       25'000, 64'000'000);
   sdr_bandwidth_hz_ = std::clamp(
-      settings.value(storageKey(QStringLiteral("sdr/bandwidthHz")), 0)
-          .toInt(),
+      settings.value(storageKey(QStringLiteral("sdr/bandwidthHz")), 0).toInt(),
       0, 64'000'000);
   sdr_antenna_ =
       settings.value(storageKey(QStringLiteral("sdr/antenna"))).toString();
   sdr_decoder_center_frequency_hz_ = std::clamp<qulonglong>(
-      settings.value(storageKey(QStringLiteral("sdr/decoderCenterFrequencyHz")),
-                     QVariant::fromValue<qulonglong>(
-                         sdr_center_frequency_hz_))
+      settings
+          .value(storageKey(QStringLiteral("sdr/decoderCenterFrequencyHz")),
+                 QVariant::fromValue<qulonglong>(sdr_center_frequency_hz_))
           .toULongLong(),
       1ULL, 99'000'000'000ULL);
   sdr_decoder_bandwidth_hz_ = std::clamp(
-      settings.value(storageKey(QStringLiteral("sdr/decoderBandwidthHz")),
-                     24'000)
+      settings
+          .value(storageKey(QStringLiteral("sdr/decoderBandwidthHz")), 24'000)
           .toInt(),
       6'000, 96'000);
-  sdr_follow_radio_vfo_ = settings
-      .value(storageKey(QStringLiteral("sdr/followRadioVfo")), false)
-      .toBool();
+  sdr_follow_radio_vfo_ =
+      settings.value(storageKey(QStringLiteral("sdr/followRadioVfo")), false)
+          .toBool();
   sdr_radio_lo_offset_hz_ = std::clamp<qint64>(
       settings.value(storageKey(QStringLiteral("sdr/radioLoOffsetHz")), 0)
           .toLongLong(),
       -10'000'000LL, 10'000'000LL);
-  sdr_automatic_gain_ = settings
-      .value(storageKey(QStringLiteral("sdr/automaticGain")), true)
-      .toBool();
+  sdr_automatic_gain_ =
+      settings.value(storageKey(QStringLiteral("sdr/automaticGain")), true)
+          .toBool();
   sdr_gain_db_ = std::clamp(
-      settings.value(storageKey(QStringLiteral("sdr/gainDb")), 30.0)
-          .toDouble(),
+      settings.value(storageKey(QStringLiteral("sdr/gainDb")), 30.0).toDouble(),
       -100.0, 100.0);
   own_callsign_ =
-      settings.value(storageKey(QStringLiteral("station/ownCallsign"))).toString();
-  radio_enabled_ = settings
-                       .value(storageKey(QStringLiteral("radio/enabled")),
-                              setup_complete_)
-                       .toBool();
-  const int saved_index = settings.value(storageKey(QStringLiteral("radio/referenceRigIndex")), 0).toInt();
-  const auto profile_count = static_cast<int>(cwassistant::core::reference_rig_profiles().size());
-  reference_rig_index_ = std::clamp(saved_index, 0, std::max(0, profile_count - 1));
+      settings.value(storageKey(QStringLiteral("station/ownCallsign")))
+          .toString();
+  radio_enabled_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/enabled")), setup_complete_)
+          .toBool();
+  const int saved_index =
+      settings.value(storageKey(QStringLiteral("radio/referenceRigIndex")), 0)
+          .toInt();
+  const auto profile_count =
+      static_cast<int>(cwassistant::core::reference_rig_profiles().size());
+  reference_rig_index_ =
+      std::clamp(saved_index, 0, std::max(0, profile_count - 1));
   applyReferenceDefaults(reference_rig_index_);
-  frequency_backend_index_ = settings.value(storageKey(QStringLiteral("radio/frequencyBackendIndex")), 0).toInt();
+  frequency_backend_index_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/frequencyBackendIndex")), 0)
+          .toInt();
   radio_tuning_step_hz_ = std::clamp(
       settings.value(storageKey(QStringLiteral("radio/tuningStepHz")), 1'000)
           .toInt(),
       1'000, 100'000);
   radio_tx_mode_target_ = cwassistant::core::radio_mode_from_token(
-      settings.value(storageKey(QStringLiteral("radio/txModeTarget")),
-                     QStringLiteral("CW"))
+      settings
+          .value(storageKey(QStringLiteral("radio/txModeTarget")),
+                 QStringLiteral("CW"))
           .toString()
           .toStdString());
   if (!cwassistant::core::radio_tx_mode_target_is_valid(
           radio_tx_mode_target_)) {
     radio_tx_mode_target_ = cwassistant::core::RadioMode::Cw;
   }
-  omnirig_slot_ = settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1).toInt();
+  omnirig_slot_ =
+      settings.value(storageKey(QStringLiteral("radio/omniRigSlot")), 1)
+          .toInt();
   hamlib_host_ = settings
-      .value(storageKey(QStringLiteral("radio/hamlibHost")),
-             QStringLiteral("127.0.0.1"))
-      .toString();
-  hamlib_port_ = settings
-      .value(storageKey(QStringLiteral("radio/hamlibPort")), 4'532)
-      .toInt();
+                     .value(storageKey(QStringLiteral("radio/hamlibHost")),
+                            QStringLiteral("127.0.0.1"))
+                     .toString();
+  hamlib_port_ =
+      settings.value(storageKey(QStringLiteral("radio/hamlibPort")), 4'532)
+          .toInt();
   hamlib_rx_vfo_ = settings
-      .value(storageKey(QStringLiteral("radio/hamlibRxVfo")),
-             QStringLiteral("VFOA"))
-      .toString();
+                       .value(storageKey(QStringLiteral("radio/hamlibRxVfo")),
+                              QStringLiteral("VFOA"))
+                       .toString();
   hamlib_tx_vfo_ = settings
-      .value(storageKey(QStringLiteral("radio/hamlibTxVfo")),
-             QStringLiteral("VFOB"))
-      .toString();
-  hamlib_writable_ = settings
-      .value(storageKey(QStringLiteral("radio/hamlibWritable")), false)
-      .toBool();
+                       .value(storageKey(QStringLiteral("radio/hamlibTxVfo")),
+                              QStringLiteral("VFOB"))
+                       .toString();
+  hamlib_writable_ =
+      settings.value(storageKey(QStringLiteral("radio/hamlibWritable")), false)
+          .toBool();
   cat4om_url_ = settings
                     .value(storageKey(QStringLiteral("radio/cat4omUrl")),
                            QStringLiteral("ws://127.0.0.1:5001/"))
                     .toString();
   cat4om_radio_id_ =
-      settings.value(storageKey(QStringLiteral("radio/cat4omRadioId"))).toString();
+      settings.value(storageKey(QStringLiteral("radio/cat4omRadioId")))
+          .toString();
   cat4om_password_.clear();
-  cat_port_ = settings.value(storageKey(QStringLiteral("radio/catPort"))).toString();
-  cat_baud_rate_ = settings.value(storageKey(QStringLiteral("radio/catBaudRate")), cat_baud_rate_).toInt();
-  cat_data_bits_ = settings.value(storageKey(QStringLiteral("radio/catDataBits")), cat_data_bits_).toInt();
-  cat_parity_index_ = settings.value(storageKey(QStringLiteral("radio/catParityIndex")), cat_parity_index_).toInt();
-  cat_stop_bits_ = settings.value(storageKey(QStringLiteral("radio/catStopBits")), cat_stop_bits_).toInt();
-  cat_flow_control_index_ = settings.value(storageKey(QStringLiteral("radio/catFlowControlIndex")), cat_flow_control_index_).toInt();
-  poll_interval_ms_ = settings.value(storageKey(QStringLiteral("radio/pollIntervalMs")), poll_interval_ms_).toInt();
-  timeout_ms_ = settings.value(storageKey(QStringLiteral("radio/timeoutMs")), timeout_ms_).toInt();
-  split_enabled_ = settings.value(storageKey(QStringLiteral("radio/splitEnabled")), false).toBool();
-  rx_transverter_offset_hz_ = settings.value(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")), 0).toLongLong();
-  tx_transverter_offset_hz_ = settings.value(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), 0).toLongLong();
+  cat_port_ =
+      settings.value(storageKey(QStringLiteral("radio/catPort"))).toString();
+  cat_baud_rate_ = settings
+                       .value(storageKey(QStringLiteral("radio/catBaudRate")),
+                              cat_baud_rate_)
+                       .toInt();
+  cat_data_bits_ = settings
+                       .value(storageKey(QStringLiteral("radio/catDataBits")),
+                              cat_data_bits_)
+                       .toInt();
+  cat_parity_index_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/catParityIndex")),
+                 cat_parity_index_)
+          .toInt();
+  cat_stop_bits_ = settings
+                       .value(storageKey(QStringLiteral("radio/catStopBits")),
+                              cat_stop_bits_)
+                       .toInt();
+  cat_flow_control_index_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/catFlowControlIndex")),
+                 cat_flow_control_index_)
+          .toInt();
+  poll_interval_ms_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/pollIntervalMs")),
+                 poll_interval_ms_)
+          .toInt();
+  timeout_ms_ =
+      settings.value(storageKey(QStringLiteral("radio/timeoutMs")), timeout_ms_)
+          .toInt();
+  split_enabled_ =
+      settings.value(storageKey(QStringLiteral("radio/splitEnabled")), false)
+          .toBool();
+  rx_transverter_offset_hz_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/rxTransverterOffsetHz")), 0)
+          .toLongLong();
+  tx_transverter_offset_hz_ =
+      settings
+          .value(storageKey(QStringLiteral("radio/txTransverterOffsetHz")), 0)
+          .toLongLong();
   cw_tone_sideband_index_ = std::clamp(
       settings.value(storageKey(QStringLiteral("radio/cwToneSidebandIndex")), 0)
           .toInt(),
       0, 1);
-  keying_port_ = settings.value(storageKey(QStringLiteral("keying/port"))).toString();
-  direct_keying_enabled_ = settings
-      .value(storageKey(QStringLiteral("keying/directEnabled")), false)
-      .toBool();
-  ptt_line_index_ = settings.value(storageKey(QStringLiteral("keying/pttLineIndex")), ptt_line_index_).toInt();
-  key_line_index_ = settings.value(storageKey(QStringLiteral("keying/keyLineIndex")), key_line_index_).toInt();
-  ptt_active_high_ = settings.value(storageKey(QStringLiteral("keying/pttActiveHigh")), true).toBool();
-  key_active_high_ = settings.value(storageKey(QStringLiteral("keying/keyActiveHigh")), true).toBool();
-  direct_keying_acceptance_sha256_ = settings
-      .value(storageKey(
-          QStringLiteral("keying/acceptanceConfigurationSha256")))
-      .toString();
-  direct_keying_acceptance_platform_ = settings
-      .value(storageKey(QStringLiteral("keying/acceptancePlatform")))
-      .toString();
-  direct_keying_acceptance_utc_seconds_ = settings
-      .value(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")), 0)
-      .toLongLong();
+  keying_port_ =
+      settings.value(storageKey(QStringLiteral("keying/port"))).toString();
+  direct_keying_enabled_ =
+      settings.value(storageKey(QStringLiteral("keying/directEnabled")), false)
+          .toBool();
+  ptt_line_index_ =
+      settings
+          .value(storageKey(QStringLiteral("keying/pttLineIndex")),
+                 ptt_line_index_)
+          .toInt();
+  key_line_index_ =
+      settings
+          .value(storageKey(QStringLiteral("keying/keyLineIndex")),
+                 key_line_index_)
+          .toInt();
+  ptt_active_high_ =
+      settings.value(storageKey(QStringLiteral("keying/pttActiveHigh")), true)
+          .toBool();
+  key_active_high_ =
+      settings.value(storageKey(QStringLiteral("keying/keyActiveHigh")), true)
+          .toBool();
+  direct_keying_acceptance_sha256_ =
+      settings
+          .value(storageKey(
+              QStringLiteral("keying/acceptanceConfigurationSha256")))
+          .toString();
+  direct_keying_acceptance_platform_ =
+      settings.value(storageKey(QStringLiteral("keying/acceptancePlatform")))
+          .toString();
+  direct_keying_acceptance_utc_seconds_ =
+      settings
+          .value(storageKey(QStringLiteral("keying/acceptanceUtcSeconds")), 0)
+          .toLongLong();
   const DirectKeyingConfig stored_keying_config{
       .port_name = keying_port_,
-      .ptt_line = ptt_line_index_ == 0 ? DirectKeyingLine::Rts
-                                      : DirectKeyingLine::Dtr,
-      .key_line = key_line_index_ == 0 ? DirectKeyingLine::Rts
-                                      : DirectKeyingLine::Dtr,
+      .ptt_line =
+          ptt_line_index_ == 0 ? DirectKeyingLine::Rts : DirectKeyingLine::Dtr,
+      .key_line =
+          key_line_index_ == 0 ? DirectKeyingLine::Rts : DirectKeyingLine::Dtr,
       .ptt_active_high = ptt_active_high_,
       .key_active_high = key_active_high_};
   const QString current_acceptance =
       directKeyingConfigurationSha256(stored_keying_config);
-  direct_keying_validated_ = direct_keying_enabled_ &&
-      direct_keying_acceptance_utc_seconds_ > 0 &&
+  direct_keying_validated_ =
+      direct_keying_enabled_ && direct_keying_acceptance_utc_seconds_ > 0 &&
       direct_keying_acceptance_platform_ == acceptancePlatformToken() &&
       direct_keying_acceptance_sha256_ == current_acceptance;
-  direct_keying_acceptance_status_ = direct_keying_validated_
-      ? QStringLiteral("Measured physical loopback passed for this exact keying configuration. Complete dummy-load acceptance before on-air use.")
-      : QStringLiteral("Physical loopback has not been measured for this exact keying configuration.");
+  direct_keying_acceptance_status_ =
+      direct_keying_validated_
+          ? QStringLiteral(
+                "Measured physical loopback passed for this exact "
+                "keying configuration. Complete dummy-load "
+                "acceptance before on-air use.")
+          : QStringLiteral(
+                "Physical loopback has not been measured for this "
+                "exact keying configuration.");
   tx_speed_mode_ = std::clamp(
       settings.value(storageKey(QStringLiteral("keying/txSpeedMode")), 0)
-          .toInt(), 0, 1);
+          .toInt(),
+      0, 1);
   fixed_tx_wpm_ = std::clamp(
       settings.value(storageKey(QStringLiteral("keying/fixedTxWpm")), 20)
-          .toInt(), 5, 80);
+          .toInt(),
+      5, 80);
   tx_macro_1_ = settings
-      .value(storageKey(QStringLiteral("keying/txMacro1")),
-             QStringLiteral("TU"))
-      .toString().simplified().toUpper().left(64);
+                    .value(storageKey(QStringLiteral("keying/txMacro1")),
+                           QStringLiteral("TU"))
+                    .toString()
+                    .simplified()
+                    .toUpper()
+                    .left(64);
   tx_macro_2_ = settings
-      .value(storageKey(QStringLiteral("keying/txMacro2")),
-             QStringLiteral("AGN"))
-      .toString().simplified().toUpper().left(64);
+                    .value(storageKey(QStringLiteral("keying/txMacro2")),
+                           QStringLiteral("AGN"))
+                    .toString()
+                    .simplified()
+                    .toUpper()
+                    .left(64);
   tx_macro_3_ = settings
-      .value(storageKey(QStringLiteral("keying/txMacro3")),
-             QStringLiteral("PSE K"))
-      .toString().simplified().toUpper().left(64);
+                    .value(storageKey(QStringLiteral("keying/txMacro3")),
+                           QStringLiteral("PSE K"))
+                    .toString()
+                    .simplified()
+                    .toUpper()
+                    .left(64);
   tx_macro_4_ = settings
-      .value(storageKey(QStringLiteral("keying/txMacro4")),
-             QStringLiteral("73"))
-      .toString().simplified().toUpper().left(64);
-  target_fps_ = settings.value(storageKey(QStringLiteral("display/targetFps")), 60).toInt();
-  waterfall_rate_ = settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60).toInt();
+                    .value(storageKey(QStringLiteral("keying/txMacro4")),
+                           QStringLiteral("73"))
+                    .toString()
+                    .simplified()
+                    .toUpper()
+                    .left(64);
+  target_fps_ =
+      settings.value(storageKey(QStringLiteral("display/targetFps")), 60)
+          .toInt();
+  waterfall_rate_ =
+      settings.value(storageKey(QStringLiteral("display/waterfallRate")), 60)
+          .toInt();
   waterfall_time_span_seconds_ =
-      settings.value(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")), 10).toInt();
-  spectrum_display_mode_ = std::clamp(settings.value(
-      storageKey(QStringLiteral("display/spectrumDisplayMode")), 0).toInt(),
+      settings
+          .value(storageKey(QStringLiteral("display/waterfallTimeSpanSeconds")),
+                 10)
+          .toInt();
+  spectrum_display_mode_ = std::clamp(
+      settings
+          .value(storageKey(QStringLiteral("display/spectrumDisplayMode")), 0)
+          .toInt(),
       0, 1);
-  automatic_range_ = settings.value(storageKey(QStringLiteral("display/automaticRange")), true).toBool();
-  lower_bound_db_ = settings.value(storageKey(QStringLiteral("display/lowerBoundDb")), -120.0).toDouble();
-  upper_bound_db_ = settings.value(storageKey(QStringLiteral("display/upperBoundDb")), -20.0).toDouble();
+  automatic_range_ =
+      settings.value(storageKey(QStringLiteral("display/automaticRange")), true)
+          .toBool();
+  lower_bound_db_ =
+      settings.value(storageKey(QStringLiteral("display/lowerBoundDb")), -120.0)
+          .toDouble();
+  upper_bound_db_ =
+      settings.value(storageKey(QStringLiteral("display/upperBoundDb")), -20.0)
+          .toDouble();
   automatic_range_span_db_ =
-      settings.value(storageKey(QStringLiteral("display/automaticRangeSpanDb")), 60.0).toDouble();
+      settings
+          .value(storageKey(QStringLiteral("display/automaticRangeSpanDb")),
+                 60.0)
+          .toDouble();
   waterfall_noise_suppression_ =
-      settings.value(storageKey(QStringLiteral("display/waterfallNoiseSuppression")), true).toBool();
+      settings
+          .value(
+              storageKey(QStringLiteral("display/waterfallNoiseSuppression")),
+              true)
+          .toBool();
   waterfall_noise_margin_db_ =
-      settings.value(storageKey(QStringLiteral("display/waterfallNoiseMarginDb")), 6.0).toDouble();
+      settings
+          .value(storageKey(QStringLiteral("display/waterfallNoiseMarginDb")),
+                 6.0)
+          .toDouble();
   show_cw_guide_ =
-      settings.value(storageKey(QStringLiteral("display/showCwGuide")), true).toBool();
+      settings.value(storageKey(QStringLiteral("display/showCwGuide")), true)
+          .toBool();
   cw_guide_center_hz_ =
-      settings.value(storageKey(QStringLiteral("display/cwGuideCenterHz")), 700.0).toDouble();
+      settings
+          .value(storageKey(QStringLiteral("display/cwGuideCenterHz")), 700.0)
+          .toDouble();
   cw_guide_width_hz_ =
-      settings.value(storageKey(QStringLiteral("display/cwGuideWidthHz")), 200.0).toDouble();
-  averaging_frames_ = settings.value(storageKey(QStringLiteral("display/averagingFrames")), 3).toInt();
-  show_grid_ = settings.value(storageKey(QStringLiteral("display/showGrid")), true).toBool();
+      settings
+          .value(storageKey(QStringLiteral("display/cwGuideWidthHz")), 200.0)
+          .toDouble();
+  averaging_frames_ =
+      settings.value(storageKey(QStringLiteral("display/averagingFrames")), 3)
+          .toInt();
+  show_grid_ =
+      settings.value(storageKey(QStringLiteral("display/showGrid")), true)
+          .toBool();
+  show_spectrum_gesture_hints_ =
+      settings
+          .value(storageKey(QStringLiteral("display/showSpectrumGestureHints")),
+                 true)
+          .toBool();
   decoded_signal_timeout_seconds_ =
-      settings.value(storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")), 30).toInt();
-  local_decoder_enabled_ = settings
-      .value(storageKey(QStringLiteral("decoder/localEnabled")), false)
-      .toBool();
-  callsign_database_correction_enabled_ = settings
-      .value(storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
-             false)
-      .toBool();
+      settings
+          .value(
+              storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
+              30)
+          .toInt();
+  local_decoder_enabled_ =
+      settings.value(storageKey(QStringLiteral("decoder/localEnabled")), false)
+          .toBool();
+  callsign_database_correction_enabled_ =
+      settings
+          .value(
+              storageKey(QStringLiteral("decoder/callsignDatabaseCorrection")),
+              false)
+          .toBool();
   keying_model_ = settings
-      .value(storageKey(QStringLiteral("decoder/keyingModel")),
-             QStringLiteral("adaptive-threshold"))
-      .toString();
+                      .value(storageKey(QStringLiteral("decoder/keyingModel")),
+                             QStringLiteral("adaptive-threshold"))
+                      .toString();
   debug_capture_maximum_seconds_ = std::clamp(
       settings
           .value(storageKey(
@@ -2449,26 +2788,35 @@ void AppSettings::load() {
                  300)
           .toInt(),
       30, 1'800);
-  operator_role_ = settings
-      .value(storageKey(QStringLiteral("station/operatorRole")),
-             QStringLiteral("monitor"))
-      .toString();
-  local_decoder_model_path_ = settings
-      .value(storageKey(QStringLiteral("decoder/localModelPath"))).toString();
-  local_decoder_metadata_path_ = settings
-      .value(storageKey(QStringLiteral("decoder/localMetadataPath"))).toString();
-  local_callsign_database_enabled_ = settings
-      .value(storageKey(QStringLiteral("decoder/localCallsignDatabaseEnabled")),
-             false)
-      .toBool();
-  local_callsign_database_path_ = settings
-      .value(storageKey(QStringLiteral("decoder/localCallsignDatabasePath")))
-      .toString();
-  local_callsign_database_status_ = !local_callsign_database_enabled_
-      ? QStringLiteral("Disabled. No local callsign list is in use.")
-      : (local_callsign_database_path_.isEmpty()
-             ? QStringLiteral("Select a local master.scp or Call History text file.")
-             : QStringLiteral("Saved local callsign list configured."));
+  operator_role_ =
+      settings
+          .value(storageKey(QStringLiteral("station/operatorRole")),
+                 QStringLiteral("monitor"))
+          .toString();
+  local_decoder_model_path_ =
+      settings.value(storageKey(QStringLiteral("decoder/localModelPath")))
+          .toString();
+  local_decoder_metadata_path_ =
+      settings.value(storageKey(QStringLiteral("decoder/localMetadataPath")))
+          .toString();
+  local_callsign_database_enabled_ =
+      settings
+          .value(storageKey(
+                     QStringLiteral("decoder/localCallsignDatabaseEnabled")),
+                 false)
+          .toBool();
+  local_callsign_database_path_ =
+      settings
+          .value(
+              storageKey(QStringLiteral("decoder/localCallsignDatabasePath")))
+          .toString();
+  local_callsign_database_status_ =
+      !local_callsign_database_enabled_
+          ? QStringLiteral("Disabled. No local callsign list is in use.")
+          : (local_callsign_database_path_.isEmpty()
+                 ? QStringLiteral(
+                       "Select a local master.scp or Call History text file.")
+                 : QStringLiteral("Saved local callsign list configured."));
 }
 
 bool AppSettings::completeSetup() {
@@ -2476,15 +2824,18 @@ bool AppSettings::completeSetup() {
     return false;
   }
   QSettings settings;
-  settings.setValue(storageKey(QStringLiteral("configuration/setupComplete")), true);
+  settings.setValue(storageKey(QStringLiteral("configuration/setupComplete")),
+                    true);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
-    setStatusMessage(QStringLiteral("Setup could not be completed because settings were not writable."));
+    setStatusMessage(QStringLiteral(
+        "Setup could not be completed because settings were not writable."));
     return false;
   }
   setup_complete_ = true;
   emit setupCompleteChanged();
-  setStatusMessage(QStringLiteral("Station profile is ready. Transmit remains disarmed."));
+  setStatusMessage(
+      QStringLiteral("Station profile is ready. Transmit remains disarmed."));
   return true;
 }
 
@@ -2495,15 +2846,19 @@ bool AppSettings::selectProfile(const QString& profile_name) {
     return false;
   }
   QSettings settings;
-  if (!settings.contains(QStringLiteral("profiles/%1/configuration/schemaVersion").arg(key))) {
-    setStatusMessage(QStringLiteral("The selected station profile does not exist."));
+  if (!settings.contains(
+          QStringLiteral("profiles/%1/configuration/schemaVersion").arg(key))) {
+    setStatusMessage(
+        QStringLiteral("The selected station profile does not exist."));
     return false;
   }
   profile_storage_key_ = key;
-  profile_name_ = settings
-                      .value(QStringLiteral("profiles/%1/configuration/displayName").arg(key),
-                             profile_name)
-                      .toString();
+  profile_name_ =
+      settings
+          .value(
+              QStringLiteral("profiles/%1/configuration/displayName").arg(key),
+              profile_name)
+          .toString();
   resetInMemorySettings();
   load();
   refreshAudioInputs();
@@ -2513,13 +2868,14 @@ bool AppSettings::selectProfile(const QString& profile_name) {
   emit profileSelectionRequiredChanged();
   emit audioInputsChanged();
   emit settingsChanged();
-  emit localDecoderConfigurationCommitted(
-      local_decoder_enabled_, local_decoder_model_path_,
-      local_decoder_metadata_path_);
+  emit localDecoderConfigurationCommitted(local_decoder_enabled_,
+                                          local_decoder_model_path_,
+                                          local_decoder_metadata_path_);
   emit localCallsignDatabaseChanged();
   emit localCallsignDatabaseConfigurationCommitted(
       local_callsign_database_enabled_, local_callsign_database_path_);
-  setStatusMessage(QStringLiteral("Station profile selected. Transmit remains disarmed."));
+  setStatusMessage(
+      QStringLiteral("Station profile selected. Transmit remains disarmed."));
   return true;
 }
 
@@ -2534,15 +2890,18 @@ bool AppSettings::createProfile(const QString& profile_name) {
   const QString schema_key =
       QStringLiteral("profiles/%1/configuration/schemaVersion").arg(key);
   if (settings.contains(schema_key)) {
-    setStatusMessage(QStringLiteral("A profile with that name already exists."));
+    setStatusMessage(
+        QStringLiteral("A profile with that name already exists."));
     return false;
   }
   profile_storage_key_ = key;
   profile_name_ = trimmed;
   resetInMemorySettings();
   settings.setValue(schema_key, kSchemaVersion);
-  settings.setValue(storageKey(QStringLiteral("configuration/displayName")), profile_name_);
-  settings.setValue(storageKey(QStringLiteral("configuration/setupComplete")), false);
+  settings.setValue(storageKey(QStringLiteral("configuration/displayName")),
+                    profile_name_);
+  settings.setValue(storageKey(QStringLiteral("configuration/setupComplete")),
+                    false);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("The new profile could not be created."));
@@ -2555,13 +2914,14 @@ bool AppSettings::createProfile(const QString& profile_name) {
   emit profileSelectionRequiredChanged();
   emit audioInputsChanged();
   emit settingsChanged();
-  emit localDecoderConfigurationCommitted(
-      local_decoder_enabled_, local_decoder_model_path_,
-      local_decoder_metadata_path_);
+  emit localDecoderConfigurationCommitted(local_decoder_enabled_,
+                                          local_decoder_model_path_,
+                                          local_decoder_metadata_path_);
   emit localCallsignDatabaseChanged();
   emit localCallsignDatabaseConfigurationCommitted(
       local_callsign_database_enabled_, local_callsign_database_path_);
-  setStatusMessage(QStringLiteral("New station profile created. Complete its setup."));
+  setStatusMessage(
+      QStringLiteral("New station profile created. Complete its setup."));
   return true;
 }
 
@@ -2587,7 +2947,10 @@ void AppSettings::refreshProfiles() {
   QStringList profiles;
   for (const auto& group : groups) {
     profiles.push_back(
-        settings.value(QStringLiteral("profiles/%1/configuration/displayName").arg(group), group)
+        settings
+            .value(QStringLiteral("profiles/%1/configuration/displayName")
+                       .arg(group),
+                   group)
             .toString());
   }
   if (!profiles.contains(profile_name_, Qt::CaseInsensitive)) {
@@ -2676,6 +3039,7 @@ void AppSettings::resetInMemorySettings() {
   cw_guide_width_hz_ = 200.0;
   averaging_frames_ = 3;
   show_grid_ = true;
+  show_spectrum_gesture_hints_ = true;
   decoded_signal_timeout_seconds_ = 30;
   local_decoder_enabled_ = false;
   callsign_database_correction_enabled_ = false;
@@ -2700,7 +3064,8 @@ void AppSettings::setStatusMessage(QString message) {
 void AppSettings::showOmniRigConfiguration() {
 #ifdef Q_OS_WIN
   if (!ensureOmniRigAutomation()) {
-    setStatusMessage(QStringLiteral("OmniRig is not installed or could not be started."));
+    setStatusMessage(
+        QStringLiteral("OmniRig is not installed or could not be started."));
     return;
   }
   auto* automation = static_cast<IDispatch*>(omnirig_automation_);
@@ -2708,7 +3073,7 @@ void AppSettings::showOmniRigConfiguration() {
   OLECHAR* property_name = const_cast<OLECHAR*>(L"DialogVisible");
   DISPID property_id{};
   HRESULT result = automation->GetIDsOfNames(IID_NULL, &property_name, 1,
-                                              LOCALE_USER_DEFAULT, &property_id);
+                                             LOCALE_USER_DEFAULT, &property_id);
   VARIANT value;
   VariantInit(&value);
   value.vt = VT_BOOL;
@@ -2720,11 +3085,15 @@ void AppSettings::showOmniRigConfiguration() {
                                 DISPATCH_PROPERTYPUT, &parameters, nullptr,
                                 nullptr, nullptr);
   }
-  setStatusMessage(SUCCEEDED(result)
-                       ? QStringLiteral("OmniRig configuration opened. Match its live CAT values to this profile.")
-                       : QStringLiteral("OmniRig configuration could not be opened."));
+  setStatusMessage(
+      SUCCEEDED(result)
+          ? QStringLiteral("OmniRig configuration opened. Match its live CAT "
+                           "values to this profile.")
+          : QStringLiteral("OmniRig configuration could not be opened."));
 #else
-  setStatusMessage(QStringLiteral("OmniRig integration is available on Windows; use Hamlib on this platform."));
+  setStatusMessage(
+      QStringLiteral("OmniRig integration is available on "
+                     "Windows; use Hamlib on this platform."));
 #endif
 }
 
@@ -2749,8 +3118,8 @@ void AppSettings::disconnectHamlib() {
 bool AppSettings::runDirectKeyingLoopback(
     const bool radio_disconnected_confirmed) {
   if (!direct_keying_enabled_) {
-    direct_keying_acceptance_status_ =
-        QStringLiteral("Enable direct keying before running the loopback test.");
+    direct_keying_acceptance_status_ = QStringLiteral(
+        "Enable direct keying before running the loopback test.");
     emit settingsChanged();
     return false;
   }
@@ -2763,10 +3132,10 @@ bool AppSettings::runDirectKeyingLoopback(
   }
   const DirectKeyingConfig configuration{
       .port_name = keying_port_.trimmed(),
-      .ptt_line = ptt_line_index_ == 0 ? DirectKeyingLine::Rts
-                                      : DirectKeyingLine::Dtr,
-      .key_line = key_line_index_ == 0 ? DirectKeyingLine::Rts
-                                      : DirectKeyingLine::Dtr,
+      .ptt_line =
+          ptt_line_index_ == 0 ? DirectKeyingLine::Rts : DirectKeyingLine::Dtr,
+      .key_line =
+          key_line_index_ == 0 ? DirectKeyingLine::Rts : DirectKeyingLine::Dtr,
       .ptt_active_high = ptt_active_high_,
       .key_active_high = key_active_high_};
   DirectKeyingAcceptanceProbe probe;
@@ -2774,12 +3143,13 @@ bool AppSettings::runDirectKeyingLoopback(
       probe.run(configuration, radio_disconnected_confirmed);
   direct_keying_validated_ = result.passed;
   direct_keying_acceptance_status_ = result.detail;
-  direct_keying_acceptance_sha256_ = result.passed
-      ? directKeyingConfigurationSha256(configuration) : QString{};
-  direct_keying_acceptance_platform_ = result.passed
-      ? acceptancePlatformToken() : QString{};
-  direct_keying_acceptance_utc_seconds_ = result.passed
-      ? QDateTime::currentSecsSinceEpoch() : 0;
+  direct_keying_acceptance_sha256_ =
+      result.passed ? directKeyingConfigurationSha256(configuration)
+                    : QString{};
+  direct_keying_acceptance_platform_ =
+      result.passed ? acceptancePlatformToken() : QString{};
+  direct_keying_acceptance_utc_seconds_ =
+      result.passed ? QDateTime::currentSecsSinceEpoch() : 0;
 
   QSettings settings;
   settings.remove(storageKey(QStringLiteral("keying/directValidated")));
@@ -2806,7 +3176,8 @@ bool AppSettings::ensureOmniRigAutomation() {
     return true;
   }
   if (!com_initialization_attempted_) {
-    const HRESULT init_result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    const HRESULT init_result =
+        CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     com_initialized_ = SUCCEEDED(init_result);
     com_initialization_attempted_ = true;
   }
@@ -2814,9 +3185,9 @@ bool AppSettings::ensureOmniRigAutomation() {
   HRESULT result = CLSIDFromProgID(L"OmniRig.OmniRigX", &class_id);
   IDispatch* automation = nullptr;
   if (SUCCEEDED(result)) {
-    result = CoCreateInstance(class_id, nullptr, CLSCTX_LOCAL_SERVER,
-                              IID_IDispatch,
-                              reinterpret_cast<void**>(&automation));
+    result =
+        CoCreateInstance(class_id, nullptr, CLSCTX_LOCAL_SERVER, IID_IDispatch,
+                         reinterpret_cast<void**>(&automation));
   }
   if (FAILED(result) || automation == nullptr) {
     return false;
@@ -2842,12 +3213,12 @@ bool AppSettings::writeOmniRigRxFrequency(
     const auto target = omni_rig_rx_write_target(rig);
     const wchar_t* property =
         target == cwassistant::core::OmniRigRxFrequencyTarget::FrequencyA
-                                  ? L"FreqA"
+            ? L"FreqA"
         : target == cwassistant::core::OmniRigRxFrequencyTarget::FrequencyB
-                                  ? L"FreqB"
+            ? L"FreqB"
         : target == cwassistant::core::OmniRigRxFrequencyTarget::Frequency
-                                  ? L"Freq"
-                                  : nullptr;
+            ? L"Freq"
+            : nullptr;
     written = property != nullptr &&
               automation_put_frequency(rig, property, dial_frequency_hz);
   }
@@ -2871,10 +3242,20 @@ bool AppSettings::writeOmniRigTxFrequency(
     const bool has_writable =
         automation_property(rig, L"WriteableParams", &writable_value);
     const auto vfo = has_vfo ? automation_integer(vfo_value) : std::nullopt;
-    const auto writable = has_writable ? automation_integer(writable_value)
-                                       : std::nullopt;
-    const wchar_t* property =
-        vfo ? omni_rig_frequency_property(*vfo, true) : nullptr;
+    const auto writable =
+        has_writable ? automation_integer(writable_value) : std::nullopt;
+    // Use the last authoritative logical TX-VFO identity first. A request that
+    // enables split and immediately writes the pointed frequency can arrive
+    // before OmniRig's Vfo property changes from its simplex value; deriving
+    // TX from that transient value wrote the receive VFO on affected rigs.
+    const wchar_t* property = nullptr;
+    if (radio_state_.tx_vfo.observation ==
+        cwassistant::core::RadioObservation::Known) {
+      if (radio_state_.tx_vfo.identifier == "A") property = L"FreqA";
+      if (radio_state_.tx_vfo.identifier == "B") property = L"FreqB";
+    }
+    if (property == nullptr && vfo)
+      property = omni_rig_frequency_property(*vfo, true);
     const long required = property && property[4] == L'A' ? 0x04L : 0x08L;
     written = property && writable && ((*writable & required) != 0) &&
               automation_put_frequency(rig, property, dial_frequency_hz);
@@ -2898,8 +3279,8 @@ bool AppSettings::writeOmniRigMode(const cwassistant::core::RadioMode mode) {
     VARIANT writable_value;
     const bool present =
         automation_property(rig, L"WriteableParams", &writable_value);
-    const auto writable = present ? automation_integer(writable_value)
-                                  : std::nullopt;
+    const auto writable =
+        present ? automation_integer(writable_value) : std::nullopt;
     written = writable && ((*writable & *requested) != 0) &&
               automation_put_integer(rig, L"Mode", *requested);
     if (present) VariantClear(&writable_value);
@@ -2921,8 +3302,8 @@ bool AppSettings::writeOmniRigSplit(const bool enabled) {
     VARIANT writable_value;
     const bool present =
         automation_property(rig, L"WriteableParams", &writable_value);
-    const auto writable = present ? automation_integer(writable_value)
-                                  : std::nullopt;
+    const auto writable =
+        present ? automation_integer(writable_value) : std::nullopt;
     written = writable && ((*writable & requested) != 0) &&
               automation_put_integer(rig, L"Split", requested);
     if (present) VariantClear(&writable_value);
@@ -2933,13 +3314,13 @@ bool AppSettings::writeOmniRigSplit(const bool enabled) {
 #endif
 
 void AppSettings::testCat4omConnection() {
-  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()),
-                                  cat4om_radio_id_, {}, true);
+  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()), cat4om_radio_id_,
+                                  {}, true);
 }
 
 void AppSettings::connectCat4omControl() {
-  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()),
-                                  cat4om_radio_id_, cat4om_password_, false);
+  cat4om_client_->connectToServer(QUrl(cat4om_url_.trimmed()), cat4om_radio_id_,
+                                  cat4om_password_, false);
   cat4om_password_.clear();
   emit settingsChanged();
 }

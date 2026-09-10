@@ -870,7 +870,20 @@ Pane {
                         onMoved: value => appSettings.radioTuningStepHz = Math.round(value * 1000)
                     }
                     Label { text: "OmniRig radio slot"; visible: appSettings.frequencyBackendIndex === 0 }
-                    SpinBox { visible: appSettings.frequencyBackendIndex === 0; from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: appSettings.frequencyBackendIndex === 0
+                        SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                        Button {
+                            text: "Configure OmniRig"
+                            enabled: appSettings.omniRigAvailable
+                            onClicked: appSettings.showOmniRigConfiguration()
+                            ToolTip.visible: hovered
+                            ToolTip.text: enabled
+                                ? "Open OmniRig to configure its radio model, COM port, baud rate, parity, and stop bits"
+                                : "OmniRig is not available on this system"
+                        }
+                    }
                     Label { text: "Hamlib rigctld host"; visible: appSettings.frequencyBackendIndex === 1 }
                     TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 1; text: appSettings.hamlibHost; placeholderText: "127.0.0.1"; onEditingFinished: appSettings.hamlibHost = text }
                     Label { text: "Hamlib rigctld port"; visible: appSettings.frequencyBackendIndex === 1 }
@@ -935,30 +948,6 @@ Pane {
                             }
                         }
                     }
-                    Label { text: "CAT port" }
-                    ComboBox {
-                        Layout.fillWidth: true
-                        editable: true
-                        model: appSettings.serialPorts
-                        currentIndex: find(appSettings.catPort)
-                        displayText: currentIndex >= 0 ? currentText : appSettings.catPort
-                        onActivated: appSettings.catPort = currentText
-                        onAccepted: appSettings.catPort = editText
-                    }
-                    Label { text: "Baud rate" }
-                    SpinBox { editable: true; from: 300; to: 1000000; value: appSettings.catBaudRate; onValueModified: appSettings.catBaudRate = value }
-                    Label { text: "Data bits" }
-                    ComboBox { model: [5, 6, 7, 8]; currentIndex: appSettings.catDataBits - 5; onActivated: appSettings.catDataBits = currentValue }
-                    Label { text: "Parity" }
-                    ComboBox { model: ["None", "Even", "Odd"]; currentIndex: appSettings.catParityIndex; onActivated: appSettings.catParityIndex = currentIndex }
-                    Label { text: "Stop bits" }
-                    ComboBox { model: [1, 2]; currentIndex: appSettings.catStopBits - 1; onActivated: appSettings.catStopBits = currentValue }
-                    Label { text: "RTS mode" }
-                    ComboBox { model: ["Low / no flow control", "Hardware handshake"]; currentIndex: appSettings.catFlowControlIndex; onActivated: appSettings.catFlowControlIndex = currentIndex }
-                    Label { text: "Polling interval (ms)" }
-                    SpinBox { editable: true; from: 50; to: 10000; value: appSettings.pollIntervalMs; onValueModified: appSettings.pollIntervalMs = value }
-                    Label { text: "Timeout (ms)" }
-                    SpinBox { editable: true; from: 100; to: 60000; value: appSettings.timeoutMs; onValueModified: appSettings.timeoutMs = value }
                     Label { text: "Split operation" }
                     CheckBox { text: "Use independent TX VFO"; checked: appSettings.splitEnabled; onToggled: appSettings.splitEnabled = checked }
                     Label { text: "RX transverter offset (Hz)" }
@@ -975,19 +964,6 @@ Pane {
                     Label { text: "" }
                     RowLayout {
                         Button {
-                            text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts()
-                            ToolTip.visible: hovered
-                            ToolTip.text: "Rescan serial-port names without opening or probing them"
-                        }
-                        Button {
-                            text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable
-                            onClicked: appSettings.showOmniRigConfiguration()
-                            ToolTip.visible: hovered
-                            ToolTip.text: enabled
-                                ? "Open the native OmniRig configuration dialog"
-                                : "OmniRig is not available on this system"
-                        }
-                        Button {
                             text: "Restore radio defaults"; onClicked: appSettings.resetToReferenceDefaults()
                             ToolTip.visible: hovered
                             ToolTip.text: "Restore the selected reference rig's editable CAT defaults"
@@ -999,7 +975,11 @@ Pane {
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
                         text: appSettings.radioEnabled
-                              ? "Detected radios are positively identified by an integration; serial ports are never guessed. Manual CAT values remain editable. CAT4OM passwords are held for one connection attempt only and are never saved."
+                              ? (appSettings.frequencyBackendIndex === 0
+                                 ? "OmniRig owns radio-model and serial framing configuration; CW Buddy selects only the OmniRig slot. Direct key/PTT remains an independent connection."
+                                 : appSettings.frequencyBackendIndex === 1
+                                   ? "rigctld owns the physical radio and serial framing. CW Buddy configures only its loopback endpoint, VFO mapping, and write permission."
+                                   : "CAT4OM owns the physical radio and serial framing. CW Buddy configures only its Control service connection; passwords are never saved.")
                               : "SWL mode processes receiver audio without CAT or key/PTT. Stored radio values are retained in case this profile is switched back to radio operation."
                     }
                 }
@@ -1153,6 +1133,15 @@ Pane {
                     LabeledSlider { Layout.fillWidth: true; caption: "frames"; from: 1; to: 32; value: appSettings.averagingFrames; onMoved: value => appSettings.averagingFrames = Math.round(value) }
                     Label { text: "Reference grid" }
                     CheckBox { text: "Show frequency and level grid"; checked: appSettings.showGrid; onToggled: appSettings.showGrid = checked }
+                    Label { text: "Spectrum help" }
+                    CheckBox {
+                        objectName: "showSpectrumGestureHintsCheck"
+                        text: "Show brief spectrum gesture hints"
+                        checked: appSettings.showSpectrumGestureHints
+                        onToggled: appSettings.showSpectrumGestureHints = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Show the spectrum pointer legend for at most 10 seconds, no more than once every five minutes"
+                    }
                     Label { text: "Decoded signal timeout" }
                     LabeledSlider { Layout.fillWidth: true; caption: "seconds"; from: 5; to: 300; value: appSettings.decodedSignalTimeoutSeconds; onMoved: value => appSettings.decodedSignalTimeoutSeconds = Math.round(value) }
                     Label { text: "" }

@@ -8,6 +8,22 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Radio Settings and the station wizard now expose only configuration consumed
+  by the selected provider. OmniRig owns its COM/framing values, rigctld owns
+  its physical-radio connection, and CAT4OM owns its server-side connection;
+  CW Buddy no longer shows misleading local baud, parity, stop-bit, polling,
+  or timeout controls for those integrations. The retained direct-serial model
+  validates baud rates against conventional 1200–115200 choices and explicitly
+  bounds data bits, parity, and stop bits for a future direct-CAT provider.
+
+- In direct-SDR views, Shift+left-drag now selects the decoder center and
+  bandwidth directly on the spectrum/waterfall. A short Shift+click recenters
+  the existing window, the drag overlay previews the selection, and the
+  established wheel-zoom, middle-pan, right-probe, and Ctrl+click TX gestures
+  remain unchanged. The compact pointer legend now stays visible for at most
+  ten seconds and cannot reappear for five minutes; a profile-persisted Display
+  option can disable that spectrum overlay without removing button tooltips.
+
 - The public design now defines distinct Standard, PileUp Chaser, PileUp
   Slicer, and Runner workspaces. Chaser includes an observation-only learning
   phase, configurable half-duplex relearning, continuous full-duplex learning,
@@ -43,7 +59,7 @@ All notable changes to CW Buddy are recorded here. The format follows
   than separate physical receivers.
 
 - The direct-SDR spectrum and waterfall support pointer-centred wheel zoom,
-  middle-button panning, double-click/full-span reset, and a visible overlay for
+  middle-button panning, explicit full-span reset, and a visible overlay for
   the bounded decoder window. Right-clicking an SDR frequency moves that window
   before starting the normal manual CW probe.
 
@@ -73,6 +89,25 @@ All notable changes to CW Buddy are recorded here. The format follows
   sole control for enabling or disabling one or more filtered CW streams.
 
 ### Fixed
+
+- Recentring the live-SDR decoder window no longer drops the immediately
+  following manual-probe request while the channelizer is resetting. The
+  request is retained until the first spectrum from the new IQ slice establishes
+  valid frequency bounds, then its decoder card is opened normally.
+
+- Spectrum pointer gestures are now mutually exclusive: plain left opens a
+  stream, Ctrl+left sets TX, Shift+left selects the SDR decoder span, right
+  probes, and middle-drag pans. Unsupported modifier combinations do nothing,
+  while full-span reset is an explicit button action instead of a double-click
+  that also fired ordinary left-click behavior. Pointed TX selection has its
+  own capability gate (it no longer incorrectly requires RX-frequency
+  readback), and OmniRig writes the last authoritatively identified TX VFO
+  instead of a transient simplex VFO observed while split is being enabled.
+
+- Selected-stream monitor audio now applies bounded post-filter level
+  normalization with fast attack and slow release. This compensates for large
+  SDR device/gain-level differences without changing decoder evidence or
+  pumping the noise floor during ordinary Morse gaps.
 
 - Material-style padding and the scrolling transcript background no longer let
   the first decoded line touch or cross the decoder-card text-box border.

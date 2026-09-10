@@ -13,15 +13,16 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
-#include "cwassistant/core/sample_block.hpp"
+#include "../decoder/local_character_decoder.hpp"
+#include "../visualization/spectrum_frame.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/iq_receive.hpp"
+#include "cwassistant/core/sample_block.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_writer.hpp"
 #include "live_audio_pipe.hpp"
-#include "../visualization/spectrum_frame.hpp"
-#include "../decoder/local_character_decoder.hpp"
 
 #include <fstream>
 
@@ -85,9 +86,8 @@ class LiveAudioDspWorker final : public QObject {
   void stop();
   void configure(int averaging_frames, int frame_rate_hz, bool dc_rejection,
                  bool automatic_gain, double gain_db,
-                 double automatic_gain_target_dbfs,
-                 bool automatic_bandwidth, double lower_frequency_hz,
-                 double upper_frequency_hz);
+                 double automatic_gain_target_dbfs, bool automatic_bandwidth,
+                 double lower_frequency_hz, double upper_frequency_hz);
   void setOwnCallsign(const QString& callsign);
   void setKeyingModel(const QString& model);
   void setDebugCaptureMaximumSeconds(double seconds);
@@ -119,7 +119,7 @@ class LiveAudioDspWorker final : public QObject {
   void startDebugCapture(const QString& directory_path);
   void stopDebugCapture();
 
-signals:
+ signals:
   void frameProduced(const cwassistant::desktop::SpectrumFrame& frame);
   void decoderProduced(const QVariantList& channels);
   void diagnosticsProduced(const QVariantMap& diagnostics);
@@ -150,6 +150,7 @@ signals:
   std::uint64_t sdr_decoder_pending_sequence_{0};
   double sdr_decoder_center_frequency_hz_{14'050'000.0};
   double sdr_decoder_bandwidth_hz_{24'000.0};
+  std::optional<double> pending_manual_frequency_hz_;
   cwassistant::core::CwChannelBank decoder_;
   LocalCharacterFrontendBank character_frontends_;
 

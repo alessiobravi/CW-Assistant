@@ -1,7 +1,7 @@
 #include "live_audio_worker.hpp"
 
-#include "decoder_channel_model.hpp"
 #include "cwassistant/core/callsign_policy.hpp"
+#include "decoder_channel_model.hpp"
 
 #include <QAudioDevice>
 #include <QAudioSource>
@@ -24,9 +24,8 @@ namespace cwassistant::desktop {
 namespace {
 
 QString encoded_device_id(const QAudioDevice& device) {
-  return QString::fromLatin1(
-      device.id().toBase64(QByteArray::Base64UrlEncoding |
-                           QByteArray::OmitTrailingEquals));
+  return QString::fromLatin1(device.id().toBase64(
+      QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
 }
 
 QAudioDevice resolve_input(const QString& requested_id) {
@@ -71,8 +70,9 @@ void LiveAudioCaptureWorker::start(const QString& encoded_device_id_value) {
   stopping_ = false;
   const QAudioDevice device = resolve_input(encoded_device_id_value);
   if (device.isNull()) {
-    emit failed(QStringLiteral(
-        "The selected audio input is unavailable. Reconnect it or select another input."));
+    emit failed(
+        QStringLiteral("The selected audio input is unavailable. "
+                       "Reconnect it or select another input."));
     return;
   }
 
@@ -80,7 +80,8 @@ void LiveAudioCaptureWorker::start(const QString& encoded_device_id_value) {
   if (!format_.isValid() || format_.channelCount() < 1 ||
       format_.bytesPerFrame() < 1 ||
       format_.sampleFormat() == QAudioFormat::Unknown) {
-    emit failed(QStringLiteral("The selected audio input has no supported PCM format."));
+    emit failed(QStringLiteral(
+        "The selected audio input has no supported PCM format."));
     return;
   }
 
@@ -103,7 +104,8 @@ void LiveAudioCaptureWorker::start(const QString& encoded_device_id_value) {
           &LiveAudioCaptureWorker::handleStateChanged);
   input_ = source_->start();
   if (input_ == nullptr) {
-    const QString message = QStringLiteral("The operating system could not start the audio input.");
+    const QString message =
+        QStringLiteral("The operating system could not start the audio input.");
     delete source_;
     source_ = nullptr;
     emit failed(message);
@@ -131,7 +133,8 @@ void LiveAudioCaptureWorker::stop() {
 float LiveAudioCaptureWorker::readSample(const char* data) const noexcept {
   switch (format_.sampleFormat()) {
     case QAudioFormat::UInt8:
-      return (static_cast<float>(*reinterpret_cast<const unsigned char*>(data)) -
+      return (static_cast<float>(
+                  *reinterpret_cast<const unsigned char*>(data)) -
               128.0F) /
              128.0F;
     case QAudioFormat::Int16: {
@@ -150,8 +153,7 @@ float LiveAudioCaptureWorker::readSample(const char* data) const noexcept {
       return std::clamp(value, -1.0F, 1.0F);
     }
     case QAudioFormat::Unknown:
-    case QAudioFormat::NSampleFormats:
-      break;
+    case QAudioFormat::NSampleFormats: break;
   }
   return 0.0F;
 }
@@ -179,7 +181,8 @@ void LiveAudioCaptureWorker::appendFrame(const char* frame) {
 void LiveAudioCaptureWorker::publishBlock() {
   block_.sequence = sequence_++;
   if (!pipe_->blocks.try_push(block_)) {
-    const auto count = pipe_->overruns.fetch_add(1, std::memory_order_acq_rel) + 1;
+    const auto count =
+        pipe_->overruns.fetch_add(1, std::memory_order_acq_rel) + 1;
     emit overrunCountChanged(count);
   }
   block_.sample_count = 0;
@@ -213,7 +216,8 @@ void LiveAudioCaptureWorker::handleStateChanged() {
   if (!stopping_ && source_ != nullptr &&
       source_->state() == QtAudio::StoppedState &&
       source_->error() != QtAudio::NoError) {
-    emit failed(QStringLiteral("Live audio stopped because the input device reported an error."));
+    emit failed(QStringLiteral(
+        "Live audio stopped because the input device reported an error."));
   }
 }
 
@@ -230,6 +234,7 @@ void LiveAudioDspWorker::start() {
   sdr_decoder_channelizer_.reset();
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
+  pending_manual_frequency_hz_.reset();
   decoder_.reset();
   character_frontends_.reset();
   monitor_resample_phase_ = 0.0;
@@ -249,6 +254,7 @@ void LiveAudioDspWorker::stop() {
   sdr_decoder_channelizer_.reset();
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
+  pending_manual_frequency_hz_.reset();
   decoder_.reset();
   character_frontends_.reset();
   monitor_resample_phase_ = 0.0;
@@ -264,9 +270,15 @@ void LiveAudioDspWorker::stop() {
 
 void LiveAudioDspWorker::selectDecoderFrequency(
     const double audio_frequency_hz) {
-  const std::uint64_t channel_id =
-      decoder_.selectFrequency(audio_frequency_hz);
-  if (channel_id == 0) return;
+  const std::uint64_t channel_id = decoder_.selectFrequency(audio_frequency_hz);
+  if (channel_id == 0) {
+    // Changing an SDR decoder window resets the detector's spectrum bounds.
+    // A click delivered immediately after that change must survive until the
+    // first spectrum from the newly configured IQ slice establishes them.
+    pending_manual_frequency_hz_ = audio_frequency_hz;
+    return;
+  }
+  pending_manual_frequency_hz_.reset();
   emit decoderProduced(decoderChannelModel(decoder_.channels()));
   emit manualDecoderSelected(static_cast<qulonglong>(channel_id));
 }
@@ -275,23 +287,24 @@ void LiveAudioDspWorker::startDebugCapture(const QString& directory_path) {
   if (capture_active_) {
     finishDebugCapture(QStringLiteral("Restarted"));
   }
-  const QString folder_name =
-      QStringLiteral("cwa-debug-capture-%1")
-          .arg(QDateTime::currentDateTimeUtc().toString(
-              QStringLiteral("yyyyMMdd-HHmmss")));
+  const QString folder_name = QStringLiteral("cwa-debug-capture-%1")
+                                  .arg(QDateTime::currentDateTimeUtc().toString(
+                                      QStringLiteral("yyyyMMdd-HHmmss")));
   QDir base_dir(directory_path);
   if (!base_dir.exists()) {
     base_dir.mkpath(QStringLiteral("."));
   }
   const QString capture_dir = base_dir.filePath(folder_name);
   if (!QDir().mkpath(capture_dir)) {
-    emit debugCaptureStateChanged(false, QString(), 0.0,
-                                  QStringLiteral("Could not create capture folder"));
+    emit debugCaptureStateChanged(
+        false, QString(), 0.0,
+        QStringLiteral("Could not create capture folder"));
     return;
   }
   const QString log_path =
       QDir(capture_dir).filePath(QStringLiteral("diagnostics.jsonl"));
-  capture_diagnostics_log_.open(log_path.toStdString(), std::ios::out | std::ios::trunc);
+  capture_diagnostics_log_.open(log_path.toStdString(),
+                                std::ios::out | std::ios::trunc);
   if (!capture_diagnostics_log_) {
     emit debugCaptureStateChanged(
         false, QString(), 0.0,
@@ -330,21 +343,24 @@ void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
     capture_diagnostics_log_.flush();
     capture_diagnostics_log_.close();
   }
-  const double elapsed_seconds = capture_have_start_
-      ? static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
-            1'000'000'000.0
-      : 0.0;
+  const double elapsed_seconds =
+      capture_have_start_
+          ? static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
+                1'000'000'000.0
+          : 0.0;
   capture_active_ = false;
   capture_writer_pending_ = false;
   capture_have_start_ = false;
-  emit debugCaptureStateChanged(false, capture_base_path_, elapsed_seconds, note);
+  emit debugCaptureStateChanged(false, capture_base_path_, elapsed_seconds,
+                                note);
 }
 
 void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
   QJsonObject root;
-  root.insert(QStringLiteral("elapsedSeconds"),
-              static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
-                  1'000'000'000.0);
+  root.insert(
+      QStringLiteral("elapsedSeconds"),
+      static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
+          1'000'000'000.0);
 
   // A diagnostic capture deliberately does not reset the live decoder: doing
   // so would interrupt open sessions merely because the operator requested a
@@ -378,9 +394,9 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
   QJsonObject radio;
   radio.insert(QStringLiteral("available"), radio_frequency_available_);
   radio.insert(QStringLiteral("rxFrequencyHz"),
-              static_cast<double>(radio_rx_rf_hz_));
+               static_cast<double>(radio_rx_rf_hz_));
   radio.insert(QStringLiteral("txFrequencyHz"),
-              static_cast<double>(radio_tx_rf_hz_));
+               static_cast<double>(radio_tx_rf_hz_));
   radio.insert(QStringLiteral("splitActive"), radio_split_active_);
   root.insert(QStringLiteral("radio"), radio);
 
@@ -396,13 +412,17 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
                 track.presentation_frequency_hz);
     item.insert(QStringLiteral("driftHzPerSecond"), track.drift_hz_per_second);
     item.insert(QStringLiteral("snrDb"), track.snr_db);
-    item.insert(QStringLiteral("narrowbandCoherence"), track.narrowband_coherence);
+    item.insert(QStringLiteral("narrowbandCoherence"),
+                track.narrowband_coherence);
     item.insert(QStringLiteral("filterWidthHz"), track.filter_width_hz);
-    item.insert(QStringLiteral("state"), QString::fromLatin1(
-        cwassistant::core::cwTrackStateName(track.verification_state)));
-    item.insert(QStringLiteral("reason"), QString::fromLatin1(
-        cwassistant::core::cwVerificationReasonName(track.verification_reason)));
-    item.insert(QStringLiteral("spectralObservations"), track.spectral_observations);
+    item.insert(QStringLiteral("state"),
+                QString::fromLatin1(cwassistant::core::cwTrackStateName(
+                    track.verification_state)));
+    item.insert(QStringLiteral("reason"),
+                QString::fromLatin1(cwassistant::core::cwVerificationReasonName(
+                    track.verification_reason)));
+    item.insert(QStringLiteral("spectralObservations"),
+                track.spectral_observations);
     item.insert(QStringLiteral("keyTransitions"),
                 static_cast<qint64>(track.key_transitions));
     item.insert(QStringLiteral("decodedSymbols"),
@@ -432,7 +452,8 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
           return channel.id == track.id;
         });
     const std::string presented_callsign = published == published_channels.end()
-        ? std::string{} : published->callsign;
+                                               ? std::string{}
+                                               : published->callsign;
     QString callsign_source = QStringLiteral("none");
     if (!presented_callsign.empty()) {
       if (cwassistant::core::CallsignPolicy::best_complete_in_text(
@@ -458,8 +479,7 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
         QJsonObject value;
         value.insert(QStringLiteral("sequence"),
                      static_cast<qint64>(turn.sequence));
-        value.insert(QStringLiteral("text"),
-                     QString::fromStdString(turn.text));
+        value.insert(QStringLiteral("text"), QString::fromStdString(turn.text));
         value.insert(QStringLiteral("sender"),
                      QString::fromStdString(turn.sender_callsign));
         value.insert(QStringLiteral("wpm"), turn.wpm);
@@ -469,11 +489,9 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
           const auto& timing = *turn.timing_fingerprint;
           QJsonObject fingerprint;
           fingerprint.insert(QStringLiteral("firstObservationId"),
-                             static_cast<qint64>(
-                                 timing.first_observation_id));
+                             static_cast<qint64>(timing.first_observation_id));
           fingerprint.insert(QStringLiteral("lastObservationId"),
-                             static_cast<qint64>(
-                                 timing.last_observation_id));
+                             static_cast<qint64>(timing.last_observation_id));
           fingerprint.insert(QStringLiteral("evidenceStartedNs"),
                              static_cast<qint64>(timing.evidence_started_ns));
           fingerprint.insert(QStringLiteral("evidenceEndedNs"),
@@ -487,11 +505,9 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
           fingerprint.insert(QStringLiteral("dahCount"),
                              static_cast<qint64>(timing.dah_count));
           fingerprint.insert(QStringLiteral("elementGapCount"),
-                             static_cast<qint64>(
-                                 timing.element_gap_count));
+                             static_cast<qint64>(timing.element_gap_count));
           fingerprint.insert(QStringLiteral("characterGapCount"),
-                             static_cast<qint64>(
-                                 timing.character_gap_count));
+                             static_cast<qint64>(timing.character_gap_count));
           fingerprint.insert(QStringLiteral("wordGapCount"),
                              static_cast<qint64>(timing.word_gap_count));
           fingerprint.insert(QStringLiteral("ditMedianMs"),
@@ -523,9 +539,9 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
       QJsonObject candidate;
       candidate.insert(QStringLiteral("text"),
                        QString::fromStdString(alternative.text));
-      candidate.insert(QStringLiteral("provisionalElements"),
-                       QString::fromStdString(
-                           alternative.provisional_elements));
+      candidate.insert(
+          QStringLiteral("provisionalElements"),
+          QString::fromStdString(alternative.provisional_elements));
       candidate.insert(QStringLiteral("wpm"), alternative.wpm);
       candidate.insert(QStringLiteral("acousticCost"),
                        alternative.acoustic_cost);
@@ -558,27 +574,25 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
 
 void LiveAudioDspWorker::configure(
     const int averaging_frames, const int frame_rate_hz,
-    const bool dc_rejection,
-    const bool automatic_gain, const double gain_db,
+    const bool dc_rejection, const bool automatic_gain, const double gain_db,
     const double automatic_gain_target_dbfs, const bool automatic_bandwidth,
     const double lower_frequency_hz, const double upper_frequency_hz) {
   const auto previous = analyzer_.config();
   auto config = previous;
-  config.averaging_frames = static_cast<std::uint8_t>(
-      std::clamp(averaging_frames, 1, 32));
-  config.frame_rate_hz = static_cast<std::uint16_t>(
-      std::clamp(frame_rate_hz, 1, 120));
+  config.averaging_frames =
+      static_cast<std::uint8_t>(std::clamp(averaging_frames, 1, 32));
+  config.frame_rate_hz =
+      static_cast<std::uint16_t>(std::clamp(frame_rate_hz, 1, 120));
   config.audio_dc_rejection = dc_rejection;
   config.audio_automatic_gain = automatic_gain;
   config.audio_gain_db = static_cast<float>(std::clamp(gain_db, -40.0, 40.0));
-  config.audio_automatic_gain_target_dbfs = static_cast<float>(
-      std::clamp(automatic_gain_target_dbfs, -40.0, -1.0));
+  config.audio_automatic_gain_target_dbfs =
+      static_cast<float>(std::clamp(automatic_gain_target_dbfs, -40.0, -1.0));
   config.audio_automatic_bandwidth = automatic_bandwidth;
   config.audio_lower_frequency_hz =
       std::clamp(lower_frequency_hz, 0.0, 95'999.0);
-  config.audio_upper_frequency_hz =
-      std::clamp(upper_frequency_hz,
-                 config.audio_lower_frequency_hz + 1.0, 96'000.0);
+  config.audio_upper_frequency_hz = std::clamp(
+      upper_frequency_hz, config.audio_lower_frequency_hz + 1.0, 96'000.0);
   // Only a change that alters the audio actually presented to the detector may
   // discard decoder state. Spectrum averaging and the display frame rate are
   // presentation settings: resetting on them destroyed every track, transcript
@@ -606,8 +620,8 @@ void LiveAudioDspWorker::setOperatorRole(const QString& role) {
 }
 
 void LiveAudioDspWorker::setKeyingModel(const QString& model) {
-  decoder_.setKeyingModel(cwassistant::core::cwKeyingModelFromName(
-      model.toStdString()));
+  decoder_.setKeyingModel(
+      cwassistant::core::cwKeyingModelFromName(model.toStdString()));
 }
 
 void LiveAudioDspWorker::setOwnCallsign(const QString& callsign) {
@@ -619,8 +633,7 @@ void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
                           static_cast<double>(std::clamp(seconds, 5, 120))});
 }
 
-void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(
-    const bool enabled) {
+void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(const bool enabled) {
   character_frontends_.setEnabled(enabled);
 }
 
@@ -632,8 +645,8 @@ void LiveAudioDspWorker::setMonitor(const int mode,
   monitor_resample_input_rate_hz_ = 0.0;
   monitor_resample_sum_ = 0.0F;
   monitor_resample_count_ = 0;
-  const auto selected_mode = mode == 1
-      ? cwassistant::core::CwMonitorMode::FullReceiver
+  const auto selected_mode =
+      mode == 1   ? cwassistant::core::CwMonitorMode::FullReceiver
       : mode == 2 ? cwassistant::core::CwMonitorMode::SelectedTrack
                   : cwassistant::core::CwMonitorMode::Off;
   std::vector<std::uint64_t> ids;
@@ -643,14 +656,14 @@ void LiveAudioDspWorker::setMonitor(const int mode,
   decoder_.setMonitorTracks(selected_mode, ids, reference_tone_hz);
 }
 
-void LiveAudioDspWorker::setSdrDecoderWindow(
-    const double center_frequency_hz, const double bandwidth_hz) {
+void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
+                                             const double bandwidth_hz) {
   const double output_rate_hz =
       std::clamp(bandwidth_hz * 2.5, 48'000.0, 192'000.0);
   if (!sdr_decoder_channelizer_.configure(
-      {.center_frequency_hz = center_frequency_hz,
-       .bandwidth_hz = bandwidth_hz,
-       .maximum_output_sample_rate_hz = output_rate_hz}))
+          {.center_frequency_hz = center_frequency_hz,
+           .bandwidth_hz = bandwidth_hz,
+           .maximum_output_sample_rate_hz = output_rate_hz}))
     return;
   sdr_decoder_center_frequency_hz_ = center_frequency_hz;
   sdr_decoder_bandwidth_hz_ = bandwidth_hz;
@@ -675,9 +688,10 @@ void LiveAudioDspWorker::shiftTrackedFrequencies(const double audio_hz_delta) {
   decoder_.shiftTrackedFrequencies(audio_hz_delta);
 }
 
-void LiveAudioDspWorker::setRadioFrequencyContext(
-    const bool available, const qulonglong rx_rf_hz,
-    const qulonglong tx_rf_hz, const bool split_active) {
+void LiveAudioDspWorker::setRadioFrequencyContext(const bool available,
+                                                  const qulonglong rx_rf_hz,
+                                                  const qulonglong tx_rf_hz,
+                                                  const bool split_active) {
   radio_frequency_available_ = available;
   radio_rx_rf_hz_ = rx_rf_hz;
   radio_tx_rf_hz_ = tx_rf_hz;
@@ -712,7 +726,7 @@ void LiveAudioDspWorker::captureBlock(
                            .arg(maximum_capture_seconds_ / 60.0, 0, 'g', 2));
   } else if (static_cast<double>(block.timestamp_ns -
                                  capture_last_snapshot_ns_) /
-                     1'000'000'000.0 >=
+                 1'000'000'000.0 >=
              kSnapshotIntervalSeconds) {
     capture_last_snapshot_ns_ = block.timestamp_ns;
     writeDebugCaptureSnapshot();
@@ -727,9 +741,8 @@ void LiveAudioDspWorker::drain() {
   while (drained < 32 && pipe_->blocks.try_pop(block)) {
     ++drained;
     const std::size_t wanted_fft_size =
-        block.stream.kind == cwassistant::core::StreamKind::ComplexIq
-            ? 16'384U
-            : 2'048U;
+        block.stream.kind == cwassistant::core::StreamKind::ComplexIq ? 16'384U
+                                                                      : 2'048U;
     if (analyzer_.config().fft_size != wanted_fft_size) {
       auto config = analyzer_.config();
       config.fft_size = wanted_fft_size;
@@ -742,14 +755,16 @@ void LiveAudioDspWorker::drain() {
     const cwassistant::core::RealtimeSampleBlock* processing_block = &block;
     std::vector<cwassistant::core::SpectrumSnapshot> decoder_snapshots;
     if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq) {
-      const auto status = sdr_decoder_channelizer_.process(block,
-                                                           decoder_block);
+      const auto status =
+          sdr_decoder_channelizer_.process(block, decoder_block);
       if (status != cwassistant::core::IqBlockStatus::Accepted &&
-          status != cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity) {
+          status !=
+              cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity) {
         // The wide overview remains live even if the configured decoder slice
         // is temporarily outside the acquired hardware passband.
         for (auto& snapshot : snapshots) {
-          QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
+          QVector<float> bins(
+              static_cast<qsizetype>(snapshot.bins_dbfs.size()));
           std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
                     bins.begin());
           QVector<float> instantaneous_bins(
@@ -768,7 +783,8 @@ void LiveAudioDspWorker::drain() {
         }
         continue;
       }
-      if (status == cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity)
+      if (status ==
+          cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity)
         sdr_decoder_pending_ = {};
       if (decoder_block.sample_count > 0) {
         if (sdr_decoder_pending_.sample_count > 0 &&
@@ -787,17 +803,18 @@ void LiveAudioDspWorker::drain() {
                                       sdr_decoder_pending_.sample_count;
         const std::size_t copied =
             std::min(available, decoder_block.sample_count);
-        std::copy_n(decoder_block.samples.cbegin(), copied,
-                    sdr_decoder_pending_.samples.begin() +
-                        static_cast<std::ptrdiff_t>(
-                            sdr_decoder_pending_.sample_count));
+        std::copy_n(
+            decoder_block.samples.cbegin(), copied,
+            sdr_decoder_pending_.samples.begin() +
+                static_cast<std::ptrdiff_t>(sdr_decoder_pending_.sample_count));
         sdr_decoder_pending_.sample_count += copied;
         if (copied < decoder_block.sample_count) {
           decoder_carry.stream = decoder_block.stream;
           decoder_carry.timestamp_ns =
-              decoder_block.timestamp_ns + static_cast<std::uint64_t>(
-                  static_cast<long double>(copied) * 1'000'000'000.0L /
-                  decoder_block.stream.sample_rate_hz);
+              decoder_block.timestamp_ns +
+              static_cast<std::uint64_t>(static_cast<long double>(copied) *
+                                         1'000'000'000.0L /
+                                         decoder_block.stream.sample_rate_hz);
           decoder_carry.sequence = sdr_decoder_pending_sequence_++;
           decoder_carry.sample_count = decoder_block.sample_count - copied;
           std::copy_n(decoder_block.samples.cbegin() +
@@ -811,7 +828,8 @@ void LiveAudioDspWorker::drain() {
       // not receive thousands of tiny queued updates per second.
       if (sdr_decoder_pending_.sample_count < 512) {
         for (auto& snapshot : snapshots) {
-          QVector<float> bins(static_cast<qsizetype>(snapshot.bins_dbfs.size()));
+          QVector<float> bins(
+              static_cast<qsizetype>(snapshot.bins_dbfs.size()));
           std::copy(snapshot.bins_dbfs.cbegin(), snapshot.bins_dbfs.cend(),
                     bins.begin());
           QVector<float> instantaneous_bins(
@@ -847,10 +865,10 @@ void LiveAudioDspWorker::drain() {
         continue;
       }
       const double bin_width_hz = snapshot.bin_width_hz;
-      const double requested_lower_hz = sdr_decoder_center_frequency_hz_ -
-          sdr_decoder_bandwidth_hz_ * 0.5;
-      const double requested_upper_hz = sdr_decoder_center_frequency_hz_ +
-          sdr_decoder_bandwidth_hz_ * 0.5;
+      const double requested_lower_hz =
+          sdr_decoder_center_frequency_hz_ - sdr_decoder_bandwidth_hz_ * 0.5;
+      const double requested_upper_hz =
+          sdr_decoder_center_frequency_hz_ + sdr_decoder_bandwidth_hz_ * 0.5;
       const auto first_bin = static_cast<std::size_t>(std::clamp(
           std::ceil((requested_lower_hz - snapshot.lower_frequency_hz) /
                     bin_width_hz),
@@ -861,7 +879,8 @@ void LiveAudioDspWorker::drain() {
                      bin_width_hz),
           static_cast<double>(first_bin),
           static_cast<double>(snapshot.instantaneous_bins_dbfs.size() - 1U)));
-      const double detector_lower_hz = snapshot.lower_frequency_hz +
+      const double detector_lower_hz =
+          snapshot.lower_frequency_hz +
           static_cast<double>(first_bin) * bin_width_hz;
       const auto detector_bins = std::span<const float>(
           snapshot.instantaneous_bins_dbfs.data() + first_bin,
@@ -871,6 +890,16 @@ void LiveAudioDspWorker::drain() {
           detector_lower_hz +
               static_cast<double>(detector_bins.size()) * bin_width_hz,
           detector_bins, false));
+    }
+    if (pending_manual_frequency_hz_.has_value() &&
+        !decoder_snapshots.empty()) {
+      const std::uint64_t channel_id =
+          decoder_.selectFrequency(*pending_manual_frequency_hz_);
+      pending_manual_frequency_hz_.reset();
+      if (channel_id != 0) {
+        emit decoderProduced(decoderChannelModel(decoder_.channels()));
+        emit manualDecoderSelected(static_cast<qulonglong>(channel_id));
+      }
     }
     const auto& decoder_channels = decoder_.processSamples(*processing_block);
     const auto& raw_monitor_audio = decoder_.monitorAudio();
@@ -892,18 +921,16 @@ void LiveAudioDspWorker::drain() {
               processing_block->stream.sample_rate_hz;
         }
         std::vector<float> resampled;
-        resampled.reserve(static_cast<std::size_t>(
-            std::ceil(static_cast<double>(raw_monitor_audio.size()) *
-                      monitor_output_rate_hz /
-                      processing_block->stream.sample_rate_hz)));
+        resampled.reserve(static_cast<std::size_t>(std::ceil(
+            static_cast<double>(raw_monitor_audio.size()) *
+            monitor_output_rate_hz / processing_block->stream.sample_rate_hz)));
         for (const float sample : raw_monitor_audio) {
           monitor_resample_sum_ += sample;
           ++monitor_resample_count_;
           monitor_resample_phase_ += monitor_output_rate_hz;
           if (monitor_resample_phase_ >=
               processing_block->stream.sample_rate_hz) {
-            monitor_resample_phase_ -=
-                processing_block->stream.sample_rate_hz;
+            monitor_resample_phase_ -= processing_block->stream.sample_rate_hz;
             resampled.push_back(monitor_resample_sum_ /
                                 static_cast<float>(monitor_resample_count_));
             monitor_resample_sum_ = 0.0F;
@@ -947,7 +974,6 @@ void LiveAudioDspWorker::drain() {
       emit decoderProduced(decoderChannelModel(decoder_channels));
     if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq)
       sdr_decoder_pending_ = std::move(decoder_carry);
-
   }
   if (drained > 0) {
     emit diagnosticsProduced(

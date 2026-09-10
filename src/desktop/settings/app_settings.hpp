@@ -1,18 +1,18 @@
 #pragma once
 
 #include <QElapsedTimer>
-#include <QObject>
 #include <QList>
 #include <QMediaDevices>
+#include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 
-#include <memory>
 #include <array>
 #include <cstdint>
+#include <memory>
 #include <optional>
 
 #include "cwassistant/core/frequency_plan.hpp"
@@ -26,145 +26,278 @@ class AppSettings final : public QObject {
   Q_OBJECT
   Q_PROPERTY(QStringList referenceRigNames READ referenceRigNames CONSTANT)
   Q_PROPERTY(QString profileName READ profileName NOTIFY profileChanged)
-  Q_PROPERTY(QStringList availableProfiles READ availableProfiles NOTIFY profilesChanged)
-  Q_PROPERTY(bool profileSelectionRequired READ profileSelectionRequired NOTIFY profileSelectionRequiredChanged)
+  Q_PROPERTY(QStringList availableProfiles READ availableProfiles NOTIFY
+                 profilesChanged)
+  Q_PROPERTY(bool profileSelectionRequired READ profileSelectionRequired NOTIFY
+                 profileSelectionRequiredChanged)
   Q_PROPERTY(bool setupComplete READ setupComplete NOTIFY setupCompleteChanged)
   Q_PROPERTY(QStringList serialPorts READ serialPorts NOTIFY serialPortsChanged)
-  Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY audioInputsChanged)
+  Q_PROPERTY(QStringList audioInputNames READ audioInputNames NOTIFY
+                 audioInputsChanged)
   Q_PROPERTY(int audioInputIndex READ audioInputIndex NOTIFY audioInputsChanged)
-  Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY audioInputsChanged)
-  Q_PROPERTY(QStringList audioOutputNames READ audioOutputNames NOTIFY audioOutputsChanged)
-  Q_PROPERTY(int audioOutputIndex READ audioOutputIndex NOTIFY audioOutputsChanged)
-  Q_PROPERTY(QString audioOutputDisplayName READ audioOutputDisplayName NOTIFY audioOutputsChanged)
-  Q_PROPERTY(QStringList receiverInputTypeNames READ receiverInputTypeNames CONSTANT)
-  Q_PROPERTY(int receiverInputTypeIndex READ receiverInputTypeIndex WRITE setReceiverInputTypeIndex NOTIFY receiverInputTypeChanged)
-  Q_PROPERTY(bool sdrBackendAvailable READ sdrBackendAvailable NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QString sdrBackendVersion READ sdrBackendVersion NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QStringList sdrModuleNames READ sdrModuleNames NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QStringList sdrDeviceNames READ sdrDeviceNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString audioInputDisplayName READ audioInputDisplayName NOTIFY
+                 audioInputsChanged)
+  Q_PROPERTY(QStringList audioOutputNames READ audioOutputNames NOTIFY
+                 audioOutputsChanged)
+  Q_PROPERTY(
+      int audioOutputIndex READ audioOutputIndex NOTIFY audioOutputsChanged)
+  Q_PROPERTY(QString audioOutputDisplayName READ audioOutputDisplayName NOTIFY
+                 audioOutputsChanged)
+  Q_PROPERTY(
+      QStringList receiverInputTypeNames READ receiverInputTypeNames CONSTANT)
+  Q_PROPERTY(int receiverInputTypeIndex READ receiverInputTypeIndex WRITE
+                 setReceiverInputTypeIndex NOTIFY receiverInputTypeChanged)
+  Q_PROPERTY(bool sdrBackendAvailable READ sdrBackendAvailable NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(QString sdrBackendVersion READ sdrBackendVersion NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(
+      QStringList sdrModuleNames READ sdrModuleNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(
+      QStringList sdrDeviceNames READ sdrDeviceNames NOTIFY sdrSettingsChanged)
   Q_PROPERTY(int sdrDeviceIndex READ sdrDeviceIndex NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QString sdrDeviceDisplayName READ sdrDeviceDisplayName NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrDeviceDisplayName READ sdrDeviceDisplayName NOTIFY
+                 sdrSettingsChanged)
   Q_PROPERTY(QString sdrDiagnostic READ sdrDiagnostic NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(qulonglong sdrCenterFrequencyHz READ sdrCenterFrequencyHz WRITE setSdrCenterFrequencyHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(int sdrSampleRateHz READ sdrSampleRateHz WRITE setSdrSampleRateHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(int sdrBandwidthHz READ sdrBandwidthHz WRITE setSdrBandwidthHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QVariantList sdrSampleRateOptions READ sdrSampleRateOptions NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QVariantList sdrBandwidthOptions READ sdrBandwidthOptions NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QStringList sdrAntennaNames READ sdrAntennaNames NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(qulonglong sdrCenterFrequencyHz READ sdrCenterFrequencyHz WRITE
+                 setSdrCenterFrequencyHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrSampleRateHz READ sdrSampleRateHz WRITE setSdrSampleRateHz
+                 NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrBandwidthHz READ sdrBandwidthHz WRITE setSdrBandwidthHz
+                 NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QVariantList sdrSampleRateOptions READ sdrSampleRateOptions NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(QVariantList sdrBandwidthOptions READ sdrBandwidthOptions NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(QStringList sdrAntennaNames READ sdrAntennaNames NOTIFY
+                 sdrSettingsChanged)
   Q_PROPERTY(int sdrAntennaIndex READ sdrAntennaIndex NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(qulonglong sdrDecoderCenterFrequencyHz READ sdrDecoderCenterFrequencyHz WRITE setSdrDecoderCenterFrequencyHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(int sdrDecoderBandwidthHz READ sdrDecoderBandwidthHz WRITE setSdrDecoderBandwidthHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(bool sdrFollowRadioVfo READ sdrFollowRadioVfo WRITE setSdrFollowRadioVfo NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(qint64 sdrRadioLoOffsetHz READ sdrRadioLoOffsetHz WRITE setSdrRadioLoOffsetHz NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(bool sdrAutomaticGain READ sdrAutomaticGain WRITE setSdrAutomaticGain NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(bool sdrAutomaticGainAvailable READ sdrAutomaticGainAvailable NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(double sdrGainDb READ sdrGainDb WRITE setSdrGainDb NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(double sdrMinimumGainDb READ sdrMinimumGainDb NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(double sdrMaximumGainDb READ sdrMaximumGainDb NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(QString sdrWidePassbandSummary READ sdrWidePassbandSummary NOTIFY sdrSettingsChanged)
-  Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE setAudioDcRejection NOTIFY settingsChanged)
-  Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE setAudioAutomaticGain NOTIFY settingsChanged)
-  Q_PROPERTY(double audioGainDb READ audioGainDb WRITE setAudioGainDb NOTIFY settingsChanged)
-  Q_PROPERTY(double audioAutomaticGainTargetDbfs READ audioAutomaticGainTargetDbfs WRITE setAudioAutomaticGainTargetDbfs NOTIFY settingsChanged)
-  Q_PROPERTY(bool audioAutomaticBandwidth READ audioAutomaticBandwidth WRITE setAudioAutomaticBandwidth NOTIFY settingsChanged)
-  Q_PROPERTY(double audioLowerFrequencyHz READ audioLowerFrequencyHz WRITE setAudioLowerFrequencyHz NOTIFY settingsChanged)
-  Q_PROPERTY(double audioUpperFrequencyHz READ audioUpperFrequencyHz WRITE setAudioUpperFrequencyHz NOTIFY settingsChanged)
-  Q_PROPERTY(bool audioInputRadioLinked READ audioInputRadioLinked WRITE setAudioInputRadioLinked NOTIFY settingsChanged)
-  Q_PROPERTY(QString ownCallsign READ ownCallsign WRITE setOwnCallsign NOTIFY settingsChanged)
+  Q_PROPERTY(
+      qulonglong sdrDecoderCenterFrequencyHz READ sdrDecoderCenterFrequencyHz
+          WRITE setSdrDecoderCenterFrequencyHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrDecoderBandwidthHz READ sdrDecoderBandwidthHz WRITE
+                 setSdrDecoderBandwidthHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrFollowRadioVfo READ sdrFollowRadioVfo WRITE
+                 setSdrFollowRadioVfo NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(qint64 sdrRadioLoOffsetHz READ sdrRadioLoOffsetHz WRITE
+                 setSdrRadioLoOffsetHz NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrAutomaticGain READ sdrAutomaticGain WRITE
+                 setSdrAutomaticGain NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrAutomaticGainAvailable READ sdrAutomaticGainAvailable
+                 NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(double sdrGainDb READ sdrGainDb WRITE setSdrGainDb NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(
+      double sdrMinimumGainDb READ sdrMinimumGainDb NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(
+      double sdrMaximumGainDb READ sdrMaximumGainDb NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrWidePassbandSummary READ sdrWidePassbandSummary NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(bool audioDcRejection READ audioDcRejection WRITE
+                 setAudioDcRejection NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioAutomaticGain READ audioAutomaticGain WRITE
+                 setAudioAutomaticGain NOTIFY settingsChanged)
+  Q_PROPERTY(double audioGainDb READ audioGainDb WRITE setAudioGainDb NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(
+      double audioAutomaticGainTargetDbfs READ audioAutomaticGainTargetDbfs
+          WRITE setAudioAutomaticGainTargetDbfs NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioAutomaticBandwidth READ audioAutomaticBandwidth WRITE
+                 setAudioAutomaticBandwidth NOTIFY settingsChanged)
+  Q_PROPERTY(double audioLowerFrequencyHz READ audioLowerFrequencyHz WRITE
+                 setAudioLowerFrequencyHz NOTIFY settingsChanged)
+  Q_PROPERTY(double audioUpperFrequencyHz READ audioUpperFrequencyHz WRITE
+                 setAudioUpperFrequencyHz NOTIFY settingsChanged)
+  Q_PROPERTY(bool audioInputRadioLinked READ audioInputRadioLinked WRITE
+                 setAudioInputRadioLinked NOTIFY settingsChanged)
+  Q_PROPERTY(QString ownCallsign READ ownCallsign WRITE setOwnCallsign NOTIFY
+                 settingsChanged)
   Q_PROPERTY(bool omniRigAvailable READ omniRigAvailable CONSTANT)
-  Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(QString radioDisplayName READ radioDisplayName NOTIFY settingsChanged)
-  Q_PROPERTY(QStringList detectedRadioNames READ detectedRadioNames NOTIFY detectedRadiosChanged)
-  Q_PROPERTY(int detectedRadioIndex READ detectedRadioIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int referenceRigIndex READ referenceRigIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int frequencyBackendIndex READ frequencyBackendIndex WRITE setFrequencyBackendIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int radioTuningStepHz READ radioTuningStepHz WRITE setRadioTuningStepHz NOTIFY settingsChanged)
-  Q_PROPERTY(bool radioFrequencyWritable READ radioFrequencyWritable NOTIFY radioFrequencyControlChanged)
-  Q_PROPERTY(bool radioTxFrequencyWritable READ radioTxFrequencyWritable NOTIFY radioFrequencyControlChanged)
-  Q_PROPERTY(bool radioTxFrequencySyncAvailable READ radioTxFrequencySyncAvailable NOTIFY radioFrequencyControlChanged)
-  Q_PROPERTY(bool radioRxModeWritable READ radioRxModeWritable NOTIFY radioFrequencyControlChanged)
-  Q_PROPERTY(bool radioTxModeWritable READ radioTxModeWritable NOTIFY radioFrequencyControlChanged)
-  Q_PROPERTY(bool radioSplitWritable READ radioSplitWritable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioEnabled READ radioEnabled WRITE setRadioEnabled NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(
+      QString radioDisplayName READ radioDisplayName NOTIFY settingsChanged)
+  Q_PROPERTY(QStringList detectedRadioNames READ detectedRadioNames NOTIFY
+                 detectedRadiosChanged)
+  Q_PROPERTY(
+      int detectedRadioIndex READ detectedRadioIndex NOTIFY settingsChanged)
+  Q_PROPERTY(
+      int referenceRigIndex READ referenceRigIndex NOTIFY settingsChanged)
+  Q_PROPERTY(int frequencyBackendIndex READ frequencyBackendIndex WRITE
+                 setFrequencyBackendIndex NOTIFY settingsChanged)
+  Q_PROPERTY(int radioTuningStepHz READ radioTuningStepHz WRITE
+                 setRadioTuningStepHz NOTIFY settingsChanged)
+  Q_PROPERTY(bool radioFrequencyWritable READ radioFrequencyWritable NOTIFY
+                 radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioTxFrequencyWritable READ radioTxFrequencyWritable NOTIFY
+                 radioFrequencyControlChanged)
+  Q_PROPERTY(
+      bool radioTxFrequencySyncAvailable READ radioTxFrequencySyncAvailable
+          NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(
+      bool radioPointedTxFrequencyAvailable READ
+          radioPointedTxFrequencyAvailable NOTIFY radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioRxModeWritable READ radioRxModeWritable NOTIFY
+                 radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioTxModeWritable READ radioTxModeWritable NOTIFY
+                 radioFrequencyControlChanged)
+  Q_PROPERTY(bool radioSplitWritable READ radioSplitWritable NOTIFY
+                 radioFrequencyControlChanged)
   Q_PROPERTY(QString radioRxMode READ radioRxMode NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioTxMode READ radioTxMode NOTIFY radioFrequencyChanged)
-  Q_PROPERTY(QString radioTxModeTarget READ radioTxModeTarget NOTIFY radioFrequencyChanged)
-  Q_PROPERTY(bool radioTxModeConfirmed READ radioTxModeConfirmed NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(QString radioTxModeTarget READ radioTxModeTarget NOTIFY
+                 radioFrequencyChanged)
+  Q_PROPERTY(bool radioTxModeConfirmed READ radioTxModeConfirmed NOTIFY
+                 radioFrequencyChanged)
   Q_PROPERTY(QString radioRxVfo READ radioRxVfo NOTIFY radioFrequencyChanged)
   Q_PROPERTY(QString radioTxVfo READ radioTxVfo NOTIFY radioFrequencyChanged)
-  Q_PROPERTY(qulonglong radioTxVfoFrequencyHz READ radioTxVfoFrequencyHz
-                 NOTIFY radioFrequencyChanged)
-  Q_PROPERTY(bool radioSplitKnown READ radioSplitKnown NOTIFY radioFrequencyChanged)
-  Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY settingsChanged)
-  Q_PROPERTY(QString hamlibHost READ hamlibHost WRITE setHamlibHost NOTIFY settingsChanged)
-  Q_PROPERTY(int hamlibPort READ hamlibPort WRITE setHamlibPort NOTIFY settingsChanged)
-  Q_PROPERTY(QString hamlibRxVfo READ hamlibRxVfo WRITE setHamlibRxVfo NOTIFY settingsChanged)
-  Q_PROPERTY(QString hamlibTxVfo READ hamlibTxVfo WRITE setHamlibTxVfo NOTIFY settingsChanged)
-  Q_PROPERTY(bool hamlibWritable READ hamlibWritable WRITE setHamlibWritable NOTIFY settingsChanged)
+  Q_PROPERTY(qulonglong radioTxVfoFrequencyHz READ radioTxVfoFrequencyHz NOTIFY
+                 radioFrequencyChanged)
+  Q_PROPERTY(
+      bool radioSplitKnown READ radioSplitKnown NOTIFY radioFrequencyChanged)
+  Q_PROPERTY(int omniRigSlot READ omniRigSlot WRITE setOmniRigSlot NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString hamlibHost READ hamlibHost WRITE setHamlibHost NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(
+      int hamlibPort READ hamlibPort WRITE setHamlibPort NOTIFY settingsChanged)
+  Q_PROPERTY(QString hamlibRxVfo READ hamlibRxVfo WRITE setHamlibRxVfo NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString hamlibTxVfo READ hamlibTxVfo WRITE setHamlibTxVfo NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(bool hamlibWritable READ hamlibWritable WRITE setHamlibWritable
+                 NOTIFY settingsChanged)
   Q_PROPERTY(QString hamlibState READ hamlibState NOTIFY hamlibChanged)
   Q_PROPERTY(bool hamlibCanWrite READ hamlibCanWrite NOTIFY hamlibChanged)
-  Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY settingsChanged)
-  Q_PROPERTY(QString cat4omRadioId READ cat4omRadioId WRITE setCat4omRadioId NOTIFY settingsChanged)
-  Q_PROPERTY(QString cat4omPassword READ cat4omPassword WRITE setCat4omPassword NOTIFY settingsChanged)
+  Q_PROPERTY(QString cat4omUrl READ cat4omUrl WRITE setCat4omUrl NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString cat4omRadioId READ cat4omRadioId WRITE setCat4omRadioId
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(QString cat4omPassword READ cat4omPassword WRITE setCat4omPassword
+                 NOTIFY settingsChanged)
   Q_PROPERTY(QString cat4omState READ cat4omState NOTIFY cat4omChanged)
-  Q_PROPERTY(QString cat4omFrequencySummary READ cat4omFrequencySummary NOTIFY cat4omChanged)
+  Q_PROPERTY(QString cat4omFrequencySummary READ cat4omFrequencySummary NOTIFY
+                 cat4omChanged)
   Q_PROPERTY(bool cat4omCanWrite READ cat4omCanWrite NOTIFY cat4omChanged)
-  Q_PROPERTY(QString catPort READ catPort WRITE setCatPort NOTIFY settingsChanged)
-  Q_PROPERTY(int catBaudRate READ catBaudRate WRITE setCatBaudRate NOTIFY settingsChanged)
-  Q_PROPERTY(int catDataBits READ catDataBits WRITE setCatDataBits NOTIFY settingsChanged)
-  Q_PROPERTY(int catParityIndex READ catParityIndex WRITE setCatParityIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int catStopBits READ catStopBits WRITE setCatStopBits NOTIFY settingsChanged)
-  Q_PROPERTY(int catFlowControlIndex READ catFlowControlIndex WRITE setCatFlowControlIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int pollIntervalMs READ pollIntervalMs WRITE setPollIntervalMs NOTIFY settingsChanged)
-  Q_PROPERTY(int timeoutMs READ timeoutMs WRITE setTimeoutMs NOTIFY settingsChanged)
-  Q_PROPERTY(bool splitEnabled READ splitEnabled WRITE setSplitEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(qint64 rxTransverterOffsetHz READ rxTransverterOffsetHz WRITE setRxTransverterOffsetHz NOTIFY settingsChanged)
-  Q_PROPERTY(qint64 txTransverterOffsetHz READ txTransverterOffsetHz WRITE setTxTransverterOffsetHz NOTIFY settingsChanged)
-  Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE setCwToneSidebandIndex NOTIFY settingsChanged)
-  Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY settingsChanged)
-  Q_PROPERTY(bool directKeyingEnabled READ directKeyingEnabled WRITE setDirectKeyingEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(bool directKeyingValidated READ directKeyingValidated NOTIFY settingsChanged)
-  Q_PROPERTY(QString directKeyingAcceptanceStatus READ directKeyingAcceptanceStatus NOTIFY settingsChanged)
-  Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY settingsChanged)
-  Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY settingsChanged)
-  Q_PROPERTY(bool pttActiveHigh READ pttActiveHigh WRITE setPttActiveHigh NOTIFY settingsChanged)
-  Q_PROPERTY(bool keyActiveHigh READ keyActiveHigh WRITE setKeyActiveHigh NOTIFY settingsChanged)
-  Q_PROPERTY(int txSpeedMode READ txSpeedMode WRITE setTxSpeedMode NOTIFY settingsChanged)
-  Q_PROPERTY(int fixedTxWpm READ fixedTxWpm WRITE setFixedTxWpm NOTIFY settingsChanged)
-  Q_PROPERTY(QString txMacro1 READ txMacro1 WRITE setTxMacro1 NOTIFY settingsChanged)
-  Q_PROPERTY(QString txMacro2 READ txMacro2 WRITE setTxMacro2 NOTIFY settingsChanged)
-  Q_PROPERTY(QString txMacro3 READ txMacro3 WRITE setTxMacro3 NOTIFY settingsChanged)
-  Q_PROPERTY(QString txMacro4 READ txMacro4 WRITE setTxMacro4 NOTIFY settingsChanged)
-  Q_PROPERTY(int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
-  Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY settingsChanged)
-  Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
-  Q_PROPERTY(int spectrumDisplayMode READ spectrumDisplayMode WRITE setSpectrumDisplayMode NOTIFY settingsChanged)
-  Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange NOTIFY settingsChanged)
-  Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY settingsChanged)
-  Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY settingsChanged)
-  Q_PROPERTY(double automaticRangeSpanDb READ automaticRangeSpanDb WRITE setAutomaticRangeSpanDb NOTIFY settingsChanged)
-  Q_PROPERTY(bool waterfallNoiseSuppression READ waterfallNoiseSuppression WRITE setWaterfallNoiseSuppression NOTIFY settingsChanged)
-  Q_PROPERTY(double waterfallNoiseMarginDb READ waterfallNoiseMarginDb WRITE setWaterfallNoiseMarginDb NOTIFY settingsChanged)
-  Q_PROPERTY(bool showCwGuide READ showCwGuide WRITE setShowCwGuide NOTIFY settingsChanged)
-  Q_PROPERTY(double cwGuideCenterHz READ cwGuideCenterHz WRITE setCwGuideCenterHz NOTIFY settingsChanged)
-  Q_PROPERTY(double cwGuideWidthHz READ cwGuideWidthHz WRITE setCwGuideWidthHz NOTIFY settingsChanged)
-  Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames NOTIFY settingsChanged)
-  Q_PROPERTY(bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
-  Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
-  Q_PROPERTY(bool localDecoderEnabled READ localDecoderEnabled WRITE setLocalDecoderEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(bool callsignDatabaseCorrectionEnabled READ callsignDatabaseCorrectionEnabled WRITE setCallsignDatabaseCorrectionEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString catPort READ catPort WRITE setCatPort NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QVariantList supportedCatBaudRates READ supportedCatBaudRates CONSTANT)
+  Q_PROPERTY(int catBaudRate READ catBaudRate WRITE setCatBaudRate NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int catDataBits READ catDataBits WRITE setCatDataBits NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int catParityIndex READ catParityIndex WRITE setCatParityIndex
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(int catStopBits READ catStopBits WRITE setCatStopBits NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int catFlowControlIndex READ catFlowControlIndex WRITE
+                 setCatFlowControlIndex NOTIFY settingsChanged)
+  Q_PROPERTY(int pollIntervalMs READ pollIntervalMs WRITE setPollIntervalMs
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      int timeoutMs READ timeoutMs WRITE setTimeoutMs NOTIFY settingsChanged)
+  Q_PROPERTY(bool splitEnabled READ splitEnabled WRITE setSplitEnabled NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(qint64 rxTransverterOffsetHz READ rxTransverterOffsetHz WRITE
+                 setRxTransverterOffsetHz NOTIFY settingsChanged)
+  Q_PROPERTY(qint64 txTransverterOffsetHz READ txTransverterOffsetHz WRITE
+                 setTxTransverterOffsetHz NOTIFY settingsChanged)
+  Q_PROPERTY(int cwToneSidebandIndex READ cwToneSidebandIndex WRITE
+                 setCwToneSidebandIndex NOTIFY settingsChanged)
+  Q_PROPERTY(QString keyingPort READ keyingPort WRITE setKeyingPort NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(bool directKeyingEnabled READ directKeyingEnabled WRITE
+                 setDirectKeyingEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(bool directKeyingValidated READ directKeyingValidated NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString directKeyingAcceptanceStatus READ
+                 directKeyingAcceptanceStatus NOTIFY settingsChanged)
+  Q_PROPERTY(int pttLineIndex READ pttLineIndex WRITE setPttLineIndex NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int keyLineIndex READ keyLineIndex WRITE setKeyLineIndex NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(bool pttActiveHigh READ pttActiveHigh WRITE setPttActiveHigh NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(bool keyActiveHigh READ keyActiveHigh WRITE setKeyActiveHigh NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int txSpeedMode READ txSpeedMode WRITE setTxSpeedMode NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(
+      int fixedTxWpm READ fixedTxWpm WRITE setFixedTxWpm NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString txMacro1 READ txMacro1 WRITE setTxMacro1 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString txMacro2 READ txMacro2 WRITE setTxMacro2 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString txMacro3 READ txMacro3 WRITE setTxMacro3 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString txMacro4 READ txMacro4 WRITE setTxMacro4 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      int targetFps READ targetFps WRITE setTargetFps NOTIFY settingsChanged)
+  Q_PROPERTY(int waterfallRate READ waterfallRate WRITE setWaterfallRate NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int waterfallTimeSpanSeconds READ waterfallTimeSpanSeconds WRITE
+                 setWaterfallTimeSpanSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(int spectrumDisplayMode READ spectrumDisplayMode WRITE
+                 setSpectrumDisplayMode NOTIFY settingsChanged)
+  Q_PROPERTY(bool automaticRange READ automaticRange WRITE setAutomaticRange
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(double lowerBoundDb READ lowerBoundDb WRITE setLowerBoundDb NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(double upperBoundDb READ upperBoundDb WRITE setUpperBoundDb NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(double automaticRangeSpanDb READ automaticRangeSpanDb WRITE
+                 setAutomaticRangeSpanDb NOTIFY settingsChanged)
+  Q_PROPERTY(bool waterfallNoiseSuppression READ waterfallNoiseSuppression WRITE
+                 setWaterfallNoiseSuppression NOTIFY settingsChanged)
+  Q_PROPERTY(double waterfallNoiseMarginDb READ waterfallNoiseMarginDb WRITE
+                 setWaterfallNoiseMarginDb NOTIFY settingsChanged)
+  Q_PROPERTY(bool showCwGuide READ showCwGuide WRITE setShowCwGuide NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(double cwGuideCenterHz READ cwGuideCenterHz WRITE
+                 setCwGuideCenterHz NOTIFY settingsChanged)
+  Q_PROPERTY(double cwGuideWidthHz READ cwGuideWidthHz WRITE setCwGuideWidthHz
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(int averagingFrames READ averagingFrames WRITE setAveragingFrames
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      bool showGrid READ showGrid WRITE setShowGrid NOTIFY settingsChanged)
+  Q_PROPERTY(bool showSpectrumGestureHints READ showSpectrumGestureHints WRITE
+                 setShowSpectrumGestureHints NOTIFY settingsChanged)
+  Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds
+                 WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(bool localDecoderEnabled READ localDecoderEnabled WRITE
+                 setLocalDecoderEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(
+      bool callsignDatabaseCorrectionEnabled READ
+          callsignDatabaseCorrectionEnabled WRITE
+              setCallsignDatabaseCorrectionEnabled NOTIFY settingsChanged)
   // Stored by name rather than by position so the preference survives another
   // technique being added to the list or the list being reordered.
-  Q_PROPERTY(QString keyingModel READ keyingModel WRITE setKeyingModel NOTIFY settingsChanged)
-  Q_PROPERTY(int debugCaptureMaximumSeconds READ debugCaptureMaximumSeconds WRITE setDebugCaptureMaximumSeconds NOTIFY settingsChanged)
-  Q_PROPERTY(QString operatorRole READ operatorRole WRITE setOperatorRole NOTIFY settingsChanged)
-  Q_PROPERTY(QString localDecoderModelPath READ localDecoderModelPath NOTIFY settingsChanged)
-  Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath NOTIFY settingsChanged)
-  Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable CONSTANT)
-  Q_PROPERTY(QString localDecoderStatus READ localDecoderStatus NOTIFY settingsChanged)
-  Q_PROPERTY(bool localCallsignDatabaseEnabled READ localCallsignDatabaseEnabled WRITE setLocalCallsignDatabaseEnabled NOTIFY settingsChanged)
-  Q_PROPERTY(QString localCallsignDatabasePath READ localCallsignDatabasePath NOTIFY settingsChanged)
-  Q_PROPERTY(QString localCallsignDatabaseStatus READ localCallsignDatabaseStatus NOTIFY localCallsignDatabaseChanged)
-  Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
+  Q_PROPERTY(QString keyingModel READ keyingModel WRITE setKeyingModel NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(int debugCaptureMaximumSeconds READ debugCaptureMaximumSeconds
+                 WRITE setDebugCaptureMaximumSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(QString operatorRole READ operatorRole WRITE setOperatorRole NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString localDecoderModelPath READ localDecoderModelPath NOTIFY
+                 settingsChanged)
+  Q_PROPERTY(QString localDecoderMetadataPath READ localDecoderMetadataPath
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(bool localDecoderBackendAvailable READ localDecoderBackendAvailable
+                 CONSTANT)
+  Q_PROPERTY(
+      QString localDecoderStatus READ localDecoderStatus NOTIFY settingsChanged)
+  Q_PROPERTY(bool localCallsignDatabaseEnabled READ localCallsignDatabaseEnabled
+                 WRITE setLocalCallsignDatabaseEnabled NOTIFY settingsChanged)
+  Q_PROPERTY(QString localCallsignDatabasePath READ localCallsignDatabasePath
+                 NOTIFY settingsChanged)
+  Q_PROPERTY(
+      QString localCallsignDatabaseStatus READ localCallsignDatabaseStatus
+          NOTIFY localCallsignDatabaseChanged)
+  Q_PROPERTY(
+      QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
  public:
   explicit AppSettings(QString profile_name, bool profile_was_explicit,
@@ -233,6 +366,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool radioFrequencyWritable() const noexcept;
   [[nodiscard]] bool radioTxFrequencyWritable() const noexcept;
   [[nodiscard]] bool radioTxFrequencySyncAvailable() const noexcept;
+  [[nodiscard]] bool radioPointedTxFrequencyAvailable() const noexcept;
   [[nodiscard]] bool radioRxModeWritable() const noexcept;
   [[nodiscard]] bool radioTxModeWritable() const noexcept;
   [[nodiscard]] bool radioSplitWritable() const noexcept;
@@ -259,6 +393,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] QString cat4omFrequencySummary() const;
   [[nodiscard]] bool cat4omCanWrite() const noexcept;
   [[nodiscard]] const QString& catPort() const noexcept;
+  [[nodiscard]] QVariantList supportedCatBaudRates() const;
   [[nodiscard]] int catBaudRate() const noexcept;
   [[nodiscard]] int catDataBits() const noexcept;
   [[nodiscard]] int catParityIndex() const noexcept;
@@ -302,6 +437,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] double cwGuideWidthHz() const noexcept;
   [[nodiscard]] int averagingFrames() const noexcept;
   [[nodiscard]] bool showGrid() const noexcept;
+  [[nodiscard]] bool showSpectrumGestureHints() const noexcept;
   [[nodiscard]] int decodedSignalTimeoutSeconds() const noexcept;
   [[nodiscard]] bool localDecoderEnabled() const noexcept;
   [[nodiscard]] bool callsignDatabaseCorrectionEnabled() const noexcept;
@@ -387,6 +523,7 @@ class AppSettings final : public QObject {
   void setCwGuideWidthHz(double value);
   void setAveragingFrames(int value);
   void setShowGrid(bool value);
+  void setShowSpectrumGestureHints(bool value);
   void setDecodedSignalTimeoutSeconds(int value);
   void setLocalDecoderEnabled(bool value);
   void setCallsignDatabaseCorrectionEnabled(bool value);
@@ -403,6 +540,8 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void refreshAudioOutputs();
   Q_INVOKABLE void selectAudioOutput(int index);
   Q_INVOKABLE void refreshSdrDevices();
+  Q_INVOKABLE void setSdrDecoderWindow(qulonglong center_frequency_hz,
+                                       int bandwidth_hz);
   Q_INVOKABLE void selectSdrDevice(int index);
   Q_INVOKABLE void selectSdrAntenna(int index);
   Q_INVOKABLE void refreshDetectedRadios();
@@ -510,8 +649,9 @@ class AppSettings final : public QObject {
   QStringList sdr_device_ids_;
   QString sdr_device_id_;
   QString sdr_device_name_;
-  QString sdr_diagnostic_{QStringLiteral(
-      "SDR discovery has not run. Open the SDR settings page or press Refresh devices; live audio remains available.")};
+  QString sdr_diagnostic_{
+      QStringLiteral("SDR discovery has not run. Open the SDR settings page or "
+                     "press Refresh devices; live audio remains available.")};
   qulonglong sdr_center_frequency_hz_{14'050'000ULL};
   int sdr_sample_rate_hz_{250'000};
   int sdr_bandwidth_hz_{0};
@@ -599,6 +739,7 @@ class AppSettings final : public QObject {
   double cw_guide_width_hz_{200.0};
   int averaging_frames_{3};
   bool show_grid_{true};
+  bool show_spectrum_gesture_hints_{true};
   int decoded_signal_timeout_seconds_{30};
   bool local_decoder_enabled_{false};
   // Off by default. Two listed stations can differ by one character, so a

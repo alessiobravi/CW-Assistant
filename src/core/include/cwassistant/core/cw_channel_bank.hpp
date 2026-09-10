@@ -56,7 +56,8 @@ inline constexpr std::size_t kCwVerificationReasonCount =
 // spell by chance. Short, common ones a random keying pattern lands on
 // regularly -- K, DE, R, single letters -- are excluded however useful they
 // are to a human reader, because the point is evidence, not readability.
-[[nodiscard]] bool cwTextContainsDistinctiveToken(std::string_view text) noexcept;
+[[nodiscard]] bool cwTextContainsDistinctiveToken(
+    std::string_view text) noexcept;
 
 [[nodiscard]] const char* cwVerificationReasonName(
     CwVerificationReason reason) noexcept;
@@ -381,8 +382,7 @@ class CwChannelBank {
 
  private:
   struct Track {
-    Track(std::uint64_t track_id, double frequency,
-          std::uint64_t timestamp_ns);
+    Track(std::uint64_t track_id, double frequency, std::uint64_t timestamp_ns);
 
     std::uint64_t id;
     std::uint8_t color_index{0};
@@ -480,6 +480,7 @@ class CwChannelBank {
     std::size_t accumulated_samples{0};
     float lower_noise_power{0.0F};
     float upper_noise_power{0.0F};
+    float monitor_peak_envelope{0.0F};
     std::uint8_t selected_width_index{1};
     std::uint8_t pending_width_index{1};
     std::uint16_t pending_width_observations{0};
@@ -529,8 +530,7 @@ class CwChannelBank {
   static constexpr std::size_t kColorLeaseCount = 24;
 
   [[nodiscard]] float estimateNoise(std::span<const float> bins_dbfs) const;
-  [[nodiscard]] float spectralSnr(const Track& track,
-                                  double lower_frequency_hz,
+  [[nodiscard]] float spectralSnr(const Track& track, double lower_frequency_hz,
                                   double bin_width_hz,
                                   std::span<const float> bins_dbfs,
                                   float noise_dbfs) const;
@@ -549,10 +549,8 @@ class CwChannelBank {
   void resetFilter(Track& track) noexcept;
   void updateVerification(Track& track, std::uint64_t timestamp_ns);
   void recoverRejectedDecoder(Track& track);
-  void assignOrRefreshColor(Track& track,
-                            std::uint64_t timestamp_ns) noexcept;
-  void observePresentationFrequency(Track& track,
-                                    double candidate_frequency_hz,
+  void assignOrRefreshColor(Track& track, std::uint64_t timestamp_ns) noexcept;
+  void observePresentationFrequency(Track& track, double candidate_frequency_hz,
                                     std::uint64_t timestamp_ns) noexcept;
   void reanchorPresentationOnFirstVerification(
       Track& track, std::uint64_t timestamp_ns) noexcept;

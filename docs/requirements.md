@@ -333,8 +333,10 @@ authority.
   confirmation, and keying time. Initial rules are normalized exact matches;
   wildcard/prefix rules are out of scope until their ambiguity is designed.
 - Initial reference radios are Yaesu FT-450D and FT-818/FT-818ND. Their supplied
-  defaults remain fully editable: port, baud, data bits, parity, stop bits,
-  RTS/flow-control mode, polling interval, and timeout.
+  direct-serial defaults remain part of the profile schema, but a provider UI
+  exposes them only when that provider actually owns a local serial transport.
+  Baud is selected from 1200, 2400, 4800, 9600, 19200, 38400, 57600, or 115200;
+  data bits, parity, stop bits, and flow control are explicit bounded choices.
 - On Windows, OmniRig Rig 1/Rig 2 is the first frequency-control integration and
   its native configuration is reachable from the application Settings pane.
   Hamlib rigctld provides a platform-neutral frequency-control path, requires
@@ -345,6 +347,10 @@ authority.
   compatible JSON WebSocket Control channel. It consumes pushed state, treats
   VFO names as opaque identifiers, honors group ownership, and never exposes
   CAT4OM PTT/CW operations around the local transmit-safety boundary.
+- Provider setup is capability-specific in Settings and the station wizard.
+  OmniRig exposes its slot and native setup only; rigctld exposes its loopback
+  endpoint, VFO mapping and write permission; CAT4OM exposes its Control service
+  identity. None duplicates serial settings owned by another process.
 
 ### Configuration and instances
 

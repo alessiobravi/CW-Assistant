@@ -69,8 +69,8 @@ bool cwTextContainsDistinctiveToken(const std::string_view text) noexcept {
   // likely to be three noise elements that happened to land together than a
   // station calling, and this evidence is only worth having while it stays
   // harder to counterfeit than the gates it stands in for.
-  static constexpr std::string_view kDistinctive[]{
-      "CQ", "TEST", "599", "5NN", "QRZ", "TU", "UP"};
+  static constexpr std::string_view kDistinctive[]{"CQ",  "TEST", "599", "5NN",
+                                                   "QRZ", "TU",   "UP"};
   std::size_t begin = 0;
   while (begin <= text.size()) {
     const std::size_t end = std::min(text.find(' ', begin), text.size());
@@ -96,14 +96,12 @@ const char* cwVerificationReasonName(
       return "needs-cadence-evidence";
     case CwVerificationReason::LowNarrowbandCoherence:
       return "low-narrowband-coherence";
-    case CwVerificationReason::LowCadenceQuality:
-      return "low-cadence-quality";
+    case CwVerificationReason::LowCadenceQuality: return "low-cadence-quality";
     case CwVerificationReason::NeedsDecodedSymbols:
       return "needs-decoded-symbols";
     case CwVerificationReason::TooManyUnknownSymbols:
       return "too-many-unknown-symbols";
-    case CwVerificationReason::LowTimingQuality:
-      return "low-timing-quality";
+    case CwVerificationReason::LowTimingQuality: return "low-timing-quality";
     case CwVerificationReason::LowCharacterConfidence:
       return "low-character-confidence";
     case CwVerificationReason::NeedsSustainedEvidence:
@@ -169,36 +167,35 @@ void CwChannelBank::setOwnCallsign(std::string callsign) {
 void CwChannelBank::sanitizeConfig() noexcept {
   config_.acquisition_snr_db =
       std::clamp(config_.acquisition_snr_db, 3.0F, 30.0F);
-  config_.retention_snr_db = std::clamp(
-      config_.retention_snr_db, 0.0F, config_.acquisition_snr_db);
+  config_.retention_snr_db =
+      std::clamp(config_.retention_snr_db, 0.0F, config_.acquisition_snr_db);
   config_.detection_dynamic_range_db =
       std::clamp(config_.detection_dynamic_range_db, 40.0F, 140.0F);
   config_.minimum_peak_prominence_db =
       std::clamp(config_.minimum_peak_prominence_db, 0.0F, 30.0F);
-  config_.minimum_near_peak_prominence_db = std::clamp(
-      config_.minimum_near_peak_prominence_db, 0.0F,
-      config_.minimum_peak_prominence_db);
-  config_.prominence_reference_offset_hz = std::clamp(
-      config_.prominence_reference_offset_hz, 40.0, 1'000.0);
-  config_.prominence_reference_width_hz = std::clamp(
-      config_.prominence_reference_width_hz, 20.0,
-      config_.prominence_reference_offset_hz);
+  config_.minimum_near_peak_prominence_db =
+      std::clamp(config_.minimum_near_peak_prominence_db, 0.0F,
+                 config_.minimum_peak_prominence_db);
+  config_.prominence_reference_offset_hz =
+      std::clamp(config_.prominence_reference_offset_hz, 40.0, 1'000.0);
+  config_.prominence_reference_width_hz =
+      std::clamp(config_.prominence_reference_width_hz, 20.0,
+                 config_.prominence_reference_offset_hz);
   config_.minimum_separation_hz =
       std::clamp(config_.minimum_separation_hz, 5.0, 500.0);
   config_.tracking_tolerance_hz = std::clamp(
       config_.tracking_tolerance_hz, config_.minimum_separation_hz, 1'000.0);
   config_.empty_track_retention_seconds =
       std::clamp(config_.empty_track_retention_seconds, 0.5, 30.0);
-  config_.decoded_track_retention_seconds = std::clamp(
-      config_.decoded_track_retention_seconds,
-      config_.empty_track_retention_seconds, 300.0);
-  config_.unverified_track_retention_seconds = std::clamp(
-      config_.unverified_track_retention_seconds, 0.2, 5.0);
-  config_.color_identity_retention_seconds = std::clamp(
-      config_.color_identity_retention_seconds, 300.0, 3'600.0);
+  config_.decoded_track_retention_seconds =
+      std::clamp(config_.decoded_track_retention_seconds,
+                 config_.empty_track_retention_seconds, 300.0);
+  config_.unverified_track_retention_seconds =
+      std::clamp(config_.unverified_track_retention_seconds, 0.2, 5.0);
+  config_.color_identity_retention_seconds =
+      std::clamp(config_.color_identity_retention_seconds, 300.0, 3'600.0);
   config_.color_identity_tolerance_hz = std::clamp(
-      config_.color_identity_tolerance_hz, 5.0,
-      config_.tracking_tolerance_hz);
+      config_.color_identity_tolerance_hz, 5.0, config_.tracking_tolerance_hz);
   config_.narrowband_width_hz =
       std::clamp(config_.narrowband_width_hz, 40.0, 500.0);
   config_.noise_reference_offset_hz = std::clamp(
@@ -225,46 +222,45 @@ void CwChannelBank::sanitizeConfig() noexcept {
       std::clamp<std::uint16_t>(config_.minimum_key_transitions, 2, 100);
   config_.minimum_cadence_observations =
       std::clamp<std::uint16_t>(config_.minimum_cadence_observations, 1, 50);
-  config_.minimum_verification_timing_quality = std::clamp(
-      config_.minimum_verification_timing_quality, 0.0F, 1.0F);
-  config_.minimum_verification_cadence_quality = std::clamp(
-      config_.minimum_verification_cadence_quality, 0.0F, 1.0F);
-  config_.minimum_character_confidence = std::clamp(
-      config_.minimum_character_confidence, 0.0F, 1.0F);
-  config_.minimum_narrowband_coherence = std::clamp(
-      config_.minimum_narrowband_coherence, 0.0F, 1.0F);
-  config_.maximum_verification_unknown_fraction = std::clamp(
-      config_.maximum_verification_unknown_fraction, 0.0F, 1.0F);
+  config_.minimum_verification_timing_quality =
+      std::clamp(config_.minimum_verification_timing_quality, 0.0F, 1.0F);
+  config_.minimum_verification_cadence_quality =
+      std::clamp(config_.minimum_verification_cadence_quality, 0.0F, 1.0F);
+  config_.minimum_character_confidence =
+      std::clamp(config_.minimum_character_confidence, 0.0F, 1.0F);
+  config_.minimum_narrowband_coherence =
+      std::clamp(config_.minimum_narrowband_coherence, 0.0F, 1.0F);
+  config_.maximum_verification_unknown_fraction =
+      std::clamp(config_.maximum_verification_unknown_fraction, 0.0F, 1.0F);
   config_.minimum_plausibility_check_characters = std::clamp<std::uint16_t>(
       config_.minimum_plausibility_check_characters, 10, 500);
-  config_.maximum_simple_character_fraction = std::clamp(
-      config_.maximum_simple_character_fraction, 0.0F, 1.0F);
+  config_.maximum_simple_character_fraction =
+      std::clamp(config_.maximum_simple_character_fraction, 0.0F, 1.0F);
   config_.track_identity_tolerance_hz = std::clamp(
-      config_.track_identity_tolerance_hz, 5.0,
-      config_.tracking_tolerance_hz);
-  config_.presentation_reanchor_limit_hz = std::clamp(
-      config_.presentation_reanchor_limit_hz, 5.0,
-      std::max(5.0, config_.tracking_tolerance_hz - 5.0));
-  config_.presentation_follow_deadband_hz = std::clamp(
-      config_.presentation_follow_deadband_hz, 1.0,
-      config_.presentation_reanchor_limit_hz * 0.5);
-  config_.presentation_follow_slew_hz_per_second = std::clamp(
-      config_.presentation_follow_slew_hz_per_second, 0.25, 10.0);
-  config_.presentation_follow_stable_seconds = std::clamp(
-      config_.presentation_follow_stable_seconds, 0.5, 5.0);
+      config_.track_identity_tolerance_hz, 5.0, config_.tracking_tolerance_hz);
+  config_.presentation_reanchor_limit_hz =
+      std::clamp(config_.presentation_reanchor_limit_hz, 5.0,
+                 std::max(5.0, config_.tracking_tolerance_hz - 5.0));
+  config_.presentation_follow_deadband_hz =
+      std::clamp(config_.presentation_follow_deadband_hz, 1.0,
+                 config_.presentation_reanchor_limit_hz * 0.5);
+  config_.presentation_follow_slew_hz_per_second =
+      std::clamp(config_.presentation_follow_slew_hz_per_second, 0.25, 10.0);
+  config_.presentation_follow_stable_seconds =
+      std::clamp(config_.presentation_follow_stable_seconds, 0.5, 5.0);
   config_.presentation_follow_maximum_drift_hz_per_second = std::clamp(
       config_.presentation_follow_maximum_drift_hz_per_second, 0.5, 20.0);
-  config_.presentation_follow_maximum_mad_hz = std::clamp(
-      config_.presentation_follow_maximum_mad_hz, 1.0, 15.0);
-  config_.track_replacement_margin_db = std::clamp(
-      config_.track_replacement_margin_db, 0.0F, 20.0F);
-  config_.verification_enter_seconds = std::clamp(
-      config_.verification_enter_seconds, 0.0, 5.0);
-  config_.verification_exit_seconds = std::clamp(
-      config_.verification_exit_seconds,
-      config_.verification_enter_seconds, 15.0);
-  config_.decoder_recovery_seconds = std::clamp(
-      config_.decoder_recovery_seconds, 0.5, 15.0);
+  config_.presentation_follow_maximum_mad_hz =
+      std::clamp(config_.presentation_follow_maximum_mad_hz, 1.0, 15.0);
+  config_.track_replacement_margin_db =
+      std::clamp(config_.track_replacement_margin_db, 0.0F, 20.0F);
+  config_.verification_enter_seconds =
+      std::clamp(config_.verification_enter_seconds, 0.0, 5.0);
+  config_.verification_exit_seconds =
+      std::clamp(config_.verification_exit_seconds,
+                 config_.verification_enter_seconds, 15.0);
+  config_.decoder_recovery_seconds =
+      std::clamp(config_.decoder_recovery_seconds, 0.5, 15.0);
 }
 
 void CwChannelBank::reset() noexcept {
@@ -296,8 +292,7 @@ void CwChannelBank::setMonitor(const CwMonitorMode mode,
 }
 
 void CwChannelBank::setMonitorTracks(
-    const CwMonitorMode mode,
-    const std::span<const std::uint64_t> track_ids,
+    const CwMonitorMode mode, const std::span<const std::uint64_t> track_ids,
     const double reference_tone_hz) noexcept {
   const double sanitized_tone =
       std::isfinite(reference_tone_hz)
@@ -311,9 +306,9 @@ void CwChannelBank::setMonitorTracks(
           std::find(sanitized_tracks.cbegin(),
                     sanitized_tracks.cbegin() +
                         static_cast<std::ptrdiff_t>(sanitized_count),
-                    track_id) != sanitized_tracks.cbegin() +
-                                     static_cast<std::ptrdiff_t>(
-                                         sanitized_count)) {
+                    track_id) !=
+              sanitized_tracks.cbegin() +
+                  static_cast<std::ptrdiff_t>(sanitized_count)) {
         continue;
       }
       sanitized_tracks[sanitized_count++] = track_id;
@@ -338,11 +333,9 @@ void CwChannelBank::setMonitorTracks(
 
 const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     const std::uint64_t timestamp_ns, const double lower_frequency_hz,
-    const double upper_frequency_hz,
-    const std::span<const float> raw_bins_dbfs,
+    const double upper_frequency_hz, const std::span<const float> raw_bins_dbfs,
     const bool rebuild_snapshot) {
-  if (raw_bins_dbfs.size() < 3 ||
-      !std::isfinite(lower_frequency_hz) ||
+  if (raw_bins_dbfs.size() < 3 || !std::isfinite(lower_frequency_hz) ||
       !std::isfinite(upper_frequency_hz) ||
       upper_frequency_hz <= lower_frequency_hz) {
     return snapshots_;
@@ -381,20 +374,22 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     detector_average_initialized_ = false;
   }
   const float averaging_alpha =
-      !detector_average_initialized_ || config_.detector_averaging_seconds <= 0.0
+      !detector_average_initialized_ ||
+              config_.detector_averaging_seconds <= 0.0
           ? 1.0F
-          : static_cast<float>(1.0 - std::exp(
-                -std::max(detector_interval_seconds, 0.001) /
-                config_.detector_averaging_seconds));
+          : static_cast<float>(
+                1.0 - std::exp(-std::max(detector_interval_seconds, 0.001) /
+                               config_.detector_averaging_seconds));
   for (std::size_t bin = 0; bin < raw_bins_dbfs.size(); ++bin) {
     const float level = raw_bins_dbfs[bin];
-    const float power = std::isfinite(level)
-        ? std::pow(10.0F, 0.1F * level) : 0.0F;
+    const float power =
+        std::isfinite(level) ? std::pow(10.0F, 0.1F * level) : 0.0F;
     detector_bins_power_[bin] +=
         averaging_alpha * (power - detector_bins_power_[bin]);
-    detector_bins_dbfs_[bin] = detector_bins_power_[bin] > 0.0F
-        ? 10.0F * std::log10(detector_bins_power_[bin])
-        : -200.0F;
+    detector_bins_dbfs_[bin] =
+        detector_bins_power_[bin] > 0.0F
+            ? 10.0F * std::log10(detector_bins_power_[bin])
+            : -200.0F;
   }
   detector_average_initialized_ = true;
   const std::span<const float> bins_dbfs{detector_bins_dbfs_};
@@ -406,8 +401,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   constexpr double kObservationQuantumMs = 1'000.0 / 60.0;
   constexpr double kPersistenceDecayIntervalMs = 500.0;
   const double frame_interval_ms = detector_interval_seconds > 0.0
-      ? detector_interval_seconds * 1'000.0
-      : kObservationQuantumMs;
+                                       ? detector_interval_seconds * 1'000.0
+                                       : kObservationQuantumMs;
   // One spectrum frame is at most one independent observation however long the
   // preceding gap was, so a single frame after silence cannot manufacture
   // persistence. Raising the frame rate above the 60 Hz reference therefore no
@@ -436,15 +431,13 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     }
   };
 
-  const double bin_width_hz =
-      (upper_frequency_hz - lower_frequency_hz) /
-      static_cast<double>(bins_dbfs.size() - 1);
+  const double bin_width_hz = (upper_frequency_hz - lower_frequency_hz) /
+                              static_cast<double>(bins_dbfs.size() - 1);
   const float measured_noise_dbfs = estimateNoise(bins_dbfs);
-  const float strongest_dbfs = *std::max_element(
-      bins_dbfs.begin(), bins_dbfs.end());
+  const float strongest_dbfs =
+      *std::max_element(bins_dbfs.begin(), bins_dbfs.end());
   const float noise_dbfs = std::max(
-      measured_noise_dbfs,
-      strongest_dbfs - config_.detection_dynamic_range_db);
+      measured_noise_dbfs, strongest_dbfs - config_.detection_dynamic_range_db);
   std::vector<Candidate> candidates;
   candidates.reserve(std::min<std::size_t>(bins_dbfs.size(), 64));
   for (std::size_t bin = 1; bin + 1 < bins_dbfs.size(); ++bin) {
@@ -456,13 +449,15 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     const float left = bins_dbfs[bin - 1];
     const float right = bins_dbfs[bin + 1];
     const float denominator = left - 2.0F * level + right;
-    const double fractional_bin = std::abs(denominator) > 1.0e-6F
-        ? std::clamp(0.5 * static_cast<double>(left - right) /
-                         static_cast<double>(denominator),
-                     -0.5, 0.5)
-        : 0.0;
-    const float interpolated_level = level - static_cast<float>(
-        0.25 * static_cast<double>(left - right) * fractional_bin);
+    const double fractional_bin =
+        std::abs(denominator) > 1.0e-6F
+            ? std::clamp(0.5 * static_cast<double>(left - right) /
+                             static_cast<double>(denominator),
+                         -0.5, 0.5)
+            : 0.0;
+    const float interpolated_level =
+        level - static_cast<float>(0.25 * static_cast<double>(left - right) *
+                                   fractional_bin);
     float near_left_sum = 0.0F;
     float near_right_sum = 0.0F;
     std::size_t near_count = 0;
@@ -473,27 +468,27 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       ++near_count;
     }
     if (near_count == 0) continue;
-    const float near_reference = std::max(
-        near_left_sum / static_cast<float>(near_count),
-        near_right_sum / static_cast<float>(near_count));
+    const float near_reference =
+        std::max(near_left_sum / static_cast<float>(near_count),
+                 near_right_sum / static_cast<float>(near_count));
     if (interpolated_level - near_reference <
         config_.minimum_near_peak_prominence_db) {
       continue;
     }
-    const auto reference_offset_bins = static_cast<std::ptrdiff_t>(
-        std::max(2.0, std::round(
-            config_.prominence_reference_offset_hz / bin_width_hz)));
+    const auto reference_offset_bins = static_cast<std::ptrdiff_t>(std::max(
+        2.0,
+        std::round(config_.prominence_reference_offset_hz / bin_width_hz)));
     const auto reference_half_width_bins = static_cast<std::ptrdiff_t>(
-        std::max(1.0, std::round(
-            0.5 * config_.prominence_reference_width_hz / bin_width_hz)));
+        std::max(1.0, std::round(0.5 * config_.prominence_reference_width_hz /
+                                 bin_width_hz)));
     const auto reference_average = [&](const std::ptrdiff_t center) {
       float sum = 0.0F;
       std::size_t count = 0;
       for (std::ptrdiff_t offset = -reference_half_width_bins;
            offset <= reference_half_width_bins; ++offset) {
         const auto index = center + offset;
-        if (index < 0 || index >=
-            static_cast<std::ptrdiff_t>(bins_dbfs.size())) continue;
+        if (index < 0 || index >= static_cast<std::ptrdiff_t>(bins_dbfs.size()))
+          continue;
         const float value = bins_dbfs[static_cast<std::size_t>(index)];
         if (!std::isfinite(value)) continue;
         sum += value;
@@ -507,10 +502,12 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
         static_cast<std::ptrdiff_t>(bin) + reference_offset_bins);
     if (left_count == 0 && right_count == 0) continue;
     float local_reference = -std::numeric_limits<float>::infinity();
-    if (left_count > 0) local_reference = std::max(
-        local_reference, left_sum / static_cast<float>(left_count));
-    if (right_count > 0) local_reference = std::max(
-        local_reference, right_sum / static_cast<float>(right_count));
+    if (left_count > 0)
+      local_reference =
+          std::max(local_reference, left_sum / static_cast<float>(left_count));
+    if (right_count > 0)
+      local_reference = std::max(local_reference,
+                                 right_sum / static_cast<float>(right_count));
     if (interpolated_level - local_reference <
         config_.minimum_peak_prominence_db) {
       continue;
@@ -518,9 +515,9 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     const float snr_db = interpolated_level - noise_dbfs;
     if (snr_db < config_.acquisition_snr_db) continue;
     candidates.push_back({
-        .frequency_hz = lower_frequency_hz +
-                        (static_cast<double>(bin) + fractional_bin) *
-                            bin_width_hz,
+        .frequency_hz =
+            lower_frequency_hz +
+            (static_cast<double>(bin) + fractional_bin) * bin_width_hz,
         .snr_db = snr_db,
         .preferred_track_id = 0,
     });
@@ -547,43 +544,46 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       established_tracks.push_back(&track);
     }
   }
-  std::stable_sort(established_tracks.begin(), established_tracks.end(),
-                   [](const Track* left, const Track* right) {
-    const auto priority = [](const Track& track) {
-      if (track.operator_selected) return 4;
-      if (track.verification_state == CwTrackState::Verified) return 3;
-      if (track.ever_verified) return 2;
-      if (track.verification_state == CwTrackState::MorseLikely) return 1;
-      return 0;
-    };
-    const int left_priority = priority(*left);
-    const int right_priority = priority(*right);
-    if (left_priority != right_priority)
-      return left_priority > right_priority;
-    if (left->spectral_observations != right->spectral_observations)
-      return left->spectral_observations > right->spectral_observations;
-    if (left->spectral_snr_db != right->spectral_snr_db)
-      return left->spectral_snr_db > right->spectral_snr_db;
-    return left->id < right->id;
-  });
+  std::stable_sort(
+      established_tracks.begin(), established_tracks.end(),
+      [](const Track* left, const Track* right) {
+        const auto priority = [](const Track& track) {
+          if (track.operator_selected) return 4;
+          if (track.verification_state == CwTrackState::Verified) return 3;
+          if (track.ever_verified) return 2;
+          if (track.verification_state == CwTrackState::MorseLikely) return 1;
+          return 0;
+        };
+        const int left_priority = priority(*left);
+        const int right_priority = priority(*right);
+        if (left_priority != right_priority)
+          return left_priority > right_priority;
+        if (left->spectral_observations != right->spectral_observations)
+          return left->spectral_observations > right->spectral_observations;
+        if (left->spectral_snr_db != right->spectral_snr_db)
+          return left->spectral_snr_db > right->spectral_snr_db;
+        return left->id < right->id;
+      });
   for (const Track* track_pointer : established_tracks) {
     const auto& track = *track_pointer;
-    const double elapsed_seconds = timestamp_ns > track.last_frequency_update_ns
-        ? static_cast<double>(timestamp_ns - track.last_frequency_update_ns) /
-              1'000'000'000.0
-        : 0.0;
-    const double predicted_frequency = track.frequency_hz +
+    const double elapsed_seconds =
+        timestamp_ns > track.last_frequency_update_ns
+            ? static_cast<double>(timestamp_ns -
+                                  track.last_frequency_update_ns) /
+                  1'000'000'000.0
+            : 0.0;
+    const double predicted_frequency =
+        track.frequency_hz +
         track.drift_hz_per_second * std::min(elapsed_seconds, 0.25);
     std::size_t nearest_index = candidates.size();
-    double best_reservation_score =
-        std::numeric_limits<double>::infinity();
+    double best_reservation_score = std::numeric_limits<double>::infinity();
     for (std::size_t index = 0; index < candidates.size(); ++index) {
       if (reserved[index]) continue;
       const auto& candidate = candidates[index];
-      const double predicted_distance = std::abs(
-          candidate.frequency_hz - predicted_frequency);
-      const double presentation_distance = std::abs(
-          candidate.frequency_hz - track.presentation_frequency_hz);
+      const double predicted_distance =
+          std::abs(candidate.frequency_hz - predicted_frequency);
+      const double presentation_distance =
+          std::abs(candidate.frequency_hz - track.presentation_frequency_hz);
       if (track.spectral_observations >=
               config_.minimum_spectral_observations &&
           (std::min(predicted_distance, presentation_distance) >
@@ -598,8 +598,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       // walking the internal DSP center. If the true ridge returns alongside
       // that noise, it therefore reacquires the established identity instead
       // of creating a duplicate at the original frequency.
-      const double reservation_score = predicted_distance +
-          1.5 * presentation_distance;
+      const double reservation_score =
+          predicted_distance + 1.5 * presentation_distance;
       if (reservation_score <= best_reservation_score) {
         best_reservation_score = reservation_score;
         nearest_index = index;
@@ -607,13 +607,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
     }
     if (nearest_index == candidates.size()) continue;
     Candidate protected_candidate = candidates[nearest_index];
-    const bool duplicates_reserved_identity = !track.operator_selected &&
+    const bool duplicates_reserved_identity =
+        !track.operator_selected &&
         std::any_of(separated.cbegin(), separated.cend(),
                     [&](const Candidate& selected) {
-      return std::abs(protected_candidate.frequency_hz -
-                      selected.frequency_hz) <
-          config_.minimum_separation_hz;
-    });
+                      return std::abs(protected_candidate.frequency_hz -
+                                      selected.frequency_hz) <
+                             config_.minimum_separation_hz;
+                    });
     if (duplicates_reserved_identity) continue;
     protected_candidate.preferred_track_id = track.id;
     separated.push_back(protected_candidate);
@@ -640,23 +641,26 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
           candidate.preferred_track_id != track->id) {
         continue;
       }
-      const double elapsed_seconds = timestamp_ns > track->last_frequency_update_ns
-          ? static_cast<double>(timestamp_ns - track->last_frequency_update_ns) /
-                1'000'000'000.0
-          : 0.0;
+      const double elapsed_seconds =
+          timestamp_ns > track->last_frequency_update_ns
+              ? static_cast<double>(timestamp_ns -
+                                    track->last_frequency_update_ns) /
+                    1'000'000'000.0
+              : 0.0;
       // Drift is a short-term predictor, not permission to coast through a
       // word/message gap. Unbounded extrapolation let a modest noisy estimate
       // move the match tens or hundreds of hertz while the key was up.
       const double prediction_seconds = std::min(elapsed_seconds, 0.25);
-      const double predicted_frequency = track->frequency_hz +
-          track->drift_hz_per_second * prediction_seconds;
+      const double predicted_frequency =
+          track->frequency_hz + track->drift_hz_per_second * prediction_seconds;
       const double predicted_distance =
           std::abs(predicted_frequency - candidate.frequency_hz);
-      const double distance = candidate.preferred_track_id == track->id
-          ? std::min(predicted_distance,
-                     std::abs(track->presentation_frequency_hz -
-                              candidate.frequency_hz))
-          : predicted_distance;
+      const double distance =
+          candidate.preferred_track_id == track->id
+              ? std::min(predicted_distance,
+                         std::abs(track->presentation_frequency_hz -
+                                  candidate.frequency_hz))
+              : predicted_distance;
       // Once a track has accumulated enough evidence, a large innovation is
       // a different signal, not ordinary drift. Refusing that association is
       // what prevents an old decoder/text history from walking across nearby
@@ -689,11 +693,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
             track->verification_state == CwTrackState::Lost) {
           continue;
         }
-        const double distance = std::min(
-            std::abs(candidate.frequency_hz -
-                     track->identity_origin_frequency_hz),
-            std::abs(candidate.frequency_hz -
-                     track->presentation_frequency_hz));
+        const double distance =
+            std::min(std::abs(candidate.frequency_hz -
+                              track->identity_origin_frequency_hz),
+                     std::abs(candidate.frequency_hz -
+                              track->presentation_frequency_hz));
         if (distance >= config_.minimum_separation_hz) continue;
         if (track->matched) {
           occupied_by_matched_track = true;
@@ -719,26 +723,27 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
               track->verification_state == CwTrackState::Verified) {
             continue;
           }
-          const float score = track->spectral_snr_db +
+          const float score =
+              track->spectral_snr_db +
               0.10F * static_cast<float>(std::min<std::uint16_t>(
-                  track->spectral_observations, 20)) +
-              (track->verification_state == CwTrackState::MorseLikely
-                   ? 8.0F : 0.0F);
+                          track->spectral_observations, 20)) +
+              (track->verification_state == CwTrackState::MorseLikely ? 8.0F
+                                                                      : 0.0F);
           if (score < victim_score) {
             victim_score = score;
             victim = track;
           }
         }
         if (victim == tracks_.end()) continue;
-        const double unmatched_seconds = timestamp_ns >
-                victim->last_candidate_match_ns
-            ? static_cast<double>(timestamp_ns -
-                                  victim->last_candidate_match_ns) /
-                  1'000'000'000.0
-            : 0.0;
+        const double unmatched_seconds =
+            timestamp_ns > victim->last_candidate_match_ns
+                ? static_cast<double>(timestamp_ns -
+                                      victim->last_candidate_match_ns) /
+                      1'000'000'000.0
+                : 0.0;
         const bool replace =
-            candidate.snr_db >= victim->spectral_snr_db +
-                                    config_.track_replacement_margin_db ||
+            candidate.snr_db >=
+                victim->spectral_snr_db + config_.track_replacement_margin_db ||
             unmatched_seconds >= 0.25 ||
             victim->spectral_observations <
                 config_.minimum_spectral_observations;
@@ -758,18 +763,20 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
       nearest->update = nearest->decoder.resumeInput(timestamp_ns);
     nearest->decoder_input_suspended = false;
     creditMatchedEvidence(*nearest);
-    const double elapsed_seconds = timestamp_ns > nearest->last_frequency_update_ns
-        ? static_cast<double>(timestamp_ns - nearest->last_frequency_update_ns) /
-              1'000'000'000.0
-        : 0.0;
+    const double elapsed_seconds =
+        timestamp_ns > nearest->last_frequency_update_ns
+            ? static_cast<double>(timestamp_ns -
+                                  nearest->last_frequency_update_ns) /
+                  1'000'000'000.0
+            : 0.0;
     if (elapsed_seconds > 0.0 && elapsed_seconds <= 1.0) {
-      const double predicted_frequency = nearest->frequency_hz +
+      const double predicted_frequency =
+          nearest->frequency_hz +
           nearest->drift_hz_per_second * elapsed_seconds;
       const double innovation = candidate.frequency_hz - predicted_frequency;
       nearest->frequency_hz = predicted_frequency + 0.45 * innovation;
       nearest->drift_hz_per_second = std::clamp(
-          nearest->drift_hz_per_second +
-              0.08 * innovation / elapsed_seconds,
+          nearest->drift_hz_per_second + 0.08 * innovation / elapsed_seconds,
           -200.0, 200.0);
     } else {
       nearest->frequency_hz +=
@@ -798,8 +805,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   // timing, character, and sustained-entry gate still applies unchanged.
   for (auto& track : tracks_) {
     if (!track.operator_selected || track.matched) continue;
-    const float selected_snr = spectralSnr(
-        track, lower_frequency_hz, bin_width_hz, bins_dbfs, noise_dbfs);
+    const float selected_snr = spectralSnr(track, lower_frequency_hz,
+                                           bin_width_hz, bins_dbfs, noise_dbfs);
     if (selected_snr < config_.retention_snr_db) continue;
     track.matched = true;
     if (track.decoder_input_suspended)
@@ -812,8 +819,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   }
 
   for (auto& track : tracks_) {
-    track.spectral_snr_db = spectralSnr(
-        track, lower_frequency_hz, bin_width_hz, bins_dbfs, noise_dbfs);
+    track.spectral_snr_db = spectralSnr(track, lower_frequency_hz, bin_width_hz,
+                                        bins_dbfs, noise_dbfs);
     if (!track.matched) {
       if (track.consecutive_spectrum_misses <
           std::numeric_limits<std::uint16_t>::max()) {
@@ -839,22 +846,21 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   const auto expired = [&](const Track& track) {
     const bool unverified_manual =
         track.operator_selected && !track.ever_verified;
-    const std::uint64_t last_activity_ns = unverified_manual
-        ? track.operator_selected_ns : track.last_detected_ns;
+    const std::uint64_t last_activity_ns =
+        unverified_manual ? track.operator_selected_ns : track.last_detected_ns;
     if (timestamp_ns < last_activity_ns) return false;
     const double age_seconds =
-        static_cast<double>(timestamp_ns - last_activity_ns) /
-        1'000'000'000.0;
-    const double retention = unverified_manual
-        ? config_.decoded_track_retention_seconds
+        static_cast<double>(timestamp_ns - last_activity_ns) / 1'000'000'000.0;
+    const double retention =
+        unverified_manual ? config_.decoded_track_retention_seconds
         : track.verification_state != CwTrackState::Verified
-        ? (!track.update.text.empty() ||
-                   !track.update.provisional_text.empty() ||
-                   track.verification_state == CwTrackState::MorseLikely
-               ? std::max(config_.unverified_track_retention_seconds,
-                          config_.empty_track_retention_seconds)
-               : config_.unverified_track_retention_seconds)
-        : config_.decoded_track_retention_seconds;
+            ? (!track.update.text.empty() ||
+                       !track.update.provisional_text.empty() ||
+                       track.verification_state == CwTrackState::MorseLikely
+                   ? std::max(config_.unverified_track_retention_seconds,
+                              config_.empty_track_retention_seconds)
+                   : config_.unverified_track_retention_seconds)
+            : config_.decoded_track_retention_seconds;
     return age_seconds > retention;
   };
   for (auto& track : tracks_) {
@@ -901,11 +907,12 @@ std::uint64_t CwChannelBank::selectFrequency(
             track->operator_selected) {
           continue;
         }
-        const float score = track->spectral_snr_db +
+        const float score =
+            track->spectral_snr_db +
             0.10F * static_cast<float>(std::min<std::uint16_t>(
-                track->spectral_observations, 20)) +
-            (track->verification_state == CwTrackState::MorseLikely
-                 ? 8.0F : 0.0F);
+                        track->spectral_observations, 20)) +
+            (track->verification_state == CwTrackState::MorseLikely ? 8.0F
+                                                                    : 0.0F);
         if (score < victim_score) {
           victim_score = score;
           victim = track;
@@ -953,8 +960,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
     return snapshots_;
   }
 
-  const bool same_stream = stream_initialized_ &&
-      stream_.kind == block.stream.kind &&
+  const bool same_stream =
+      stream_initialized_ && stream_.kind == block.stream.kind &&
       stream_.sample_rate_hz == block.stream.sample_rate_hz &&
       stream_.center_frequency_hz == block.stream.center_frequency_hz;
   if (!same_stream) {
@@ -993,24 +1000,24 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
   for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
     const double cutoff_hz =
         std::min(kNarrowbandWidthsHz[width] * 0.5, sample_rate_hz * 0.2);
-    filter_alphas[width] = static_cast<float>(1.0 - std::exp(
-        -2.0 * std::numbers::pi * cutoff_hz / sample_rate_hz));
+    filter_alphas[width] = static_cast<float>(
+        1.0 - std::exp(-2.0 * std::numbers::pi * cutoff_hz / sample_rate_hz));
   }
   const float reference_alpha = filter_alphas[1];
-  const double monitor_angle = 2.0 * std::numbers::pi *
-      monitor_reference_tone_hz_ / sample_rate_hz;
+  const double monitor_angle =
+      2.0 * std::numbers::pi * monitor_reference_tone_hz_ / sample_rate_hz;
   const std::complex<float> monitor_step{
       static_cast<float>(std::cos(monitor_angle)),
       static_cast<float>(std::sin(monitor_angle))};
 
   const auto is_monitored = [this](const std::uint64_t track_id) {
     return monitor_mode_ == CwMonitorMode::SelectedTrack &&
-        std::find(monitored_track_ids_.cbegin(),
-                  monitored_track_ids_.cbegin() +
-                      static_cast<std::ptrdiff_t>(monitored_track_count_),
-                  track_id) != monitored_track_ids_.cbegin() +
-                                   static_cast<std::ptrdiff_t>(
-                                       monitored_track_count_);
+           std::find(monitored_track_ids_.cbegin(),
+                     monitored_track_ids_.cbegin() +
+                         static_cast<std::ptrdiff_t>(monitored_track_count_),
+                     track_id) !=
+               monitored_track_ids_.cbegin() +
+                   static_cast<std::ptrdiff_t>(monitored_track_count_);
   };
   const std::size_t active_monitor_count = static_cast<std::size_t>(
       std::count_if(tracks_.cbegin(), tracks_.cend(),
@@ -1020,21 +1027,27 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
   if (active_monitor_count > 0U) {
     monitor_audio_.assign(block.sample_count, 0.0F);
   }
-  const float monitor_mix_gain = active_monitor_count > 0U
-      ? 1.0F / std::sqrt(static_cast<float>(active_monitor_count))
-      : 0.0F;
+  const float monitor_mix_gain =
+      active_monitor_count > 0U
+          ? 1.0F / std::sqrt(static_cast<float>(active_monitor_count))
+          : 0.0F;
+  const float monitor_attack = static_cast<float>(
+      1.0 - std::exp(-1.0 / std::max(1.0, 0.005 * sample_rate_hz)));
+  const float monitor_release = static_cast<float>(
+      1.0 - std::exp(-1.0 / std::max(1.0, 1.5 * sample_rate_hz)));
   std::complex<float> advanced_monitor_oscillator = monitor_oscillator_;
 
   for (auto& track : tracks_) {
     const bool monitored_track = is_monitored(track.id);
     std::complex<float> track_monitor_oscillator = monitor_oscillator_;
-    const double center_hz = block.stream.kind == StreamKind::Audio
-        ? track.frequency_hz
-        : track.frequency_hz - block.stream.center_frequency_hz;
+    const double center_hz =
+        block.stream.kind == StreamKind::Audio
+            ? track.frequency_hz
+            : track.frequency_hz - block.stream.center_frequency_hz;
     const double reference_offset = config_.noise_reference_offset_hz;
     const auto oscillator_step = [sample_rate_hz](const double frequency_hz) {
-      const double angle = -2.0 * std::numbers::pi * frequency_hz /
-                           sample_rate_hz;
+      const double angle =
+          -2.0 * std::numbers::pi * frequency_hz / sample_rate_hz;
       return std::complex<float>(static_cast<float>(std::cos(angle)),
                                  static_cast<float>(std::sin(angle)));
     };
@@ -1046,27 +1059,38 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.filter_initialized = true;
     }
 
-    const auto filtered = [](
-        const std::complex<float> input,
-        const float alpha,
-        std::array<std::complex<float>, 3>& stages) {
+    const auto filtered = [](const std::complex<float> input, const float alpha,
+                             std::array<std::complex<float>, 3>& stages) {
       stages[0] += alpha * (input - stages[0]);
       stages[1] += alpha * (stages[0] - stages[1]);
       stages[2] += alpha * (stages[1] - stages[2]);
       return stages[2];
     };
     for (std::size_t index = 0; index < block.sample_count; ++index) {
-      const auto sample = block.stream.kind == StreamKind::Audio
-          ? std::complex<float>(block.samples[index].real(), 0.0F)
-          : block.samples[index];
+      const auto sample =
+          block.stream.kind == StreamKind::Audio
+              ? std::complex<float>(block.samples[index].real(), 0.0F)
+              : block.samples[index];
       const auto center_mixed = sample * track.center_oscillator;
       for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
         const auto center = filtered(center_mixed, filter_alphas[width],
                                      track.center_filters[width]);
         track.center_power_sums[width] += std::norm(center);
         if (monitored_track && width == track.selected_width_index) {
-          monitor_audio_[index] += 2.0F * monitor_mix_gain *
-              (center * track_monitor_oscillator).real();
+          const float amplitude = std::abs(center);
+          const float envelope_rate = amplitude > track.monitor_peak_envelope
+                                          ? monitor_attack
+                                          : monitor_release;
+          track.monitor_peak_envelope +=
+              envelope_rate * (amplitude - track.monitor_peak_envelope);
+          // SDR sample levels vary by device, gain mode and driver. Normalize
+          // only the selected narrowband monitor after filtering, with a fast
+          // attack and slow release so gaps remain quiet instead of pumping.
+          const float monitor_gain =
+              std::clamp(0.28F / std::max(track.monitor_peak_envelope, 0.001F),
+                         0.5F, 200.0F);
+          monitor_audio_[index] += 2.0F * monitor_mix_gain * monitor_gain *
+                                   (center * track_monitor_oscillator).real();
         }
       }
       const auto lower = filtered(sample * track.lower_oscillator,
@@ -1093,8 +1117,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       }
 
       if (track.accumulated_samples < evidence_samples) continue;
-      const float scale = 1.0F /
-          static_cast<float>(track.accumulated_samples);
+      const float scale = 1.0F / static_cast<float>(track.accumulated_samples);
       constexpr float kPowerFloor = 1.0e-12F;
       const float observed_lower = track.lower_power_sum * scale;
       const float observed_upper = track.upper_power_sum * scale;
@@ -1114,18 +1137,19 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // look like a keyed carrier. The geometric mean remains tolerant of a
       // nearby interferer on one side without inheriting the old min-side
       // floor underestimate.
-      const float reference_power = std::max(
-          std::sqrt(std::max(track.lower_noise_power, kPowerFloor) *
-                    std::max(track.upper_noise_power, kPowerFloor)),
-          kPowerFloor);
+      const float reference_power =
+          std::max(std::sqrt(std::max(track.lower_noise_power, kPowerFloor) *
+                             std::max(track.upper_noise_power, kPowerFloor)),
+                   kPowerFloor);
       std::array<float, kNarrowbandWidthsHz.size()> width_snr{};
       for (std::size_t width = 0; width < kNarrowbandWidthsHz.size(); ++width) {
         const float center_power = track.center_power_sums[width] * scale;
         const float noise_scale = static_cast<float>(
             kNarrowbandWidthsHz[width] / kNarrowbandWidthsHz[1]);
-        width_snr[width] = 10.0F * std::log10(
-            std::max(center_power, kPowerFloor) /
-            std::max(reference_power * noise_scale, kPowerFloor));
+        width_snr[width] =
+            10.0F *
+            std::log10(std::max(center_power, kPowerFloor) /
+                       std::max(reference_power * noise_scale, kPowerFloor));
       }
       const float center_localization_ratio =
           track.center_power_sums[2] > kPowerFloor
@@ -1136,14 +1160,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // both filters (0 dB). Normalize and bound that physical range so the
       // verification threshold has stable meaning and cannot explode when
       // the wide filter happens to be near its numerical floor.
-      const float localization_db = 10.0F * std::log10(std::max(
-          center_localization_ratio, kPowerFloor));
-      const float center_localization = std::clamp(
-          (localization_db + 6.0F) / 6.0F, 0.0F, 1.0F);
+      const float localization_db =
+          10.0F * std::log10(std::max(center_localization_ratio, kPowerFloor));
+      const float center_localization =
+          std::clamp((localization_db + 6.0F) / 6.0F, 0.0F, 1.0F);
       track.narrowband_coherence = track.total_width_observations == 0
-          ? center_localization
-          : 0.92F * track.narrowband_coherence +
-                0.08F * center_localization;
+                                       ? center_localization
+                                       : 0.92F * track.narrowband_coherence +
+                                             0.08F * center_localization;
       // Analysis width follows the keying bandwidth the signal actually needs.
       // A keyed carrier occupies roughly four times its element rate, so the
       // requirement is about 4 * (WPM / 1.2) Hz: 60 Hz carries speeds to about
@@ -1153,11 +1177,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // fast signals decode as strings of single-element characters. Selecting
       // on comparative filter power instead let a fast signal sit in a filter
       // too narrow to resolve its own dits.
-      const double measured_wpm = std::max(
-          track.update.wpm,
-          track.decoder.timingControlCadenceConfidence() >= 0.45F
-              ? track.decoder.timingControlWpm()
-              : 0.0);
+      const double measured_wpm =
+          std::max(track.update.wpm,
+                   track.decoder.timingControlCadenceConfidence() >= 0.45F
+                       ? track.decoder.timingControlWpm()
+                       : 0.0);
       std::size_t preferred = 1;
       if (measured_wpm > 0.0) {
         // 3.5 measured best across the speed/noise surface: the theoretical
@@ -1190,11 +1214,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         // another report the wrong one.
         const double required_width_hz = 3.5 * (measured_wpm / 1.2);
         constexpr double kNarrowPathMaximumWpm = 15.0;
-        preferred =
-            required_width_hz <= kNarrowbandWidthsHz[0] &&
-                    measured_wpm <= kNarrowPathMaximumWpm ? 0U
-          : required_width_hz <= kNarrowbandWidthsHz[1] ? 1U
-                                                        : 2U;
+        preferred = required_width_hz <= kNarrowbandWidthsHz[0] &&
+                            measured_wpm <= kNarrowPathMaximumWpm
+                        ? 0U
+                    : required_width_hz <= kNarrowbandWidthsHz[1] ? 1U
+                                                                  : 2U;
       }
       // A drifting carrier needs headroom regardless of its speed.
       if (std::abs(track.drift_hz_per_second) >= 30.0) preferred = 2;
@@ -1202,8 +1226,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         ++track.total_width_observations;
       } else if (preferred == track.pending_width_index) {
         if (++track.pending_width_observations >= 20) {
-          track.selected_width_index =
-              static_cast<std::uint8_t>(preferred);
+          track.selected_width_index = static_cast<std::uint8_t>(preferred);
           track.pending_width_observations = 0;
         }
       } else {
@@ -1222,10 +1245,10 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         track.keying_mark_power = observed_power * 4.0F;
         track.keying_envelope_initialized = true;
       } else {
-        const float space_amplitude = std::sqrt(std::max(
-            track.keying_space_power, 0.0F));
-        const float mark_amplitude = std::sqrt(std::max(
-            track.keying_mark_power, 0.0F));
+        const float space_amplitude =
+            std::sqrt(std::max(track.keying_space_power, 0.0F));
+        const float mark_amplitude =
+            std::sqrt(std::max(track.keying_mark_power, 0.0F));
         // Each observation updates only the level it currently belongs to, so
         // the two components stay separated instead of one slow envelope
         // chasing both states. Weighting both levels by how far the sample
@@ -1235,23 +1258,20 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         // ambiguous sample pulls the levels together instead of leaving them
         // alone, and at 12 WPM and 12 dB the model collapsed outright.
         // Measured, 0.388 mean character error against 0.295.
-        const float split_amplitude = 0.5F * (space_amplitude +
-                                              mark_amplitude);
+        const float split_amplitude = 0.5F * (space_amplitude + mark_amplitude);
         if (observed_power < split_amplitude * split_amplitude) {
-          track.keying_space_power += (observed_power <
-                                       track.keying_space_power ? 0.30F
-                                                                : 0.02F) *
+          track.keying_space_power +=
+              (observed_power < track.keying_space_power ? 0.30F : 0.02F) *
               (observed_power - track.keying_space_power);
         } else {
-          track.keying_mark_power += (observed_power >
-                                      track.keying_mark_power ? 0.30F
-                                                              : 0.02F) *
+          track.keying_mark_power +=
+              (observed_power > track.keying_mark_power ? 0.30F : 0.02F) *
               (observed_power - track.keying_mark_power);
         }
         // Keep the two levels separated so a silent channel cannot collapse
         // the model onto one point and start slicing noise.
-        track.keying_mark_power = std::max(track.keying_mark_power,
-                                           track.keying_space_power * 2.0F);
+        track.keying_mark_power =
+            std::max(track.keying_mark_power, track.keying_space_power * 2.0F);
       }
       // Periodically regularise the fast online levels against a bounded
       // history.  Otsu's between-class criterion finds the strongest split;
@@ -1268,9 +1288,9 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
         track.keying_level_history_index =
             (track.keying_level_history_index + 1) %
             Track::kKeyingLevelHistorySize;
-        track.keying_level_history_count = std::min(
-            track.keying_level_history_count + 1,
-            Track::kKeyingLevelHistorySize);
+        track.keying_level_history_count =
+            std::min(track.keying_level_history_count + 1,
+                     Track::kKeyingLevelHistorySize);
       }
       if (config_.robust_keying_level_history &&
           ++track.keying_level_fit_countdown >= 16 &&
@@ -1281,15 +1301,15 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                     track.keying_level_history_count, ordered.begin());
         std::sort(ordered.begin(),
                   ordered.begin() + static_cast<std::ptrdiff_t>(
-                      track.keying_level_history_count));
+                                        track.keying_level_history_count));
         const std::size_t count = track.keying_level_history_count;
         const std::size_t minimum_group = std::max<std::size_t>(8, count / 10);
         double total = 0.0;
         double total_squared = 0.0;
         for (std::size_t sample = 0; sample < count; ++sample) {
           total += ordered[sample];
-          total_squared += static_cast<double>(ordered[sample]) *
-              ordered[sample];
+          total_squared +=
+              static_cast<double>(ordered[sample]) * ordered[sample];
         }
         double lower_sum = 0.0;
         double best_separation = -1.0;
@@ -1302,7 +1322,8 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
               (total - lower_sum) / static_cast<double>(count - split);
           const double difference = upper_mean - lower_mean;
           const double separation = static_cast<double>(split) *
-              static_cast<double>(count - split) * difference * difference;
+                                    static_cast<double>(count - split) *
+                                    difference * difference;
           if (separation > best_separation) {
             best_separation = separation;
             best_split = split;
@@ -1314,10 +1335,9 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
               total_squared - total * total / static_cast<double>(count),
               1.0e-12);
           const double explained_variation =
-              (best_separation / static_cast<double>(count)) /
-              total_variation;
-          track.keying_level_explained_variation = static_cast<float>(
-              std::clamp(explained_variation, 0.0, 1.0));
+              (best_separation / static_cast<double>(count)) / total_variation;
+          track.keying_level_explained_variation =
+              static_cast<float>(std::clamp(explained_variation, 0.0, 1.0));
           track.robust_keying_level_anchor_active = false;
           const float robust_space_amplitude = ordered[best_split / 2];
           const float robust_mark_amplitude =
@@ -1334,21 +1354,23 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
               robust_mark_amplitude >=
                   robust_space_amplitude * kMinimumAmplitudeSeparation) {
             constexpr float kRobustAnchorRate = 0.015F;
-            const float current_space_amplitude = std::sqrt(
-                std::max(track.keying_space_power, 0.0F));
-            const float current_mark_amplitude = std::sqrt(
-                std::max(track.keying_mark_power, 0.0F));
-            const float anchored_space_amplitude = current_space_amplitude +
+            const float current_space_amplitude =
+                std::sqrt(std::max(track.keying_space_power, 0.0F));
+            const float current_mark_amplitude =
+                std::sqrt(std::max(track.keying_mark_power, 0.0F));
+            const float anchored_space_amplitude =
+                current_space_amplitude +
                 kRobustAnchorRate *
                     (robust_space_amplitude - current_space_amplitude);
-            const float anchored_mark_amplitude = current_mark_amplitude +
+            const float anchored_mark_amplitude =
+                current_mark_amplitude +
                 kRobustAnchorRate *
                     (robust_mark_amplitude - current_mark_amplitude);
-            track.keying_space_power = anchored_space_amplitude *
-                anchored_space_amplitude;
-            track.keying_mark_power = std::max(
-                anchored_mark_amplitude * anchored_mark_amplitude,
-                track.keying_space_power * 2.0F);
+            track.keying_space_power =
+                anchored_space_amplitude * anchored_space_amplitude;
+            track.keying_mark_power =
+                std::max(anchored_mark_amplitude * anchored_mark_amplitude,
+                         track.keying_space_power * 2.0F);
             track.robust_keying_level_anchor_active = true;
           }
         }
@@ -1358,15 +1380,14 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // the signal rather than whichever half of the keying cycle happened to
       // be sampled.
       if (track.keying_envelope_initialized) {
-        track.keying_mark_snr_db = 10.0F * std::log10(
-            std::max(track.keying_mark_power, 1.0e-12F));
+        track.keying_mark_snr_db =
+            10.0F * std::log10(std::max(track.keying_mark_power, 1.0e-12F));
       }
-      const float space_amplitude = std::sqrt(std::max(
-          track.keying_space_power, 0.0F));
-      const float mark_amplitude = std::sqrt(std::max(
-          track.keying_mark_power, 0.0F));
-      const float middle_amplitude = 0.5F * (space_amplitude +
-                                             mark_amplitude);
+      const float space_amplitude =
+          std::sqrt(std::max(track.keying_space_power, 0.0F));
+      const float mark_amplitude =
+          std::sqrt(std::max(track.keying_mark_power, 0.0F));
+      const float middle_amplitude = 0.5F * (space_amplitude + mark_amplitude);
       const float observed_amplitude = std::sqrt(observed_power);
       // Scatter about the assigned level, tracked slowly so a burst of marks
       // cannot make the channel look quiet. A sample caught on a keying edge
@@ -1374,10 +1395,11 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // it is excluded: at 40 WPM the dot is barely two detector frames long
       // and edge samples would otherwise dominate the estimate, flattening
       // the decision on exactly the clean fast signals it should sharpen.
-      const float half_span_amplitude = std::max(
-          0.5F * (mark_amplitude - space_amplitude), 1.0e-6F);
+      const float half_span_amplitude =
+          std::max(0.5F * (mark_amplitude - space_amplitude), 1.0e-6F);
       const bool nearer_space = observed_amplitude < middle_amplitude;
-      const float level_residual = observed_amplitude -
+      const float level_residual =
+          observed_amplitude -
           (nearer_space ? space_amplitude : mark_amplitude);
       // A mark carries signal plus noise and a space carries noise alone, so
       // the two levels do not scatter equally. Tracking them separately is
@@ -1422,12 +1444,12 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       // discards this margin, which is what fragmented weak elements: at 6 dB
       // nine marks in ten broke up and mean mark length fell to 18 ms against
       // a true 60 ms, even though spectral acquisition never failed.
-      const float variance_floor = std::max(
-          1.0e-12F, 1.0e-4F * middle_amplitude * middle_amplitude);
-      const float space_variance = std::max(track.keying_space_variance,
-                                            variance_floor);
-      const float mark_variance = std::max(track.keying_mark_variance,
-                                           variance_floor);
+      const float variance_floor =
+          std::max(1.0e-12F, 1.0e-4F * middle_amplitude * middle_amplitude);
+      const float space_variance =
+          std::max(track.keying_space_variance, variance_floor);
+      const float mark_variance =
+          std::max(track.keying_mark_variance, variance_floor);
       // Likelihood ratio under the two-level model with each level carrying
       // its own scatter. Unequal scatter moves the decision off half
       // amplitude, and here that is wanted rather than tolerated: a mark
@@ -1441,15 +1463,16 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                   mark_offset * mark_offset / mark_variance);
       track.keying_snr_db =
           track.decoder.evidenceForLogLikelihoodRatio(log_likelihood_ratio);
-      const auto timestamp_ns = block.timestamp_ns +
-          static_cast<std::uint64_t>(
-              static_cast<long double>(index) * 1'000'000'000.0L /
-              sample_rate_hz);
+      const auto timestamp_ns =
+          block.timestamp_ns +
+          static_cast<std::uint64_t>(static_cast<long double>(index) *
+                                     1'000'000'000.0L / sample_rate_hz);
       const bool candidate_match_held =
           timestamp_ns < track.last_candidate_match_ns ||
           static_cast<long double>(timestamp_ns -
                                    track.last_candidate_match_ns) /
-                  1'000'000'000.0L <= kCandidateMatchHoldSeconds;
+                  1'000'000'000.0L <=
+              kCandidateMatchHoldSeconds;
       if (!candidate_match_held) {
         if (!track.decoder_input_suspended) {
           // Drain a possibly keyed acoustic segment once, but do not claim an
@@ -1460,8 +1483,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           track.decoder_input_suspended = true;
         }
       } else if (!track.decoder_input_suspended) {
-        track.update = track.decoder.process(timestamp_ns,
-                                              track.keying_snr_db);
+        track.update = track.decoder.process(timestamp_ns, track.keying_snr_db);
         updateVerification(track, timestamp_ns);
         recoverRejectedDecoder(track);
       }
@@ -1470,8 +1492,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
       track.upper_power_sum = 0.0F;
       track.accumulated_samples = 0;
     }
-    if (monitored_track)
-      advanced_monitor_oscillator = track_monitor_oscillator;
+    if (monitored_track) advanced_monitor_oscillator = track_monitor_oscillator;
   }
 
   if (active_monitor_count > 0U) {
@@ -1481,9 +1502,9 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
   }
 
   expected_sample_timestamp_ns_ =
-      block.timestamp_ns + static_cast<std::uint64_t>(
-          static_cast<long double>(block.sample_count) * 1'000'000'000.0L /
-          sample_rate_hz);
+      block.timestamp_ns +
+      static_cast<std::uint64_t>(static_cast<long double>(block.sample_count) *
+                                 1'000'000'000.0L / sample_rate_hz);
   sample_timing_initialized_ = true;
   rebuildSnapshots(expected_sample_timestamp_ns_);
   return snapshots_;
@@ -1509,22 +1530,22 @@ CwVerificationDiagnostics CwChannelBank::verificationDiagnostics() const {
     const auto reason = static_cast<std::size_t>(track.verification_reason);
     if (reason < result.current_reason_counts.size())
       ++result.current_reason_counts[reason];
-    result.maximum_decoded_symbols = std::max(
-        result.maximum_decoded_symbols, track.update.decoded_symbols);
-    result.maximum_key_transitions = std::max(
-        result.maximum_key_transitions, track.update.key_transitions);
-    result.best_timing_quality = std::max(
-        result.best_timing_quality, track.update.timing_quality);
-    result.best_cadence_quality = std::max(
-        result.best_cadence_quality, track.update.cadence_quality);
+    result.maximum_decoded_symbols =
+        std::max(result.maximum_decoded_symbols, track.update.decoded_symbols);
+    result.maximum_key_transitions =
+        std::max(result.maximum_key_transitions, track.update.key_transitions);
+    result.best_timing_quality =
+        std::max(result.best_timing_quality, track.update.timing_quality);
+    result.best_cadence_quality =
+        std::max(result.best_cadence_quality, track.update.cadence_quality);
     if (track.verification_state == CwTrackState::Verified &&
         track.distinctive_token_seen &&
         track.update.timing_quality <
             config_.minimum_verification_timing_quality) {
       ++result.pattern_verified_tracks;
     }
-    result.best_narrowband_coherence = std::max(
-        result.best_narrowband_coherence, track.narrowband_coherence);
+    result.best_narrowband_coherence =
+        std::max(result.best_narrowband_coherence, track.narrowband_coherence);
   }
   return result;
 }
@@ -1538,8 +1559,9 @@ float CwChannelBank::estimateNoise(
   }
   if (finite.empty()) return -200.0F;
   const std::size_t index = finite.size() / 2;
-  std::nth_element(finite.begin(), finite.begin() +
-                   static_cast<std::ptrdiff_t>(index), finite.end());
+  std::nth_element(finite.begin(),
+                   finite.begin() + static_cast<std::ptrdiff_t>(index),
+                   finite.end());
   return finite[index];
 }
 
@@ -1574,6 +1596,7 @@ void CwChannelBank::resetFilter(Track& track) noexcept {
   track.accumulated_samples = 0;
   track.lower_noise_power = 0.0F;
   track.upper_noise_power = 0.0F;
+  track.monitor_peak_envelope = 0.0F;
   track.selected_width_index = 1;
   track.pending_width_index = 1;
   track.pending_width_observations = 0;
@@ -1620,10 +1643,10 @@ void CwChannelBank::shiftTrackedFrequencies(
     observation.snapshot.frequency_hz += audio_hz_delta;
     observation.snapshot.presentation_frequency_hz += audio_hz_delta;
   }
-  std::erase_if(
-      retained_observations_, [](const RetainedObservation& observation) {
-        return observation.snapshot.frequency_hz <= 0.0;
-      });
+  std::erase_if(retained_observations_,
+                [](const RetainedObservation& observation) {
+                  return observation.snapshot.frequency_hz <= 0.0;
+                });
   // A shift is meant to follow a signal that stays within the processed
   // audio band as the VFO moves; repeated or large shifts (an operator
   // tuning across the band, not centering on one station) can carry a
@@ -1639,15 +1662,16 @@ void CwChannelBank::shiftTrackedFrequencies(
 
 void CwChannelBank::updateVerification(Track& track,
                                        const std::uint64_t timestamp_ns) {
-  const bool was_verified =
-      track.verification_state == CwTrackState::Verified;
+  const bool was_verified = track.verification_state == CwTrackState::Verified;
   const std::size_t plausibility_window = std::max<std::size_t>(
-      64, static_cast<std::size_t>(
-              config_.minimum_plausibility_check_characters) * 2U);
-  const std::string recent_text = track.update.text.size() > plausibility_window
-      ? track.update.text.substr(track.update.text.size() -
-                                 plausibility_window)
-      : track.update.text;
+      64,
+      static_cast<std::size_t>(config_.minimum_plausibility_check_characters) *
+          2U);
+  const std::string recent_text =
+      track.update.text.size() > plausibility_window
+          ? track.update.text.substr(track.update.text.size() -
+                                     plausibility_window)
+          : track.update.text;
   if (isCharacterDistributionImplausible(
           recent_text, config_.minimum_plausibility_check_characters,
           config_.maximum_simple_character_fraction)) {
@@ -1673,12 +1697,12 @@ void CwChannelBank::updateVerification(Track& track,
 
   const auto observations = track.spectral_observations;
   const auto symbols = track.update.recent_decoded_symbols > 0
-      ? track.update.recent_decoded_symbols : track.update.decoded_symbols;
-  const auto unknown = std::min(
-      track.update.recent_decoded_symbols > 0
-          ? track.update.recent_unknown_symbols
-          : track.update.unknown_symbols,
-      symbols);
+                           ? track.update.recent_decoded_symbols
+                           : track.update.decoded_symbols;
+  const auto unknown = std::min(track.update.recent_decoded_symbols > 0
+                                    ? track.update.recent_unknown_symbols
+                                    : track.update.unknown_symbols,
+                                symbols);
   const auto cadence_observations =
       track.update.recent_cadence_observations > 0
           ? track.update.recent_cadence_observations
@@ -1687,14 +1711,16 @@ void CwChannelBank::updateVerification(Track& track,
   if (track.update.text.size() != track.distinctive_token_scanned_length) {
     track.distinctive_token_scanned_length = track.update.text.size();
     if (!track.distinctive_token_seen)
-      track.distinctive_token_seen = cwTextContainsDistinctiveToken(recent_text);
+      track.distinctive_token_seen =
+          cwTextContainsDistinctiveToken(recent_text);
   }
   const bool character_refinement_current =
       track.character_refinement_timestamp_ns != 0U &&
       timestamp_ns >= track.character_refinement_timestamp_ns &&
       static_cast<double>(timestamp_ns -
                           track.character_refinement_timestamp_ns) /
-              1'000'000'000.0 <= kCharacterRefinementEvidenceSeconds;
+              1'000'000'000.0 <=
+          kCharacterRefinementEvidenceSeconds;
   // A recognised token is evidence about whether this is Morse that does not
   // come from the timing measures themselves, so it may stand in for the three
   // gates that judge how good the decoded characters are. It deliberately does
@@ -1706,27 +1732,29 @@ void CwChannelBank::updateVerification(Track& track,
   // neither can verify a channel carrying no signal.
   const bool independent_morse_evidence =
       character_refinement_current || track.distinctive_token_seen;
-  const float unknown_fraction = symbols == 0
-      ? 1.0F
-      : static_cast<float>(unknown) / static_cast<float>(symbols);
+  const float unknown_fraction =
+      symbols == 0 ? 1.0F
+                   : static_cast<float>(unknown) / static_cast<float>(symbols);
   const float persistence = std::min(
       1.0F, static_cast<float>(observations) /
                 static_cast<float>(config_.minimum_spectral_observations));
-  const float edge_evidence = std::min(
-      1.0F, static_cast<float>(track.update.key_transitions) /
-                static_cast<float>(config_.minimum_key_transitions));
-  const float symbol_evidence = config_.minimum_verification_symbols == 0
-      ? 1.0F
-      : std::min(1.0F, static_cast<float>(known) /
-                           static_cast<float>(
-                               config_.minimum_verification_symbols));
-  track.verification_confidence = std::clamp(
-      0.12F * persistence + 0.12F * edge_evidence +
-      0.16F * track.narrowband_coherence +
-      0.18F * track.update.cadence_quality +
-      0.18F * track.update.timing_quality +
-      0.16F * track.update.mean_character_confidence +
-      0.08F * symbol_evidence, 0.0F, 1.0F);
+  const float edge_evidence =
+      std::min(1.0F, static_cast<float>(track.update.key_transitions) /
+                         static_cast<float>(config_.minimum_key_transitions));
+  const float symbol_evidence =
+      config_.minimum_verification_symbols == 0
+          ? 1.0F
+          : std::min(1.0F, static_cast<float>(known) /
+                               static_cast<float>(
+                                   config_.minimum_verification_symbols));
+  track.verification_confidence =
+      std::clamp(0.12F * persistence + 0.12F * edge_evidence +
+                     0.16F * track.narrowband_coherence +
+                     0.18F * track.update.cadence_quality +
+                     0.18F * track.update.timing_quality +
+                     0.16F * track.update.mean_character_confidence +
+                     0.08F * symbol_evidence,
+                 0.0F, 1.0F);
 
   CwTrackState eligible_state = CwTrackState::Candidate;
   CwVerificationReason failure_reason =
@@ -1736,11 +1764,9 @@ void CwChannelBank::updateVerification(Track& track,
     failure_reason = CwVerificationReason::NeedsSpectralPersistence;
   } else if (config_.minimum_verification_symbols == 0) {
     passes = true;
-  } else if (track.update.key_transitions <
-             config_.minimum_key_transitions) {
+  } else if (track.update.key_transitions < config_.minimum_key_transitions) {
     failure_reason = CwVerificationReason::NeedsKeyingEdges;
-  } else if (cadence_observations <
-             config_.minimum_cadence_observations) {
+  } else if (cadence_observations < config_.minimum_cadence_observations) {
     failure_reason = CwVerificationReason::NeedsCadenceEvidence;
   } else if (track.narrowband_coherence <
              config_.minimum_narrowband_coherence) {
@@ -1754,15 +1780,17 @@ void CwChannelBank::updateVerification(Track& track,
     if (!character_refinement_current &&
         known < config_.minimum_verification_symbols) {
       failure_reason = CwVerificationReason::NeedsDecodedSymbols;
-    } else if (!independent_morse_evidence && unknown_fraction >
-               config_.maximum_verification_unknown_fraction) {
+    } else if (!independent_morse_evidence &&
+               unknown_fraction >
+                   config_.maximum_verification_unknown_fraction) {
       failure_reason = CwVerificationReason::TooManyUnknownSymbols;
-    } else if (!independent_morse_evidence && track.update.timing_quality <
-               config_.minimum_verification_timing_quality) {
+    } else if (!independent_morse_evidence &&
+               track.update.timing_quality <
+                   config_.minimum_verification_timing_quality) {
       failure_reason = CwVerificationReason::LowTimingQuality;
     } else if (!independent_morse_evidence &&
                track.update.mean_character_confidence <
-               config_.minimum_character_confidence) {
+                   config_.minimum_character_confidence) {
       failure_reason = CwVerificationReason::LowCharacterConfidence;
     } else {
       passes = true;
@@ -1772,13 +1800,10 @@ void CwChannelBank::updateVerification(Track& track,
   const auto enter_samples = static_cast<std::uint16_t>(std::clamp(
       std::lround(config_.verification_enter_seconds *
                   config_.evidence_rate_hz),
-      1L, static_cast<long>(
-              std::numeric_limits<std::uint16_t>::max())));
+      1L, static_cast<long>(std::numeric_limits<std::uint16_t>::max())));
   const auto exit_samples = static_cast<std::uint16_t>(std::clamp(
-      std::lround(config_.verification_exit_seconds *
-                  config_.evidence_rate_hz),
-      1L, static_cast<long>(
-              std::numeric_limits<std::uint16_t>::max())));
+      std::lround(config_.verification_exit_seconds * config_.evidence_rate_hz),
+      1L, static_cast<long>(std::numeric_limits<std::uint16_t>::max())));
 
   if (!passes) {
     track.verification_pass_samples = 0;
@@ -1814,8 +1839,7 @@ void CwChannelBank::updateVerification(Track& track,
       ++track.verification_pass_samples;
     if (track.verification_pass_samples < enter_samples) {
       track.verification_state = CwTrackState::MorseLikely;
-      track.verification_reason =
-          CwVerificationReason::NeedsSustainedEvidence;
+      track.verification_reason = CwVerificationReason::NeedsSustainedEvidence;
       return;
     }
   }
@@ -1840,21 +1864,22 @@ void CwChannelBank::updateVerification(Track& track,
 bool CwChannelBank::acceptCharacterRefinement(
     const std::uint64_t track_id, const std::string& stable_text,
     const std::uint64_t evidence_timestamp_ns) {
-  auto track = std::find_if(tracks_.begin(), tracks_.end(),
-                            [track_id](const Track& candidate) {
-    return candidate.id == track_id;
-  });
+  auto track = std::find_if(
+      tracks_.begin(), tracks_.end(),
+      [track_id](const Track& candidate) { return candidate.id == track_id; });
   if (track == tracks_.end()) return false;
   const std::uint64_t current_timestamp_ns = expected_sample_timestamp_ns_ != 0U
-      ? expected_sample_timestamp_ns_ : evidence_timestamp_ns;
-  const bool timestamp_is_current = evidence_timestamp_ns != 0U &&
+                                                 ? expected_sample_timestamp_ns_
+                                                 : evidence_timestamp_ns;
+  const bool timestamp_is_current =
+      evidence_timestamp_ns != 0U &&
       evidence_timestamp_ns > track->character_refinement_timestamp_ns &&
       (evidence_timestamp_ns <= current_timestamp_ns ||
        evidence_timestamp_ns - current_timestamp_ns <= 1'000'000'000ULL) &&
       (current_timestamp_ns <= evidence_timestamp_ns ||
        current_timestamp_ns - evidence_timestamp_ns <=
-           static_cast<std::uint64_t>(
-               kCharacterRefinementEvidenceSeconds * 1'000'000'000.0));
+           static_cast<std::uint64_t>(kCharacterRefinementEvidenceSeconds *
+                                      1'000'000'000.0));
   if (!timestamp_is_current || !track->ever_morse_likely ||
       track->verification_state == CwTrackState::Lost ||
       track->spectral_observations < config_.minimum_spectral_observations ||
@@ -1889,14 +1914,14 @@ void CwChannelBank::observePresentationFrequency(
     track.presentation_follow_stable_since_ns = 0;
   }
   track.last_presentation_evidence_ns = timestamp_ns;
-  track.presentation_frequency_evidence[
-      track.presentation_frequency_evidence_index] = candidate_frequency_hz;
+  track.presentation_frequency_evidence
+      [track.presentation_frequency_evidence_index] = candidate_frequency_hz;
   track.presentation_frequency_evidence_index =
       (track.presentation_frequency_evidence_index + 1U) %
       Track::kPresentationEvidenceWindow;
-  track.presentation_frequency_evidence_count = std::min(
-      track.presentation_frequency_evidence_count + 1U,
-      Track::kPresentationEvidenceWindow);
+  track.presentation_frequency_evidence_count =
+      std::min(track.presentation_frequency_evidence_count + 1U,
+               Track::kPresentationEvidenceWindow);
 }
 
 void CwChannelBank::reanchorPresentationOnFirstVerification(
@@ -1953,9 +1978,10 @@ void CwChannelBank::followVerifiedPresentation(
        index < track.presentation_frequency_evidence_count; ++index) {
     deviations[index] = std::abs(values[index] - median);
   }
-  std::sort(deviations.begin(),
-            deviations.begin() + static_cast<std::ptrdiff_t>(
-                                     track.presentation_frequency_evidence_count));
+  std::sort(
+      deviations.begin(),
+      deviations.begin() + static_cast<std::ptrdiff_t>(
+                               track.presentation_frequency_evidence_count));
   if (deviations[middle] > config_.presentation_follow_maximum_mad_hz) {
     track.presentation_follow_stable_since_ns = 0;
     return;
@@ -1969,11 +1995,10 @@ void CwChannelBank::followVerifiedPresentation(
   }
   const bool same_side =
       (movement > 0.0) ==
-      (track.presentation_follow_median_hz -
-           track.presentation_frequency_hz > 0.0);
-  if (!same_side ||
-      std::abs(median - track.presentation_follow_median_hz) >
-          config_.presentation_follow_deadband_hz) {
+      (track.presentation_follow_median_hz - track.presentation_frequency_hz >
+       0.0);
+  if (!same_side || std::abs(median - track.presentation_follow_median_hz) >
+                        config_.presentation_follow_deadband_hz) {
     track.presentation_follow_median_hz = median;
     track.presentation_follow_stable_since_ns = timestamp_ns;
     return;
@@ -1984,8 +2009,9 @@ void CwChannelBank::followVerifiedPresentation(
     track.presentation_follow_stable_since_ns = timestamp_ns;
     return;
   }
-  const double stable_seconds = static_cast<double>(
-      timestamp_ns - track.presentation_follow_stable_since_ns) /
+  const double stable_seconds =
+      static_cast<double>(timestamp_ns -
+                          track.presentation_follow_stable_since_ns) /
       1'000'000'000.0;
   if (stable_seconds < config_.presentation_follow_stable_seconds) return;
 
@@ -1994,27 +2020,27 @@ void CwChannelBank::followVerifiedPresentation(
   const double upper = track.identity_origin_frequency_hz +
                        config_.presentation_reanchor_limit_hz;
   const double target = std::clamp(median, lower, upper);
-  const double elapsed_seconds = std::min(0.25,
-      track.last_presentation_follow_update_ns > 0U &&
-              timestamp_ns >= track.last_presentation_follow_update_ns
-          ? static_cast<double>(timestamp_ns -
-                                track.last_presentation_follow_update_ns) /
-                1'000'000'000.0
-          : 0.0);
+  const double elapsed_seconds = std::min(
+      0.25, track.last_presentation_follow_update_ns > 0U &&
+                    timestamp_ns >= track.last_presentation_follow_update_ns
+                ? static_cast<double>(
+                      timestamp_ns - track.last_presentation_follow_update_ns) /
+                      1'000'000'000.0
+                : 0.0);
   track.last_presentation_follow_update_ns = timestamp_ns;
   const double maximum_step =
       config_.presentation_follow_slew_hz_per_second * elapsed_seconds;
   track.presentation_frequency_hz += std::clamp(
       target - track.presentation_frequency_hz, -maximum_step, maximum_step);
-  track.presentation_frequency_hz = std::clamp(
-      track.presentation_frequency_hz, lower, upper);
+  track.presentation_frequency_hz =
+      std::clamp(track.presentation_frequency_hz, lower, upper);
 }
 
 void CwChannelBank::assignOrRefreshColor(
     Track& track, const std::uint64_t timestamp_ns) noexcept {
   if (track.color_assigned) {
-    const bool earlier_verified_owner = std::any_of(
-        tracks_.cbegin(), tracks_.cend(), [&](const Track& other) {
+    const bool earlier_verified_owner =
+        std::any_of(tracks_.cbegin(), tracks_.cend(), [&](const Track& other) {
           return &other != &track && other.id < track.id &&
                  other.color_assigned &&
                  other.verification_state == CwTrackState::Verified &&
@@ -2025,8 +2051,7 @@ void CwChannelBank::assignOrRefreshColor(
       // ID retains ownership; the later identity must select another color.
       track.color_assigned = false;
     } else {
-      ColorLease& lease =
-          color_leases_[track.color_index % kColorLeaseCount];
+      ColorLease& lease = color_leases_[track.color_index % kColorLeaseCount];
       // Keep the lease anchored to the frequency that established the visual
       // identity. A verified track can otherwise walk across nearby noise
       // while silent and move the lease away from the carrier it is meant to
@@ -2053,8 +2078,8 @@ void CwChannelBank::assignOrRefreshColor(
     if (colors_in_use[index]) continue;
     const ColorLease& lease = color_leases_[index];
     if (!colorLeaseIsCurrent(lease, timestamp_ns)) continue;
-    const double distance = std::abs(
-        lease.frequency_hz - track.presentation_frequency_hz);
+    const double distance =
+        std::abs(lease.frequency_hz - track.presentation_frequency_hz);
     if (distance <= nearest_distance) {
       nearest_distance = distance;
       selected = index;
@@ -2109,8 +2134,7 @@ void CwChannelBank::recoverRejectedDecoder(Track& track) {
   }
 
   const auto recovery_samples = static_cast<std::uint16_t>(std::clamp(
-      std::lround(config_.decoder_recovery_seconds *
-                  config_.evidence_rate_hz),
+      std::lround(config_.decoder_recovery_seconds * config_.evidence_rate_hz),
       1L, static_cast<long>(std::numeric_limits<std::uint16_t>::max())));
   if (track.decoder_rejection_samples < recovery_samples)
     ++track.decoder_rejection_samples;
@@ -2143,8 +2167,8 @@ namespace {
 constexpr std::uint32_t kMinimumSymbolsForPresentedSpeed = 3;
 
 double presentedWpm(const CwDecoderUpdate& update) noexcept {
-  return update.decoded_symbols >= kMinimumSymbolsForPresentedSpeed
-      ? update.wpm : 0.0;
+  return update.decoded_symbols >= kMinimumSymbolsForPresentedSpeed ? update.wpm
+                                                                    : 0.0;
 }
 
 }  // namespace
@@ -2162,12 +2186,11 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
     result.push_back({
         .id = track.id,
         .frequency_hz = track.frequency_hz,
-        .identity_origin_frequency_hz =
-            track.identity_origin_frequency_hz,
+        .identity_origin_frequency_hz = track.identity_origin_frequency_hz,
         .presentation_frequency_hz = track.presentation_frequency_hz,
         .drift_hz_per_second = track.drift_hz_per_second,
-        .snr_db = track.keying_envelope_initialized
-            ? track.keying_mark_snr_db : track.snr_db,
+        .snr_db = track.keying_envelope_initialized ? track.keying_mark_snr_db
+                                                    : track.snr_db,
         .narrowband_coherence = track.narrowband_coherence,
         .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
         .verification_state = track.verification_state,
@@ -2181,12 +2204,12 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
         .mean_character_confidence = track.update.mean_character_confidence,
         .wpm = presentedWpm(track.update),
         .acoustic_wpm = track.update.acoustic_wpm,
-        .acoustic_cadence_confidence =
-            track.update.acoustic_cadence_confidence,
-        .keying_level_separation_db = 10.0F * std::log10(std::max(
-            track.keying_mark_power /
-                std::max(track.keying_space_power, 1.0e-12F),
-            1.0F)),
+        .acoustic_cadence_confidence = track.update.acoustic_cadence_confidence,
+        .keying_level_separation_db =
+            10.0F * std::log10(std::max(
+                        track.keying_mark_power /
+                            std::max(track.keying_space_power, 1.0e-12F),
+                        1.0F)),
         .keying_level_explained_variation =
             track.keying_level_explained_variation,
         .robust_keying_level_anchor_active =
@@ -2217,15 +2240,16 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
   for (const auto& track : tracks_) {
     const double match_age_seconds =
         timestamp_ns > track.last_candidate_match_ns
-            ? static_cast<double>(timestamp_ns - track.last_candidate_match_ns) /
+            ? static_cast<double>(timestamp_ns -
+                                  track.last_candidate_match_ns) /
                   1'000'000'000.0
             : 0.0;
     character_refinement_tracks_.push_back({
         .id = track.id,
         .frequency_hz = track.frequency_hz,
         .presentation_frequency_hz = track.presentation_frequency_hz,
-        .snr_db = track.keying_envelope_initialized
-            ? track.keying_mark_snr_db : track.snr_db,
+        .snr_db = track.keying_envelope_initialized ? track.keying_mark_snr_db
+                                                    : track.snr_db,
         .verification_state = track.verification_state,
         .active = match_age_seconds <= kCandidateMatchHoldSeconds,
         .operator_selected = track.operator_selected,
@@ -2250,7 +2274,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           timestamp_ns < track.last_candidate_match_ns ||
           static_cast<long double>(timestamp_ns -
                                    track.last_candidate_match_ns) /
-                  1'000'000'000.0L <= kCandidateMatchHoldSeconds;
+                  1'000'000'000.0L <=
+              kCandidateMatchHoldSeconds;
       selected_unverified.push_back(CwChannelSnapshot{
           .id = track.id,
           .color_index = 0,
@@ -2258,17 +2283,18 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
           .presentation_frequency_hz = track.presentation_frequency_hz,
           .drift_hz_per_second = track.drift_hz_per_second,
           .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
-          .snr_db = track.keying_envelope_initialized
-            ? track.keying_mark_snr_db : track.snr_db,
+          .snr_db = track.keying_envelope_initialized ? track.keying_mark_snr_db
+                                                      : track.snr_db,
           .wpm = presentedWpm(track.update),
           .acoustic_wpm = track.update.acoustic_wpm,
           .acoustic_cadence_confidence =
               track.update.acoustic_cadence_confidence,
           .confidence = track.update.confidence,
           .key_down_probability = track.matched && recently_matched
-              ? track.update.key_down_probability : 0.0F,
-          .key_down = track.matched && recently_matched &&
-                      track.update.key_down,
+                                      ? track.update.key_down_probability
+                                      : 0.0F,
+          .key_down =
+              track.matched && recently_matched && track.update.key_down,
           .active = track.matched && recently_matched,
           .verified_cw = false,
           .operator_selected = true,
@@ -2300,10 +2326,11 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       });
     }
     if (track.verification_state != CwTrackState::Verified) continue;
-    const bool recently_matched = timestamp_ns < track.last_candidate_match_ns ||
-        static_cast<long double>(timestamp_ns -
-                                 track.last_candidate_match_ns) /
-                1'000'000'000.0L <= kCandidateMatchHoldSeconds;
+    const bool recently_matched =
+        timestamp_ns < track.last_candidate_match_ns ||
+        static_cast<long double>(timestamp_ns - track.last_candidate_match_ns) /
+                1'000'000'000.0L <=
+            kCandidateMatchHoldSeconds;
     std::string callsign;
     // Reconcile the independent literal and append-only refined paths. Shared
     // evidence settles disagreement; refinement remains usable when the
@@ -2333,17 +2360,15 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .frequency_hz = track.frequency_hz,
         .presentation_frequency_hz = track.presentation_frequency_hz,
         .drift_hz_per_second = track.drift_hz_per_second,
-        .filter_width_hz =
-            kNarrowbandWidthsHz[track.selected_width_index],
-        .snr_db = track.keying_envelope_initialized
-            ? track.keying_mark_snr_db : track.snr_db,
+        .filter_width_hz = kNarrowbandWidthsHz[track.selected_width_index],
+        .snr_db = track.keying_envelope_initialized ? track.keying_mark_snr_db
+                                                    : track.snr_db,
         .wpm = presentedWpm(track.update),
         .acoustic_wpm = track.update.acoustic_wpm,
-        .acoustic_cadence_confidence =
-            track.update.acoustic_cadence_confidence,
+        .acoustic_cadence_confidence = track.update.acoustic_cadence_confidence,
         .confidence = track.update.confidence,
-        .key_down_probability = recently_matched
-            ? track.update.key_down_probability : 0.0F,
+        .key_down_probability =
+            recently_matched ? track.update.key_down_probability : 0.0F,
         .key_down = recently_matched && track.update.key_down,
         // Retention preserves identity and text, not live carrier state.
         // Residual energy/noise at a remembered frequency must not keep the
@@ -2354,14 +2379,12 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .verification_state = track.verification_state,
         .verification_reason = track.verification_reason,
         .verification_confidence = track.verification_confidence,
-        .verification_cadence_quality =
-            track.verification_cadence_quality,
+        .verification_cadence_quality = track.verification_cadence_quality,
         .verification_timing_quality = track.verification_timing_quality,
         .verification_character_confidence =
             track.verification_character_confidence,
         .cadence_quality = track.update.cadence_quality,
-        .mean_character_confidence =
-            track.update.mean_character_confidence,
+        .mean_character_confidence = track.update.mean_character_confidence,
         .narrowband_coherence = track.narrowband_coherence,
         .key_transitions = track.update.key_transitions,
         .characters = track.update.characters,
@@ -2378,8 +2401,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .current_sender_wpm = track.update.current_sender_wpm,
         .contextual_text = track.update.contextual_text,
         .callsign = callsign,
-        .qso_participants = CallsignPolicy::qso_participants_in_text(
-            track.update.text),
+        .qso_participants =
+            CallsignPolicy::qso_participants_in_text(track.update.text),
     };
 
     auto retained = std::find_if(
@@ -2392,15 +2415,15 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       double nearest_distance = config_.color_identity_tolerance_hz;
       for (auto candidate = retained_observations_.begin();
            candidate != retained_observations_.end(); ++candidate) {
-        const bool predecessor_still_published = std::find(
-            verified_track_ids.cbegin(), verified_track_ids.cend(),
-            candidate->source_track_id) != verified_track_ids.cend();
+        const bool predecessor_still_published =
+            std::find(verified_track_ids.cbegin(), verified_track_ids.cend(),
+                      candidate->source_track_id) != verified_track_ids.cend();
         if (candidate->refreshed || predecessor_still_published ||
             candidate->snapshot.color_index != track.color_index)
           continue;
-        const double distance = std::abs(
-            candidate->snapshot.presentation_frequency_hz -
-            track.presentation_frequency_hz);
+        const double distance =
+            std::abs(candidate->snapshot.presentation_frequency_hz -
+                     track.presentation_frequency_hz);
         if (distance <= nearest_distance) {
           nearest_distance = distance;
           retained = candidate;
@@ -2414,8 +2437,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
             retained_observations_.begin(), retained_observations_.end(),
             [](const RetainedObservation& left,
                const RetainedObservation& right) {
-              if (left.refreshed != right.refreshed)
-                return !left.refreshed;
+              if (left.refreshed != right.refreshed) return !left.refreshed;
               return left.last_seen_ns < right.last_seen_ns;
             });
       } else {
@@ -2450,8 +2472,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
     } else {
       retained->confirmed_qso_participants = snapshot.qso_participants;
     }
-    snapshot.text = composePresentationText(
-        retained->inherited_text_prefix, snapshot.text);
+    snapshot.text =
+        composePresentationText(retained->inherited_text_prefix, snapshot.text);
     retained->snapshot = std::move(snapshot);
     retained->last_seen_ns = track.last_detected_ns;
     retained->refreshed = true;
@@ -2483,8 +2505,7 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
   snapshots_.insert(snapshots_.end(), selected_unverified.cbegin(),
                     selected_unverified.cend());
   std::sort(snapshots_.begin(), snapshots_.end(),
-            [](const CwChannelSnapshot& left,
-               const CwChannelSnapshot& right) {
+            [](const CwChannelSnapshot& left, const CwChannelSnapshot& right) {
               return left.frequency_hz < right.frequency_hz;
             });
 }

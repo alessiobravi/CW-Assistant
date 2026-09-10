@@ -535,6 +535,10 @@ ApplicationWindow {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                      | Qt.MiddleButton
                     property real panLastX: 0
+                    property bool decoderSelectionActive: false
+                    property bool suppressSelectionClick: false
+                    property real decoderSelectionStartX: 0
+                    property real decoderSelectionCurrentX: 0
                     function frequencyAtX(positionX) {
                         var fraction = Math.max(0, Math.min(1,
                                                            positionX / width))
@@ -542,6 +546,9 @@ ApplicationWindow {
                                 + fraction
                                   * (spectrumDisplay.upperFrequencyHz
                                      - spectrumDisplay.lowerFrequencyHz)
+                    }
+                    function hasExactModifiers(mouse, required) {
+                        return mouse.modifiers === required
                     }
                     function streamIdAtX(positionX) {
                         if (width <= 0 || spectrumDisplay.upperFrequencyHz
@@ -580,8 +587,23 @@ ApplicationWindow {
                     onPressed: function(mouse) {
                         if (mouse.button === Qt.MiddleButton)
                             panLastX = mouse.x
+                        if (mouse.button === Qt.LeftButton
+                                && hasExactModifiers(mouse,
+                                                     Qt.ShiftModifier)
+                                && replayController.sourceMode === 2) {
+                            decoderSelectionStartX = mouse.x
+                            decoderSelectionCurrentX = mouse.x
+                            decoderSelectionActive = true
+                            mouse.accepted = true
+                        }
                     }
                     onPositionChanged: function(mouse) {
+                        if (decoderSelectionActive
+                                && (mouse.buttons & Qt.LeftButton)) {
+                            decoderSelectionCurrentX = Math.max(
+                                0, Math.min(width, mouse.x))
+                            return
+                        }
                         if ((mouse.buttons & Qt.MiddleButton) === 0
                                 || width <= 0) return
                         var deltaPixels = mouse.x - panLastX
@@ -591,6 +613,35 @@ ApplicationWindow {
                             * (spectrumDisplay.upperFrequencyHz
                                - spectrumDisplay.lowerFrequencyHz))
                     }
+                    onReleased: function(mouse) {
+                        if (!decoderSelectionActive
+                                || mouse.button !== Qt.LeftButton)
+                            return
+                        decoderSelectionCurrentX = Math.max(
+                            0, Math.min(width, mouse.x))
+                        var firstHz = frequencyAtX(decoderSelectionStartX)
+                        var lastHz = frequencyAtX(decoderSelectionCurrentX)
+                        var draggedHz = Math.abs(lastHz - firstHz)
+                        var bandwidthHz = draggedHz >= 1000
+                                ? Math.round(Math.max(6000,
+                                      Math.min(96000, draggedHz)) / 1000) * 1000
+                                : appSettings.sdrDecoderBandwidthHz
+                        var selectedCenterHz = Math.round(
+                            draggedHz >= 1000
+                                ? (firstHz + lastHz) / 2 : lastHz)
+                        appSettings.setSdrDecoderWindow(selectedCenterHz,
+                                                        bandwidthHz)
+                        replayController.openManualDecoderSession(
+                            selectedCenterHz)
+                        decoderSelectionActive = false
+                        suppressSelectionClick = true
+                        mouse.accepted = true
+                    }
+                    onCanceled: decoderSelectionActive = false
+                    onContainsMouseChanged: {
+                        if (containsMouse)
+                            spectrumPointerHelp.offer()
+                    }
                     onWheel: function(wheel) {
                         if (!replayController.activeSource) return
                         spectrumDisplay.zoomAt(
@@ -598,19 +649,20 @@ ApplicationWindow {
                             wheel.angleDelta.y > 0 ? 0.72 : 1.38)
                         wheel.accepted = true
                     }
-                    onDoubleClicked: function(mouse) {
-                        if (mouse.button === Qt.LeftButton)
-                            spectrumDisplay.resetZoom()
-                    }
                     onClicked: function(mouse) {
+                        if (suppressSelectionClick) {
+                            suppressSelectionClick = false
+                            return
+                        }
                         if (!replayController.activeSource || width <= 0
                                 || spectrumDisplay.upperFrequencyHz
                                    <= spectrumDisplay.lowerFrequencyHz) {
                             return
                         }
                         if (mouse.button === Qt.LeftButton
-                                && (mouse.modifiers & Qt.ControlModifier)) {
-                            if (!appSettings.radioTxFrequencySyncAvailable)
+                                && hasExactModifiers(mouse,
+                                                     Qt.ControlModifier)) {
+                            if (!appSettings.radioPointedTxFrequencyAvailable)
                                 return
                             var txRfHz = replayController.displayFrequencyToRfHz(
                                 frequencyAtX(mouse.x))
@@ -618,13 +670,17 @@ ApplicationWindow {
                                 appSettings.setControlledTxFrequencyHz(txRfHz)
                             return
                         }
-                        if (mouse.button === Qt.LeftButton) {
+                        if (mouse.button === Qt.LeftButton
+                                && hasExactModifiers(mouse,
+                                                     Qt.NoModifier)) {
                             var streamId = streamIdAtX(mouse.x)
                             if (streamId !== 0)
                                 replayController.openDecoderSession(streamId)
                             return
                         }
-                        if (mouse.button !== Qt.RightButton)
+                        if (mouse.button !== Qt.RightButton
+                                || !hasExactModifiers(mouse,
+                                                      Qt.NoModifier))
                             return
                         var frequencyHz = frequencyAtX(mouse.x)
                         if (replayController.sourceMode === 2)
@@ -632,21 +688,23 @@ ApplicationWindow {
                                 Math.round(frequencyHz)
                         replayController.openManualDecoderSession(frequencyHz)
                     }
-                    ToolTip.visible: containsMouse
-                    ToolTip.delay: 350
-                    ToolTip.text: hoveredStreamId !== 0
-                        ? "Left click: open this stream's decoder card\n"
-                          + "Right click: center the SDR decoder window and start a manual probe\n"
-                          + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
-                          + (appSettings.radioTxFrequencySyncAvailable
-                             ? "Ctrl+click: set the pointed RF on VFO B / TX and enable split if needed"
-                             : "Ctrl+click: unavailable; the radio provider must support TX-frequency and split control")
-                        : "Left click: no decoded stream at this position\n"
-                          + "Right click: center the SDR decoder window and start a manual probe\n"
-                          + "Wheel: zoom • Middle drag: pan • Double click: full span\n"
-                          + (appSettings.radioTxFrequencySyncAvailable
-                             ? "Ctrl+click: set the pointed RF on VFO B / TX and enable split if needed"
-                             : "Ctrl+click: unavailable; the radio provider must support TX-frequency and split control")
+                }
+                Rectangle {
+                    objectName: "sdrDecoderDragSelection"
+                    visible: manualSliceHitArea.decoderSelectionActive
+                    x: spectrumDisplay.x + Math.min(
+                           manualSliceHitArea.decoderSelectionStartX,
+                           manualSliceHitArea.decoderSelectionCurrentX)
+                    y: spectrumDisplay.y
+                    width: Math.max(2, Math.abs(
+                               manualSliceHitArea.decoderSelectionCurrentX
+                               - manualSliceHitArea.decoderSelectionStartX))
+                    height: spectrumDisplay.height
+                    color: "#2639d7bd"
+                    border.color: "#7fffe7"
+                    border.width: 2
+                    opacity: 0.52
+                    z: 8
                 }
                 ToolButton {
                     objectName: "resetSpectrumZoomButton"
@@ -661,8 +719,19 @@ ApplicationWindow {
                     ToolTip.text: "Reset spectrum and waterfall zoom"
                 }
                 Rectangle {
+                    id: spectrumPointerHelp
                     objectName: "spectrumPointerHelp"
-                    visible: manualSliceHitArea.containsMouse
+                    property bool hintActive: false
+                    function offer() {
+                        if (!appSettings.showSpectrumGestureHints
+                                || pointerHintCooldown.running)
+                            return
+                        hintActive = true
+                        pointerHintLifetime.restart()
+                    }
+                    visible: appSettings.showSpectrumGestureHints
+                             && hintActive
+                             && manualSliceHitArea.containsMouse
                     z: 9
                     anchors.left: spectrumDisplay.left
                     anchors.bottom: spectrumDisplay.bottom
@@ -679,12 +748,26 @@ ApplicationWindow {
                         id: pointerHelpText
                         anchors.centerIn: parent
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open decoder   •   RIGHT: manual probe   •   CTRL+LEFT: set TX VFO"
-                              : "LEFT: no stream   •   RIGHT: manual probe   •   CTRL+LEFT: set TX VFO"
+                              ? "LEFT: open   •   RIGHT: probe   •   SHIFT+DRAG: decoder span   •   CTRL+LEFT: TX"
+                              : "RIGHT: probe   •   SHIFT+DRAG: decoder span   •   WHEEL: zoom   •   CTRL+LEFT: TX"
                         color: "#d4dbe4"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
                         elide: Text.ElideRight
+                    }
+                    Timer {
+                        id: pointerHintLifetime
+                        interval: 10000
+                        repeat: false
+                        onTriggered: {
+                            spectrumPointerHelp.hintActive = false
+                            pointerHintCooldown.restart()
+                        }
+                    }
+                    Timer {
+                        id: pointerHintCooldown
+                        interval: 300000
+                        repeat: false
                     }
                 }
                 ToolButton {

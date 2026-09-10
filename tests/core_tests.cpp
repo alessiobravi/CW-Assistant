@@ -1,7 +1,8 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <cstdlib>
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -17,23 +18,23 @@
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include "cwassistant/core/cw_context_rescorer.hpp"
-#include "cwassistant/core/cw_transmit_encoder.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
+#include "cwassistant/core/cw_transmit_encoder.hpp"
 #include "cwassistant/core/frequency_plan.hpp"
-#include "cwassistant/core/remote_control.hpp"
 #include "cwassistant/core/reference_rig_profiles.hpp"
-#include "cwassistant/core/spectrum_visualization_settings.hpp"
+#include "cwassistant/core/remote_control.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
-#include "cwassistant/core/station_equipment.hpp"
+#include "cwassistant/core/spectrum_visualization_settings.hpp"
 #include "cwassistant/core/spsc_ring_buffer.hpp"
+#include "cwassistant/core/station_equipment.hpp"
 #include "cwassistant/core/transmit_guard.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "cwassistant/core/wav_writer.hpp"
 
 namespace {
 
-static_assert(std::is_trivially_copyable_v<
-              cwassistant::core::CwCharacterTrackSnapshot>);
+static_assert(
+    std::is_trivially_copyable_v<cwassistant::core::CwCharacterTrackSnapshot>);
 static_assert(sizeof(cwassistant::core::CwCharacterTrackSnapshot) <= 64U);
 
 int failures = 0;
@@ -102,13 +103,13 @@ void test_scheduler() {
   const std::vector<DetectedChannel> channels{
       {.id = 1, .snr_db = 4.0F, .arrival_sequence = 30},
       {.id = 2, .snr_db = 18.0F, .arrival_sequence = 20},
-      {.id = 3, .snr_db = 8.0F, .arrival_sequence = 10,
-       .user_selected = true},
+      {.id = 3, .snr_db = 8.0F, .arrival_sequence = 10, .user_selected = true},
   };
   ChannelScheduler scheduler;
-  expect(scheduler.select(channels, 2, ChannelSelectionPolicy::StrongestSignal) ==
-             std::vector<std::uint64_t>({2, 3}),
-         "strongest policy ranks by SNR");
+  expect(
+      scheduler.select(channels, 2, ChannelSelectionPolicy::StrongestSignal) ==
+          std::vector<std::uint64_t>({2, 3}),
+      "strongest policy ranks by SNR");
   expect(scheduler.select(channels, 2, ChannelSelectionPolicy::ArrivalQueue) ==
              std::vector<std::uint64_t>({3, 2}),
          "queue policy ranks by arrival");
@@ -130,9 +131,16 @@ void test_cw_timing_decoder() {
     }
   };
   feed(false, 100);
-  feed(true, 60); feed(false, 60); feed(true, 60); feed(false, 200);
-  feed(true, 60); feed(false, 60); feed(true, 60); feed(false, 60);
-  feed(true, 60); feed(false, 200);
+  feed(true, 60);
+  feed(false, 60);
+  feed(true, 60);
+  feed(false, 200);
+  feed(true, 60);
+  feed(false, 60);
+  feed(true, 60);
+  feed(false, 60);
+  feed(true, 60);
+  feed(false, 200);
   const auto result = decoder.flush(now + 500'000'000);
   expect(result.text.find("IS") != std::string::npos,
          "adaptive CW timing decodes deterministic dit sequences");
@@ -154,15 +162,20 @@ void test_cw_timing_decoder() {
     const int steps = milliseconds / 2;
     for (int i = 0; i < steps; ++i) {
       semi_now += 2'000'000;
-      static_cast<void>(
-          semi_markov.process(semi_now, down ? 12.0F : 0.0F));
+      static_cast<void>(semi_markov.process(semi_now, down ? 12.0F : 0.0F));
     }
   };
   feed_semi(false, 300);
-  feed_semi(true, 60); feed_semi(false, 60); feed_semi(true, 60);
+  feed_semi(true, 60);
+  feed_semi(false, 60);
+  feed_semi(true, 60);
   feed_semi(false, 200);
-  feed_semi(true, 60); feed_semi(false, 60); feed_semi(true, 60);
-  feed_semi(false, 60); feed_semi(true, 60); feed_semi(false, 600);
+  feed_semi(true, 60);
+  feed_semi(false, 60);
+  feed_semi(true, 60);
+  feed_semi(false, 60);
+  feed_semi(true, 60);
+  feed_semi(false, 600);
   const auto semi_result = semi_markov.flush(semi_now + 500'000'000);
   expect(semi_result.text.find("IS") != std::string::npos,
          "the duration model decodes the same keying as the threshold");
@@ -178,8 +191,8 @@ void test_cw_timing_decoder() {
          "only a segmenting model builds a segmenter");
   using cwassistant::core::CwKeyingModel;
   expect(cwassistant::core::cwKeyingModelFromName(
-             cwassistant::core::cwKeyingModelName(
-                 CwKeyingModel::SemiMarkov)) == CwKeyingModel::SemiMarkov &&
+             cwassistant::core::cwKeyingModelName(CwKeyingModel::SemiMarkov)) ==
+                 CwKeyingModel::SemiMarkov &&
              cwassistant::core::cwKeyingModelFromName(
                  cwassistant::core::cwKeyingModelName(
                      CwKeyingModel::AdaptiveThreshold)) ==
@@ -215,8 +228,8 @@ void test_cw_timing_decoder() {
     const auto neutral = CallsignPolicy::best_complete_in_text(exchange);
     const auto running = CallsignPolicy::best_complete_in_text(
         exchange, CwOperatorRole::Runner, "");
-    expect(neutral.has_value() && *neutral == "DL1NKB" &&
-               running.has_value() && *running == "DL1NKB",
+    expect(neutral.has_value() && *neutral == "DL1NKB" && running.has_value() &&
+               *running == "DL1NKB",
            "running keeps labelling the station answering");
   }
   // The operator's own call identifies the operator. Whoever else is on the
@@ -228,8 +241,7 @@ void test_cw_timing_decoder() {
     expect(!labelled.has_value(),
            "a stream is never labelled with the operator's own callsign");
     const auto other = CallsignPolicy::best_complete_in_text(
-        "CQ TEST DE OK5OO OK5OO K", CwOperatorRole::SearchAndPounce,
-        "IU0LFQ");
+        "CQ TEST DE OK5OO OK5OO K", CwOperatorRole::SearchAndPounce, "IU0LFQ");
     expect(other.has_value() && *other == "OK5OO",
            "excluding the operator's own call leaves other stations labelled");
   }
@@ -282,7 +294,8 @@ void test_cw_timing_decoder() {
          "completed character is exposed provisionally before confirmation");
   staged_feed(false, 60);
   expect(staged.text == "E" && staged.provisional_text.empty(),
-         "confirmation delay promotes provisional text to append-only stable text");
+         "confirmation delay promotes provisional text to append-only stable "
+         "text");
 
   cwassistant::core::CwMultiSpeedDecoder cadence_decoder;
   std::uint64_t cadence_now = 0;
@@ -290,8 +303,7 @@ void test_cw_timing_decoder() {
   const auto cadence_feed = [&](const bool down, const int milliseconds) {
     for (int elapsed = 0; elapsed < milliseconds; elapsed += 5) {
       cadence_now += 5'000'000;
-      cadence = cadence_decoder.process(cadence_now,
-                                        down ? 12.0F : 0.0F);
+      cadence = cadence_decoder.process(cadence_now, down ? 12.0F : 0.0F);
     }
   };
   cadence_feed(false, 200);
@@ -358,12 +370,12 @@ void test_cw_channel_bank() {
     const auto low_color = channels[0].color_index;
     const auto high_color = channels[1].color_index;
     expect(std::abs(channels[0].frequency_hz - 300.0) < 5.0 &&
-               (channels[0].text + channels[0].provisional_text)
-                       .find('E') != std::string::npos,
+               (channels[0].text + channels[0].provisional_text).find('E') !=
+                   std::string::npos,
            "lower-frequency slice decodes its own dit");
     expect(std::abs(channels[1].frequency_hz - 700.0) < 5.0 &&
-               (channels[1].text + channels[1].provisional_text)
-                       .find('T') != std::string::npos,
+               (channels[1].text + channels[1].provisional_text).find('T') !=
+                   std::string::npos,
            "upper-frequency slice decodes its own dah");
     expect(channels[0].color_index != channels[1].color_index,
            "simultaneous tracks receive stable distinct colors");
@@ -372,16 +384,16 @@ void test_cw_channel_bank() {
            "flickering the stream areas");
     feed(false, false, 1'000);
     const auto& held = bank.channels();
-    expect(held.size() == 2 && held[0].id == low_id &&
-               held[1].id == high_id && held[0].color_index == low_color &&
+    expect(held.size() == 2 && held[0].id == low_id && held[1].id == high_id &&
+               held[0].color_index == low_color &&
                held[1].color_index == high_color && !held[0].active &&
                !held[1].active && !held[0].key_down && !held[1].key_down,
            "frequency identity survives keyed gaps without presenting a "
            "retained track as active or keyed");
     feed(false, false, 3'000);
     const auto& silent_held = bank.channels();
-    expect(silent_held.size() == 2 &&
-               silent_held[0].id == low_id && silent_held[1].id == high_id &&
+    expect(silent_held.size() == 2 && silent_held[0].id == low_id &&
+               silent_held[1].id == high_id &&
                silent_held[0].color_index == low_color &&
                silent_held[1].color_index == high_color &&
                !silent_held[0].active && !silent_held[1].active,
@@ -418,8 +430,8 @@ void test_cw_channel_bank() {
       nearby_bins.assign(nearby_bins.size(), -110.0F);
       nearby_bins[60] = -55.0F;
       nearby_bins[66] = -57.0F;
-      static_cast<void>(nearby_bank.updateSpectrum(
-          nearby_now, 0.0, 1'000.0, nearby_bins));
+      static_cast<void>(
+          nearby_bank.updateSpectrum(nearby_now, 0.0, 1'000.0, nearby_bins));
       cwassistant::core::RealtimeSampleBlock block;
       block.stream.sample_rate_hz = sample_rate;
       block.timestamp_ns = nearby_now;
@@ -447,13 +459,12 @@ void test_cw_channel_bank() {
       const auto first_color = first_nearby[0].color_index;
       const auto second_color = first_nearby[1].color_index;
       for (int refresh = 0; refresh < 8; ++refresh) {
-        static_cast<void>(nearby_bank.updateSpectrum(
-            nearby_now, 0.0, 1'000.0, nearby_bins));
+        static_cast<void>(
+            nearby_bank.updateSpectrum(nearby_now, 0.0, 1'000.0, nearby_bins));
         nearby_now += 10'000'000;
       }
       const auto& stable_nearby = nearby_bank.channels();
-      expect(stable_nearby.size() == 2 &&
-                 stable_nearby[0].id == first_id &&
+      expect(stable_nearby.size() == 2 && stable_nearby[0].id == first_id &&
                  stable_nearby[1].id == second_id &&
                  stable_nearby[0].color_index == first_color &&
                  stable_nearby[1].color_index == second_color,
@@ -474,17 +485,17 @@ void test_cw_channel_bank() {
     });
     std::vector<float> reservation_bins(1'001, -110.0F);
     reservation_bins[500] = -55.0F;
-    static_cast<void>(reservation_bank.updateSpectrum(
-        0, 0.0, 1'000.0, reservation_bins));
+    static_cast<void>(
+        reservation_bank.updateSpectrum(0, 0.0, 1'000.0, reservation_bins));
     reservation_bins.assign(reservation_bins.size(), -110.0F);
     reservation_bins[460] = -55.0F;
     reservation_bins[540] = -56.0F;
-    static_cast<void>(reservation_bank.updateSpectrum(
-        10'000'000, 0.0, 1'000.0, reservation_bins));
+    static_cast<void>(reservation_bank.updateSpectrum(10'000'000, 0.0, 1'000.0,
+                                                      reservation_bins));
     const auto diagnostics = reservation_bank.allTrackDiagnostics();
-    const auto matched = std::count_if(
-        diagnostics.cbegin(), diagnostics.cend(),
-        [](const auto& track) { return track.matched; });
+    const auto matched =
+        std::count_if(diagnostics.cbegin(), diagnostics.cend(),
+                      [](const auto& track) { return track.matched; });
     expect(diagnostics.size() == 1 && matched == 1,
            "changing sidelobes inside one identity cell cannot clone an "
            "automatic carrier track");
@@ -497,8 +508,8 @@ void test_cw_channel_bank() {
         .decoded_track_retention_seconds = 10.0,
         .unverified_track_retention_seconds = 10.0,
         .minimum_spectral_observations = 1,
-        .minimum_verification_symbols = static_cast<std::uint16_t>(
-            keep_unverified ? 100 : 0),
+        .minimum_verification_symbols =
+            static_cast<std::uint16_t>(keep_unverified ? 100 : 0),
         .minimum_key_transitions = 0,
         .minimum_cadence_observations = 0,
         .minimum_verification_timing_quality = 0.0F,
@@ -533,8 +544,7 @@ void test_cw_channel_bank() {
           sample = 0.42F * static_cast<float>(std::sin(neighbor_phase));
         block.samples[index] = {sample, 0.0F};
         first_phase += 2.0 * std::numbers::pi * first_hz / sample_rate;
-        neighbor_phase +=
-            2.0 * std::numbers::pi * neighbor_hz / sample_rate;
+        neighbor_phase += 2.0 * std::numbers::pi * neighbor_hz / sample_rate;
       }
       static_cast<void>(alternating_bank.processSamples(block));
       alternating_now += 10'000'000;
@@ -553,11 +563,10 @@ void test_cw_channel_bank() {
     dits(0, 12);
     step(0);
     auto diagnostics = alternating_bank.allTrackDiagnostics();
-    auto first = std::find_if(diagnostics.begin(), diagnostics.end(),
-                              [](const auto& track) {
-                                return std::abs(track.frequency_hz - first_hz) <
-                                       10.0;
-                              });
+    auto first = std::find_if(
+        diagnostics.begin(), diagnostics.end(), [](const auto& track) {
+          return std::abs(track.frequency_hz - first_hz) < 10.0;
+        });
     expect(first != diagnostics.end(),
            "alternating-tone fixture acquires the first carrier");
     if (first == diagnostics.end()) continue;
@@ -591,10 +600,9 @@ void test_cw_channel_bank() {
     feed(-1, 600);
     dits(0, 3);
     diagnostics = alternating_bank.allTrackDiagnostics();
-    first = std::find_if(diagnostics.begin(), diagnostics.end(),
-                         [first_id](const auto& track) {
-                           return track.id == first_id;
-                         });
+    first = std::find_if(
+        diagnostics.begin(), diagnostics.end(),
+        [first_id](const auto& track) { return track.id == first_id; });
     expect(first != diagnostics.end() &&
                first->decoded_symbols > symbols_before_gap,
            "a same-frequency sender resumes through a normal 600 ms word "
@@ -602,10 +610,9 @@ void test_cw_channel_bank() {
 
     dits(1, 10);
     diagnostics = alternating_bank.allTrackDiagnostics();
-    first = std::find_if(diagnostics.begin(), diagnostics.end(),
-                         [first_id](const auto& track) {
-                           return track.id == first_id;
-                         });
+    first = std::find_if(
+        diagnostics.begin(), diagnostics.end(),
+        [first_id](const auto& track) { return track.id == first_id; });
     expect(first != diagnostics.end() && !first->key_down,
            "an unmatched adjacent carrier forces the old decoder key up");
     if (first == diagnostics.end()) continue;
@@ -616,21 +623,19 @@ void test_cw_channel_bank() {
 
     dits(1, 14);
     diagnostics = alternating_bank.allTrackDiagnostics();
-    first = std::find_if(diagnostics.begin(), diagnostics.end(),
-                         [first_id](const auto& track) {
-                           return track.id == first_id;
-                         });
+    first = std::find_if(
+        diagnostics.begin(), diagnostics.end(),
+        [first_id](const auto& track) { return track.id == first_id; });
     expect(first != diagnostics.end() && first->text == frozen_text &&
                first->provisional_text == frozen_provisional &&
                first->decoded_symbols == frozen_symbols &&
-               first->key_transitions == frozen_transitions &&
-               !first->key_down,
+               first->key_transitions == frozen_transitions && !first->key_down,
            "verified and unverified tracks freeze all decoder output after "
            "the unmatched gap hold despite a stronger 85 Hz neighbor");
 
     if (keep_unverified && first != diagnostics.end()) {
-      expect(!alternating_bank.acceptCharacterRefinement(
-                 first_id, "NOISE", alternating_now),
+      expect(!alternating_bank.acceptCharacterRefinement(first_id, "NOISE",
+                                                         alternating_now),
              "local character evidence without a complete callsign cannot "
              "confirm a stream");
       expect(alternating_bank.acceptCharacterRefinement(
@@ -642,15 +647,13 @@ void test_cw_channel_bank() {
              "retained model text cannot refresh the same acoustic evidence "
              "timestamp");
       expect(!alternating_bank.acceptCharacterRefinement(
-                 first_id, "CQ DE 4X5LL ",
-                 alternating_now + 2'000'000'000ULL),
+                 first_id, "CQ DE 4X5LL ", alternating_now + 2'000'000'000ULL),
              "future model evidence cannot advance verification state");
       feed(0, 700);
       diagnostics = alternating_bank.allTrackDiagnostics();
-      first = std::find_if(diagnostics.begin(), diagnostics.end(),
-                           [first_id](const auto& track) {
-        return track.id == first_id;
-      });
+      first = std::find_if(
+          diagnostics.begin(), diagnostics.end(),
+          [first_id](const auto& track) { return track.id == first_id; });
       expect(first != diagnostics.end() &&
                  first->verification_state ==
                      cwassistant::core::CwTrackState::Verified,
@@ -688,8 +691,7 @@ void test_cw_channel_bank() {
             keyed ? 0.40F * static_cast<float>(std::sin(replacement_phase))
                   : 0.0F,
             0.0F};
-        replacement_phase +=
-            2.0 * std::numbers::pi * 300.0 / sample_rate;
+        replacement_phase += 2.0 * std::numbers::pi * 300.0 / sample_rate;
       }
       static_cast<void>(replacement_bank.processSamples(block));
       replacement_now += 10'000'000;
@@ -723,16 +725,16 @@ void test_cw_channel_bank() {
     replacement_character("-.-.");  // C
     replacement_character("--.-");  // Q
     replacement_word_gap();
-    replacement_character("-..");   // D
-    replacement_character(".");     // E
+    replacement_character("-..");  // D
+    replacement_character(".");    // E
     replacement_word_gap();
-    replacement_character("-..");   // D
-    replacement_character("-.-");   // K
-    replacement_character("--..."); // 7
-    replacement_character("...");   // S
-    replacement_character("...");   // S
+    replacement_character("-..");    // D
+    replacement_character("-.-");    // K
+    replacement_character("--...");  // 7
+    replacement_character("...");    // S
+    replacement_character("...");    // S
     replacement_word_gap();
-    replacement_character(".");     // Close the preceding callsign token.
+    replacement_character(".");  // Close the preceding callsign token.
     const auto predecessor = replacement_bank.channels();
     expect(predecessor.size() == 1 && !predecessor.front().text.empty(),
            "replacement fixture starts with stable predecessor text");
@@ -743,28 +745,26 @@ void test_cw_channel_bank() {
       expect(predecessor.front().callsign == "DK7SS",
              "replacement fixture confirms a predecessor callsign");
 
-      replacement_bank.configure({
-          .empty_track_retention_seconds = 0.5,
-          .decoded_track_retention_seconds = 10.0,
-          .detector_frame_interval_seconds = 0.0,
-          .minimum_spectral_observations = 1,
-          .minimum_verification_symbols = 20,
-          .verification_enter_seconds = 0.0,
-          .verification_exit_seconds = 0.0});
+      replacement_bank.configure({.empty_track_retention_seconds = 0.5,
+                                  .decoded_track_retention_seconds = 10.0,
+                                  .detector_frame_interval_seconds = 0.0,
+                                  .minimum_spectral_observations = 1,
+                                  .minimum_verification_symbols = 20,
+                                  .verification_enter_seconds = 0.0,
+                                  .verification_exit_seconds = 0.0});
       replacement_step(true);
       replacement_now += 1'000'000'000;
       replacement_bins.assign(replacement_bins.size(), -110.0F);
       static_cast<void>(replacement_bank.updateSpectrum(
           replacement_now, 0.0, 1'000.0, replacement_bins));
 
-      replacement_bank.configure({
-          .empty_track_retention_seconds = 0.5,
-          .decoded_track_retention_seconds = 10.0,
-          .detector_frame_interval_seconds = 0.0,
-          .minimum_spectral_observations = 1,
-          .minimum_verification_symbols = 0,
-          .verification_enter_seconds = 0.0,
-          .verification_exit_seconds = 0.0});
+      replacement_bank.configure({.empty_track_retention_seconds = 0.5,
+                                  .decoded_track_retention_seconds = 10.0,
+                                  .detector_frame_interval_seconds = 0.0,
+                                  .minimum_spectral_observations = 1,
+                                  .minimum_verification_symbols = 0,
+                                  .verification_enter_seconds = 0.0,
+                                  .verification_exit_seconds = 0.0});
       replacement_step(true);
       const auto& replacement = replacement_bank.channels();
       expect(replacement.size() == 1 &&
@@ -785,25 +785,26 @@ void test_cw_channel_bank() {
   }
 
   {
-    CwChannelBank admission_bank({.maximum_tracks = 2,
-                                  .minimum_spectral_observations = 50});
+    CwChannelBank admission_bank(
+        {.maximum_tracks = 2, .minimum_spectral_observations = 50});
     std::vector<float> admission_bins(1'001, -110.0F);
     admission_bins[200] = -76.0F;
     admission_bins[400] = -74.0F;
-    static_cast<void>(admission_bank.updateSpectrum(
-        0, 0.0, 1'000.0, admission_bins));
+    static_cast<void>(
+        admission_bank.updateSpectrum(0, 0.0, 1'000.0, admission_bins));
     expect(admission_bank.allTrackDiagnostics().size() == 2,
            "track bank reaches its configured candidate capacity");
     admission_bins[800] = -45.0F;
-    static_cast<void>(admission_bank.updateSpectrum(
-        20'000'000, 0.0, 1'000.0, admission_bins));
+    static_cast<void>(admission_bank.updateSpectrum(20'000'000, 0.0, 1'000.0,
+                                                    admission_bins));
     const auto admitted = admission_bank.allTrackDiagnostics();
-    const bool admitted_strong_new_peak = std::any_of(
-        admitted.begin(), admitted.end(), [](const auto& track) {
+    const bool admitted_strong_new_peak =
+        std::any_of(admitted.begin(), admitted.end(), [](const auto& track) {
           return std::abs(track.frequency_hz - 800.0) < 2.0;
         });
     expect(admitted.size() == 2 && admitted_strong_new_peak,
-           "a saturated track bank replaces weak unverified occupancy with a stronger new carrier");
+           "a saturated track bank replaces weak unverified occupancy with a "
+           "stronger new carrier");
   }
 
   {
@@ -813,33 +814,33 @@ void test_cw_channel_bank() {
     for (std::uint64_t frame = 0; frame < 3; ++frame) {
       identity_bins.assign(identity_bins.size(), -110.0F);
       identity_bins[250] = -65.0F;
-      static_cast<void>(identity_bank.updateSpectrum(
-          frame * 20'000'000, 0.0, 1'000.0, identity_bins));
+      static_cast<void>(identity_bank.updateSpectrum(frame * 20'000'000, 0.0,
+                                                     1'000.0, identity_bins));
     }
     const auto original_tracks = identity_bank.allTrackDiagnostics();
     const auto original_id = original_tracks.front().id;
     identity_bins.assign(identity_bins.size(), -110.0F);
     identity_bins[300] = -55.0F;
-    static_cast<void>(identity_bank.updateSpectrum(
-        80'000'000, 0.0, 1'000.0, identity_bins));
+    static_cast<void>(
+        identity_bank.updateSpectrum(80'000'000, 0.0, 1'000.0, identity_bins));
     const auto separated_tracks = identity_bank.allTrackDiagnostics();
-    const auto new_signal = std::min_element(
-        separated_tracks.begin(), separated_tracks.end(),
-        [](const auto& left, const auto& right) {
-          return std::abs(left.frequency_hz - 300.0) <
-                 std::abs(right.frequency_hz - 300.0);
-        });
+    const auto new_signal =
+        std::min_element(separated_tracks.begin(), separated_tracks.end(),
+                         [](const auto& left, const auto& right) {
+                           return std::abs(left.frequency_hz - 300.0) <
+                                  std::abs(right.frequency_hz - 300.0);
+                         });
     expect(separated_tracks.size() == 2 &&
                new_signal != separated_tracks.end() &&
                new_signal->id != original_id,
-           "an established track cannot carry decoder history across an identity-breaking frequency jump");
+           "an established track cannot carry decoder history across an "
+           "identity-breaking frequency jump");
   }
 
   CwChannelBank rejection_bank;
   bins.assign(bins.size(), -100.0F);
   bins[70] = -75.0F;
-  static_cast<void>(rejection_bank.updateSpectrum(
-      0, 0.0, 1'000.0, bins));
+  static_cast<void>(rejection_bank.updateSpectrum(0, 0.0, 1'000.0, bins));
   double interference_phase = 0.0;
   for (int step = 0; step < 30; ++step) {
     cwassistant::core::RealtimeSampleBlock block;
@@ -849,8 +850,7 @@ void test_cw_channel_bank() {
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       block.samples[index] = {
           0.45F * static_cast<float>(std::sin(interference_phase)), 0.0F};
-      interference_phase +=
-          2.0 * std::numbers::pi * 880.0 / sample_rate;
+      interference_phase += 2.0 * std::numbers::pi * 880.0 / sample_rate;
     }
     static_cast<void>(rejection_bank.processSamples(block));
   }
@@ -863,21 +863,20 @@ void test_cw_channel_bank() {
   for (int step = 0; step < 500; ++step) {
     for (std::size_t bin = 0; bin < bins.size(); ++bin) {
       bins[bin] = -88.0F +
-          8.0F * static_cast<float>(std::sin(0.08 * bin + noise_time)) +
-          2.0F * static_cast<float>(std::sin(0.91 * bin - noise_time));
+                  8.0F * static_cast<float>(std::sin(0.08 * bin + noise_time)) +
+                  2.0F * static_cast<float>(std::sin(0.91 * bin - noise_time));
     }
     const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
-    static_cast<void>(shaped_noise_bank.updateSpectrum(
-        timestamp, 0.0, 1'000.0, bins));
+    static_cast<void>(
+        shaped_noise_bank.updateSpectrum(timestamp, 0.0, 1'000.0, bins));
     cwassistant::core::RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
     block.timestamp_ns = timestamp;
     block.sample_count = 80;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       noise_state = noise_state * 1'664'525U + 1'013'904'223U;
-      const float noise = static_cast<float>((noise_state >> 8U) & 0xFFFFU) /
-                              32'767.5F -
-                          1.0F;
+      const float noise =
+          static_cast<float>((noise_state >> 8U) & 0xFFFFU) / 32'767.5F - 1.0F;
       block.samples[index] = {0.18F * noise, 0.0F};
     }
     static_cast<void>(shaped_noise_bank.processSamples(block));
@@ -893,13 +892,13 @@ void test_cw_channel_bank() {
   constexpr double requested_drift_hz_per_second = 40.0;
   for (int step = 0; step < 120; ++step) {
     const double elapsed = static_cast<double>(step) * 0.01;
-    const double tone_hz = initial_tone_hz +
-                           requested_drift_hz_per_second * elapsed;
+    const double tone_hz =
+        initial_tone_hz + requested_drift_hz_per_second * elapsed;
     fine_bins.assign(fine_bins.size(), -110.0F);
     fine_bins[static_cast<std::size_t>(std::llround(tone_hz))] = -68.0F;
     const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
-    static_cast<void>(drift_bank.updateSpectrum(
-        timestamp, 0.0, 1'000.0, fine_bins));
+    static_cast<void>(
+        drift_bank.updateSpectrum(timestamp, 0.0, 1'000.0, fine_bins));
     cwassistant::core::RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
     block.timestamp_ns = timestamp;
@@ -917,8 +916,7 @@ void test_cw_channel_bank() {
     const auto& drifting = drift_bank.channels().front();
     expect(std::abs(drifting.frequency_hz - 547.6) < 4.0,
            "sub-bin tracker follows the current drifting tone frequency");
-    expect(std::abs(drifting.presentation_frequency_hz - initial_tone_hz) <
-               2.0,
+    expect(std::abs(drifting.presentation_frequency_hz - initial_tone_hz) < 2.0,
            "operator marker remains anchored while internal tracking follows "
            "bounded oscillator drift");
     expect(drifting.drift_hz_per_second > 20.0 &&
@@ -946,13 +944,13 @@ void test_cw_channel_bank() {
   append_units(false, 4);  // Complete the seven-unit word gap.
   const int slow_steps = static_cast<int>(slow_keying.size()) * 5;
   for (int step = 0; step < slow_steps; ++step) {
-    const bool keyed = slow_keying[static_cast<std::size_t>(step) %
-                                    slow_keying.size()];
+    const bool keyed =
+        slow_keying[static_cast<std::size_t>(step) % slow_keying.size()];
     fine_bins.assign(fine_bins.size(), -110.0F);
     if (keyed) fine_bins[400] = -68.0F;
     const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
-    static_cast<void>(slow_bank.updateSpectrum(
-        timestamp, 0.0, 1'000.0, fine_bins));
+    static_cast<void>(
+        slow_bank.updateSpectrum(timestamp, 0.0, 1'000.0, fine_bins));
     cwassistant::core::RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
     block.timestamp_ns = timestamp;
@@ -972,15 +970,14 @@ void test_cw_channel_bank() {
     expect(verified.filter_width_hz == 60.0,
            "automatic narrowband selection narrows a clean slow signal");
     expect(verified.verification_state ==
-               cwassistant::core::CwTrackState::Verified &&
+                   cwassistant::core::CwTrackState::Verified &&
                verified.verification_confidence >= 0.55F &&
                verified.verification_cadence_quality >= 0.45F &&
                verified.verification_timing_quality >= 0.55F &&
                verified.verification_character_confidence >= 0.55F &&
                verified.key_transitions >= 6,
            "published CW exposes the evidence that verified its cadence");
-    expect(verified.characters.size() >= 3 &&
-               verified.characters.back().known,
+    expect(verified.characters.size() >= 3 && verified.characters.back().known,
            "stable decoded characters retain bounded per-character evidence");
     expect(std::abs(verified.verification_timing_quality -
                     verified.verification_character_confidence) > 0.01F,
@@ -1016,14 +1013,14 @@ void test_cw_channel_bank() {
          "shiftTrackedFrequencies re-centers a track by exactly the given "
          "delta while preserving its verification state and decoded text");
   for (int step = 0; step < slow_steps; ++step) {
-    const bool keyed = slow_keying[static_cast<std::size_t>(step) %
-                                    slow_keying.size()];
+    const bool keyed =
+        slow_keying[static_cast<std::size_t>(step) % slow_keying.size()];
     fine_bins.assign(fine_bins.size(), -110.0F);
     if (keyed) fine_bins[700] = -68.0F;
     const auto timestamp =
         static_cast<std::uint64_t>(slow_steps + step) * 10'000'000;
-    static_cast<void>(slow_bank.updateSpectrum(
-        timestamp, 0.0, 1'000.0, fine_bins));
+    static_cast<void>(
+        slow_bank.updateSpectrum(timestamp, 0.0, 1'000.0, fine_bins));
     cwassistant::core::RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
     block.timestamp_ns = timestamp;
@@ -1036,13 +1033,13 @@ void test_cw_channel_bank() {
     }
     static_cast<void>(slow_bank.processSamples(block));
   }
-  expect(slow_bank.channels().size() == 1 &&
-             slow_bank.channels().front().verification_state ==
-                 cwassistant::core::CwTrackState::Verified &&
-             slow_bank.channels().front().text.size() >
-                 text_before_shift.size(),
-         "decoding continues on the same track identity at the shifted "
-         "frequency, growing its text, rather than starting a new track");
+  expect(
+      slow_bank.channels().size() == 1 &&
+          slow_bank.channels().front().verification_state ==
+              cwassistant::core::CwTrackState::Verified &&
+          slow_bank.channels().front().text.size() > text_before_shift.size(),
+      "decoding continues on the same track identity at the shifted "
+      "frequency, growing its text, rather than starting a new track");
 
   // A large shift (an operator tuning across the band, not centering on one
   // station -- or several small shifts accumulating the same way) can carry
@@ -1056,15 +1053,14 @@ void test_cw_channel_bank() {
     double drop_phase = 0.0;
     std::vector<bool> drop_keying;
     const auto append_drop_units = [&drop_keying](const bool keyed,
-                                                   const int units) {
+                                                  const int units) {
       drop_keying.insert(drop_keying.end(), units * 10, keyed);
     };
     const auto append_drop_letter =
         [&append_drop_units](const std::string_view elements) {
           for (std::size_t index = 0; index < elements.size(); ++index) {
             append_drop_units(true, elements[index] == '.' ? 1 : 3);
-            append_drop_units(false,
-                              index + 1 == elements.size() ? 3 : 1);
+            append_drop_units(false, index + 1 == elements.size() ? 3 : 1);
           }
         };
     append_drop_letter("...");
@@ -1073,8 +1069,8 @@ void test_cw_channel_bank() {
     append_drop_units(false, 4);
     const int drop_steps = static_cast<int>(drop_keying.size()) * 5;
     for (int step = 0; step < drop_steps; ++step) {
-      const bool keyed = drop_keying[static_cast<std::size_t>(step) %
-                                     drop_keying.size()];
+      const bool keyed =
+          drop_keying[static_cast<std::size_t>(step) % drop_keying.size()];
       drop_bins.assign(drop_bins.size(), -110.0F);
       if (keyed) drop_bins[500] = -68.0F;
       const auto timestamp = static_cast<std::uint64_t>(step) * 10'000'000;
@@ -1105,10 +1101,12 @@ void test_cw_channel_bank() {
                        .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {
     fine_bins.assign(fine_bins.size(), -110.0F);
-    const auto timestamp = static_cast<std::uint64_t>(
-        static_cast<std::int64_t>(2 * slow_steps) + silence_step) * 10'000'000;
-    static_cast<void>(slow_bank.updateSpectrum(
-        timestamp, 0.0, 1'000.0, fine_bins));
+    const auto timestamp =
+        static_cast<std::uint64_t>(static_cast<std::int64_t>(2 * slow_steps) +
+                                   silence_step) *
+        10'000'000;
+    static_cast<void>(
+        slow_bank.updateSpectrum(timestamp, 0.0, 1'000.0, fine_bins));
     cwassistant::core::RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
     block.timestamp_ns = timestamp;
@@ -1131,8 +1129,8 @@ void test_cw_channel_bank() {
       .audio_lower_frequency_hz = 0.0,
       .audio_upper_frequency_hz = 24'000.0,
   });
-  CwChannelBank pipeline_bank({.minimum_spectral_observations = 1,
-                               .minimum_verification_symbols = 0});
+  CwChannelBank pipeline_bank(
+      {.minimum_spectral_observations = 1, .minimum_verification_symbols = 0});
   cwassistant::core::RealtimeSampleBlock pipeline_block;
   pipeline_block.stream.sample_rate_hz = 48'000.0;
   pipeline_block.sample_count = 2'048;
@@ -1144,13 +1142,13 @@ void test_cw_channel_bank() {
   const auto pipeline_frames = pipeline_analyzer.process(pipeline_block);
   for (const auto& frame : pipeline_frames) {
     static_cast<void>(pipeline_bank.updateSpectrum(
-        frame.timestamp_ns, frame.lower_frequency_hz,
-        frame.upper_frequency_hz, frame.bins_dbfs));
+        frame.timestamp_ns, frame.lower_frequency_hz, frame.upper_frequency_hz,
+        frame.bins_dbfs));
   }
   static_cast<void>(pipeline_bank.processSamples(pipeline_block));
   expect(pipeline_frames.size() == 1 && pipeline_bank.channels().size() == 1 &&
-             std::abs(pipeline_bank.channels().front().frequency_hz -
-                      1'000.0) < 30.0 &&
+             std::abs(pipeline_bank.channels().front().frequency_hz - 1'000.0) <
+                 30.0 &&
              pipeline_bank.channels().front().snr_db > 6.0F,
          "shared FFT discovery feeds raw narrowband channel evidence");
 }
@@ -1195,8 +1193,7 @@ void test_established_cw_track_reserves_its_carrier_ridge() {
     block.sample_count = 80;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       block.samples[index] = {
-          keyed ? 0.35F * static_cast<float>(std::sin(phase)) : 0.0F,
-          0.0F};
+          keyed ? 0.35F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
       phase += 2.0 * std::numbers::pi * carrier_hz / sample_rate_hz;
     }
     static_cast<void>(bank.processSamples(block));
@@ -1232,11 +1229,10 @@ void test_established_cw_track_reserves_its_carrier_ridge() {
     feed(false, 180, true);
   }
   diagnostics = bank.allTrackDiagnostics();
-  established = std::find_if(
-      diagnostics.cbegin(), diagnostics.cend(),
-      [established_id](const auto& track) {
-        return track.id == established_id;
-      });
+  established = std::find_if(diagnostics.cbegin(), diagnostics.cend(),
+                             [established_id](const auto& track) {
+                               return track.id == established_id;
+                             });
   expect(established != diagnostics.cend() &&
              established->verification_state == CwTrackState::Candidate,
          "ridge reservation survives demotion of an established identity");
@@ -1246,11 +1242,10 @@ void test_established_cw_track_reserves_its_carrier_ridge() {
   // its own nearest raw ridge before strength ranking considers that neighbor.
   feed(true, 1'200, true);
   diagnostics = bank.allTrackDiagnostics();
-  established = std::find_if(
-      diagnostics.cbegin(), diagnostics.cend(),
-      [established_id](const auto& track) {
-        return track.id == established_id;
-      });
+  established = std::find_if(diagnostics.cbegin(), diagnostics.cend(),
+                             [established_id](const auto& track) {
+                               return track.id == established_id;
+                             });
   const auto adjacent_duplicates = std::count_if(
       diagnostics.cbegin(), diagnostics.cend(), [](const auto& track) {
         return std::abs(track.frequency_hz - carrier_hz) <= 45.0;
@@ -1318,11 +1313,11 @@ void test_cw_channel_bank_state_reason_consistency() {
     for (std::size_t reason = 0;
          reason < diagnostics.current_reason_counts.size(); ++reason) {
       const auto count = diagnostics.current_reason_counts[reason];
-      if (reason <= static_cast<std::size_t>(
-                        CwVerificationReason::LowCadenceQuality)) {
+      if (reason <=
+          static_cast<std::size_t>(CwVerificationReason::LowCadenceQuality)) {
         pre_morse_likely_reasons += count;
       } else if (reason <= static_cast<std::size_t>(
-                                CwVerificationReason::NeedsSustainedEvidence)) {
+                               CwVerificationReason::NeedsSustainedEvidence)) {
         post_morse_likely_reasons += count;
       }
     }
@@ -1340,14 +1335,14 @@ void test_cw_channel_bank_state_reason_consistency() {
 
 void test_operator_selected_cw_probe() {
   using namespace cwassistant::core;
-  CwChannelBank bank({.decoded_track_retention_seconds = 7.0,
-                      .maximum_tracks = 2});
+  CwChannelBank bank(
+      {.decoded_track_retention_seconds = 7.0, .maximum_tracks = 2});
   std::vector<float> quiet_spectrum(101, -100.0F);
 
   expect(bank.selectFrequency(700.0) == 0,
          "manual probe requires a current spectrum range");
-  static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 200.0, 1'200.0,
-                                        quiet_spectrum));
+  static_cast<void>(
+      bank.updateSpectrum(1'000'000'000ULL, 200.0, 1'200.0, quiet_spectrum));
   expect(bank.selectFrequency(150.0) == 0,
          "manual probe rejects a frequency outside the displayed passband");
 
@@ -1366,9 +1361,9 @@ void test_operator_selected_cw_probe() {
            "a newly selected probe exposes no unverified decoded identity");
   }
 
-  expect(bank.selectFrequency(710.0) == selected_id &&
-             bank.channels().size() == 1,
-         "nearby repeated clicks refresh one bounded probe");
+  expect(
+      bank.selectFrequency(710.0) == selected_id && bank.channels().size() == 1,
+      "nearby repeated clicks refresh one bounded probe");
   const std::uint64_t close_pileup_id = bank.selectFrequency(739.0);
   expect(close_pileup_id != 0 && close_pileup_id != selected_id &&
              bank.channels().size() == 2,
@@ -1376,14 +1371,14 @@ void test_operator_selected_cw_probe() {
 
   std::vector<float> weak_spectrum(101, -100.0F);
   weak_spectrum[50] = -96.0F;  // 4 dB: below normal 7 dB acquisition.
-  static_cast<void>(bank.updateSpectrum(1'100'000'000ULL, 200.0, 1'200.0,
-                                        weak_spectrum));
+  static_cast<void>(
+      bank.updateSpectrum(1'100'000'000ULL, 200.0, 1'200.0, weak_spectrum));
   const auto diagnostics = bank.allTrackDiagnostics();
-  const auto weak_probe = std::find_if(
-      diagnostics.cbegin(), diagnostics.cend(),
-      [selected_id](const CwTrackDiagnostic& diagnostic) {
-        return diagnostic.id == selected_id;
-      });
+  const auto weak_probe =
+      std::find_if(diagnostics.cbegin(), diagnostics.cend(),
+                   [selected_id](const CwTrackDiagnostic& diagnostic) {
+                     return diagnostic.id == selected_id;
+                   });
   expect(diagnostics.size() == 2 && weak_probe != diagnostics.cend() &&
              weak_probe->operator_selected && weak_probe->matched &&
              weak_probe->spectral_observations == 1 &&
@@ -1392,10 +1387,11 @@ void test_operator_selected_cw_probe() {
   expect(!bank.channels().empty() && !bank.channels().front().verified_cw,
          "manual weak-signal priority still does not bypass verification");
 
-  static_cast<void>(bank.updateSpectrum(8'000'000'001ULL, 200.0, 1'200.0,
-                                        quiet_spectrum));
-  expect(bank.channels().empty(),
-         "an unverified manual probe expires after the configured stream timeout");
+  static_cast<void>(
+      bank.updateSpectrum(8'000'000'001ULL, 200.0, 1'200.0, quiet_spectrum));
+  expect(
+      bank.channels().empty(),
+      "an unverified manual probe expires after the configured stream timeout");
 
   CwChannelBank following_bank({
       .decoded_track_retention_seconds = 7.0,
@@ -1410,15 +1406,15 @@ void test_operator_selected_cw_probe() {
       .presentation_follow_maximum_mad_hz = 20.0,
   });
   std::vector<float> following_spectrum(1'001U, -100.0F);
-  static_cast<void>(following_bank.updateSpectrum(
-      1'000'000'000ULL, 200.0, 1'200.0, following_spectrum));
+  static_cast<void>(following_bank.updateSpectrum(1'000'000'000ULL, 200.0,
+                                                  1'200.0, following_spectrum));
   const std::uint64_t following_id = following_bank.selectFrequency(700.0);
   for (std::uint64_t frame = 1; frame <= 26; ++frame) {
     std::fill(following_spectrum.begin(), following_spectrum.end(), -100.0F);
     following_spectrum[515U] = -20.0F;  // Carrier moved from 700 to 715 Hz.
-    static_cast<void>(following_bank.updateSpectrum(
-        1'000'000'000ULL + frame * 100'000'000ULL,
-        200.0, 1'200.0, following_spectrum));
+    static_cast<void>(
+        following_bank.updateSpectrum(1'000'000'000ULL + frame * 100'000'000ULL,
+                                      200.0, 1'200.0, following_spectrum));
   }
   const auto followed = std::find_if(
       following_bank.channels().cbegin(), following_bank.channels().cend(),
@@ -1432,12 +1428,10 @@ void test_operator_selected_cw_probe() {
          "an unverified manual region follows sustained carrier movement");
 
   CwChannelBank close_lane_bank({.maximum_tracks = 3});
-  static_cast<void>(close_lane_bank.updateSpectrum(
-      1'000'000'000ULL, 200.0, 1'200.0, quiet_spectrum));
-  const std::uint64_t lower_lane_id =
-      close_lane_bank.selectFrequency(710.0);
-  const std::uint64_t upper_lane_id =
-      close_lane_bank.selectFrequency(739.0);
+  static_cast<void>(close_lane_bank.updateSpectrum(1'000'000'000ULL, 200.0,
+                                                   1'200.0, quiet_spectrum));
+  const std::uint64_t lower_lane_id = close_lane_bank.selectFrequency(710.0);
+  const std::uint64_t upper_lane_id = close_lane_bank.selectFrequency(739.0);
   std::vector<float> lower_lane_spectrum(101, -100.0F);
   lower_lane_spectrum[51] = -80.0F;  // 710 Hz, 29 Hz below the click.
   static_cast<void>(close_lane_bank.updateSpectrum(
@@ -1511,8 +1505,7 @@ void test_cw_channel_presentation_frequency_model() {
     block.sample_count = 80;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       block.samples[index] = {
-          keyed ? 0.32F * static_cast<float>(std::sin(phase)) : 0.0F,
-          0.0F};
+          keyed ? 0.32F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
       phase += 2.0 * std::numbers::pi * frequency_hz / sample_rate;
     }
     static_cast<void>(bank.processSamples(block));
@@ -1546,9 +1539,11 @@ void test_cw_channel_presentation_frequency_model() {
          "biased acquisition still produces one verified carrier track");
   if (main_track == diagnostics.end()) return;
   const std::uint64_t main_id = main_track->id;
-  expect(std::abs(main_track->identity_origin_frequency_hz - acquired_hz) < 2.0 &&
-             std::abs(main_track->presentation_frequency_hz - carrier_hz) < 3.0,
-         "first verification robustly centers presentation without moving identity origin");
+  expect(
+      std::abs(main_track->identity_origin_frequency_hz - acquired_hz) < 2.0 &&
+          std::abs(main_track->presentation_frequency_hz - carrier_hz) < 3.0,
+      "first verification robustly centers presentation without moving "
+      "identity origin");
   expect(!main_track->matched && main_track->active &&
              main_track->match_age_seconds <= 0.75 &&
              main_track->color_index == 0,
@@ -1562,10 +1557,9 @@ void test_cw_channel_presentation_frequency_model() {
     step(index % 12 < 6, jittered);
   }
   diagnostics = bank.allTrackDiagnostics();
-  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
-                            [main_id](const auto& track) {
-                              return track.id == main_id;
-                            });
+  main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(),
+      [main_id](const auto& track) { return track.id == main_id; });
   expect(main_track != diagnostics.end() &&
              std::abs(main_track->presentation_frequency_hz - centered) < 1.0,
          "bounded jitter does not move the presentation center");
@@ -1574,68 +1568,68 @@ void test_cw_channel_presentation_frequency_model() {
   // and stable-time guard, then follows at the configured slew rate. Its
   // absolute center remains capped relative to the immutable identity origin.
   for (int index = 0; index < 700; ++index) {
-    const double moving = carrier_hz + 9.0 *
-        static_cast<double>(index) / 699.0;
+    const double moving = carrier_hz + 9.0 * static_cast<double>(index) / 699.0;
     step(index % 12 < 6, moving);
   }
   diagnostics = bank.allTrackDiagnostics();
-  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
-                            [main_id](const auto& track) {
-                              return track.id == main_id;
-                            });
+  main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(),
+      [main_id](const auto& track) { return track.id == main_id; });
   expect(main_track != diagnostics.end() &&
              main_track->presentation_frequency_hz > centered + 2.0 &&
              main_track->presentation_frequency_hz <= acquired_hz + 65.01 &&
-             std::abs(main_track->identity_origin_frequency_hz - acquired_hz) < 2.0,
+             std::abs(main_track->identity_origin_frequency_hz - acquired_hz) <
+                 2.0,
          "sustained slow motion follows within an immutable-origin hard bound");
 
   // An adjacent strong carrier gets a separate candidate and cannot pull the
   // verified marker. Small cumulative innovations likewise stop at the same
   // absolute origin bound rather than moving that bound themselves.
   const double before_adjacent = main_track->presentation_frequency_hz;
-  for (int index = 0; index < 80; ++index)
-    step(index % 12 < 6, 565.0, true);
+  for (int index = 0; index < 80; ++index) step(index % 12 < 6, 565.0, true);
   for (int index = 0; index < 120; ++index)
     step(true, 565.0 + 0.5 * static_cast<double>(index));
   diagnostics = bank.allTrackDiagnostics();
-  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
-                            [main_id](const auto& track) {
-                              return track.id == main_id;
-                            });
+  main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(),
+      [main_id](const auto& track) { return track.id == main_id; });
   expect(main_track != diagnostics.end() &&
              main_track->presentation_frequency_hz <= acquired_hz + 65.01 &&
              main_track->identity_origin_frequency_hz < acquired_hz + 2.0 &&
              main_track->presentation_frequency_hz >= before_adjacent - 1.0,
-         "adjacent and cumulative peaks cannot walk the identity origin or presentation cap");
+         "adjacent and cumulative peaks cannot walk the identity origin or "
+         "presentation cap");
 
   const double before_silence = main_track->presentation_frequency_hz;
   for (int index = 0; index < 120; ++index) step(false, 565.0);
   diagnostics = bank.allTrackDiagnostics();
-  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
-                            [main_id](const auto& track) {
-                              return track.id == main_id;
-                            });
+  main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(),
+      [main_id](const auto& track) { return track.id == main_id; });
   expect(main_track != diagnostics.end() && !main_track->active &&
              !main_track->key_down && main_track->match_age_seconds > 0.75 &&
-             std::abs(main_track->presentation_frequency_hz - before_silence) < 0.01,
+             std::abs(main_track->presentation_frequency_hz - before_silence) <
+                 0.01,
          "silence exposes inactive match age without moving presentation");
 
   const double dsp_before_shift = main_track->frequency_hz;
   const double origin_before_shift = main_track->identity_origin_frequency_hz;
-  const double presentation_before_shift = main_track->presentation_frequency_hz;
+  const double presentation_before_shift =
+      main_track->presentation_frequency_hz;
   bank.shiftTrackedFrequencies(200.0);
   diagnostics = bank.allTrackDiagnostics();
-  main_track = std::find_if(diagnostics.begin(), diagnostics.end(),
-                            [main_id](const auto& track) {
-                              return track.id == main_id;
-                            });
+  main_track = std::find_if(
+      diagnostics.begin(), diagnostics.end(),
+      [main_id](const auto& track) { return track.id == main_id; });
   expect(main_track != diagnostics.end() &&
-             std::abs(main_track->frequency_hz - (dsp_before_shift + 200.0)) < 0.01 &&
+             std::abs(main_track->frequency_hz - (dsp_before_shift + 200.0)) <
+                 0.01 &&
              std::abs(main_track->identity_origin_frequency_hz -
                       (origin_before_shift + 200.0)) < 0.01 &&
              std::abs(main_track->presentation_frequency_hz -
                       (presentation_before_shift + 200.0)) < 0.01,
-         "known VFO retune shifts DSP, identity, and presentation exactly together");
+         "known VFO retune shifts DSP, identity, and presentation exactly "
+         "together");
 
   // Let the original track expire, then reacquire directly at the corrected
   // carrier. Its new association origin is about 58 Hz away from the old
@@ -1661,7 +1655,8 @@ void test_cw_channel_presentation_frequency_model() {
   expect(replacement != diagnostics.end() && replacement->color_index == 0 &&
              std::abs(replacement->presentation_frequency_hz -
                       (carrier_hz + 200.0)) < 3.0,
-         "reacquisition after a biased origin preserves the verified-carrier color lease");
+         "reacquisition after a biased origin preserves the verified-carrier "
+         "color lease");
 }
 
 void test_cw_channel_bank_implausible_character_distribution() {
@@ -1681,8 +1676,8 @@ void test_cw_channel_bank_implausible_character_distribution() {
          "has accumulated, since the fraction is not yet meaningful");
   expect(!isCharacterDistributionImplausible("", 0, 0.35F),
          "empty decoded text is never flagged (no letters to judge)");
-  expect(isCharacterDistributionImplausible(
-             "TE TE TE TE TE TE TE TE TE TE", 10, 0.35F),
+  expect(isCharacterDistributionImplausible("TE TE TE TE TE TE TE TE TE TE", 10,
+                                            0.35F),
          "inter-character spaces are ignored when computing the fraction, "
          "so a spaced-out run of only E/T is still flagged");
   expect(!isCharacterDistributionImplausible("SOS DE W1AW K", 10, 0.60F),
@@ -1702,16 +1697,14 @@ void test_cw_channel_bank_implausible_character_distribution() {
     for (int elapsed = 0; elapsed < milliseconds; elapsed += 10) {
       bins.assign(bins.size(), -110.0F);
       if (keyed) bins[500] = -65.0F;
-      static_cast<void>(recovery_bank.updateSpectrum(
-          now, 0.0, 1'000.0, bins));
+      static_cast<void>(recovery_bank.updateSpectrum(now, 0.0, 1'000.0, bins));
       cwassistant::core::RealtimeSampleBlock block;
       block.stream.sample_rate_hz = sample_rate;
       block.timestamp_ns = now;
       block.sample_count = 80;
       for (std::size_t index = 0; index < block.sample_count; ++index) {
         block.samples[index] = {
-            keyed ? 0.30F * static_cast<float>(std::sin(phase)) : 0.0F,
-            0.0F};
+            keyed ? 0.30F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
         phase += 2.0 * std::numbers::pi * 500.0 / sample_rate;
       }
       static_cast<void>(recovery_bank.processSamples(block));
@@ -1719,7 +1712,7 @@ void test_cw_channel_bank_implausible_character_distribution() {
     }
   };
   for (int repetition = 0; repetition < 12; ++repetition) {
-    feed(true, 60);   // E
+    feed(true, 60);  // E
     feed(false, 180);
     feed(true, 180);  // T
     feed(false, 180);
@@ -1777,9 +1770,9 @@ void test_transmit_guard() {
              guard.state() == cwassistant::core::TransmitState::Fault,
          "KEY assertion outside guarded TX latches a fault");
   expect(guard.reset_fault(), "out-of-state KEY fault resets to disarmed");
-  expect(guard.arm() && guard.request_qso("K2XYZ") &&
-             guard.confirm("K2XYZ") && guard.stage_message("TEST") &&
-             guard.confirm_message("TEST") && guard.begin_transmission(),
+  expect(guard.arm() && guard.request_qso("K2XYZ") && guard.confirm("K2XYZ") &&
+             guard.stage_message("TEST") && guard.confirm_message("TEST") &&
+             guard.begin_transmission(),
          "watchdog fixture reaches guarded transmission");
   expect(guard.observe_key_state(true, 3'000'000'000ULL) &&
              !guard.observe_key_state(
@@ -1794,8 +1787,7 @@ void test_transmit_guard() {
              guard.observe_key_state(true, 10'000'000'000ULL),
          "TUNE enters its distinct guarded KEY state");
   expect(guard.observe_key_state(
-             true, 10'000'000'000ULL +
-                       TransmitGuard::kMaximumTuneKeyDownNs),
+             true, 10'000'000'000ULL + TransmitGuard::kMaximumTuneKeyDownNs),
          "TUNE remains valid through its exact 15-second limit");
   expect(guard.finish_tune() &&
              guard.state() == cwassistant::core::TransmitState::Armed,
@@ -1861,12 +1853,11 @@ void test_selected_track_audio_monitor() {
   CwChannelBank bank({.minimum_verification_symbols = 0});
   std::vector<float> spectrum(291U, -100.0F);
   spectrum[90U] = -20.0F;  // 1000 Hz in the 100..3000 Hz test range.
-  static_cast<void>(bank.updateSpectrum(1'000'000'000ULL, 100.0, 3'000.0,
-                                        spectrum));
+  static_cast<void>(
+      bank.updateSpectrum(1'000'000'000ULL, 100.0, 3'000.0, spectrum));
   const std::uint64_t selected = bank.selectFrequency(1'000.0);
   const std::uint64_t selected_second = bank.selectFrequency(1'500.0);
-  expect(selected != 0U && selected_second != 0U &&
-             selected != selected_second,
+  expect(selected != 0U && selected_second != 0U && selected != selected_second,
          "monitor fixture creates two operator-selected lanes");
 
   constexpr double sample_rate = 48'000.0;
@@ -1884,13 +1875,12 @@ void test_selected_track_audio_monitor() {
     block.timestamp_ns = 1'000'000'000ULL + block_index * 21'333'333ULL;
     for (std::size_t index = 0; index < block.sample_count; ++index) {
       target_phase += 2.0 * std::numbers::pi * 1'000.0 / sample_rate;
-      second_target_phase +=
-          2.0 * std::numbers::pi * 1'500.0 / sample_rate;
+      second_target_phase += 2.0 * std::numbers::pi * 1'500.0 / sample_rate;
       interferer_phase += 2.0 * std::numbers::pi * 2'200.0 / sample_rate;
       block.samples[index] = {
-          0.20F * static_cast<float>(std::sin(target_phase)) +
-              0.20F * static_cast<float>(std::sin(second_target_phase)) +
-              0.20F * static_cast<float>(std::sin(interferer_phase)),
+          0.005F * static_cast<float>(std::sin(target_phase)) +
+              0.005F * static_cast<float>(std::sin(second_target_phase)) +
+              0.005F * static_cast<float>(std::sin(interferer_phase)),
           0.0F};
     }
     static_cast<void>(bank.processSamples(block));
@@ -1909,10 +1899,12 @@ void test_selected_track_audio_monitor() {
     }
     return std::hypot(real, imaginary);
   };
-  expect(magnitude_at(700.0) > 8.0 * magnitude_at(1'000.0) &&
+  expect(magnitude_at(700.0) > 40.0 &&
+             magnitude_at(700.0) > 8.0 * magnitude_at(1'000.0) &&
              magnitude_at(700.0) > 8.0 * magnitude_at(1'500.0) &&
              magnitude_at(700.0) > 8.0 * magnitude_at(2'200.0),
-         "selected monitor mixes selected carriers at one pitch and rejects unselected audio");
+         "selected monitor normalizes weak selected carriers at one pitch and "
+         "rejects unselected audio");
 
   bank.setMonitor(CwMonitorMode::FullReceiver);
   static_cast<void>(bank.processSamples(block));
@@ -1962,8 +1954,7 @@ void test_presented_speed_requires_evidence() {
   feed(true, 60);
   feed(false, 180);
   const auto& early = bank.channels();
-  const bool early_speed_hidden =
-      early.empty() || early.front().wpm == 0.0;
+  const bool early_speed_hidden = early.empty() || early.front().wpm == 0.0;
   expect(early_speed_hidden,
          "no speed is presented before enough symbols support one");
 }
@@ -1975,8 +1966,8 @@ void test_callsign_policy_prosign_glue() {
   // on a receiver capture: a station sending CQ CQ CQ DE SV7BIO SV7BIO decoded
   // as "CQ CQ DESV7BIO SV7BIO SV7BIO" and the stream was labelled DESV7BIO,
   // although the real callsign stood alone twice in the same text.
-  const auto glued = CallsignPolicy::best_complete_in_text(
-      "Q CQ DESV7BIO SV7BIO SV7BI O + ");
+  const auto glued =
+      CallsignPolicy::best_complete_in_text("Q CQ DESV7BIO SV7BIO SV7BI O + ");
   expect(glued.has_value() && *glued == "SV7BIO",
          "a prosign glued to the callsign after it does not become the "
          "station label");
@@ -1984,8 +1975,8 @@ void test_callsign_policy_prosign_glue() {
   // The split may only happen where what follows the prosign is itself a
   // callsign. A genuine German DE-prefixed call must survive intact: removing
   // DE from DE1ABC leaves 1ABC, which is not a callsign, so the token stands.
-  const auto german = CallsignPolicy::best_complete_in_text(
-      "CQ DE DE1ABC DE1ABC K ");
+  const auto german =
+      CallsignPolicy::best_complete_in_text("CQ DE DE1ABC DE1ABC K ");
   expect(german.has_value() && *german == "DE1ABC",
          "a genuine DE-prefixed callsign is not split apart");
 }
@@ -2012,16 +2003,14 @@ void test_callsign_policy() {
   expect(CallsignPolicy::latest_complete_in_text("CQ IU0LFQ ") ==
              std::optional<std::string>("IU0LFQ"),
          "a stable word gap confirms a structurally valid decoded callsign");
-  expect(CallsignPolicy::latest_complete_in_text(
-             "GW0KRL KN28N6 RANDOM7 ") ==
+  expect(CallsignPolicy::latest_complete_in_text("GW0KRL KN28N6 RANDOM7 ") ==
              std::optional<std::string>("GW0KRL"),
          "callsign extraction ignores noise tokens with trailing or embedded "
          "digits after the district numeral");
   expect(CallsignPolicy::best_complete_in_text("CQ IU0LFQ ") ==
              std::optional<std::string>("IU0LFQ"),
          "CQ context supplies enough evidence for an automatic call label");
-  expect(CallsignPolicy::best_complete_in_text(
-             "CQ TEST IU0LFQ IU0LFQ 599 ") ==
+  expect(CallsignPolicy::best_complete_in_text("CQ TEST IU0LFQ IU0LFQ 599 ") ==
              std::optional<std::string>("IU0LFQ"),
          "an exactly repeated decoded callsign supplies label evidence");
   expect(!CallsignPolicy::best_complete_in_text("QA1RRK 599 "),
@@ -2061,24 +2050,17 @@ void test_callsign_policy() {
       "FB CARO EMILIO IK1WJQ DE IU8NMZ + K ");
   expect(participants == std::vector<std::string>({"IK1WJQ", "IU8NMZ"}),
          "CALL1 DE CALL2 identifies both participants on one simplex carrier");
-  expect(CallsignPolicy::qso_participants_in_text(
-             "IK1WJQ DE IU8NMZ")
-             .empty(),
+  expect(CallsignPolicy::qso_participants_in_text("IK1WJQ DE IU8NMZ").empty(),
          "an unfinished participant handover is not exposed");
-  expect(CallsignPolicy::qso_participants_in_text(
-             "IK1WJQ DE IK1WJQ K ")
-             .empty(),
-         "one repeated callsign is not presented as a two-party QSO");
-  expect(CallsignPolicy::qso_participants_in_text(
-             "REPORT DE 599 K ")
-             .empty(),
+  expect(
+      CallsignPolicy::qso_participants_in_text("IK1WJQ DE IK1WJQ K ").empty(),
+      "one repeated callsign is not presented as a two-party QSO");
+  expect(CallsignPolicy::qso_participants_in_text("REPORT DE 599 K ").empty(),
          "ordinary DE text without two callsigns does not invent participants");
-  expect(CallsignPolicy::strong_sender_in_text(
-             "IK1WJQ DE IU8NMZ K ") ==
+  expect(CallsignPolicy::strong_sender_in_text("IK1WJQ DE IU8NMZ K ") ==
              std::optional<std::string>("IU8NMZ"),
          "an explicit CALL1 DE CALL2 handover attributes the sender");
-  expect(CallsignPolicy::strong_sender_in_text(
-             "CQ CQ DE SV7BIO K ") ==
+  expect(CallsignPolicy::strong_sender_in_text("CQ CQ DE SV7BIO K ") ==
              std::optional<std::string>("SV7BIO"),
          "CQ DE CALL explicitly attributes a calling station");
   expect(!CallsignPolicy::strong_sender_in_text("SV7BIO SV7BIO K "),
@@ -2088,18 +2070,18 @@ void test_callsign_policy() {
   expect(CallsignPolicy::best_complete_in_parallel_texts(
              "TEST SM5IMO TU DL1NKB DAN 1854 TU SM5E ",
              "TEST SM5IMO TU DL1NKB DAN 1854 TU SM5U ",
-             cwassistant::core::CwOperatorRole::Monitor, {}) ==
-             std::optional<std::string>("DL1NKB"),
+             cwassistant::core::CwOperatorRole::Monitor,
+             {}) == std::optional<std::string>("DL1NKB"),
          "independent paths reinforce the shared contest callsign");
   expect(!CallsignPolicy::best_complete_in_parallel_texts(
-              {}, "TTE C 5NE S TU5NEET6T E HI ",
-              cwassistant::core::CwOperatorRole::Monitor, {}),
+             {}, "TTE C 5NE S TU5NEET6T E HI ",
+             cwassistant::core::CwOperatorRole::Monitor, {}),
          "a call created only by splitting a glued TU cannot label a stream");
-  expect(CallsignPolicy::best_complete_in_parallel_texts(
-             {}, "G4LJU G4LJU COLIN ",
-             cwassistant::core::CwOperatorRole::Monitor, {}) ==
-             std::optional<std::string>("G4LJU"),
-         "an exact refined-only callsign remains usable");
+  expect(
+      CallsignPolicy::best_complete_in_parallel_texts(
+          {}, "G4LJU G4LJU COLIN ", cwassistant::core::CwOperatorRole::Monitor,
+          {}) == std::optional<std::string>("G4LJU"),
+      "an exact refined-only callsign remains usable");
 }
 
 void test_cw_context_rescorer() {
@@ -2134,14 +2116,13 @@ void test_cw_context_rescorer() {
   };
   expect(selectCwContextAlternative(unsorted, 1.0).index == 0,
          "context handles unsorted input and ignores a non-finite path");
-  expect(cwassistant::core::reconstructCwWordGaps(
-             "CQDESV7BIO PSEK") == "CQ DE SV7BIO PSE K",
+  expect(cwassistant::core::reconstructCwWordGaps("CQDESV7BIO PSEK") ==
+             "CQ DE SV7BIO PSE K",
          "known exchange words are separated around a plausible callsign");
-  expect(cwassistant::core::reconstructCwWordGaps(
-             "CQ DE1ABC K") == "CQ DE1ABC K",
-         "word-gap repair does not split a genuine DE-prefixed call");
-  expect(cwassistant::core::reconstructCwWordGaps(
-             "RANDOMTEXT") == "RANDOMTEXT",
+  expect(
+      cwassistant::core::reconstructCwWordGaps("CQ DE1ABC K") == "CQ DE1ABC K",
+      "word-gap repair does not split a genuine DE-prefixed call");
+  expect(cwassistant::core::reconstructCwWordGaps("RANDOMTEXT") == "RANDOMTEXT",
          "word-gap repair leaves unconstrained text unchanged");
 }
 
@@ -2262,32 +2243,34 @@ void test_spectrum_analyzer() {
   const auto snapshots = analyzer.process(block);
   expect(snapshots.size() == 1 && snapshots[0].bins_dbfs.size() == 513 &&
              snapshots[0].instantaneous_bins_dbfs.size() == 513,
-         "audio FFT emits averaged and instantaneous one-sided bins including Nyquist");
-  const auto peak = static_cast<std::size_t>(std::distance(
-      snapshots[0].bins_dbfs.begin(),
-      std::max_element(snapshots[0].bins_dbfs.begin(),
-                       snapshots[0].bins_dbfs.end())));
+         "audio FFT emits averaged and instantaneous one-sided bins including "
+         "Nyquist");
+  const auto peak = static_cast<std::size_t>(
+      std::distance(snapshots[0].bins_dbfs.begin(),
+                    std::max_element(snapshots[0].bins_dbfs.begin(),
+                                     snapshots[0].bins_dbfs.end())));
   expect(peak == tone_bin, "windowed FFT locates a bin-centered CW tone");
   expect(std::abs(snapshots[0].bins_dbfs[peak]) < 0.05F,
-         "window coherent-gain normalization reports a full-scale tone near 0 dBFS");
-  expect(std::abs(snapshots[0].instantaneous_bins_dbfs[peak] -
-                  snapshots[0].bins_dbfs[peak]) < 1.0e-6F,
-         "one-frame averaging preserves the instantaneous CW-symbol raster bins");
+         "window coherent-gain normalization reports a full-scale tone near 0 "
+         "dBFS");
+  expect(
+      std::abs(snapshots[0].instantaneous_bins_dbfs[peak] -
+               snapshots[0].bins_dbfs[peak]) < 1.0e-6F,
+      "one-frame averaging preserves the instantaneous CW-symbol raster bins");
   expect(snapshots[0].lower_frequency_hz == 0.0 &&
              snapshots[0].upper_frequency_hz == 24'000.0 &&
              std::abs(snapshots[0].bin_width_hz - 46.875) < 1.0e-9,
          "audio FFT publishes exact frequency coordinates");
 
-  SpectrumAnalyzer conditioned(
-      {.fft_size = fft_size,
-       .averaging_frames = 1,
-       .audio_dc_rejection = true,
-       .audio_automatic_gain = true,
-       .audio_gain_db = 0.0F,
-       .audio_automatic_gain_target_dbfs = -6.0F,
-       .audio_automatic_bandwidth = false,
-       .audio_lower_frequency_hz = 300.0,
-       .audio_upper_frequency_hz = 3'000.0});
+  SpectrumAnalyzer conditioned({.fft_size = fft_size,
+                                .averaging_frames = 1,
+                                .audio_dc_rejection = true,
+                                .audio_automatic_gain = true,
+                                .audio_gain_db = 0.0F,
+                                .audio_automatic_gain_target_dbfs = -6.0F,
+                                .audio_automatic_bandwidth = false,
+                                .audio_lower_frequency_hz = 300.0,
+                                .audio_upper_frequency_hz = 3'000.0});
   constexpr std::size_t conditioned_tone_bin = 16;
   for (std::size_t index = 0; index < fft_size; ++index) {
     const float phase = 2.0F * std::numbers::pi_v<float> *
@@ -2300,18 +2283,19 @@ void test_spectrum_analyzer() {
              conditioned_snapshots[0].bins_dbfs.size() == 58 &&
              conditioned_snapshots[0].lower_frequency_hz == 328.125 &&
              conditioned_snapshots[0].upper_frequency_hz == 3'000.0,
-         "manual audio bandwidth crops bins and reports exact displayed coordinates");
-  const auto conditioned_peak = std::max_element(
-      conditioned_snapshots[0].bins_dbfs.begin(),
-      conditioned_snapshots[0].bins_dbfs.end());
+         "manual audio bandwidth crops bins and reports exact displayed "
+         "coordinates");
+  const auto conditioned_peak =
+      std::max_element(conditioned_snapshots[0].bins_dbfs.begin(),
+                       conditioned_snapshots[0].bins_dbfs.end());
   expect(conditioned_peak != conditioned_snapshots[0].bins_dbfs.end() &&
              std::abs(*conditioned_peak + 6.0F) < 0.1F,
-         "automatic input gain reaches its configured dBFS target after DC rejection");
+         "automatic input gain reaches its configured dBFS target after DC "
+         "rejection");
 
-  SpectrumAnalyzer dc_rejected(
-      {.fft_size = fft_size,
-       .averaging_frames = 1,
-       .audio_dc_rejection = true});
+  SpectrumAnalyzer dc_rejected({.fft_size = fft_size,
+                                .averaging_frames = 1,
+                                .audio_dc_rejection = true});
   const auto dc_rejected_snapshots = dc_rejected.process(block);
   expect(dc_rejected_snapshots.size() == 1 &&
              dc_rejected_snapshots[0].bins_dbfs.front() < -100.0F,
@@ -2326,10 +2310,11 @@ void test_spectrum_analyzer() {
        .audio_automatic_gain_target_dbfs = -12.0F,
        .audio_automatic_bandwidth = true});
   const auto automatic_snapshots = automatic_bandwidth.process(block);
-  expect(automatic_snapshots.size() == 1 &&
-             automatic_snapshots[0].lower_frequency_hz == 140.625 &&
-             automatic_snapshots[0].upper_frequency_hz == 3'000.0,
-         "automatic audio bandwidth derives a CW-oriented view from sample rate");
+  expect(
+      automatic_snapshots.size() == 1 &&
+          automatic_snapshots[0].lower_frequency_hz == 140.625 &&
+          automatic_snapshots[0].upper_frequency_hz == 3'000.0,
+      "automatic audio bandwidth derives a CW-oriented view from sample rate");
 
   expect(!analyzer.configure({.fft_size = 1'000, .averaging_frames = 1}),
          "spectrum analyzer rejects a non-radix-two transform");
@@ -2353,7 +2338,8 @@ void test_spectrum_analyzer() {
   const auto after_gap = overlapping.process(overlap_block);
   expect(after_gap.size() == 1 &&
              after_gap.front().timestamp_ns == overlap_block.timestamp_ns,
-         "analysis resets overlap at a capture gap so waterfall time is not compressed");
+         "analysis resets overlap at a capture gap so waterfall time is not "
+         "compressed");
 
   SpectrumAnalyzer wide_rate_limited(
       {.fft_size = 1'024, .averaging_frames = 1, .frame_rate_hz = 60});
@@ -2364,15 +2350,17 @@ void test_spectrum_analyzer() {
                        .channel_count = 2};
   wide_block.sample_count = wide_block.samples.size();
   for (std::size_t index = 0; index < wide_block.sample_count; ++index) {
-    const float phase = 2.0F * std::numbers::pi_v<float> *
-                        2'000.0F * static_cast<float>(index) / 240'000.0F;
+    const float phase = 2.0F * std::numbers::pi_v<float> * 2'000.0F *
+                        static_cast<float>(index) / 240'000.0F;
     wide_block.samples[index] = {std::cos(phase), std::sin(phase)};
   }
   const auto limited_snapshots = wide_rate_limited.process(wide_block);
   expect(limited_snapshots.size() == 1,
-         "wide-IQ FFT skips complete input intervals to honor its configured frame rate");
+         "wide-IQ FFT skips complete input intervals to honor its configured "
+         "frame rate");
   expect(limited_snapshots.size() < wide_block.sample_count / 1'024,
-         "wide-IQ FFT does not emit one frame per transform length at high sample rates");
+         "wide-IQ FFT does not emit one frame per transform length at high "
+         "sample rates");
 
   SpectrumAnalyzer multi_mhz_limited(
       {.fft_size = 1'024, .averaging_frames = 1, .frame_rate_hz = 60});
@@ -2390,7 +2378,8 @@ void test_spectrum_analyzer() {
       if (multi_mhz_frames > 0) {
         expect(snapshot.timestamp_ns > last_frame_timestamp + 16'600'000 &&
                    snapshot.timestamp_ns < last_frame_timestamp + 16'800'000,
-               "multi-MHz overview frames retain the configured wall-clock cadence");
+               "multi-MHz overview frames retain the configured wall-clock "
+               "cadence");
       }
       last_frame_timestamp = snapshot.timestamp_ns;
       ++multi_mhz_frames;
@@ -2398,7 +2387,8 @@ void test_spectrum_analyzer() {
     sample_offset += wide_block.sample_count;
   }
   expect(multi_mhz_frames == 4,
-         "an 8 MHz overview emits about 60 frames per second instead of one per FFT");
+         "an 8 MHz overview emits about 60 frames per "
+         "second instead of one per FFT");
 
   SpectrumAnalyzer discontinuous_average(
       {.fft_size = 1'024, .averaging_frames = 4, .frame_rate_hz = 60});
@@ -2416,7 +2406,8 @@ void test_spectrum_analyzer() {
   expect(!after_discontinuity.empty() &&
              after_discontinuity.front().bins_dbfs ==
                  after_discontinuity.front().instantaneous_bins_dbfs,
-         "a capture discontinuity clears spectral averaging instead of ghosting old RF");
+         "a capture discontinuity clears spectral averaging instead of "
+         "ghosting old RF");
 }
 
 void test_remote_control_lease() {
@@ -2497,9 +2488,9 @@ void test_split_transverter_and_satellite_adif() {
          "satellite QSO receives calculated RF fields");
   expect(qso.band == "70CM" && qso.band_rx == "2M",
          "ADIF TX and RX bands derive from actual RF frequencies");
-  expect(qso.frequency_mhz == "435.300000" &&
-             qso.frequency_rx_mhz == "145.900000",
-         "ADIF keeps exact TX and RX frequencies to one hertz");
+  expect(
+      qso.frequency_mhz == "435.300000" && qso.frequency_rx_mhz == "145.900000",
+      "ADIF keeps exact TX and RX frequencies to one hertz");
 
   const auto adif = to_adif(qso);
   expect(adif.find("<BAND:4>70CM") != std::string::npos,
@@ -2526,10 +2517,10 @@ void test_negative_transverter_offset_and_invalid_frequency() {
          "negative transverter offsets are supported for RX and TX");
   expect(adif_band_from_frequency(29'900'000).empty(),
          "out-of-band frequency is not mislabeled in ADIF");
-  expect(!resolve_frequencies(
-              {.rx_dial_hz = 10'000'000, .split_enabled = false},
-              {.rx_offset_hz = -10'000'000, .tx_offset_hz = 0}),
-         "offset calculation rejects zero or underflowed actual RF");
+  expect(
+      !resolve_frequencies({.rx_dial_hz = 10'000'000, .split_enabled = false},
+                           {.rx_offset_hz = -10'000'000, .tx_offset_hz = 0}),
+      "offset calculation rejects zero or underflowed actual RF");
   expect(resolve_audio_tone_rf(14'074'700, 725.0, 700.0, true) ==
              std::optional<std::uint64_t>(14'074'725),
          "CW-U audio offset maps upward from the actual-RF reference");
@@ -2546,19 +2537,16 @@ void test_negative_transverter_offset_and_invalid_frequency() {
          "actual RF is converted back through a negative transverter offset");
   expect(!resolve_dial_frequency(116'000'000, 116'000'000),
          "inverse offset rejects a zero dial frequency");
-  expect(!resolve_dial_frequency(
-             std::numeric_limits<std::uint64_t>::max(), -1),
+  expect(!resolve_dial_frequency(std::numeric_limits<std::uint64_t>::max(), -1),
          "inverse offset rejects unsigned overflow");
-  expect(resolve_dial_frequency(
-             1, std::numeric_limits<std::int64_t>::min()) ==
-             std::optional<std::uint64_t>(9'223'372'036'854'775'809ULL) &&
-             resolve_dial_frequency(
-                 9'223'372'036'854'775'808ULL,
-                 std::numeric_limits<std::int64_t>::max()) ==
+  expect(resolve_dial_frequency(1, std::numeric_limits<std::int64_t>::min()) ==
+                 std::optional<std::uint64_t>(9'223'372'036'854'775'809ULL) &&
+             resolve_dial_frequency(9'223'372'036'854'775'808ULL,
+                                    std::numeric_limits<std::int64_t>::max()) ==
                  std::optional<std::uint64_t>(1),
          "inverse offset handles both signed limits without overflow");
   expect(parse_frequency_value("14040.49", 1'000) ==
-             std::optional<std::uint64_t>(14'040'490) &&
+                 std::optional<std::uint64_t>(14'040'490) &&
              parse_frequency_value(" 7010,5 ", 1'000) ==
                  std::optional<std::uint64_t>(7'010'500) &&
              parse_frequency_value("1", 1'000) ==
@@ -2572,7 +2560,8 @@ void test_negative_transverter_offset_and_invalid_frequency() {
              !parse_frequency_value("0", 1'000) &&
              !parse_frequency_value("14 MHz", 1'000) &&
              !parse_frequency_value("14.1", 60),
-         "operator kHz entry rejects grouping, excessive precision, zero, and units");
+         "operator kHz entry rejects grouping, excessive precision, zero, and "
+         "units");
 
   using Target = OmniRigRxFrequencyTarget;
   expect(select_omnirig_rx_frequency_target(true, true, 0x04, 0x80) ==
@@ -2597,12 +2586,11 @@ void test_negative_transverter_offset_and_invalid_frequency() {
                  Target::None &&
              select_omnirig_rx_frequency_target(true, true, 0, 0x80) ==
                  Target::None,
-         "OmniRig uses generic Freq only when writable and blocks offline, TX, and read-only states");
+         "OmniRig uses generic Freq only when writable and blocks offline, TX, "
+         "and read-only states");
 
-  const auto first_step = step_rx_frequency(14'040'000, std::nullopt,
-                                            1'000, 1);
-  const auto second_step = step_rx_frequency(14'040'000, first_step,
-                                             1'000, 1);
+  const auto first_step = step_rx_frequency(14'040'000, std::nullopt, 1'000, 1);
+  const auto second_step = step_rx_frequency(14'040'000, first_step, 1'000, 1);
   expect(first_step == std::optional<std::uint64_t>(14'041'000) &&
              second_step == std::optional<std::uint64_t>(14'042'000),
          "accepted RX steps accumulate while provider readback is pending");
@@ -2616,19 +2604,21 @@ void test_band_selected_station_equipment_adif() {
   const std::vector<StationEquipmentRule> rules{
       {
           .bands = {"6M", "10M", "12M", "15M", "17M", "20M"},
-          .equipment = {
-              .radio = "Yaesu FT-450D",
-              .transverter = {},
-              .antenna = "Dipole",
-          },
+          .equipment =
+              {
+                  .radio = "Yaesu FT-450D",
+                  .transverter = {},
+                  .antenna = "Dipole",
+              },
       },
       {
           .bands = {"13CM"},
-          .equipment = {
-              .radio = "Microwave IF radio",
-              .transverter = "DXPatrol Transverter",
-              .antenna = "Offset parabolic dish",
-          },
+          .equipment =
+              {
+                  .radio = "Microwave IF radio",
+                  .transverter = "DXPatrol Transverter",
+                  .antenna = "Offset parabolic dish",
+              },
       },
   };
   const ResolvedFrequencies hf{
@@ -2652,8 +2642,7 @@ void test_band_selected_station_equipment_adif() {
   expect(qso.station_rig ==
              "TX: Microwave IF radio + DXPatrol Transverter; RX: Yaesu FT-450D",
          "different TX/RX radio chains are explicit");
-  expect(qso.station_antenna ==
-             "TX: Offset parabolic dish; RX: Dipole",
+  expect(qso.station_antenna == "TX: Offset parabolic dish; RX: Dipole",
          "different TX/RX antennas are explicit");
   const auto adif = to_adif(qso);
   expect(adif.find("<MY_RIG:") != std::string::npos &&
@@ -2663,6 +2652,16 @@ void test_band_selected_station_equipment_adif() {
 
 void test_reference_rig_profiles() {
   using namespace cwassistant::core;
+  expect(kSupportedSerialBaudRates ==
+             std::array<std::uint32_t, 8>{1'200, 2'400, 4'800, 9'600, 19'200,
+                                          38'400, 57'600, 115'200},
+         "direct serial CAT exposes only conventional supported baud rates");
+  expect(is_supported_serial_baud_rate(57'600) &&
+             !is_supported_serial_baud_rate(57'601),
+         "serial baud validation rejects one-unit arbitrary values");
+  expect(nearest_supported_serial_baud_rate(57'601) == 57'600 &&
+             nearest_supported_serial_baud_rate(200'000) == 115'200,
+         "legacy arbitrary baud values migrate to the nearest supported rate");
   const auto profiles = reference_rig_profiles();
   expect(profiles.size() == 2, "two Yaesu reference profiles are available");
 
@@ -2730,8 +2729,7 @@ void test_cat4om_protocol_contract() {
   split.split = true;
   const auto split_plan = cat4om_frequency_plan(split);
   expect(split_plan && split_plan->rx_dial_hz == 14'025'000 &&
-             split_plan->tx_dial_hz == 7'010'000 &&
-             split_plan->split_enabled,
+             split_plan->tx_dial_hz == 7'010'000 && split_plan->split_enabled,
          "CAT4OM split state preserves independent opaque VFO names");
   const auto split_radio = cat4om_radio_state(split, true);
   expect(split_radio.tx_frequency.hz == 7'010'000 &&
@@ -2766,12 +2764,13 @@ void test_decoder_display_setting_invariance() {
     const auto count = static_cast<std::size_t>(seconds * sample_rate);
     for (std::size_t index = 0; index < count; ++index) {
       noise_state = noise_state * 1'103'515'245U + 12'345U;
-      const float noise = 0.002F * (static_cast<float>(
-          (noise_state >> 16U) & 0x7FFFU) / 16'384.0F - 1.0F);
+      const float noise =
+          0.002F *
+          (static_cast<float>((noise_state >> 16U) & 0x7FFFU) / 16'384.0F -
+           1.0F);
       phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
-      audio.push_back(keyed
-          ? 0.20F * static_cast<float>(std::sin(phase)) + noise
-          : noise);
+      audio.push_back(
+          keyed ? 0.20F * static_cast<float>(std::sin(phase)) + noise : noise);
     }
   };
   const auto send = [&](const std::string_view elements) {
@@ -2783,9 +2782,9 @@ void test_decoder_display_setting_invariance() {
   };
   emit(0.3, false);
   for (int repeat = 0; repeat < 6; ++repeat) {
-    send("...");    // S
-    send("---");    // O
-    send("...");    // S
+    send("...");  // S
+    send("---");  // O
+    send("...");  // S
     emit(4.0 * dot_seconds, false);
   }
 
@@ -2794,12 +2793,11 @@ void test_decoder_display_setting_invariance() {
     std::size_t published{0};
     std::uint64_t verified{0};
   };
-  const auto replay = [&](const int averaging_frames,
-                          const int frame_rate_hz) {
-    SpectrumAnalyzer analyzer({
-        .averaging_frames = static_cast<std::uint8_t>(averaging_frames),
-        .frame_rate_hz = static_cast<std::uint16_t>(frame_rate_hz),
-        .audio_upper_frequency_hz = 3'000.0});
+  const auto replay = [&](const int averaging_frames, const int frame_rate_hz) {
+    SpectrumAnalyzer analyzer(
+        {.averaging_frames = static_cast<std::uint8_t>(averaging_frames),
+         .frame_rate_hz = static_cast<std::uint16_t>(frame_rate_hz),
+         .audio_upper_frequency_hz = 3'000.0});
     CwChannelBank bank;
     RealtimeSampleBlock block;
     block.stream.sample_rate_hz = sample_rate;
@@ -2808,8 +2806,8 @@ void test_decoder_display_setting_invariance() {
     std::size_t position = 0;
     std::uint64_t now = 0;
     while (position < audio.size()) {
-      const std::size_t take = std::min<std::size_t>(1'024,
-                                                     audio.size() - position);
+      const std::size_t take =
+          std::min<std::size_t>(1'024, audio.size() - position);
       block.sample_count = take;
       block.timestamp_ns = now;
       for (std::size_t index = 0; index < take; ++index)
@@ -2819,8 +2817,7 @@ void test_decoder_display_setting_invariance() {
         // smoothing so display averaging cannot reach it.
         static_cast<void>(bank.updateSpectrum(
             snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-            snapshot.upper_frequency_hz,
-            snapshot.instantaneous_bins_dbfs));
+            snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
       }
       for (const auto& channel : bank.processSamples(block)) {
         if (std::find(ids.begin(), ids.end(), channel.id) == ids.end())
@@ -2829,8 +2826,8 @@ void test_decoder_display_setting_invariance() {
           outcome.text = channel.text;
       }
       position += take;
-      now += static_cast<std::uint64_t>(
-          static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
+      now += static_cast<std::uint64_t>(static_cast<long double>(take) *
+                                        1'000'000'000.0L / sample_rate);
     }
     outcome.published = ids.size();
     outcome.verified = bank.verificationDiagnostics().verified_transitions;
@@ -2876,7 +2873,7 @@ void test_soft_decision_keying_evidence() {
   // the transient is the only thing either estimate ever sees -- that failure
   // is total, and the decoder emits nothing at all.
   const auto decode = [&](const double dot_seconds,
-                         const float noise_amplitude) {
+                          const float noise_amplitude) {
     std::vector<float> audio;
     audio.reserve(static_cast<std::size_t>(sample_rate * 12.0));
     double phase = 0.0;
@@ -2885,12 +2882,14 @@ void test_soft_decision_keying_evidence() {
       const auto count = static_cast<std::size_t>(seconds * sample_rate);
       for (std::size_t index = 0; index < count; ++index) {
         noise_state = noise_state * 1'103'515'245U + 12'345U;
-        const float noise = noise_amplitude * (static_cast<float>(
-            (noise_state >> 16U) & 0x7FFFU) / 16'384.0F - 1.0F);
+        const float noise =
+            noise_amplitude *
+            (static_cast<float>((noise_state >> 16U) & 0x7FFFU) / 16'384.0F -
+             1.0F);
         phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
-        audio.push_back(keyed
-            ? 0.20F * static_cast<float>(std::sin(phase)) + noise
-            : noise);
+        audio.push_back(keyed ? 0.20F * static_cast<float>(std::sin(phase)) +
+                                    noise
+                              : noise);
       }
     };
     const auto send = [&](const std::string_view elements) {
@@ -2902,9 +2901,9 @@ void test_soft_decision_keying_evidence() {
     };
     emit(0.3, false);
     for (int repeat = 0; repeat < 8; ++repeat) {
-      send("...");    // S
-      send("---");    // O
-      send("...");    // S
+      send("...");  // S
+      send("---");  // O
+      send("...");  // S
       emit(4.0 * dot_seconds, false);
     }
 
@@ -2916,8 +2915,8 @@ void test_soft_decision_keying_evidence() {
     std::size_t position = 0;
     std::uint64_t now = 0;
     while (position < audio.size()) {
-      const std::size_t take = std::min<std::size_t>(1'024,
-                                                     audio.size() - position);
+      const std::size_t take =
+          std::min<std::size_t>(1'024, audio.size() - position);
       block.sample_count = take;
       block.timestamp_ns = now;
       for (std::size_t index = 0; index < take; ++index)
@@ -2925,20 +2924,19 @@ void test_soft_decision_keying_evidence() {
       for (const auto& snapshot : analyzer.process(block)) {
         static_cast<void>(bank.updateSpectrum(
             snapshot.timestamp_ns, snapshot.lower_frequency_hz,
-            snapshot.upper_frequency_hz,
-            snapshot.instantaneous_bins_dbfs));
+            snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs));
       }
       for (const auto& channel : bank.processSamples(block)) {
         if (!channel.text.empty()) text = channel.text;
       }
       position += take;
-      now += static_cast<std::uint64_t>(
-          static_cast<long double>(take) * 1'000'000'000.0L / sample_rate);
+      now += static_cast<std::uint64_t>(static_cast<long double>(take) *
+                                        1'000'000'000.0L / sample_rate);
     }
     return text;
   };
 
-  const std::string clean = decode(0.06, 0.0F);   // 20 WPM, no noise
+  const std::string clean = decode(0.06, 0.0F);  // 20 WPM, no noise
   expect(clean.find("SOS") != std::string::npos,
          "a perfectly keyed signal carrying no noise decodes");
 

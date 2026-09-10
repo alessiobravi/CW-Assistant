@@ -25,12 +25,14 @@ cwassistant::core::RadioState writable_radio() {
       .rx_vfo = {RadioObservation::Known, "VFO-A"},
       .tx_vfo = {RadioObservation::Known, "VFO-B"},
       .split = {RadioObservation::Known, RadioSplit::Enabled},
-      .capabilities = {
-          RadioObservation::Known,
-          RadioCapability::SetRxFrequency | RadioCapability::SetTxFrequency |
-              RadioCapability::SetRxMode | RadioCapability::SetTxMode |
-              RadioCapability::SelectRxVfo |
-              RadioCapability::SelectTxVfo | RadioCapability::SetSplit},
+      .capabilities = {RadioObservation::Known,
+                       RadioCapability::SetRxFrequency |
+                           RadioCapability::SetTxFrequency |
+                           RadioCapability::SetRxMode |
+                           RadioCapability::SetTxMode |
+                           RadioCapability::SelectRxVfo |
+                           RadioCapability::SelectTxVfo |
+                           RadioCapability::SetSplit},
   };
 }
 
@@ -48,9 +50,9 @@ void test_complete_state_and_capabilities() {
              state.tx_vfo.identifier == "VFO-B" &&
              state.split.split == RadioSplit::Enabled,
          "VFO and split state retain authoritative values");
-  expect(radio_has_capability(state.capabilities,
-                              RadioCapability::SetTxFrequency),
-         "known advertised capability is available");
+  expect(
+      radio_has_capability(state.capabilities, RadioCapability::SetTxFrequency),
+      "known advertised capability is available");
   expect(!radio_has_capability({RadioObservation::Unknown, 0U},
                                RadioCapability::SetTxFrequency),
          "unknown capability state never grants a command");
@@ -75,15 +77,14 @@ void test_tx_mode_target_is_separate_from_provider_observation() {
              !radio_tx_mode_target_is_valid(RadioMode::UpperSideband) &&
              !radio_tx_mode_target_is_valid(RadioMode::Unknown),
          "operator TX targets are restricted to CW and CW-R");
-  expect(radio_mode_target_is_confirmed(
-             {RadioObservation::Known, RadioMode::Cw}, RadioMode::Cw) &&
-             !radio_mode_target_is_confirmed(
-                 {RadioObservation::Known, RadioMode::CwReverse},
-                 RadioMode::Cw) &&
-             !radio_mode_target_is_confirmed(
-                 {RadioObservation::Unknown, RadioMode::Unknown},
-                 RadioMode::Cw),
-         "only matching known provider readback confirms an operator target");
+  expect(
+      radio_mode_target_is_confirmed({RadioObservation::Known, RadioMode::Cw},
+                                     RadioMode::Cw) &&
+          !radio_mode_target_is_confirmed(
+              {RadioObservation::Known, RadioMode::CwReverse}, RadioMode::Cw) &&
+          !radio_mode_target_is_confirmed(
+              {RadioObservation::Unknown, RadioMode::Unknown}, RadioMode::Cw),
+      "only matching known provider readback confirms an operator target");
 }
 
 void test_frequency_sync_requires_observed_rx_and_provider_capability() {
@@ -95,8 +96,7 @@ void test_frequency_sync_requires_observed_rx_and_provider_capability() {
   state.split = {RadioObservation::Known, RadioSplit::Disabled};
   expect(radio_tx_frequency_sync_is_available(state),
          "simplex radio can synchronize when it can enable split");
-  state.capabilities.bits &=
-      ~radio_capability_bit(RadioCapability::SetSplit);
+  state.capabilities.bits &= ~radio_capability_bit(RadioCapability::SetSplit);
   expect(!radio_tx_frequency_sync_is_available(state),
          "simplex radio cannot synchronize without split control");
 
@@ -109,6 +109,15 @@ void test_frequency_sync_requires_observed_rx_and_provider_capability() {
       ~radio_capability_bit(RadioCapability::SetTxFrequency);
   expect(!radio_tx_frequency_sync_is_available(state),
          "provider without TX-frequency capability cannot synchronize");
+
+  state = writable_radio();
+  state.rx_frequency = {RadioObservation::Unknown, 0U};
+  expect(radio_pointed_tx_frequency_is_available(state),
+         "pointed absolute RF does not require an unrelated RX readback");
+  state.split = {RadioObservation::Known, RadioSplit::Disabled};
+  state.capabilities.bits &= ~radio_capability_bit(RadioCapability::SetSplit);
+  expect(!radio_pointed_tx_frequency_is_available(state),
+         "pointed TX selection cannot create split without provider support");
 }
 
 void test_unknown_and_unavailable_are_not_fabricated() {
@@ -131,7 +140,8 @@ void test_unknown_and_unavailable_are_not_fabricated() {
   state.tx_vfo.observation = RadioObservation::Unavailable;
   state.split.observation = RadioObservation::Unavailable;
   state.capabilities.observation = RadioObservation::Unavailable;
-  expect(radio_state_is_valid(state), "unavailable state is explicit and valid");
+  expect(radio_state_is_valid(state),
+         "unavailable state is explicit and valid");
   expect(validate_radio_command(state, SetSplit{false}) ==
              RadioCommandValidation::RadioUnavailable,
          "unavailable radio rejects even a simplex request");
@@ -192,7 +202,7 @@ void test_every_command_and_capability() {
   auto read_only = state;
   read_only.capabilities.bits = 0U;
   expect(validate_radio_command(read_only, SetRxFrequency{7'030'000U}) ==
-             RadioCommandValidation::Unsupported &&
+                 RadioCommandValidation::Unsupported &&
              validate_radio_command(read_only, SetTxMode{RadioMode::Cw}) ==
                  RadioCommandValidation::Unsupported &&
              validate_radio_command(read_only, SetSplit{true}) ==

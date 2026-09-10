@@ -163,6 +163,11 @@ opens a detected stream, right-click creates a neutral manual probe, and
 capability-gated Ctrl+left-click requests the pointed exact RF on VFO B/TX
 through the configured provider, enabling split when needed. Provider readback
 remains authoritative and the gesture never arms or starts transmission.
+In a direct-SDR view, Shift+left-drag previews and applies a 6–96 kHz decoder
+window directly on the plot; a short Shift+click recentres the existing width.
+The selection changes only the bounded receive/DSP region and never tunes TX.
+Zoom reset uses the explicit **Full span** button so a double-click cannot also
+trigger normal stream selection.
 Action buttons in the receiver, settings, setup, and profile views also expose
 contextual hover help, including why an action is disabled where applicable.
 
@@ -485,9 +490,9 @@ rewrites, or corrects decoded characters.
   positively identifies as online. The initial Windows implementation reads
   the two OmniRig slots. It never treats a COM-port name as a radio model and
   does not issue speculative CAT commands.
-- **Manual radio template:** exposes the supplied reference templates only when
-  the operator deliberately chooses manual setup. All resulting serial values
-  remain editable.
+- **Manual radio template:** loads known safe starting metadata when the
+  operator deliberately chooses manual setup. The chosen frequency provider
+  still determines which connection fields are shown.
 
 Use **Refresh detection** after starting or reconfiguring the frequency service.
 An installed but disabled, busy, unresponsive, or unconfigured radio is not
@@ -538,9 +543,21 @@ been observed remains `?`; CW Buddy never copies the other VFO's mode into it.
 
 ### Serial CAT values
 
-The port, baud rate, data bits, parity, stop bits, RTS flow-control mode,
-polling interval, and timeout are configurable. These values apply to a direct
-serial provider; CAT4OM owns its physical radio connection on the server.
+CW Buddy does not duplicate connection settings owned elsewhere:
+
+- OmniRig's native setup owns its COM port, baud, data bits, parity, stop bits,
+  and polling behavior. CW Buddy selects only OmniRig slot 1 or 2.
+- `rigctld` owns its physical radio and serial connection. CW Buddy selects only
+  the loopback host/port, RX/TX VFO mapping, and whether writes are allowed.
+- CAT4OM owns its physical radio connection. CW Buddy selects only its Control
+  URL and radio identity.
+
+The retained direct-serial profile schema is reserved for an implemented
+in-process direct-CAT provider. Its UI must offer only 1200, 2400, 4800, 9600,
+19200, 38400, 57600, and 115200 baud—not an arbitrary numeric step—and explicit
+data-bit, parity, stop-bit, and flow-control selections. Until that provider is
+implemented, these nonfunctional fields are deliberately absent from Settings
+and the first-run wizard.
 
 ### Split and offsets
 
@@ -610,6 +627,9 @@ minimum power first.
 - **Spectrum averaging:** applies exponential power averaging in DSP from 1 to
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
+- **Show brief spectrum gesture hints:** enables the compact pointer legend for
+  at most ten seconds, with a five-minute cooldown before it can appear again.
+  Disabling it leaves ordinary button tooltips available.
 - **Lower/upper dB:** manual bounds; at least 10 dB of span is enforced.
 - **Decoded signal timeout:** from 5 to 300 seconds, default 30. Controls how
   long a verified track's marker and session stay visible after its signal

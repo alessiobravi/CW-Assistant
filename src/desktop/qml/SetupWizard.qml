@@ -29,6 +29,19 @@ Dialog {
             root.step--
     }
 
+    function frequencyProviderSummary() {
+        if (!appSettings.radioEnabled)
+            return "Frequency control: skipped in SWL mode"
+        if (appSettings.frequencyBackendIndex === 0)
+            return "Frequency control: OmniRig slot " + appSettings.omniRigSlot
+        if (appSettings.frequencyBackendIndex === 1)
+            return "Frequency control: rigctld " + appSettings.hamlibHost + ":" + appSettings.hamlibPort
+        return "Frequency control: CAT4OM "
+                + (appSettings.cat4omRadioId.length > 0
+                   ? "radio " + appSettings.cat4omRadioId
+                   : appSettings.cat4omUrl)
+    }
+
     footer: Rectangle {
         implicitHeight: footerLayout.implicitHeight + 24
         color: "#151b23"
@@ -233,7 +246,20 @@ Dialog {
                 Label { text: "Frequency provider" }
                 ComboBox { Layout.fillWidth: true; model: ["OmniRig (Windows)", "Hamlib", "CAT4OM network service"]; currentIndex: appSettings.frequencyBackendIndex; onActivated: appSettings.frequencyBackendIndex = currentIndex }
                 Label { text: "OmniRig slot"; visible: appSettings.frequencyBackendIndex === 0 }
-                SpinBox { visible: appSettings.frequencyBackendIndex === 0; from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: appSettings.frequencyBackendIndex === 0
+                    SpinBox { from: 1; to: 2; value: appSettings.omniRigSlot; onValueModified: appSettings.omniRigSlot = value }
+                    Button {
+                        text: "Configure OmniRig"
+                        enabled: appSettings.omniRigAvailable
+                        onClicked: appSettings.showOmniRigConfiguration()
+                        ToolTip.visible: hovered
+                        ToolTip.text: enabled
+                            ? "Open OmniRig to configure its radio model, COM port, baud rate, parity, and stop bits"
+                            : "OmniRig is not available on this system"
+                    }
+                }
                 Label { text: "Hamlib rigctld endpoint"; visible: appSettings.frequencyBackendIndex === 1 }
                 RowLayout {
                     Layout.fillWidth: true
@@ -253,18 +279,6 @@ Dialog {
                 TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omUrl; placeholderText: "ws://127.0.0.1:5001/"; onEditingFinished: appSettings.cat4omUrl = text }
                 Label { text: "CAT4OM radio ID"; visible: appSettings.frequencyBackendIndex === 2 }
                 TextField { Layout.fillWidth: true; visible: appSettings.frequencyBackendIndex === 2; text: appSettings.cat4omRadioId; placeholderText: "Optional"; onEditingFinished: appSettings.cat4omRadioId = text }
-                Label { text: "CAT COM port" }
-                ComboBox { Layout.fillWidth: true; editable: true; model: appSettings.serialPorts; currentIndex: find(appSettings.catPort); displayText: currentIndex >= 0 ? currentText : appSettings.catPort; onActivated: appSettings.catPort = currentText; onAccepted: appSettings.catPort = editText }
-                Label { text: "Baud rate" }
-                SpinBox { editable: true; from: 300; to: 1000000; value: appSettings.catBaudRate; onValueModified: appSettings.catBaudRate = value }
-                Label { text: "Framing" }
-                RowLayout {
-                    ComboBox { model: [5, 6, 7, 8]; currentIndex: appSettings.catDataBits - 5; onActivated: appSettings.catDataBits = currentValue }
-                    ComboBox { model: ["None", "Even", "Odd"]; currentIndex: appSettings.catParityIndex; onActivated: appSettings.catParityIndex = currentIndex }
-                    ComboBox { model: [1, 2]; currentIndex: appSettings.catStopBits - 1; onActivated: appSettings.catStopBits = currentValue }
-                }
-                Label { text: "RTS mode" }
-                ComboBox { model: ["Low / none", "Handshake"]; currentIndex: appSettings.catFlowControlIndex; onActivated: appSettings.catFlowControlIndex = currentIndex }
                 Label { text: "Split" }
                 CheckBox { text: "Independent TX frequency"; checked: appSettings.splitEnabled; onToggled: appSettings.splitEnabled = checked }
                 Label { text: "RX transverter offset (Hz)" }
@@ -279,20 +293,15 @@ Dialog {
                     onActivated: appSettings.cwToneSidebandIndex = currentIndex
                 }
                 Label { text: "" }
-                RowLayout {
-                    Button {
-                        text: "Refresh ports"; onClicked: appSettings.refreshSerialPorts()
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Rescan serial-port names without opening or probing them"
-                    }
-                    Button {
-                        text: "Configure OmniRig"; enabled: appSettings.omniRigAvailable
-                        onClicked: appSettings.showOmniRigConfiguration()
-                        ToolTip.visible: hovered
-                        ToolTip.text: enabled
-                            ? "Open the native OmniRig configuration dialog"
-                            : "OmniRig is not available on this system"
-                    }
+                Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    color: "#91a0b1"
+                    text: appSettings.frequencyBackendIndex === 0
+                          ? "OmniRig owns its COM port and serial framing; configure those values in OmniRig."
+                          : appSettings.frequencyBackendIndex === 1
+                            ? "rigctld owns its radio connection and serial framing; CW Buddy needs only this loopback endpoint and VFO mapping."
+                            : "CAT4OM owns its radio connection and serial framing; CW Buddy needs only its Control service identity."
                 }
             }
 
@@ -399,7 +408,7 @@ Dialog {
                 Label { text: "Profile: " + appSettings.profileName }
                 Label { text: "Audio input: " + appSettings.audioInputDisplayName }
                 Label { text: "Radio: " + appSettings.radioDisplayName }
-                Label { text: appSettings.radioEnabled ? "CAT: " + (appSettings.catPort || "not selected") + " • " + appSettings.catBaudRate + " baud" : "CAT: skipped in SWL mode" }
+                Label { text: root.frequencyProviderSummary() }
                 Label { text: appSettings.radioEnabled ? "Direct key/PTT: " + (appSettings.keyingPort || "not selected") : "Direct key/PTT: disabled in SWL mode" }
                 Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; color: "#f3bd55"; text: "Finishing saves configuration only. It does not open ports, arm the transmitter, or send a test signal." }
                 Item { Layout.fillHeight: true }

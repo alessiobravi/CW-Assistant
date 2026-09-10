@@ -40,16 +40,16 @@ bool readSource(const char* path, std::string& contents) {
 // own fixed-time smoothing internally.
 bool feedsDetectorUnaveragedBins(const std::string& source) {
   return contains(source, "snapshot.instantaneous_bins_dbfs") &&
-         !contains(source,
-                   "snapshot.upper_frequency_hz, snapshot.bins_dbfs))");
+         !contains(source, "snapshot.upper_frequency_hz, snapshot.bins_dbfs))");
 }
 
 // Only a change to the audio actually presented to the detector may discard
 // decoder state. Averaging and the display line rate must not.
 bool resetsOnlyOnSignalPathChange(const std::string& source) {
   return contains(source, "const bool signal_path_changed =") &&
-         contains(source, "config.audio_lower_frequency_hz != "
-                          "previous.audio_lower_frequency_hz") &&
+         contains(source,
+                  "config.audio_lower_frequency_hz != "
+                  "previous.audio_lower_frequency_hz") &&
          contains(source, "if (signal_path_changed)") &&
          !contains(source,
                    "static_cast<void>(analyzer_.configure(config));\n"
@@ -64,8 +64,8 @@ bool resetsOnlyOnSignalPathChange(const std::string& source) {
 bool openingDecoderDoesNotStartMonitoring(const std::string& source) {
   const auto begin = source.find(
       "void ReplayController::openDecoderSession(const qulonglong channel_id)");
-  const auto end = source.find(
-      "void ReplayController::openManualDecoderSession", begin);
+  const auto end =
+      source.find("void ReplayController::openManualDecoderSession", begin);
   if (begin == std::string::npos || end == std::string::npos || end <= begin) {
     return false;
   }
@@ -74,6 +74,18 @@ bool openingDecoderDoesNotStartMonitoring(const std::string& source) {
          !contains(method, "monitor_mode_") &&
          !contains(method, "monitored_channel_ids_") &&
          !contains(method, "publishMonitorConfiguration");
+}
+
+bool defersManualSelectionUntilSdrSpectrumIsReady(const std::string& source) {
+  return contains(source,
+                  "pending_manual_frequency_hz_ = audio_frequency_hz;") &&
+         contains(source, "pending_manual_frequency_hz_.has_value() &&") &&
+         contains(source, "!decoder_snapshots.empty()") &&
+         contains(source,
+                  "decoder_.selectFrequency(*pending_manual_frequency_hz_)") &&
+         contains(
+             source,
+             "emit manualDecoderSelected(static_cast<qulonglong>(channel_id))");
 }
 
 }  // namespace
@@ -93,6 +105,7 @@ int main() {
   if (!resetsOnlyOnSignalPathChange(live_worker)) return 6;
   if (!resetsOnlyOnSignalPathChange(replay_controller)) return 7;
   if (!openingDecoderDoesNotStartMonitoring(replay_controller)) return 8;
+  if (!defersManualSelectionUntilSdrSpectrumIsReady(live_worker)) return 9;
 
   return 0;
 }
