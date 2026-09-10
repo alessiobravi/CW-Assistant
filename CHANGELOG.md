@@ -90,6 +90,9 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The Windows COM implementation now keeps the Windows SDK umbrella header
+  ahead of `OleAuto.h`, preventing MSVC syntax failures after include sorting.
+
 - Recentring the live-SDR decoder window no longer drops the immediately
   following manual-probe request while the channelizer is resetting. The
   request is retained until the first spectrum from the new IQ slice establishes

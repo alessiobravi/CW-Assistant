@@ -16,8 +16,12 @@
 #include <utility>
 
 #ifdef Q_OS_WIN
-#include <OleAuto.h>
+// Windows.h defines the COM declarations consumed by OleAuto.h. Keep this
+// order explicit: including OleAuto.h first breaks current MSVC Windows SDKs.
+// clang-format off
 #include <Windows.h>
+#include <OleAuto.h>
+// clang-format on
 #endif
 
 #include "../radio/cat4om_client.hpp"

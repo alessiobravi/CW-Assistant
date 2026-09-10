@@ -82,6 +82,13 @@ int main() {
                     "property = omni_rig_frequency_property(*vfo, true)",
                     "OmniRig TX writes need a live-VFO fallback") &&
            passed;
+  const auto windows_header = implementation.find("#include <Windows.h>");
+  const auto ole_header = implementation.find("#include <OleAuto.h>");
+  if (windows_header == std::string::npos || ole_header == std::string::npos ||
+      windows_header >= ole_header) {
+    std::cerr << "Windows.h must precede OleAuto.h for MSVC COM declarations\n";
+    passed = false;
+  }
 
   return passed ? 0 : 1;
 }
