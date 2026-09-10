@@ -29,11 +29,11 @@ flowchart TB
   subgraph ADP["adapters"]
     A1["Qt Multimedia input / WAV replay"]
     A2["SoapySDR input / SigMF IQ recording"]
-    A3["receiver directory and KiwiSDR WebSocket source"]
-    A4["remote control, event and Opus receive-media transports"]
-    A5["Hamlib CAT"]
+    A3["receiver directory and KiwiSDR WebSocket source (planned)"]
+    A4["remote control and event transports (planned)"]
+    A5["CAT over rigctld"]
     A6["serial RTS/DTR keying"]
-    A7["Log4OM UDP ADIF"]
+    A7["Log4OM UDP ADIF (planned)"]
   end
   UI --> SVC --> CORE
   ADP --> CORE
@@ -57,22 +57,29 @@ flowchart TB
   RING --> DSP["DSP dispatcher"]
   DSP -->|"FFT frame"| SNAP["UI snapshot ring"] --> RENDER["render thread"]
   DSP --> TRACK["detector / tracker"]
-  DSP --> WORK["bounded work queue"] --> POOL["fixed worker pool"]
-  POOL -->|"per-channel state"| EVQ["decoded event queue"] --> APP["application / QSO thread"]
+  DSP -->|"per-channel state, in line"| EVQ["decoded event queue"] --> APP["application / QSO thread"]
 ```
 
 Audio arrives on the capture callback in fixed blocks and is pushed into a
 bounded single-producer single-consumer ring, whose overflow counter is
 reported to diagnostics rather than blocking the callback. The DSP dispatcher
 drains it, publishing FFT frames to a snapshot ring for the render thread,
-driving the detector and tracker, and handing per-channel work to a fixed
-worker pool through a bounded queue. Decoded events reach the application and
-QSO thread through a further queue.
+driving the detector and tracker, and decoding every tracked channel in line on
+that same thread. Decoded events reach the application and QSO thread through a
+further queue.
 
-There is one capture callback per active source, one dispatcher per receiver,
-and a bounded worker pool. A tracked frequency is a state object, not a thread.
-Tasks for the same channel are serialized and carry monotonically increasing
-sample sequence numbers. Different channels may execute concurrently.
+There is one capture callback per active source and one DSP worker per
+receiver. A tracked frequency is a state object, not a thread. Work for every
+channel is serialized on the DSP thread and carries monotonically increasing
+sample sequence numbers, so channels do not presently execute concurrently.
+Threads are a small fixed set created by name -- capture, DSP, replay, the
+optional character inference worker, and transmit -- rather than a pool.
+
+A bounded work queue feeding a fixed worker pool, which would let independent
+channels run in parallel, remains the intended evolution rather than something
+delivered; it is tracked under `PERF-002`. The boundaries above are already
+shaped for it, since per-channel state is owned by the channel object and
+carries its own sequence numbers.
 
 The direct-SDR adapter uses the same ring and DSP worker. A SoapySDR capture
 worker owns one receive-only CF32 channel, reads back the actual center
