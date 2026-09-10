@@ -195,6 +195,16 @@ target_link_libraries(cwa_receiver_holdout_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_receiver_holdout_benchmark
   COMMAND cwa_receiver_holdout_benchmark)
 
+# Word-boundary placement is the only thing the context vocabulary can change,
+# and neither the synthetic surface nor the capture corpus can see it: the
+# surface never reaches the rescorer and the corpus scores callsign recovery.
+add_executable(cwa_spacing_benchmark cw_spacing_benchmark.cpp)
+target_link_libraries(cwa_spacing_benchmark PRIVATE cwa_core)
+target_compile_definitions(cwa_spacing_benchmark PRIVATE
+  CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")
+add_test(NAME cwa_spacing_benchmark COMMAND cwa_spacing_benchmark)
+set_tests_properties(cwa_spacing_benchmark PROPERTIES TIMEOUT 600)
+
 add_executable(cwa_verification_benchmark cw_verification_benchmark.cpp)
 target_link_libraries(cwa_verification_benchmark PRIVATE cwa_core)
 add_test(NAME cwa_verification_benchmark COMMAND cwa_verification_benchmark)

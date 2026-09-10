@@ -6,7 +6,27 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-sixth entry) -- the CW exchange vocabulary is
+Last reviewed: 2026-09-10 (thirty-seventh entry) -- spacing is measurable. The
+previous entry recorded that no instrument could see the context vocabulary at
+all; `cwa_spacing_benchmark` now scores word-boundary placement directly, on
+scenes whose character and word gaps are pushed together until a threshold
+cannot separate them. Paired on identical samples, the vocabulary lifts boundary
+recall from 0.429 to 0.582 at the hard setting and from 0.958 to 1.000 at the
+milder one, while asserting exactly as many spurious boundaries as the empty
+vocabulary does at both. That last figure is the one that matters, and it is now
+a gate: the benchmark fails if the vocabulary stops earning boundaries, starts
+inventing them, or changes a character.
+
+Two findings came out of building it. The context rescorer runs only in
+`completeTransmission`, so it shapes a completed turn and never the running
+text an operator watches live -- worth deciding whether that is intended. And a
+turn becomes semantic only once the decoder observes the next transmission
+begin, so a scene that ends in silence never closes its last turn and never
+reaches the rescorer at all; the benchmark carries a short second transmission
+for that reason. The corpus and surface figures are unchanged, as expected,
+since neither reaches this path.
+
+Previous review: 2026-09-10 (thirty-sixth entry) -- the CW exchange vocabulary is
 data. It was thirteen tokens in a `constexpr` array; it is now eighty-two in
 `dictionaries/`, loaded at startup, seeded into the operator's data directory so
 it can be edited and survive an upgrade. The `PSEK` special case is gone, having

@@ -8,6 +8,23 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Word-boundary placement is measured. Neither existing instrument could see
+  it: the synthetic surface is byte-identical with and without the context
+  vocabulary because it never reaches the rescorer, and the capture corpus
+  scores callsign recovery rather than spacing. A new benchmark generates
+  contacts whose character and word gaps are deliberately pushed together --
+  the measured shape of a real fist, and the one distinction a duration
+  threshold cannot settle -- decodes each scene twice from identical samples
+  with the vocabulary loaded and cleared, and scores only those decodes whose
+  characters already match, so a lettering error is never counted as a
+  spacing one. With gaps pushed to within a fifth of each other the
+  vocabulary raises boundary recall from 0.429 to 0.582 and F1 from 0.574 to
+  0.707, and at the milder setting from 0.958 to 1.000. It asserts no extra
+  boundaries at either setting, which is the property that matters: the count
+  of spurious boundaries is identical in both arms. The benchmark fails if
+  the vocabulary ever stops recovering boundaries, starts inventing them, or
+  changes a decoded character.
+
 - The CW vocabulary the decoder recognises is operator-editable text rather
   than a list compiled into the application, and it has grown from thirteen
   tokens to eighty-two: the Q-codes an operator actually sends, signal
