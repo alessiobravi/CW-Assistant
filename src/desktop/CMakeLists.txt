@@ -111,6 +111,21 @@ qt_add_resources(cw-buddy-desktop "cwa_application_icons"
   PREFIX "/icons"
   FILES packaging/cw-buddy.png packaging/on-air-active.png)
 
+# The CW dictionaries ship inside the binary so the decoder always has them,
+# and are copied to the operator's data directory on first run so they can be
+# edited there. The copy wins at startup when it exists.
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt" PROPERTIES
+  QT_RESOURCE_ALIAS cw-abbreviations.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt" PROPERTIES
+  QT_RESOURCE_ALIAS cw-word-gap-prefixes.txt)
+qt_add_resources(cw-buddy-desktop "cwa_cw_dictionaries"
+  PREFIX "/dictionaries"
+  FILES
+    "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt")
+
 if(WIN32)
   configure_file(packaging/cw-buddy.rc.in
     "${CMAKE_CURRENT_BINARY_DIR}/cw-buddy.rc" @ONLY)

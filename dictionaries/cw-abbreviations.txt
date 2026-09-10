@@ -1,0 +1,104 @@
+# CW exchange vocabulary
+#
+# Abbreviations, Q-codes and prosigns an operator sends verbatim. The decoder
+# consults this list only to choose between readings that carry exactly the
+# same characters, so an entry here can move a word boundary and can never
+# change a decoded letter. Adding a token that is not real CW therefore costs
+# accuracy in spacing, never correctness in text.
+#
+# One token per line. Blank lines and lines starting with '#' are ignored.
+# Letters, digits and '/' only; case is not significant. Longer tokens carry
+# more weight than short ones, because a single letter falls out of almost any
+# spacing by chance while a three-character Q-code does not.
+#
+# Edit freely: this file is read at startup and never compiled in.
+
+# --- Calling, acknowledging and closing ---
+CQ
+DE
+QRZ
+TEST
+K
+KN
+AR
+SK
+BK
+AS
+R
+TU
+TNX
+TKS
+PSE
+UP
+DN
+73
+88
+
+# --- Signal report, and the contest contraction of it ---
+RST
+599
+5NN
+579
+559
+339
+459
+
+# --- Q-codes an operator actually sends in a contact ---
+QRA
+QRL
+QRM
+QRN
+QRO
+QRP
+QRQ
+QRS
+QRT
+QRU
+QRV
+QRX
+QSB
+QSK
+QSL
+QSO
+QSY
+QST
+QTH
+
+# --- Greetings and the ordinary vocabulary of a ragchew ---
+GM
+GA
+GE
+GN
+GB
+GL
+FB
+HR
+ES
+OM
+YL
+XYL
+OP
+NR
+ANT
+RIG
+PWR
+WX
+AGN
+ABT
+BTU
+CUL
+HW
+HPE
+NW
+SRI
+VY
+NIL
+DX
+CFM
+RPT
+WPM
+MSG
+SIG
+SIGS
+RX
+TX

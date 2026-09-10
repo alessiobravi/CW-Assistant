@@ -17,6 +17,8 @@
 #include "cwassistant/core/cat4om_protocol.hpp"
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include <sstream>
+#include "cwassistant/core/cw_vocabulary.hpp"
 #include "cwassistant/core/cw_context_rescorer.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/cw_transmit_encoder.hpp"
@@ -2084,7 +2086,37 @@ void test_callsign_policy() {
       "an exact refined-only callsign remains usable");
 }
 
+namespace {
+
+// Loads the dictionaries the application ships. Returns false if either file
+// is missing or empty, which is itself a failure worth reporting: the decoder
+// has no compiled-in fallback and would silently lose all spacing evidence.
+bool loadShippedDictionaries() {
+  const auto read = [](const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+  };
+  const std::string directory = CWA_DICTIONARY_DIR;
+  auto& vocabulary = cwassistant::core::cwSharedVocabulary();
+  vocabulary.clear();
+  const auto words = vocabulary.importExchangeWords(
+      read(directory + "/cw-abbreviations.txt"));
+  const auto prefixes = vocabulary.importWordGapPrefixes(
+      read(directory + "/cw-word-gap-prefixes.txt"));
+  return words.inserted_tokens > 0 && words.ignored_lines == 0 &&
+      prefixes.inserted_tokens > 0 && prefixes.ignored_lines == 0 &&
+      prefixes.duplicate_tokens == 0;
+}
+
+}  // namespace
+
 void test_cw_context_rescorer() {
+  expect(loadShippedDictionaries(),
+         "the shipped CW dictionaries load without a rejected line");
+  expect(cwassistant::core::cwSharedVocabulary().exchangeWordCount() >= 60U,
+         "the shipped abbreviation dictionary carries the expected vocabulary");
   using cwassistant::core::CwContextAlternative;
   using cwassistant::core::selectCwContextAlternative;
   const std::array alternatives{

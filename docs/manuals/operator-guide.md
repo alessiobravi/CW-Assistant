@@ -675,7 +675,27 @@ appears in the header with a **MODEL** badge. Model output cannot create a
 carrier, keep silence active, replace raw text, or initiate transmission.
 
 Treat `?` as retained acoustic uncertainty, not as a character that a directory
-has disproved. Settings → Decoder can use an operator-selected offline
+has disproved.
+
+### The CW vocabulary the decoder reads
+
+The abbreviations, Q-codes and prosigns the decoder recognises are plain text
+files you can edit, not a fixed list inside the application. On first run they
+are written to `dictionaries/` inside the application data directory; from then
+on your copies are the ones loaded at startup, so an edit survives an upgrade.
+`cw-abbreviations.txt` holds the vocabulary itself, one token per line, with
+blank lines and lines beginning with `#` ignored. `cw-word-gap-prefixes.txt`
+holds the smaller set that may run straight into a callsign, which is what turns
+a run-together `CQDE` reading into `CQ DE`; every entry there must also appear in
+the abbreviations file.
+
+These lists only ever choose between readings that carry exactly the same
+characters, so adding a token can move a word boundary and can never change a
+decoded letter. Adding something that is not real CW therefore costs you
+accuracy in spacing rather than correctness in text. A longer token counts for
+more than a short one, because a single letter falls out of almost any spacing
+by chance while a three-character Q-code does not. If the files are missing or
+empty the decoder simply works from timing alone. Settings → Decoder can use an operator-selected offline
 `master.scp`/Call History file or an optional managed `MASTER.SCP` copy
 downloaded directly from the Super Check Partial (SCP) Database. Managed use
 and automatic checking are independently switchable. Automatic checks run at

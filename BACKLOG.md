@@ -6,7 +6,37 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-fifth entry) -- zoom on the wide SDR display
+Last reviewed: 2026-09-10 (thirty-sixth entry) -- the CW exchange vocabulary is
+data. It was thirteen tokens in a `constexpr` array; it is now eighty-two in
+`dictionaries/`, loaded at startup, seeded into the operator's data directory so
+it can be edited and survive an upgrade. The `PSEK` special case is gone, having
+been replaced by decomposition against the vocabulary itself. Matching is
+weighted by token length, without which a vocabulary this size lets a chance
+one-letter match outvote a Q-code -- the first attempt at that weighting scaled
+by internal gaps pinned, which demoted `CQ` and `DE`, and the existing tests
+caught it on a case that was winning by 0.02.
+
+The measurement gap is the finding worth acting on. The synthetic surface is
+byte-identical across all three seed sets before and after, because it never
+exercises the context rescorer at all; the capture corpus is unchanged at 8 of 9
+because it scores callsign recovery, not spacing. Neither instrument can see
+this class of change, and spacing is where the literature and the receiver
+captures both say the remaining error lives. A spacing metric is the next slice
+and gates the rest of the vocabulary work.
+
+An audit of compiled-in domain data found the Morse alphabet in three places --
+`cw_event_lattice.cpp`, `cw_decoder.cpp`, and `cw_transmit_encoder.cpp` -- with
+the transmit copy already carrying a different character set from the two
+receive copies, plus a fourth copy of the punctuation set in `transmit_guard.cpp`
+that must agree with the encoder or a legal character is refused without saying
+so. Whether the transmit set is deliberately narrower is the question to settle
+first. Three further vocabularies duplicate what `CwVocabulary` now serves
+(`callsign_policy.cpp` glued prefixes and its inlined prosigns,
+`cw_channel_bank.cpp` verification tokens), and the contest profiles remain
+compiled in although their schema already carries the revision and validity
+fields external data would need.
+
+Previous review: 2026-09-10 (thirty-fifth entry) -- zoom on the wide SDR display
 was released broken and is fixed. Preserving a zoom across a retune was gated on
 the receiver's bounds having moved, and the same condition was then used to
 decide whether to rebuild the view at all, so every ordinary frame took the

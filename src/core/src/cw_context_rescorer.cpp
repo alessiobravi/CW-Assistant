@@ -9,14 +9,27 @@
 #include <vector>
 
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_vocabulary.hpp"
 
 namespace cwassistant::core {
 namespace {
 
-double contextBonus(const std::string_view text) {
-  static constexpr std::array<std::string_view, 13> kExchangeWords{
-      "CQ", "DE", "QRZ", "PSE", "K", "KN", "AR", "SK", "TU",
-      "UP", "RST", "599", "5NN"};
+// Weight a match by how unlikely it is to appear by chance. A single letter
+// falls out of almost any spacing of almost any text, so `K` or `R` matching
+// says little; a three-character Q-code is far more specific, and a longer one
+// more specific still. Two characters is the established reference weight and
+// keeps its value, because the two-letter tokens here -- `CQ`, `DE`, `TU` --
+// are the most diagnostic markers in a contact rather than the least. Scoring
+// every token alike is what made this unsafe to extend: with the vocabulary
+// grown past eighty entries, incidental one-letter matches would otherwise
+// outvote a genuine Q-code.
+double exchangeWordWeight(const std::string_view token) noexcept {
+  if (token.size() <= 1U) return 0.30;
+  return 1.0 + 0.30 * (static_cast<double>(token.size()) - 2.0);
+}
+
+double contextBonus(const std::string_view text,
+                    const CwVocabulary& vocabulary) {
   std::vector<std::string> words;
   std::string word;
   std::size_t unknowns = 0;
@@ -40,8 +53,8 @@ double contextBonus(const std::string_view text) {
 
   double bonus = 0.0;
   for (const auto& token : words) {
-    if (std::ranges::find(kExchangeWords, token) != kExchangeWords.end()) {
-      bonus += 1.0;
+    if (vocabulary.containsExchangeWord(token)) {
+      bonus += exchangeWordWeight(token);
     }
   }
   std::string completed(text);
@@ -64,9 +77,8 @@ bool plausibleCall(const std::string_view token) {
 }
 
 std::vector<std::string> splitLeadingExchangeWords(
-    const std::string_view token) {
-  static constexpr std::array<std::string_view, 4> kPrefixes{
-      "QRZ", "CQ", "DE", "TU"};
+    const std::string_view token, const CwVocabulary& vocabulary) {
+  const auto& kPrefixes = vocabulary.wordGapPrefixes();
   std::vector<std::string> best;
   const auto search = [&](auto&& self, const std::string_view remaining,
                           std::vector<std::string> prefix) -> void {
@@ -75,7 +87,7 @@ std::vector<std::string> splitLeadingExchangeWords(
       best = std::move(prefix);
       return;
     }
-    for (const auto known : kPrefixes) {
+    for (const std::string_view known : kPrefixes) {
       if (remaining.size() <= known.size() ||
           !remaining.starts_with(known)) {
         continue;
@@ -87,6 +99,32 @@ std::vector<std::string> splitLeadingExchangeWords(
   };
   search(search, token, {});
   return best;
+}
+
+// "PSEK" is PSE followed by K, and neither half is a callsign, so the
+// callsign-anchored split above cannot see it. Decompose a glued token into
+// known exchange words instead of naming that one case in code. Longest match
+// first, the whole token must be consumed, and only the final part may be a
+// single letter -- without that guard a run of one-letter tokens would shatter
+// any word that happened to contain them.
+std::vector<std::string> splitIntoExchangeWords(
+    const std::string_view token, const CwVocabulary& vocabulary) {
+  std::vector<std::string> parts;
+  std::size_t offset = 0;
+  while (offset < token.size()) {
+    std::size_t matched = 0;
+    for (std::size_t length = token.size() - offset; length >= 1U; --length) {
+      const auto candidate = token.substr(offset, length);
+      if (!vocabulary.containsExchangeWord(candidate)) continue;
+      if (length == 1U && offset + length < token.size()) continue;
+      matched = length;
+      break;
+    }
+    if (matched == 0) return {};
+    parts.emplace_back(token.substr(offset, matched));
+    offset += matched;
+  }
+  return parts.size() >= 2U ? parts : std::vector<std::string>{};
 }
 
 std::string charactersWithoutWhitespace(const std::string_view text) {
@@ -103,7 +141,7 @@ std::string charactersWithoutWhitespace(const std::string_view text) {
 
 CwContextSelection selectCwContextAlternative(
     const std::span<const CwContextAlternative> alternatives,
-    const double competitive_cost_margin) {
+    const double competitive_cost_margin, const CwVocabulary& vocabulary) {
   if (alternatives.empty()) return {};
   const double margin = std::clamp(
       std::isfinite(competitive_cost_margin) ? competitive_cost_margin : 1.0,
@@ -126,7 +164,7 @@ CwContextSelection selectCwContextAlternative(
   CwContextSelection result{.index = acoustic_best_index,
                             .acoustic_cost = best_acoustic,
                             .context_bonus = contextBonus(
-                                acoustic_best->text)};
+                                acoustic_best->text, vocabulary)};
   // At most three quarters of one acoustic cost unit may be recovered through
   // context. That is enough to choose a credible missing word gap inside the
   // lattice's competitive set, but never enough to conceal materially worse
@@ -147,7 +185,7 @@ CwContextSelection selectCwContextAlternative(
         charactersWithoutWhitespace(candidate.text) != acoustic_characters) {
       continue;
     }
-    const double bonus = contextBonus(candidate.text);
+    const double bonus = contextBonus(candidate.text, vocabulary);
     const double adjusted = adjusted_cost(candidate, bonus);
     if (adjusted + 1e-9 < best_adjusted) {
       result = {.index = index,
@@ -159,7 +197,8 @@ CwContextSelection selectCwContextAlternative(
   return result;
 }
 
-std::string reconstructCwWordGaps(const std::string_view text) {
+std::string reconstructCwWordGaps(const std::string_view text,
+                                  const CwVocabulary& vocabulary) {
   std::string output;
   std::string token;
   const auto append_word = [&output](const std::string_view word) {
@@ -172,12 +211,12 @@ std::string reconstructCwWordGaps(const std::string_view text) {
     upper.reserve(token.size());
     for (const unsigned char character : token)
       upper.push_back(static_cast<char>(std::toupper(character)));
-    if (upper == "PSEK") {
-      append_word("PSE");
-      append_word("K");
-    } else if (const auto split = splitLeadingExchangeWords(upper);
-               split.size() > 1U) {
+    if (const auto split = splitLeadingExchangeWords(upper, vocabulary);
+        split.size() > 1U) {
       for (const auto& word : split) append_word(word);
+    } else if (const auto words = splitIntoExchangeWords(upper, vocabulary);
+               !words.empty()) {
+      for (const auto& word : words) append_word(word);
     } else {
       append_word(token);
     }

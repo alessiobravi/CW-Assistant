@@ -9,6 +9,10 @@
 #include <QQuickWindow>
 #include <QSettings>
 #include <QStandardPaths>
+#include "cwassistant/core/cw_vocabulary.hpp"
+#include <array>
+#include <QFile>
+#include <QDir>
 #include <QTimer>
 #include <qqml.h>
 
@@ -58,6 +62,54 @@ int run_sdr_backend_smoke() {
 
 }  // namespace
 
+namespace {
+
+// Seeds the operator's dictionary directory from the copies inside the binary
+// on first run, then loads it. The operator's files win when present so an
+// edited vocabulary survives an upgrade; the built-in copies are the fallback
+// and guarantee the decoder is never left with no vocabulary at all. Returns
+// the number of exchange words available.
+std::size_t loadCwDictionaries(const QString& app_data_path) {
+  static constexpr std::array<const char*, 2> kFiles{
+      "cw-abbreviations.txt", "cw-word-gap-prefixes.txt"};
+  const QDir directory(app_data_path + QStringLiteral("/dictionaries"));
+  QDir().mkpath(directory.absolutePath());
+
+  const auto read = [&directory](const char* name) {
+    const QString editable = directory.filePath(QString::fromLatin1(name));
+    QFile file(editable);
+    if (!file.exists()) {
+      QFile bundled(QStringLiteral(":/dictionaries/") +
+                    QString::fromLatin1(name));
+      if (bundled.open(QIODevice::ReadOnly)) {
+        const QByteArray contents = bundled.readAll();
+        // Seed the editable copy, but never fail the load if the directory is
+        // read-only: the bundled contents are already in hand.
+        if (file.open(QIODevice::WriteOnly)) file.write(contents);
+        file.close();
+        return contents;
+      }
+      return QByteArray{};
+    }
+    if (!file.open(QIODevice::ReadOnly)) return QByteArray{};
+    return file.readAll();
+  };
+
+  auto& vocabulary = cwassistant::core::cwSharedVocabulary();
+  vocabulary.clear();
+  const QByteArray words = read(kFiles[0]);
+  const QByteArray prefixes = read(kFiles[1]);
+  static_cast<void>(vocabulary.importExchangeWords(
+      std::string_view(words.constData(),
+                       static_cast<std::size_t>(words.size()))));
+  static_cast<void>(vocabulary.importWordGapPrefixes(
+      std::string_view(prefixes.constData(),
+                       static_cast<std::size_t>(prefixes.size()))));
+  return vocabulary.exchangeWordCount();
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
   if (sdr_backend_smoke_requested(argc, argv)) {
     QCoreApplication application(argc, argv);
@@ -86,6 +138,7 @@ int main(int argc, char* argv[]) {
   static_cast<void>(cwassistant::desktop::migrateLegacyProductState(
       legacy_settings, current_settings, legacy_app_data_path,
       current_app_data_path));
+  static_cast<void>(loadCwDictionaries(current_app_data_path));
   QCoreApplication::setApplicationVersion(QStringLiteral(CWA_VERSION));
   application.setWindowIcon(QIcon(QStringLiteral(":/icons/cw-buddy.png")));
   cwassistant::desktop::configureBundledSoapyRuntime(

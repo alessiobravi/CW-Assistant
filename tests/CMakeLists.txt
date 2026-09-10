@@ -1,5 +1,10 @@
 add_executable(cwa_core_tests core_tests.cpp)
 target_link_libraries(cwa_core_tests PRIVATE cwa_core)
+# The shipped dictionaries are data the decoder depends on, so the tests read
+# the real files rather than a private copy: a token removed from them, or a
+# prefix that stops being an exchange word, fails here.
+target_compile_definitions(cwa_core_tests PRIVATE
+  CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")
 add_test(NAME cwa_core_tests COMMAND cwa_core_tests)
 
 add_executable(cwa_iq_receive_tests iq_receive_tests.cpp)
@@ -199,3 +204,5 @@ add_test(NAME cwa_verification_benchmark COMMAND cwa_verification_benchmark)
 # without making external capture files a test-suite dependency.
 add_executable(cwa_capture_replay cw_capture_replay.cpp)
 target_link_libraries(cwa_capture_replay PRIVATE cwa_core)
+target_compile_definitions(cwa_capture_replay PRIVATE
+  CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")

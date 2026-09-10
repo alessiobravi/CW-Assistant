@@ -651,6 +651,23 @@ minimum power first.
 - **Spectrum averaging:** applies exponential power averaging in DSP from 1 to
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
+
+## CW vocabulary files
+
+Read at startup from `dictionaries/` in the application data directory, and
+seeded there from copies carried inside the application the first time it runs.
+
+| File | Contents |
+| --- | --- |
+| `cw-abbreviations.txt` | Abbreviations, Q-codes, prosigns and signal reports the decoder recognises. One token per line; letters, digits and `/` only; case is not significant. |
+| `cw-word-gap-prefixes.txt` | The subset that may precede a callsign with no gap. Each entry must also appear in the abbreviations file, or it is refused at load. |
+
+Blank lines and lines beginning with `#` are ignored. A line carrying any other
+character is rejected whole rather than trimmed, so a malformed entry never
+scores matches its author did not write. Membership is consulted only to choose
+between readings with identical characters, so these files cannot change a
+decoded letter. An absent or empty file is valid and contributes no spacing
+evidence.
 - **Show brief spectrum gesture hints:** enables the compact pointer legend for
   at most ten seconds, with a five-minute cooldown before it can appear again.
   Disabling it leaves ordinary button tooltips available.

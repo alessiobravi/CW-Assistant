@@ -1,0 +1,17 @@
+# Tokens that may run straight into a callsign
+#
+# Word-gap repair uses these to separate a glued reading such as "CQDESV7BIO"
+# into "CQ DE SV7BIO". A prefix is only ever split off when what remains is
+# independently a plausible callsign, so a token here cannot split an ordinary
+# word on its own.
+#
+# Every entry must also appear in cw-abbreviations.txt; one that does not is
+# refused at load, because word-gap repair would otherwise split on a string
+# the scorer does not recognise.
+
+CQ
+DE
+TU
+QRZ
+TEST
+QSL

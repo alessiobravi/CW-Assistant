@@ -5,6 +5,8 @@
 #include <string>
 #include <string_view>
 
+#include "cwassistant/core/cw_vocabulary.hpp"
+
 namespace cwassistant::core {
 
 struct CwContextAlternative {
@@ -23,11 +25,14 @@ struct CwContextSelection {
 // the acoustic lattice rejected or change any decoded character.
 [[nodiscard]] CwContextSelection selectCwContextAlternative(
     std::span<const CwContextAlternative> alternatives,
-    double competitive_cost_margin = 1.0);
+    double competitive_cost_margin = 1.0,
+    const CwVocabulary& vocabulary = cwSharedVocabulary());
 
 // Reconstructs only a small set of missing boundaries around standard CW
 // exchange words and an independently plausible callsign. Characters and
 // punctuation are never inserted, removed, or substituted.
-[[nodiscard]] std::string reconstructCwWordGaps(std::string_view text);
+[[nodiscard]] std::string reconstructCwWordGaps(
+    std::string_view text,
+    const CwVocabulary& vocabulary = cwSharedVocabulary());
 
 }  // namespace cwassistant::core

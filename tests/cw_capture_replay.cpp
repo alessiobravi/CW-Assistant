@@ -12,6 +12,8 @@
 #include <vector>
 
 #include "cwassistant/core/cw_channel_bank.hpp"
+#include <sstream>
+#include "cwassistant/core/cw_vocabulary.hpp"
 #include "cwassistant/core/spectrum_analyzer.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "support/decoder_evaluation.hpp"
@@ -515,7 +517,31 @@ int replay(
 
 }  // namespace
 
+namespace {
+
+// The replay tool decodes with the same vocabulary the application loads, so a
+// before/after audit measures the shipped dictionaries rather than an empty
+// one. Without this the context rescorer would contribute nothing here.
+void loadShippedDictionaries() {
+  const auto read = [](const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+  };
+  const std::string directory = CWA_DICTIONARY_DIR;
+  auto& vocabulary = cwassistant::core::cwSharedVocabulary();
+  vocabulary.clear();
+  static_cast<void>(vocabulary.importExchangeWords(
+      read(directory + "/cw-abbreviations.txt")));
+  static_cast<void>(vocabulary.importWordGapPrefixes(
+      read(directory + "/cw-word-gap-prefixes.txt")));
+}
+
+}  // namespace
+
 int main(const int argc, char** argv) {
+  loadShippedDictionaries();
   if (argc < 2) {
     std::cerr << "usage: cwa_capture_replay [--annotations sidecar.tsv] "
                  "<audio.wav> [audio.wav ...]\n";

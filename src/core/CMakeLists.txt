@@ -9,6 +9,7 @@ add_library(cwa_core
   src/cw_character_lane_frontend.cpp
   src/cw_channel_bank.cpp
   src/cw_context_rescorer.cpp
+  src/cw_vocabulary.cpp
   src/cw_decoder.cpp
   src/cw_event_lattice.cpp
   src/cw_probabilistic_decoder.cpp

@@ -8,6 +8,23 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The CW vocabulary the decoder recognises is operator-editable text rather
+  than a list compiled into the application, and it has grown from thirteen
+  tokens to eighty-two: the Q-codes an operator actually sends, signal
+  reports and their contest contractions, the closing prosigns, and the
+  ordinary vocabulary of a ragchew. The files are carried inside the binary,
+  written to the application data directory on first run, and the operator's
+  copies are preferred at startup thereafter, so an edit survives an upgrade.
+  Nothing is left compiled in, including the one glued token that used to be
+  named in code: a run-together reading is now decomposed against the
+  vocabulary itself, so a token added to the file needs no code to support
+  it. Matching is weighted by length, because a single letter falls out of
+  almost any spacing by chance while a three-character Q-code does not, and
+  without that weighting a vocabulary this size would let incidental
+  one-letter matches outvote a genuine Q-code. These lists only choose
+  between readings carrying identical characters, so a token can move a word
+  boundary and can never change a decoded letter.
+
 - Zoom on the wide SDR display was discarded by the next spectrum frame. The
   view was rebuilt from the frame bounds unless the zoom was being carried
   across a retune, but carrying it is by definition a response to the source
