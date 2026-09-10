@@ -1,0 +1,77 @@
+# Morse alphabet
+#
+# The element pattern the decoder recognises, and the symbol it produces.
+# One entry per line: the dots and dashes, whitespace, then the symbol.
+# Blank lines and lines beginning with # are ignored.
+#
+# This is the only copy. It is carried inside the application so it is always
+# present, and a copy is written to the dictionaries directory in application
+# data on first run so it can be extended -- accented letters and additional
+# prosigns are the usual reason. A symbol may be more than one character, which
+# is how prosigns such as <SK> are represented.
+#
+# Receive only. What may be transmitted is fixed in code and deliberately
+# narrower: <SOS> is decoded here so an operator can read a distress call, and
+# is not in the transmit alphabet so this application cannot send one.
+
+# --- letters ---
+.-         A
+-...       B
+-.-.       C
+-..        D
+.          E
+..-.       F
+--.        G
+....       H
+..         I
+.---       J
+-.-        K
+.-..       L
+--         M
+-.         N
+---        O
+.--.       P
+--.-       Q
+.-.        R
+...        S
+-          T
+..-        U
+...-       V
+.--        W
+-..-       X
+-.--       Y
+--..       Z
+
+# --- digits ---
+-----      0
+.----      1
+..---      2
+...--      3
+....-      4
+.....      5
+-....      6
+--...      7
+---..      8
+----.      9
+
+# --- punctuation and prosigns ---
+.-.-.-     .
+--..--     ,
+..--..     ?
+.----.     '
+-.-.--     !
+-..-.      /
+-.--.      (
+-.--.-     )
+.-...      &
+---...     :
+-.-.-.     ;
+-...-      =
+.-.-.      +
+-....-     -
+..--.-     _
+.-..-.     "
+...-..-    $
+.--.-.     @
+...-.-     <SK>
+...---...  <SOS>

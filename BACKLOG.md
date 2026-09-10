@@ -6,7 +6,30 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-10 (thirty-seventh entry) -- spacing is measurable. The
+Last reviewed: 2026-09-10 (thirty-eighth entry) -- the Morse alphabet is one
+copy and it is data. It was two byte-identical tables in `cw_decoder.cpp` and
+`cw_event_lattice.cpp`; both now read `dictionaries/morse-alphabet.txt`, which
+is bundled and extensible for accented characters and unnamed prosigns. Because
+an empty alphabet decodes nothing at all, unlike an empty vocabulary, the shared
+instance falls back to `CWA_DICTIONARY_DIR` and every test directory sets it in
+one loop rather than each target remembering.
+
+The audit's claim that the transmit table had drifted does not survive contact
+with it. `<SOS>` is absent from transmit deliberately -- a distress call must be
+readable without being sendable -- and `<SK>` cannot exist in a `char` keyed
+table at all, so the two are different shapes rather than the same table drifted
+apart. The transmit punctuation set and `transmit_guard.cpp` already agree
+exactly. The transmit alphabet therefore stays in the application: a transmit
+constraint must not live in a file an operator can edit.
+
+One pre-existing fragility surfaced. With no dictionary the suite reports ten
+clear failures and then crashes, because `core_tests.cpp` dereferences
+`front()` on an empty container immediately after the expectation that catches
+the failure; `core_tests.cpp:1005` is the first instance. The library
+itself returns an empty symbol and the decoder an unknown character, both
+correctly. Worth hardening the test's post-failure dereferences.
+
+Previous review: 2026-09-10 (thirty-seventh entry) -- spacing is measurable. The
 previous entry recorded that no instrument could see the context vocabulary at
 all; `cwa_spacing_benchmark` now scores word-boundary placement directly, on
 scenes whose character and word gaps are pushed together until a threshold

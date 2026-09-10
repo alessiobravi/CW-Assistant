@@ -8,6 +8,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The Morse alphabet existed twice, as two verbatim copies in separate
+  translation units, which is exactly the arrangement that drifts without
+  anyone noticing. There is now one copy and it is data: `morse-alphabet.txt`
+  alongside the other dictionaries, carried inside the application and
+  extensible in the operator's data directory, so an accented letter or an
+  unnamed prosign no longer needs a rebuild. Unlike the exchange vocabulary
+  an empty alphabet is not a graceful degradation but a decoder that reads
+  nothing, so the shared instance recovers by reading the directory named by
+  `CWA_DICTIONARY_DIR` rather than letting a caller that forgot to load it
+  fail quietly. The transmit alphabet is unchanged and stays in the
+  application: it is narrower on purpose, since `<SOS>` must be readable
+  without being sendable, and a transmit constraint does not belong in a file
+  an operator can edit.
+
 - Word-boundary placement is measured. Neither existing instrument could see
   it: the synthetic surface is byte-identical with and without the context
   vocabulary because it never reaches the rescorer, and the capture corpus

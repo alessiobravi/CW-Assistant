@@ -689,6 +689,13 @@ holds the smaller set that may run straight into a callsign, which is what turns
 a run-together `CQDE` reading into `CQ DE`; every entry there must also appear in
 the abbreviations file.
 
+`morse-alphabet.txt` in the same directory holds the alphabet itself: the
+element pattern on the left, the symbol it produces on the right. Extend it if
+you work stations sending accented letters or a prosign the decoder does not yet
+name. It is read only for receiving; what the application may transmit is fixed
+and deliberately narrower, so adding `<SOS>` there lets you read a distress call
+and still does not let this application send one.
+
 These lists only ever choose between readings that carry exactly the same
 characters, so adding a token can move a word boundary and can never change a
 decoded letter. Adding something that is not real CW therefore costs you

@@ -18,6 +18,7 @@
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include <sstream>
+#include "cwassistant/core/cw_morse_alphabet.hpp"
 #include "cwassistant/core/cw_vocabulary.hpp"
 #include "cwassistant/core/cw_context_rescorer.hpp"
 #include "cwassistant/core/cw_decoder.hpp"
@@ -2112,6 +2113,34 @@ bool loadShippedDictionaries() {
 
 }  // namespace
 
+void test_cw_morse_alphabet() {
+  // The alphabet has no compiled-in fallback, so an empty one decodes nothing
+  // at all. Assert it is present and complete rather than discovering that as
+  // a wall of unknown symbols in some unrelated benchmark.
+  const auto& alphabet = cwassistant::core::cwSharedMorseAlphabet();
+  expect(alphabet.size() >= 56U,
+         "the shipped Morse alphabet loads every symbol");
+  expect(alphabet.symbolFor(".-") == "A" && alphabet.symbolFor("-...") == "B",
+         "the alphabet maps letters");
+  expect(alphabet.symbolFor("-----") == "0" && alphabet.symbolFor(".....") == "5",
+         "the alphabet maps digits");
+  expect(alphabet.symbolFor("...-.-") == "<SK>",
+         "the alphabet maps a multi-character prosign");
+  expect(alphabet.symbolFor("...---...") == "<SOS>",
+         "a distress call can be read even though it cannot be sent");
+  expect(alphabet.symbolFor(".-.-.-.-.-").empty(),
+         "an unknown element pattern has no symbol");
+
+  cwassistant::core::CwMorseAlphabet parsed;
+  const auto result = parsed.importText(
+      "# comment\n\n.-  A\n-... B\n.- DUPLICATE\nxyz Q\n..-\n");
+  expect(result.inserted_symbols == 2U && result.duplicate_codes == 1U &&
+             result.ignored_lines == 2U,
+         "the alphabet parser counts duplicates and rejects malformed lines");
+  expect(parsed.symbolFor(".-") == "A",
+         "a duplicate code does not overwrite the first symbol");
+}
+
 void test_cw_context_rescorer() {
   expect(loadShippedDictionaries(),
          "the shipped CW dictionaries load without a rejected line");
@@ -2997,6 +3026,7 @@ int main() {
   test_soft_decision_keying_evidence();
   test_callsign_policy();
   test_callsign_policy_prosign_glue();
+  test_cw_morse_alphabet();
   test_cw_context_rescorer();
   test_presented_speed_requires_evidence();
   test_spectrum_settings();

@@ -1,4 +1,5 @@
 #include "cwassistant/core/cw_decoder.hpp"
+#include "cwassistant/core/cw_morse_alphabet.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -15,27 +16,10 @@ namespace cwassistant::core {
 namespace {
 
 std::string_view decode_elements(const std::string_view value) {
-  struct Entry { std::string_view code; std::string_view symbol; };
-  static constexpr Entry table[]{
-      {".-", "A"}, {"-...", "B"}, {"-.-.", "C"}, {"-..", "D"},
-      {".", "E"}, {"..-.", "F"}, {"--.", "G"}, {"....", "H"},
-      {"..", "I"}, {".---", "J"}, {"-.-", "K"}, {".-..", "L"},
-      {"--", "M"}, {"-.", "N"}, {"---", "O"}, {".--.", "P"},
-      {"--.-", "Q"}, {".-.", "R"}, {"...", "S"}, {"-", "T"},
-      {"..-", "U"}, {"...-", "V"}, {".--", "W"}, {"-..-", "X"},
-      {"-.--", "Y"}, {"--..", "Z"}, {"-----", "0"}, {".----", "1"},
-      {"..---", "2"}, {"...--", "3"}, {"....-", "4"}, {".....", "5"},
-      {"-....", "6"}, {"--...", "7"}, {"---..", "8"}, {"----.", "9"},
-      {".-.-.-", "."}, {"--..--", ","}, {"..--..", "?"},
-      {".----.", "'"}, {"-.-.--", "!"}, {"-..-.", "/"},
-      {"-.--.", "("}, {"-.--.-", ")"}, {".-...", "&"},
-      {"---...", ":"}, {"-.-.-.", ";"}, {"-...-", "="},
-      {".-.-.", "+"}, {"-....-", "-"}, {"..--.-", "_"},
-      {".-..-.", "\""}, {"...-..-", "$"}, {".--.-.", "@"},
-      {"...-.-", "<SK>"}, {"...---...", "<SOS>"},
-  };
-  for (const auto& entry : table) if (entry.code == value) return entry.symbol;
-  return "?";
+  // The alphabet is data, loaded once at startup; see cw_morse_alphabet.hpp.
+  // An unknown pattern is retained uncertainty, not a guess.
+  const auto symbol = cwSharedMorseAlphabet().symbolFor(value);
+  return symbol.empty() ? std::string_view{"?"} : symbol;
 }
 
 double milliseconds(const std::uint64_t value) {

@@ -661,6 +661,12 @@ seeded there from copies carried inside the application the first time it runs.
 | --- | --- |
 | `cw-abbreviations.txt` | Abbreviations, Q-codes, prosigns and signal reports the decoder recognises. One token per line; letters, digits and `/` only; case is not significant. |
 | `cw-word-gap-prefixes.txt` | The subset that may precede a callsign with no gap. Each entry must also appear in the abbreviations file, or it is refused at load. |
+| `morse-alphabet.txt` | The element pattern the decoder recognises and the symbol it produces. One entry per line: dots and dashes, whitespace, then the symbol. A symbol may be several characters, which is how prosigns such as `<SK>` are represented. |
+
+The alphabet is receive-only. What may be transmitted is fixed in the
+application and is deliberately narrower: `<SOS>` is decoded so that a distress
+call can be read, and is absent from the transmit alphabet so this application
+cannot send one. Editing `morse-alphabet.txt` cannot change that.
 
 Blank lines and lines beginning with `#` are ignored. A line carrying any other
 character is rejected whole rather than trimmed, so a malformed entry never

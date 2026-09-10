@@ -9,6 +9,7 @@
 #include <QQuickWindow>
 #include <QSettings>
 #include <QStandardPaths>
+#include "cwassistant/core/cw_morse_alphabet.hpp"
 #include "cwassistant/core/cw_vocabulary.hpp"
 #include <array>
 #include <QFile>
@@ -70,8 +71,9 @@ namespace {
 // and guarantee the decoder is never left with no vocabulary at all. Returns
 // the number of exchange words available.
 std::size_t loadCwDictionaries(const QString& app_data_path) {
-  static constexpr std::array<const char*, 2> kFiles{
-      "cw-abbreviations.txt", "cw-word-gap-prefixes.txt"};
+  static constexpr std::array<const char*, 3> kFiles{
+      "cw-abbreviations.txt", "cw-word-gap-prefixes.txt",
+      "morse-alphabet.txt"};
   const QDir directory(app_data_path + QStringLiteral("/dictionaries"));
   QDir().mkpath(directory.absolutePath());
 
@@ -105,6 +107,16 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   static_cast<void>(vocabulary.importWordGapPrefixes(
       std::string_view(prefixes.constData(),
                        static_cast<std::size_t>(prefixes.size()))));
+
+  // The alphabet has no compiled-in fallback: without it the decoder returns
+  // an unknown symbol for every character, so this is loaded explicitly here
+  // rather than left to the shared instance's environment-variable recovery.
+  const QByteArray alphabet = read(kFiles[2]);
+  auto& morse = cwassistant::core::cwMutableSharedMorseAlphabet();
+  morse.clear();
+  static_cast<void>(morse.importText(
+      std::string_view(alphabet.constData(),
+                       static_cast<std::size_t>(alphabet.size()))));
   return vocabulary.exchangeWordCount();
 }
 

@@ -120,11 +120,15 @@ set_source_files_properties(
 set_source_files_properties(
   "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt" PROPERTIES
   QT_RESOURCE_ALIAS cw-word-gap-prefixes.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt" PROPERTIES
+  QT_RESOURCE_ALIAS morse-alphabet.txt)
 qt_add_resources(cw-buddy-desktop "cwa_cw_dictionaries"
   PREFIX "/dictionaries"
   FILES
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt"
-    "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt")
+    "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt")
 
 if(WIN32)
   configure_file(packaging/cw-buddy.rc.in
@@ -523,4 +527,14 @@ if(MSVC)
   target_compile_options(cw-buddy-desktop PRIVATE /W4 /permissive-)
 else()
   target_compile_options(cw-buddy-desktop PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Same reasoning as tests/CMakeLists.txt: the Morse alphabet has no compiled-in
+# fallback, so every desktop test is pointed at the shipped dictionaries.
+if(CWA_BUILD_TESTS)
+  get_property(cwa_desktop_tests DIRECTORY PROPERTY TESTS)
+  foreach(cwa_test IN LISTS cwa_desktop_tests)
+    set_property(TEST ${cwa_test} APPEND PROPERTY ENVIRONMENT
+      "CWA_DICTIONARY_DIR=${PROJECT_SOURCE_DIR}/dictionaries")
+  endforeach()
 endif()

@@ -216,3 +216,13 @@ add_executable(cwa_capture_replay cw_capture_replay.cpp)
 target_link_libraries(cwa_capture_replay PRIVATE cwa_core)
 target_compile_definitions(cwa_capture_replay PRIVATE
   CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")
+
+# The Morse alphabet is data with no compiled-in fallback, so a target that
+# decodes without loading it would return an unknown symbol for every
+# character. Point every test in this directory at the shipped dictionaries
+# rather than relying on each one to remember.
+get_property(cwa_directory_tests DIRECTORY PROPERTY TESTS)
+foreach(cwa_test IN LISTS cwa_directory_tests)
+  set_property(TEST ${cwa_test} APPEND PROPERTY ENVIRONMENT
+    "CWA_DICTIONARY_DIR=${PROJECT_SOURCE_DIR}/dictionaries")
+endforeach()

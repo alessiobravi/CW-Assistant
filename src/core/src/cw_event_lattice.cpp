@@ -1,4 +1,5 @@
 #include "cwassistant/core/cw_event_lattice.hpp"
+#include "cwassistant/core/cw_morse_alphabet.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -10,38 +11,13 @@
 namespace cwassistant::core {
 namespace {
 
-struct MorseEntry {
-  std::string_view elements;
-  std::string_view symbol;
-};
-
-constexpr MorseEntry kMorseTable[]{
-    {".-", "A"},       {"-...", "B"},     {"-.-.", "C"},
-    {"-..", "D"},      {".", "E"},        {"..-.", "F"},
-    {"--.", "G"},      {"....", "H"},     {"..", "I"},
-    {".---", "J"},     {"-.-", "K"},      {".-..", "L"},
-    {"--", "M"},       {"-.", "N"},       {"---", "O"},
-    {".--.", "P"},     {"--.-", "Q"},     {".-.", "R"},
-    {"...", "S"},      {"-", "T"},        {"..-", "U"},
-    {"...-", "V"},     {".--", "W"},      {"-..-", "X"},
-    {"-.--", "Y"},     {"--..", "Z"},     {"-----", "0"},
-    {".----", "1"},    {"..---", "2"},    {"...--", "3"},
-    {"....-", "4"},    {".....", "5"},    {"-....", "6"},
-    {"--...", "7"},    {"---..", "8"},    {"----.", "9"},
-    {".-.-.-", "."},   {"--..--", ","},   {"..--..", "?"},
-    {".----.", "'"},   {"-.-.--", "!"},   {"-..-.", "/"},
-    {"-.--.", "("},    {"-.--.-", ")"},  {".-...", "&"},
-    {"---...", ":"},   {"-.-.-.", ";"},  {"-...-", "="},
-    {".-.-.", "+"},    {"-....-", "-"},   {"..--.-", "_"},
-    {".-..-.", "\""}, {"...-..-", "$"}, {".--.-.", "@"},
-    {"...-.-", "<SK>"}, {"...---...", "<SOS>"},
-};
-
 std::optional<std::string_view> decodeElements(const std::string_view value) {
-  for (const auto& entry : kMorseTable) {
-    if (entry.elements == value) return entry.symbol;
-  }
-  return std::nullopt;
+  // One alphabet, loaded from data; see cw_morse_alphabet.hpp. This used to be
+  // a second verbatim copy of the table in cw_decoder.cpp, which is exactly
+  // the kind of duplicate that drifts silently.
+  const auto symbol = cwSharedMorseAlphabet().symbolFor(value);
+  if (symbol.empty()) return std::nullopt;
+  return symbol;
 }
 
 double squaredResidual(const double value, const double center,
