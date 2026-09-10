@@ -60,12 +60,11 @@ guessed RF frequency.
   acquired passband remains visible. The default window is 24 kHz and choices
   range from 6 to 96 kHz; use the narrowest width that contains the stations of
   interest to reduce CPU use and decoding latency.
-- **Follow authoritative RX VFO readback** keeps the SDR decoder window centred
-  on the RX frequency reported by the configured radio-control provider. The
-  route is provider-neutral and never infers a value from operator intent.
-  **SDR LO offset** adds a signed offset to the SDR hardware centre for
+- **SDR LO offset** adds a signed offset to the SDR hardware centre for
   transverter or independently tuned receiver arrangements. CW Buddy bounds it
-  so the decoder window stays inside the acquired passband.
+  so the decoder window stays inside the acquired passband. The operational
+  **Radio Sync** control is on the main SDR faceplate rather than this settings
+  page.
 - Selecting direct SDR changes only the RX sample source. It does not hide or
   disconnect Radio Control: a separately configured CAT radio may continue to
   provide authoritative VFO state and the guarded TX/keying endpoint for
@@ -87,12 +86,24 @@ CW Buddy does not probe SDR hardware during application or profile startup.
 Opening Settings > SDR requests one scan after the page renders; use **Refresh
 devices** to repeat it after a hot-plug or reconnect.
 
-An RSPduo can appear several times because its driver advertises alternative
-operating modes, not because several physical receivers were discovered.
-Choose **Single Tuner** for CW Buddy's current one-channel receive path. **Dual
-Tuner** and **Master** entries are advanced coordinated modes; only channel 0 is
-currently consumed, so they do not yet provide two CW Buddy receiver panes.
+An RSPduo appears once by physical serial number. Its separate operating-mode
+selector contains **ST** (Single Tuner, recommended), **DT** (two synchronized
+receive channels), **MA** (master role with a 6 MHz device sample clock), and
+**MA8** (the same master role at 8 MHz) when the driver advertises them. A
+driver-controlled **SL** slave role may also appear. CW Buddy currently owns
+one IQ source, spectrum, and decoder pipeline and therefore consumes RX channel
+0; DT does not yet provide a second receiver pane. Use the antenna/tuner-input
+selector on the main **SDR Radio Control** for routine port changes.
 Close SDRUno, SDRconnect, or any other owner before probing or starting the RSP.
+
+The main SDR faceplate also edits and steps the tuned RX frequency, changes the
+selected mode, tuner/input, effective IQ rate and hardware RF bandwidth, and
+enables bidirectional **Radio Sync**. SDRplay decimation is selected through the
+effective IQ rate because the SoapySDR interface does not advertise it as an
+independent control. Frequency-only changes retune the running stream; route or
+format changes may reopen it. Physical device, operating mode, input, both
+centres and bandwidths, gain, LO offset, tuning step, and Radio Sync state are
+stored independently in every named profile.
 
 The status bar exposes bounded-queue input overruns. Standard device
 sample-rate, RF-bandwidth, antenna/input and gain controls are available when

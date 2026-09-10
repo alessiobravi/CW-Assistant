@@ -96,8 +96,33 @@ Optional RX-VFO following consumes authoritative radio-controller readback at
 the application boundary, independent of the concrete OmniRig, CAT4OM, direct
 CAT, Hamlib, or future provider. It moves the decode window and applies a signed
 profile LO offset to the SDR centre, clamping the arrangement so the entire
-decoder window remains inside the acquired passband. It cannot write TX, PTT,
-or KEY state.
+decoder window remains inside the acquired passband. An operator edit on the
+SDR faceplate uses the inverse mapping to request RX through the same common
+radio-provider boundary. Request and observation are separate events: pending
+asynchronous CAT readback is reconciled without emitting another write. It
+cannot write TX, PTT, or KEY state.
+
+Changing the center of an active SDR is a receive-thread command. Rapid requests
+are coalesced, the backend applies its normal runtime frequency operation and
+reads the actual value back, and the changed IQ descriptor creates an explicit
+DSP discontinuity without closing the stream. Device, operating mode, sample
+rate, RF bandwidth, antenna/input, and gain changes remain controlled reopen
+operations where the common backend cannot promise live reconfiguration.
+
+Discovery distinguishes a physical receiver from the operating variants its
+driver advertises. Stable driver/serial identity forms the physical entry; each
+variant retains the opaque configuration used for probing and opening. This is
+not device-specific UI logic: a receiver with one variant simply has one mode,
+while hardware such as an RSPduo can expose several modes and mode-dependent
+antenna/input capabilities.
+
+For SoapySDRPlay3, `ST` is the ordinary single-tuner configuration, `DT`
+exposes two synchronized receive channels, and `MA`/`MA8` select the master
+role with 6 MHz/8 MHz device sample clocks for coordinated master/slave use.
+`SL`, when advertised, is the corresponding slave role. These are provider
+mode identifiers beneath one physical serial. The current capture adapter owns
+one SPSC IQ source and requests RX channel 0, so ST is the supported default;
+simultaneous DT tuner display requires a second synchronized capture/DSP path.
 
 Receiver selection and radio control are orthogonal. Choosing a direct SDR as
 the RX sample source does not remove or replace the configured CAT/keying radio

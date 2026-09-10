@@ -287,6 +287,7 @@ class ReplayController final : public QObject {
                          bool automatic_gain,
                          double gain_db);
   void sdrStopRequested();
+  void sdrRetuneRequested(double center_frequency_hz);
   void liveDspStartRequested();
   void liveDspStopRequested();
   void liveDspConfigureRequested(int averaging_frames, int frame_rate_hz,

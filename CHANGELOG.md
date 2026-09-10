@@ -8,6 +8,24 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Direct SDR operation now has its own compact **SDR Radio Control** above the
+  independent CAT **Radio Control**. It provides an editable SDR RX readout,
+  one-step left/right tuning, effective IQ-rate/driver-decimation control,
+  hardware RF-bandwidth and antenna/input selection, plus provider-neutral
+  **Radio Sync**. The waterfall edge arrows also tune direct SDR reception.
+
+- SDR discovery now groups driver configurations by physical receiver and
+  serial number. An RSPduo therefore appears once, with Single Tuner, Dual
+  Tuner, and 6/8 MHz Master configurations in a separately described
+  operating-mode selector;
+  independent receivers such as an RTL-SDR remain separate entries.
+
+- Bidirectional Radio Sync treats CAT readback as observation and an SDR
+  faceplate edit as one explicit provider-neutral RX-frequency command. The
+  configured signed LO offset is applied in opposite directions, stale echoes
+  cannot create a write loop, and decoder-window-only gestures never tune the
+  radio.
+
 - Radio Settings and the station wizard now expose only configuration consumed
   by the selected provider. OmniRig owns its COM/framing values, rigctld owns
   its physical-radio connection, and CAT4OM owns its server-side connection;
@@ -89,6 +107,11 @@ All notable changes to CW Buddy are recorded here. The format follows
   sole control for enabling or disabling one or more filtered CW streams.
 
 ### Fixed
+
+- Changing only a live SDR center frequency no longer stops and reopens the
+  receiver or resets the spectrum. Rapid VFO changes are coalesced and applied
+  through the active receive backend with authoritative frequency readback;
+  changes that alter the stream format or hardware route still restart safely.
 
 - The Windows COM implementation now keeps the Windows SDK umbrella header
   ahead of `OleAuto.h`, preventing MSVC syntax failures after include sorting.

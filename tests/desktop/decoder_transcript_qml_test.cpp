@@ -298,12 +298,16 @@ int main() {
       !contains(tune_down, "appSettings.radioFrequencyWritable") ||
       !contains(tune_down, "z: 8") ||
       !contains(tune_down, "appSettings.stepControlledRxFrequency(-1)") ||
-      !contains(tune_down, "Accessible.name: \"Tune RX down\"") ||
+      !contains(tune_down, "Tune SDR RX down") ||
+      !contains(tune_down, "Tune RX down") ||
+      !contains(tune_down, "appSettings.stepSdrRxFrequency(-1)") ||
       !contains(tune_up, "objectName: \"tuneRxUpButton\"") ||
       !contains(tune_up, "appSettings.radioFrequencyWritable") ||
       !contains(tune_up, "z: 8") ||
       !contains(tune_up, "appSettings.stepControlledRxFrequency(1)") ||
-      !contains(tune_up, "Accessible.name: \"Tune RX up\"") ||
+      !contains(tune_up, "Tune SDR RX up") ||
+      !contains(tune_up, "Tune RX up") ||
+      !contains(tune_up, "appSettings.stepSdrRxFrequency(1)") ||
       !contains(marker, "z: 5") || contains(marker, "id: channelHitArea") ||
       !contains(marker, "manualSliceHitArea.hoveredStreamId")) {
     return 6;

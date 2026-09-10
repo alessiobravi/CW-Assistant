@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -32,8 +33,47 @@ std::string device_id(const SoapySDR::Kwargs& values, const std::size_t index) {
   std::ostringstream output;
   output << value_or(values, "driver", "unknown") << ':'
          << value_or(values, "serial", value_or(values, "label", "device"))
-         << ':' << index;
+         << ':' << value_or(values, "mode", std::to_string(index));
   return output.str();
+}
+
+std::string physical_device_id(const SoapySDR::Kwargs& values) {
+  return value_or(values, "driver", "unknown") + ':' +
+         value_or(values, "serial", value_or(values, "label", "device"));
+}
+
+std::string mode_label(const SoapySDR::Kwargs& values) {
+  const std::string mode = value_or(values, "mode");
+  if (mode == "ST") return "ST — Single tuner (recommended)";
+  if (mode == "DT") return "DT — Dual tuner (advanced)";
+  if (mode == "MA") return "MA — Master, 6 MHz (advanced)";
+  if (mode == "MA8") return "MA8 — Master, 8 MHz (advanced)";
+  if (mode == "SL") return "SL — Slave (advanced)";
+  return mode.empty() ? "Default" : mode;
+}
+
+std::string physical_device_label(const SoapySDR::Kwargs& values) {
+  std::string label = value_or(values, "label", physical_device_id(values));
+  if (value_or(values, "mode").empty()) return label;
+  if (const auto suffix = label.find(" - "); suffix != std::string::npos)
+    label.erase(suffix);
+  const std::string serial = value_or(values, "serial");
+  if (!serial.empty()) {
+    if (const auto position = label.rfind(serial); position != std::string::npos)
+      label.erase(position);
+  }
+  if (const auto device = label.find(" Dev"); device != std::string::npos) {
+    auto end = device + 4;
+    while (end < label.size() &&
+           std::isdigit(static_cast<unsigned char>(label[end])))
+      ++end;
+    while (end < label.size() && label[end] == ' ') ++end;
+    label.replace(device, end - device, " ");
+  }
+  while (!label.empty() &&
+         std::isspace(static_cast<unsigned char>(label.back())))
+    label.pop_back();
+  return label;
 }
 
 double nearest_supported_rate(SoapySDR::Device& device,
@@ -107,7 +147,13 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
             {.id = id,
              .label = value_or(values, "label", id),
              .driver = value_or(values, "driver", "unknown"),
-             .serial = value_or(values, "serial")});
+             .serial = value_or(values, "serial"),
+             .physical_id = physical_device_id(values),
+             .physical_label = physical_device_label(values),
+             .mode_id = value_or(values, "mode", "default"),
+             .mode_label = mode_label(values),
+             .recommended_mode = value_or(values, "mode").empty() ||
+                                 value_or(values, "mode") == "ST"});
       }
       if (report.modules.empty()) {
         report.diagnostic =
@@ -304,6 +350,31 @@ class SoapySdrReceiveBackend final : public SdrReceiveBackend {
       error = std::string("SoapySDR could not start reception: ") +
               exception.what();
       close();
+      return false;
+    }
+  }
+
+  bool retuneCenterFrequency(const double center_frequency_hz,
+                             double& actual_center_frequency_hz,
+                             std::string& error) override {
+    if (device_ == nullptr || stream_ == nullptr || !stream_active_) {
+      error = "The SoapySDR RX stream is not active.";
+      return false;
+    }
+    try {
+      device_->setFrequency(SOAPY_SDR_RX, kRxChannel, center_frequency_hz);
+      actual_center_frequency_hz =
+          device_->getFrequency(SOAPY_SDR_RX, kRxChannel);
+      constexpr double kFrequencyTolerance = 1.0;
+      if (!std::isfinite(actual_center_frequency_hz) ||
+          std::abs(actual_center_frequency_hz - center_frequency_hz) >
+              kFrequencyTolerance) {
+        error = "The SDR did not accept the requested center frequency.";
+        return false;
+      }
+      return true;
+    } catch (const std::exception& exception) {
+      error = std::string("SoapySDR could not retune RX: ") + exception.what();
       return false;
     }
   }

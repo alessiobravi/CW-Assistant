@@ -144,34 +144,62 @@ device.
    opening Settings → SDR. If it is listed but fails to load, reinstall API
    3.15; if it loads but the RSP is absent, close SDRUno/SDRconnect and refresh.
 2. Open **Settings → SDR**. The page performs one discovery scan after it
-   renders; choose the receiver when it appears. Application startup deliberately
+   renders; choose the physical receiver and, when offered, its operating mode.
+   An RSPduo is one receiver even though its driver exposes Single Tuner, Dual
+   Tuner, and Master configurations; start with **Single Tuner**. Application startup deliberately
    does not probe SDR hardware. Select **Refresh devices** after reconnecting or
    hot-plugging a receiver.
    If the backend, module, vendor runtime, USB permission, or device is missing,
    the page keeps sound-card reception available and explains what was not
    found.
-3. Enter SDR and decoder center frequencies in VFO-style kHz: for example,
+3. Enter initial SDR and decoder center frequencies in VFO-style kHz: for example,
    `7021.43` means 7.02143 MHz. Select a supported effective IQ sample rate,
    hardware RF bandwidth, and
    antenna/input where the device exposes them. Start conservatively at 250000
-   samples/s. For an RSPduo, the entries are modes of the same receiver: choose
-   **Single Tuner** for the current one-channel path; **Dual Tuner** and
-   **Master** are advanced coordinated modes and do not create extra CW Buddy
-   panes. SDRplay's lower effective rates use driver-managed decimation.
+   samples/s. **Dual Tuner** and **Master** are advanced coordinated modes and
+   do not create extra CW Buddy panes. The antenna/input list reflects the
+   ports available in the selected mode. SDRplay's lower effective rates use
+   driver-managed decimation, selected through the effective IQ sample rate;
+   there is no second independent decimation setting to guess.
+
+   The RSPduo mode abbreviations come from the SoapySDRPlay3 driver:
+
+   | Mode | Meaning in CW Buddy |
+   |---|---|
+   | **ST** | **Single Tuner**. One tuner is opened as an ordinary independent receiver. This is the recommended mode for the current CW Buddy receive path; the input selector chooses among the ports the driver exposes. |
+   | **DT** | **Dual Tuner**. Both tuners run together with a shared clock/rate and the driver exposes two simultaneous RX channels. CW Buddy currently opens only the first channel, so DT does not yet create a second spectrum or decoder bank. |
+   | **MA** | **Master, 6 MHz**. The RSPduo owns the master side of a coordinated master/slave setup using the driver's 6 MHz device sample clock. |
+   | **MA8** | **Master, 8 MHz**. The same master role using the driver's 8 MHz device sample clock; this is an advanced alternative, not another receiver. |
+
+   A driver may also advertise **SL** (**Slave**) when a matching master
+   context owns the shared hardware configuration. CW Buddy presently has one
+   IQ-source contract, one spectrum, and one decoder-window pipeline per active
+   receiver. It therefore requests SoapySDR RX channel 0; simultaneous tuner A
+   and tuner B display/decoding requires a future second synchronized source
+   pipeline rather than treating the modes as duplicate hardware.
+
    Enable hardware AGC only when that receiver provides it, otherwise select a
    manual gain.
 4. Set the **Decoder window center** and choose a 6–96 kHz decoder bandwidth.
    CW Buddy will continue to draw the complete acquired passband, but only this
    bounded, down-converted and decimated window reaches CW detection and the
    stream decoder bank. The 24 kHz default is a practical starting point.
-   Optionally enable **Follow authoritative RX VFO readback**. The configured
-   radio-control provider then moves the decoder window with VFO A/RX. Use the
-   signed **SDR LO offset** only when the SDR centre must differ from the radio
-   frequency; it is bounded to keep the decode window in view.
+   Configure a signed **SDR LO offset** only when the SDR centre must differ
+   from the radio frequency; it is bounded to keep the decode window in view.
 5. In the Receiver workspace select **Live SDR**, then **Start SDR RX**. The
    spectrum and waterfall use absolute RF coordinates across the captured IQ
    passband. A translucent region shows which part is currently eligible for
    CW detection and decoding.
+   Use **SDR Radio Control** above the independent CAT **Radio Control** for
+   normal operation. Click its RX digits to enter a frequency, use `<` / `>`
+   there or at the waterfall edges for the selected step, and choose a supported
+   IQ rate, hardware RF bandwidth, and antenna/input. A frequency-only change
+   retunes the running receiver without stopping the spectrum; controls that
+   change the device route or stream format may briefly restart reception.
+   Enable **Radio Sync** to link the SDR RX and the configured CAT RX VFO in
+   both directions. Turning the physical VFO updates the SDR; editing or
+   stepping SDR RX issues one provider-neutral CAT RX request. TX frequency,
+   split, mode, PTT, and KEY are never changed by this link.
 6. Place the pointer over the SDR spectrum or waterfall and use the wheel to
    zoom around it. Middle-button drag pans the visible view. Select **Full
    span** to return to the complete acquired passband. Right-click

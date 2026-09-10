@@ -1,6 +1,8 @@
 #include "sdr_receiver.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <utility>
 
@@ -61,6 +63,11 @@ class UnavailableSdrBackend final : public SdrReceiveBackend {
     return false;
   }
 
+  bool retuneCenterFrequency(double, double&, std::string& error) override {
+    error = discover().diagnostic;
+    return false;
+  }
+
   SdrReadResult read(std::span<std::complex<float>>, long) override {
     return {.error = "SoapySDR support is unavailable."};
   }
@@ -69,6 +76,37 @@ class UnavailableSdrBackend final : public SdrReceiveBackend {
 };
 
 }  // namespace
+
+std::vector<SdrPhysicalDeviceDescriptor> groupSdrDevices(
+    const std::vector<SdrDeviceDescriptor>& devices) {
+  std::vector<SdrPhysicalDeviceDescriptor> groups;
+  for (const auto& device : devices) {
+    const std::string physical_id =
+        device.physical_id.empty() ? device.id : device.physical_id;
+    auto group = std::find_if(
+        groups.begin(), groups.end(),
+        [&physical_id](const SdrPhysicalDeviceDescriptor& candidate) {
+          return candidate.id == physical_id;
+        });
+    if (group == groups.end()) {
+      groups.push_back(
+          {.id = physical_id,
+           .label = device.physical_label.empty() ? device.label
+                                                   : device.physical_label,
+           .modes = {}});
+      group = std::prev(groups.end());
+    }
+    group->modes.push_back(device);
+  }
+  for (auto& group : groups) {
+    std::stable_sort(group.modes.begin(), group.modes.end(),
+                     [](const SdrDeviceDescriptor& left,
+                        const SdrDeviceDescriptor& right) {
+                       return left.recommended_mode && !right.recommended_mode;
+                     });
+  }
+  return groups;
+}
 
 SdrReceiver::SdrReceiver(std::unique_ptr<SdrReceiveBackend> backend)
     : backend_(std::move(backend)) {}
@@ -128,6 +166,35 @@ bool SdrReceiver::start(const SdrReceiveConfiguration& configuration,
   synthesized_timestamp_ns_ = 0;
   validator_.reset();
   diagnostics_.running = true;
+  return true;
+}
+
+bool SdrReceiver::retuneCenterFrequency(const double center_frequency_hz,
+                                        std::string& error) {
+  if (!diagnostics_.running || !backend_) {
+    error = "SDR reception is not running.";
+    return false;
+  }
+  if (!std::isfinite(center_frequency_hz) || center_frequency_hz <= 0.0 ||
+      center_frequency_hz > 99'000'000'000.0) {
+    error = "The SDR center frequency must be between 1 Hz and 99 GHz.";
+    return false;
+  }
+  double actual_center_frequency_hz = actual_.center_frequency_hz;
+  if (!backend_->retuneCenterFrequency(center_frequency_hz,
+                                       actual_center_frequency_hz, error)) {
+    if (error.empty()) error = "The SDR could not be retuned.";
+    return false;
+  }
+  if (!std::isfinite(actual_center_frequency_hz) ||
+      actual_center_frequency_hz <= 0.0 ||
+      actual_center_frequency_hz > 99'000'000'000.0) {
+    error = "The SDR returned an invalid center frequency after retuning.";
+    return false;
+  }
+  configuration_.center_frequency_hz = center_frequency_hz;
+  actual_.center_frequency_hz = actual_center_frequency_hz;
+  diagnostics_.last_error.clear();
   return true;
 }
 

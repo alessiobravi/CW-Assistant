@@ -241,7 +241,7 @@ Pane {
                             ? appSettings.sdrModuleNames.join(", ")
                             : "No SoapySDR receiver modules detected"
                     }
-                    Label { text: "SDR device" }
+                    Label { text: "Physical SDR" }
                     ComboBox {
                         objectName: "sdrDeviceCombo"
                         Layout.fillWidth: true
@@ -252,17 +252,43 @@ Pane {
                         onActivated: appSettings.selectSdrDevice(currentIndex)
                         ToolTip.visible: hovered
                         ToolTip.text: enabled
-                            ? "Select the directly connected receive-only SDR"
+                            ? "Select one physical receive-only SDR; alternative operating modes of the same serial number are grouped together"
                             : "Install the matching SoapySDR hardware module, connect the receiver, then refresh"
                     }
-                    Label { text: "Device mode" }
+                    Label { text: "Operating mode" }
+                    ComboBox {
+                        objectName: "sdrOperatingModeCombo"
+                        Layout.fillWidth: true
+                        model: appSettings.sdrOperatingModeNames
+                        currentIndex: appSettings.sdrOperatingModeIndex
+                        enabled: appSettings.sdrOperatingModeNames.length > 1
+                        onActivated:
+                            appSettings.selectSdrOperatingMode(currentIndex)
+                        ToolTip.visible: hovered
+                        ToolTip.text: appSettings.sdrOperatingModeNames.length > 1
+                            ? "Choose a hardware operating configuration. Single tuner is recommended for CW Buddy's current one-channel receive path."
+                            : "This receiver exposes one operating configuration"
+                    }
+                    Label { text: "Mode details" }
                     Label {
+                        objectName: "sdrOperatingModeHelp"
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         color: "#91a0b1"
-                        text: appSettings.sdrDeviceDisplayName.indexOf("RSPduo") >= 0
-                            ? "RSPduo entries are operating modes of the same receiver. Single Tuner is recommended for one CW Buddy receive path; Dual Tuner and Master modes are advanced multi-channel/master-slave configurations."
-                            : "The selector may list alternative operating configurations exposed by the device driver."
+                        property string selectedMode: appSettings.sdrOperatingModeIndex >= 0
+                            ? appSettings.sdrOperatingModeNames[appSettings.sdrOperatingModeIndex]
+                            : ""
+                        text: selectedMode.indexOf("ST ") === 0
+                            ? "Single tuner is the recommended one-channel CW Buddy mode and can select either tuner input exposed by the driver."
+                            : selectedMode.indexOf("DT ") === 0
+                              ? "Dual tuner provides two synchronized RX channels; CW Buddy currently consumes channel 0 only."
+                              : selectedMode.indexOf("MA8 ") === 0
+                                ? "Master mode using the alternative 8 MHz master sample clock for coordinated master/slave operation."
+                                : selectedMode.indexOf("MA ") === 0
+                                  ? "Master mode using the 6 MHz master sample clock for coordinated master/slave operation."
+                                  : selectedMode.indexOf("SL ") === 0
+                                    ? "Slave is an advanced mode controlled by a coordinated RSPduo master process."
+                                    : "The receiver exposes a single default operating configuration."
                     }
                     Label { text: "Discovery" }
                     RowLayout {
@@ -396,16 +422,6 @@ Pane {
                             appSettings.sdrDecoderBandwidthHz = currentValue
                         ToolTip.visible: hovered
                         ToolTip.text: "Limits CPU-intensive CW detection while the full acquired spectrum remains visible"
-                    }
-                    Label { text: "Radio synchronization" }
-                    CheckBox {
-                        objectName: "sdrFollowRadioVfoCheck"
-                        text: "Follow authoritative RX VFO readback"
-                        checked: appSettings.sdrFollowRadioVfo
-                        enabled: appSettings.radioEnabled
-                        onToggled: appSettings.sdrFollowRadioVfo = checked
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Keep the decoder centered on the radio RX VFO and retune the SDR through the configured radio-control abstraction"
                     }
                     Label { text: "SDR LO offset (Hz)" }
                     TextField {

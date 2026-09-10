@@ -58,6 +58,10 @@ class AppSettings final : public QObject {
   Q_PROPERTY(int sdrDeviceIndex READ sdrDeviceIndex NOTIFY sdrSettingsChanged)
   Q_PROPERTY(QString sdrDeviceDisplayName READ sdrDeviceDisplayName NOTIFY
                  sdrSettingsChanged)
+  Q_PROPERTY(QStringList sdrOperatingModeNames READ sdrOperatingModeNames NOTIFY
+                 sdrSettingsChanged)
+  Q_PROPERTY(int sdrOperatingModeIndex READ sdrOperatingModeIndex NOTIFY
+                 sdrSettingsChanged)
   Q_PROPERTY(QString sdrDiagnostic READ sdrDiagnostic NOTIFY sdrSettingsChanged)
   Q_PROPERTY(qulonglong sdrCenterFrequencyHz READ sdrCenterFrequencyHz WRITE
                  setSdrCenterFrequencyHz NOTIFY sdrSettingsChanged)
@@ -79,6 +83,10 @@ class AppSettings final : public QObject {
                  setSdrDecoderBandwidthHz NOTIFY sdrSettingsChanged)
   Q_PROPERTY(bool sdrFollowRadioVfo READ sdrFollowRadioVfo WRITE
                  setSdrFollowRadioVfo NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(int sdrTuningStepHz READ sdrTuningStepHz WRITE setSdrTuningStepHz
+                 NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(QString sdrRadioSyncStatus READ sdrRadioSyncStatus NOTIFY
+                 sdrSettingsChanged)
   Q_PROPERTY(qint64 sdrRadioLoOffsetHz READ sdrRadioLoOffsetHz WRITE
                  setSdrRadioLoOffsetHz NOTIFY sdrSettingsChanged)
   Q_PROPERTY(bool sdrAutomaticGain READ sdrAutomaticGain WRITE
@@ -327,6 +335,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] int sdrDeviceIndex() const noexcept;
   [[nodiscard]] const QString& sdrDeviceId() const noexcept;
   [[nodiscard]] QString sdrDeviceDisplayName() const;
+  [[nodiscard]] const QStringList& sdrOperatingModeNames() const noexcept;
+  [[nodiscard]] int sdrOperatingModeIndex() const noexcept;
   [[nodiscard]] const QString& sdrDiagnostic() const noexcept;
   [[nodiscard]] qulonglong sdrCenterFrequencyHz() const noexcept;
   [[nodiscard]] int sdrSampleRateHz() const noexcept;
@@ -339,6 +349,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] qulonglong sdrDecoderCenterFrequencyHz() const noexcept;
   [[nodiscard]] int sdrDecoderBandwidthHz() const noexcept;
   [[nodiscard]] bool sdrFollowRadioVfo() const noexcept;
+  [[nodiscard]] int sdrTuningStepHz() const noexcept;
+  [[nodiscard]] QString sdrRadioSyncStatus() const;
   [[nodiscard]] qint64 sdrRadioLoOffsetHz() const noexcept;
   [[nodiscard]] bool sdrAutomaticGain() const noexcept;
   [[nodiscard]] bool sdrAutomaticGainAvailable() const noexcept;
@@ -461,6 +473,7 @@ class AppSettings final : public QObject {
   void setSdrDecoderCenterFrequencyHz(qulonglong value);
   void setSdrDecoderBandwidthHz(int value);
   void setSdrFollowRadioVfo(bool value);
+  void setSdrTuningStepHz(int value);
   void setSdrRadioLoOffsetHz(qint64 value);
   void setSdrAutomaticGain(bool value);
   void setSdrGainDb(double value);
@@ -542,7 +555,11 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void refreshSdrDevices();
   Q_INVOKABLE void setSdrDecoderWindow(qulonglong center_frequency_hz,
                                        int bandwidth_hz);
+  Q_INVOKABLE bool requestSdrRxFrequencyHz(qulonglong frequency_hz);
+  Q_INVOKABLE void stepSdrRxFrequency(int direction);
+  void followSdrToRadioVfo();
   Q_INVOKABLE void selectSdrDevice(int index);
+  Q_INVOKABLE void selectSdrOperatingMode(int index);
   Q_INVOKABLE void selectSdrAntenna(int index);
   Q_INVOKABLE void refreshDetectedRadios();
   Q_INVOKABLE void selectDetectedRadio(int index);
@@ -609,9 +626,14 @@ class AppSettings final : public QObject {
   void refreshProfiles();
   void resetInMemorySettings();
   void refreshSelectedSdrCapabilities();
+  void rebuildSdrDeviceModes(const QString& preferred_variant_id = {},
+                             const QString& preferred_mode_id = {});
   void refreshControlledFrequency();
   void reconcilePendingRxFrequency();
   void rememberPendingRxFrequency(std::uint64_t frequency_hz);
+  [[nodiscard]] std::optional<std::uint64_t> observedRadioRxRfHz() const noexcept;
+  void setSdrRadioWindow(std::uint64_t rx_frequency_hz);
+  bool writeRadioRxDialFrequency(std::uint64_t dial_frequency_hz);
   void invalidateDirectKeyingAcceptance(QString status);
   [[nodiscard]] std::optional<cwassistant::core::ResolvedFrequencies>
   resolvedControlledFrequencies() const noexcept;
@@ -647,6 +669,20 @@ class AppSettings final : public QObject {
   QStringList sdr_module_names_;
   QStringList sdr_device_names_;
   QStringList sdr_device_ids_;
+  QStringList sdr_device_mode_names_;
+  QStringList sdr_device_mode_ids_;
+  QStringList sdr_device_mode_keys_;
+  struct SdrModeChoice {
+    QString physical_id;
+    QString variant_id;
+    QString variant_name;
+    QString mode_id;
+    QString mode_name;
+    bool recommended{false};
+  };
+  QList<SdrModeChoice> sdr_discovered_modes_;
+  QString sdr_physical_device_id_;
+  QString sdr_device_mode_id_;
   QString sdr_device_id_;
   QString sdr_device_name_;
   QString sdr_diagnostic_{
@@ -662,6 +698,7 @@ class AppSettings final : public QObject {
   qulonglong sdr_decoder_center_frequency_hz_{14'050'000ULL};
   int sdr_decoder_bandwidth_hz_{24'000};
   bool sdr_follow_radio_vfo_{false};
+  int sdr_tuning_step_hz_{1'000};
   qint64 sdr_radio_lo_offset_hz_{0};
   bool sdr_automatic_gain_{true};
   bool sdr_automatic_gain_available_{true};

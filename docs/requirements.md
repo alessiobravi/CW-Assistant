@@ -434,6 +434,18 @@ authority.
 - Allow optional decoder-window following from authoritative RX-VFO readback
   through the common radio-provider boundary, with a bounded signed SDR LO
   offset. Unknown or stale radio state must not cause a speculative SDR retune.
+- Group several configurations exported for one driver/serial as operating
+  modes of one physical receiver, while retaining the exact provider identity
+  required to open the selected mode. Device ordering must not define identity.
+- Provide an operational SDR faceplate independent of the CAT radio faceplate.
+  It must expose exact RX-frequency editing and stepping plus only
+  capability-backed mode, input, IQ-rate/decimation and RF-bandwidth controls.
+  A center-only live change must use backend retuning without reopening the
+  stream; changes to device, mode, stream format or route may restart it.
+- Optional bidirectional SDR/radio synchronization must separate an operator
+  command from provider readback, apply the configured LO offset consistently,
+  suppress stale asynchronous echoes, never loop writes, and never address the
+  TX VFO, PTT or KEY. Moving only the decoder window remains local to DSP.
 - Keep RX-source selection independent from radio control. Selecting direct SDR
   must not hide or disconnect a configured CAT radio that supplies VFO state
   and a separately guarded TX/keying endpoint for full-duplex operation.

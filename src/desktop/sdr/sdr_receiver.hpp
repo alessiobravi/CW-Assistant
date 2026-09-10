@@ -17,7 +17,21 @@ struct SdrDeviceDescriptor {
   std::string label;
   std::string driver;
   std::string serial;
+  std::string physical_id;
+  std::string physical_label;
+  std::string mode_id;
+  std::string mode_label;
+  bool recommended_mode{false};
 };
+
+struct SdrPhysicalDeviceDescriptor {
+  std::string id;
+  std::string label;
+  std::vector<SdrDeviceDescriptor> modes;
+};
+
+[[nodiscard]] std::vector<SdrPhysicalDeviceDescriptor> groupSdrDevices(
+    const std::vector<SdrDeviceDescriptor>& devices);
 
 struct SdrDiscoveryReport {
   bool backend_available{false};
@@ -83,6 +97,9 @@ class SdrReceiveBackend {
   [[nodiscard]] virtual bool open(const SdrReceiveConfiguration& configuration,
                                   SdrActualConfiguration& actual,
                                   std::string& error) = 0;
+  [[nodiscard]] virtual bool retuneCenterFrequency(
+      double center_frequency_hz, double& actual_center_frequency_hz,
+      std::string& error) = 0;
   [[nodiscard]] virtual SdrReadResult read(
       std::span<std::complex<float>> samples, long timeout_microseconds) = 0;
   virtual void close() noexcept = 0;
@@ -114,6 +131,8 @@ class SdrReceiver final {
   [[nodiscard]] SdrDeviceCapabilities probe(const std::string& device_id);
   [[nodiscard]] bool start(const SdrReceiveConfiguration& configuration,
                            std::string& error);
+  [[nodiscard]] bool retuneCenterFrequency(double center_frequency_hz,
+                                           std::string& error);
   void stop() noexcept;
   [[nodiscard]] bool pump(core::RealtimeSampleBlock& block,
                           long timeout_microseconds = 100'000);

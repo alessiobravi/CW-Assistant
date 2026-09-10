@@ -6,7 +6,7 @@
 
 namespace {
 
-std::string readFile(const std::filesystem::path& path) {
+std::string readFile(const std::filesystem::path &path) {
   std::ifstream input(path, std::ios::binary);
   return {std::istreambuf_iterator<char>{input},
           std::istreambuf_iterator<char>{}};
@@ -16,7 +16,7 @@ bool contains(const std::string_view source, const std::string_view text) {
   return source.find(text) != std::string_view::npos;
 }
 
-}  // namespace
+} // namespace
 
 int main() {
   const std::string main_qml = readFile(CWA_MAIN_QML_PATH);
@@ -59,7 +59,8 @@ int main() {
   // not grow a transmit, PTT, or KEY entry point under an SDR name.
   for (const std::string_view forbidden :
        {"setSdrTransmit", "sdrPtt", "sdrKey", "startSdrTransmit"}) {
-    if (contains(header, forbidden) || contains(qml, forbidden)) return 4;
+    if (contains(header, forbidden) || contains(qml, forbidden))
+      return 4;
   }
   if (!contains(header, "Q_INVOKABLE void refreshSdrDevices()") ||
       !contains(header, "Q_INVOKABLE void selectSdrDevice(int index)")) {
@@ -72,12 +73,15 @@ int main() {
   if (!contains(qml, "objectName: \"sdrBandwidthCombo\"") ||
       !contains(qml, "objectName: \"sdrAntennaCombo\"") ||
       !contains(qml, "objectName: \"sdrDecoderBandwidthCombo\"") ||
-      !contains(qml, "objectName: \"sdrFollowRadioVfoCheck\"") ||
       !contains(qml, "function formatFrequencyKhz(frequencyHz)") ||
       !contains(qml, "function parseFrequencyKhz(value)") ||
       !contains(qml, "SDR center frequency (kHz)") ||
       !contains(qml, "placeholderText: \"7021.43\"") ||
-      !contains(qml, "RSPduo entries are operating modes") ||
+      !contains(qml, "objectName: \"sdrOperatingModeCombo\"") ||
+      !contains(qml, "appSettings.sdrOperatingModeNames") ||
+      !contains(qml, "appSettings.selectSdrOperatingMode(currentIndex)") ||
+      !contains(qml, "two synchronized RX channels") ||
+      !contains(qml, "alternative 8 MHz master sample clock") ||
       !contains(main_qml, "objectName: \"sdrDecoderWindowOverlay\"") ||
       !contains(main_qml, "spectrumDisplay.zoomAt(") ||
       !contains(main_qml, "spectrumDisplay.panBy(") ||
@@ -91,6 +95,51 @@ int main() {
       !contains(controller_header, "liveSdrDecoderWindowRequested") ||
       !contains(header, "sdrFollowRadioVfo")) {
     return 10;
+  }
+
+  // Alternative RSPduo operating configurations sharing one serial are
+  // selected separately from the physical receiver. Stable physical/mode
+  // keys supplement the legacy exact variant ID for profile migration.
+  if (!contains(header, "sdrOperatingModeNames READ") ||
+      !contains(header, "sdrOperatingModeIndex READ") ||
+      !contains(header, "selectSdrOperatingMode(int index)") ||
+      !contains(implementation, "groupSdrDevices(report.devices)") ||
+      !contains(implementation, "sdr/physicalDeviceId") ||
+      !contains(implementation, "sdr/deviceMode") ||
+      !contains(implementation, "previous_variant_id.startsWith")) {
+    return 12;
+  }
+
+  // Frequently used receive controls live beside the spectrum. The compact
+  // panel remains RX-only, exposes only driver capabilities, and precedes the
+  // independent CAT radio/TX panel.
+  const std::size_t sdr_panel = main_qml.find("id: sdrRadioDisplay");
+  const std::size_t cat_panel = main_qml.find("id: vfoDisplay");
+  if (sdr_panel == std::string::npos || cat_panel == std::string::npos ||
+      sdr_panel >= cat_panel ||
+      !contains(main_qml, "objectName: \"sdrRxFrequencyLabel\"") ||
+      !contains(main_qml, "objectName: \"sdrFrequencyDownButton\"") ||
+      !contains(main_qml, "objectName: \"sdrFrequencyUpButton\"") ||
+      !contains(main_qml, "objectName: \"sdrOperatingModeCombo\"") ||
+      !contains(main_qml, "objectName: \"sdrControlAntennaCombo\"") ||
+      !contains(main_qml, "objectName: \"sdrControlSampleRateCombo\"") ||
+      !contains(main_qml, "objectName: \"sdrControlBandwidthCombo\"") ||
+      !contains(main_qml, "objectName: \"sdrDecimationBadge\"") ||
+      !contains(main_qml, "objectName: \"sdrTuningStepCombo\"") ||
+      !contains(main_qml, "objectName: \"sdrCatSyncButton\"") ||
+      contains(qml, "objectName: \"sdrFollowRadioVfoCheck\"") ||
+      !contains(main_qml, "appSettings.requestSdrRxFrequencyHz(") ||
+      !contains(main_qml, "appSettings.stepSdrRxFrequency(-1)") ||
+      !contains(main_qml, "appSettings.stepSdrRxFrequency(1)")) {
+    return 12;
+  }
+
+  // The same edge arrows must tune whichever receiver currently owns the
+  // displayed passband; direct SDR operation must not depend on CAT support.
+  if (!contains(main_qml, "replayController.sourceMode === 2") ||
+      !contains(main_qml, "? appSettings.stepSdrRxFrequency(-1)") ||
+      !contains(main_qml, "? appSettings.stepSdrRxFrequency(1)")) {
+    return 13;
   }
 
   // Radio control remains visible with direct SDR reception so an independent

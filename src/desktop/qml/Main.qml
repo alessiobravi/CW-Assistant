@@ -773,9 +773,12 @@ ApplicationWindow {
                 ToolButton {
                     id: tuneRxDownButton
                     objectName: "tuneRxDownButton"
-                    visible: replayController.sourceMode === 0
-                             && replayController.radioFrequencyAvailable
-                             && appSettings.radioFrequencyWritable
+                    visible: (replayController.sourceMode === 0
+                              && replayController.radioFrequencyAvailable
+                              && appSettings.radioFrequencyWritable)
+                             || (replayController.sourceMode === 2
+                                 && appSettings.sdrBackendAvailable
+                                 && appSettings.sdrDeviceIndex >= 0)
                     anchors.left: spectrumDisplay.left
                     y: spectrumDisplay.y + spectrumDisplay.height * 0.68
                        - height / 2
@@ -784,23 +787,35 @@ ApplicationWindow {
                     z: 8
                     text: "<"
                     font.pixelSize: 24
-                    Accessible.name: "Tune RX down"
+                    Accessible.name: replayController.sourceMode === 2
+                                     ? "Tune SDR RX down" : "Tune RX down"
                     Accessible.description: "Decrease the receive frequency by "
-                                            + (appSettings.radioTuningStepHz / 1000)
+                                            + ((replayController.sourceMode === 2
+                                                ? appSettings.sdrTuningStepHz
+                                                : appSettings.radioTuningStepHz) / 1000)
                                             + " kilohertz"
-                    onClicked: appSettings.stepControlledRxFrequency(-1)
+                    onClicked: replayController.sourceMode === 2
+                               ? appSettings.stepSdrRxFrequency(-1)
+                               : appSettings.stepControlledRxFrequency(-1)
                     ToolTip.visible: hovered
                     ToolTip.delay: 250
-                    ToolTip.text: "Tune RX down "
-                                  + (appSettings.radioTuningStepHz / 1000)
-                                  + " kHz. Split TX and mode stay unchanged."
+                    ToolTip.text: (replayController.sourceMode === 2
+                                   ? "Move the SDR acquisition window down "
+                                   : "Tune RX down ")
+                                  + ((replayController.sourceMode === 2
+                                      ? appSettings.sdrTuningStepHz
+                                      : appSettings.radioTuningStepHz) / 1000)
+                                  + " kHz. TX and mode stay unchanged."
                 }
                 ToolButton {
                     id: tuneRxUpButton
                     objectName: "tuneRxUpButton"
-                    visible: replayController.sourceMode === 0
-                             && replayController.radioFrequencyAvailable
-                             && appSettings.radioFrequencyWritable
+                    visible: (replayController.sourceMode === 0
+                              && replayController.radioFrequencyAvailable
+                              && appSettings.radioFrequencyWritable)
+                             || (replayController.sourceMode === 2
+                                 && appSettings.sdrBackendAvailable
+                                 && appSettings.sdrDeviceIndex >= 0)
                     anchors.right: spectrumDisplay.right
                     y: spectrumDisplay.y + spectrumDisplay.height * 0.68
                        - height / 2
@@ -809,16 +824,25 @@ ApplicationWindow {
                     z: 8
                     text: ">"
                     font.pixelSize: 24
-                    Accessible.name: "Tune RX up"
+                    Accessible.name: replayController.sourceMode === 2
+                                     ? "Tune SDR RX up" : "Tune RX up"
                     Accessible.description: "Increase the receive frequency by "
-                                            + (appSettings.radioTuningStepHz / 1000)
+                                            + ((replayController.sourceMode === 2
+                                                ? appSettings.sdrTuningStepHz
+                                                : appSettings.radioTuningStepHz) / 1000)
                                             + " kilohertz"
-                    onClicked: appSettings.stepControlledRxFrequency(1)
+                    onClicked: replayController.sourceMode === 2
+                               ? appSettings.stepSdrRxFrequency(1)
+                               : appSettings.stepControlledRxFrequency(1)
                     ToolTip.visible: hovered
                     ToolTip.delay: 250
-                    ToolTip.text: "Tune RX up "
-                                  + (appSettings.radioTuningStepHz / 1000)
-                                  + " kHz. Split TX and mode stay unchanged."
+                    ToolTip.text: (replayController.sourceMode === 2
+                                   ? "Move the SDR acquisition window up "
+                                   : "Tune RX up ")
+                                  + ((replayController.sourceMode === 2
+                                      ? appSettings.sdrTuningStepHz
+                                      : appSettings.radioTuningStepHz) / 1000)
+                                  + " kHz. TX and mode stay unchanged."
                 }
                 Repeater {
                     model: replayController.decoderChannels
@@ -1305,6 +1329,346 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 16
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: sdrRadioDisplay.visible
+                    Label {
+                        text: "SDR Radio Control"
+                        font.pixelSize: 17
+                        font.weight: Font.DemiBold
+                    }
+                    Item { Layout.fillWidth: true }
+                    Label {
+                        text: appSettings.sdrDeviceDisplayName
+                        color: "#6f8396"
+                        font.pixelSize: 10
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: 245
+                    }
+                }
+                Rectangle {
+                    id: sdrRadioDisplay
+                    objectName: "sdrRadioDisplay"
+                    property bool frequencyEditing: false
+                    property bool invalidFrequency: false
+                    readonly property var rateModel: appSettings.sdrSampleRateOptions.length > 0
+                                                     ? appSettings.sdrSampleRateOptions
+                                                     : [62500, 96000, 125000,
+                                                        192000, 250000, 500000,
+                                                        1000000, 2000000]
+                    readonly property var bandwidthModel: appSettings.sdrBandwidthOptions.length > 1
+                                                          ? appSettings.sdrBandwidthOptions
+                                                          : [0, 200000, 300000,
+                                                             600000, 1536000,
+                                                             5000000, 8000000]
+                    visible: replayController.sourceMode === 2
+                             && appSettings.sdrBackendAvailable
+                             && appSettings.sdrDeviceIndex >= 0
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 188
+                    Layout.minimumHeight: 188
+                    radius: 8
+                    color: "#111821"
+                    border.color: "#326875"
+                    border.width: 1
+                    clip: true
+
+                    function beginFrequencyEdit() {
+                        sdrFrequencyField.text = window.formatVfoInput(
+                                    appSettings.sdrDecoderCenterFrequencyHz,
+                                    1000)
+                        invalidFrequency = false
+                        frequencyEditing = true
+                        sdrFrequencyField.forceActiveFocus()
+                        sdrFrequencyField.selectAll()
+                    }
+                    function dismissFrequencyEdit() {
+                        invalidFrequency = false
+                        frequencyEditing = false
+                    }
+                    function acceptFrequencyEdit() {
+                        var value = Number(sdrFrequencyField.text.replace(",", "."))
+                        var frequencyHz = Math.round(value * 1000)
+                        if (Number.isFinite(frequencyHz) && frequencyHz > 0
+                                && appSettings.requestSdrRxFrequencyHz(
+                                    frequencyHz)) {
+                            dismissFrequencyEdit()
+                            window.contentItem.forceActiveFocus()
+                        } else {
+                            invalidFrequency = true
+                            sdrFrequencyField.forceActiveFocus()
+                            sdrFrequencyField.selectAll()
+                        }
+                    }
+
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 7
+                        spacing: 5
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 62
+                            spacing: 6
+                            ToolButton {
+                                objectName: "sdrFrequencyDownButton"
+                                Layout.preferredWidth: 48
+                                Layout.preferredHeight: 56
+                                text: "<"
+                                font.pixelSize: 22
+                                onClicked: appSettings.stepSdrRxFrequency(-1)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Move the SDR acquisition window down "
+                                              + (appSettings.sdrTuningStepHz / 1000)
+                                              + " kHz"
+                            }
+                            Item {
+                                id: sdrFrequencyEditor
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 56
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: 4
+                                    color: "#031014"
+                                    border.color: sdrRadioDisplay.invalidFrequency
+                                                  ? "#ff7b84" : "#397b87"
+                                    border.width: sdrRadioDisplay.frequencyEditing
+                                                  ? 2 : 1
+                                }
+                                Label {
+                                    objectName: "sdrRxFrequencyLabel"
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 10
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: 10
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: !sdrRadioDisplay.frequencyEditing
+                                    text: window.formatRigFrequency(
+                                              appSettings.sdrDecoderCenterFrequencyHz)
+                                    color: "#75f0e0"
+                                    font.family: "monospace"
+                                    font.pixelSize: 27
+                                    fontSizeMode: Text.Fit
+                                    minimumPixelSize: 15
+                                    font.weight: Font.Bold
+                                    font.letterSpacing: 2
+                                    horizontalAlignment: Text.AlignRight
+                                }
+                                Label {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: 9
+                                    anchors.top: parent.top
+                                    anchors.topMargin: 4
+                                    visible: !sdrRadioDisplay.frequencyEditing
+                                    text: "SDR · RX"
+                                    color: "#64dff0"
+                                    font.pixelSize: 9
+                                    font.weight: Font.Bold
+                                }
+                                MouseArea {
+                                    anchors.fill: parent
+                                    visible: !sdrRadioDisplay.frequencyEditing
+                                    hoverEnabled: true
+                                    cursorShape: Qt.IBeamCursor
+                                    onClicked: sdrRadioDisplay.beginFrequencyEdit()
+                                    ToolTip.visible: containsMouse
+                                    ToolTip.text: "Click to enter the SDR tuned RX frequency in kHz; the profile LO offset is applied to the hardware acquisition centre"
+                                }
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    visible: sdrRadioDisplay.frequencyEditing
+                                    Label {
+                                        text: "RX"
+                                        color: "#64dff0"
+                                        font.weight: Font.Bold
+                                    }
+                                    TextField {
+                                        id: sdrFrequencyField
+                                        objectName: "sdrFrequencyField"
+                                        Layout.fillWidth: true
+                                        selectByMouse: true
+                                        inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                        validator: RegularExpressionValidator {
+                                            regularExpression: /[0-9]{1,8}([.,][0-9]{0,3})?/
+                                        }
+                                        color: sdrRadioDisplay.invalidFrequency
+                                               ? "#ff7b84" : "#e8fffb"
+                                        selectionColor: "#2dd4a7"
+                                        selectedTextColor: "#03100b"
+                                        font.family: "monospace"
+                                        font.pixelSize: 20
+                                        font.weight: Font.Bold
+                                        background: Rectangle {
+                                            radius: 3
+                                            color: "#02090b"
+                                            border.color: sdrRadioDisplay.invalidFrequency
+                                                          ? "#ff7b84" : "#4c8c94"
+                                        }
+                                        Keys.onPressed: function(event) {
+                                            if (event.key === Qt.Key_Escape) {
+                                                sdrRadioDisplay.dismissFrequencyEdit()
+                                                window.contentItem.forceActiveFocus()
+                                                event.accepted = true
+                                            } else if (event.key === Qt.Key_Return
+                                                       || event.key === Qt.Key_Enter) {
+                                                sdrRadioDisplay.acceptFrequencyEdit()
+                                                event.accepted = true
+                                            }
+                                        }
+                                        onActiveFocusChanged: {
+                                            if (!activeFocus
+                                                    && sdrRadioDisplay.frequencyEditing)
+                                                sdrRadioDisplay.dismissFrequencyEdit()
+                                        }
+                                    }
+                                    Label { text: "kHz"; color: "#7fb6b2" }
+                                }
+                            }
+                            ToolButton {
+                                objectName: "sdrFrequencyUpButton"
+                                Layout.preferredWidth: 48
+                                Layout.preferredHeight: 56
+                                text: ">"
+                                font.pixelSize: 22
+                                onClicked: appSettings.stepSdrRxFrequency(1)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Move the SDR acquisition window up "
+                                              + (appSettings.sdrTuningStepHz / 1000)
+                                              + " kHz"
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            spacing: 5
+                            ComboBox {
+                                id: sdrModeCombo
+                                objectName: "sdrOperatingModeCombo"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 120
+                                model: appSettings.sdrOperatingModeNames
+                                currentIndex: appSettings.sdrOperatingModeIndex
+                                visible: model.length > 1
+                                onActivated: appSettings.selectSdrOperatingMode(
+                                                 currentIndex)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Receiver operating mode exposed by the SDR driver"
+                            }
+                            ComboBox {
+                                objectName: "sdrControlAntennaCombo"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 150
+                                model: appSettings.sdrAntennaNames
+                                currentIndex: appSettings.sdrAntennaIndex
+                                visible: model.length > 0
+                                onActivated: appSettings.selectSdrAntenna(
+                                                 currentIndex)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Select the SDR antenna, port, or tuner input"
+                            }
+                            Button {
+                                objectName: "sdrCatSyncButton"
+                                Layout.preferredWidth: 86
+                                Layout.preferredHeight: 40
+                                checkable: true
+                                checked: appSettings.sdrFollowRadioVfo
+                                enabled: appSettings.radioEnabled
+                                text: !checked ? "SYNC OFF"
+                                      : appSettings.sdrRadioSyncStatus
+                                        .indexOf("waiting") >= 0
+                                        ? "SYNC …"
+                                        : appSettings.sdrRadioSyncStatus
+                                          .indexOf("bidirectional") >= 0
+                                          ? "SYNC ↔" : "SYNC ←"
+                                onToggled: appSettings.sdrFollowRadioVfo = checked
+                                ToolTip.visible: hovered
+                                ToolTip.text: appSettings.sdrRadioSyncStatus
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 40
+                            spacing: 5
+                            ComboBox {
+                                objectName: "sdrControlSampleRateCombo"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 105
+                                model: sdrRadioDisplay.rateModel
+                                currentIndex: model.indexOf(
+                                                  appSettings.sdrSampleRateHz)
+                                displayText: appSettings.sdrSampleRateHz >= 1000000
+                                             ? (appSettings.sdrSampleRateHz / 1000000)
+                                               + " MS/s"
+                                             : (appSettings.sdrSampleRateHz / 1000)
+                                               + " kS/s"
+                                onActivated: appSettings.sdrSampleRateHz = currentValue
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Effective IQ sample rate; changing it may restart SDR reception"
+                            }
+                            ComboBox {
+                                objectName: "sdrControlBandwidthCombo"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 105
+                                model: sdrRadioDisplay.bandwidthModel
+                                currentIndex: model.indexOf(
+                                                  appSettings.sdrBandwidthHz)
+                                displayText: appSettings.sdrBandwidthHz === 0
+                                             ? "RF BW AUTO"
+                                             : "RF BW "
+                                               + (appSettings.sdrBandwidthHz / 1000)
+                                               + "k"
+                                onActivated: appSettings.sdrBandwidthHz = currentValue
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Hardware RF filter bandwidth; changing it may restart reception"
+                            }
+                            ComboBox {
+                                objectName: "sdrTuningStepCombo"
+                                Layout.fillWidth: true
+                                Layout.preferredWidth: 95
+                                model: [100, 500, 1000, 2500, 5000, 10000,
+                                        25000, 50000, 100000]
+                                currentIndex: model.indexOf(
+                                                  appSettings.sdrTuningStepHz)
+                                displayText: "STEP "
+                                             + (appSettings.sdrTuningStepHz >= 1000
+                                                ? (appSettings.sdrTuningStepHz / 1000)
+                                                  + "k"
+                                                : appSettings.sdrTuningStepHz)
+                                onActivated: appSettings.sdrTuningStepHz = currentValue
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Frequency step used by the SDR < and > controls"
+                            }
+                            Rectangle {
+                                objectName: "sdrDecimationBadge"
+                                Layout.preferredWidth: 70
+                                Layout.preferredHeight: 38
+                                radius: 4
+                                color: "#18252b"
+                                border.color: "#36525a"
+                                Label {
+                                    anchors.centerIn: parent
+                                    text: "DEC RATE"
+                                    color: "#8ecbc4"
+                                    font.pixelSize: 9
+                                    font.weight: Font.DemiBold
+                                }
+                                ToolTip.visible: sdrDecimationMouse.containsMouse
+                                ToolTip.text: "The driver derives hardware decimation from the selected effective IQ rate; SoapySDR exposes no independent decimation control"
+                                MouseArea {
+                                    id: sdrDecimationMouse
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                }
+                            }
+                        }
+                    }
+                }
+                Rectangle {
+                    visible: sdrRadioDisplay.visible
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 1
+                    color: "#263241"
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     visible: vfoDisplay.visible

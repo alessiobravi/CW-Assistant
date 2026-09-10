@@ -14,9 +14,14 @@ SdrCaptureWorker::SdrCaptureWorker(
     : QObject(parent),
       pipe_(std::move(pipe)),
       receiver_(std::move(backend)),
-      pump_timer_(this) {
+      pump_timer_(this),
+      retune_timer_(this) {
   pump_timer_.setInterval(0);
+  retune_timer_.setSingleShot(true);
+  retune_timer_.setInterval(50);
   connect(&pump_timer_, &QTimer::timeout, this, &SdrCaptureWorker::pump);
+  connect(&retune_timer_, &QTimer::timeout, this,
+          &SdrCaptureWorker::applyPendingRetune);
 }
 
 SdrCaptureWorker::~SdrCaptureWorker() { stop(); }
@@ -61,12 +66,32 @@ void SdrCaptureWorker::start(const QString& device_id,
 }
 
 void SdrCaptureWorker::stop() {
+  retune_timer_.stop();
+  pending_retune_hz_.reset();
   pump_timer_.stop();
   receiver_.stop();
   if (running_) {
     running_ = false;
     emit stopped();
   }
+}
+
+void SdrCaptureWorker::requestRetune(const double center_frequency_hz) {
+  if (!running_) return;
+  pending_retune_hz_ = center_frequency_hz;
+  retune_timer_.start();
+}
+
+void SdrCaptureWorker::applyPendingRetune() {
+  if (!running_ || !pending_retune_hz_) return;
+  const double requested = *pending_retune_hz_;
+  pending_retune_hz_.reset();
+  std::string error;
+  if (!receiver_.retuneCenterFrequency(requested, error)) {
+    emit retuneFailed(QString::fromStdString(error));
+    return;
+  }
+  emit retuned(receiver_.actualConfiguration().center_frequency_hz);
 }
 
 void SdrCaptureWorker::pump() {

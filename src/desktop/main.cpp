@@ -185,23 +185,7 @@ int main(int argc, char* argv[]) {
         settings.radioSplitKnown(), settings.controlledSplitActive());
   };
   const auto follow_sdr_to_radio_vfo = [&settings] {
-    if (!settings.sdrFollowRadioVfo()) return;
-    const auto rx_rf_hz = settings.controlledRxRfHz();
-    if (!rx_rf_hz.has_value()) return;
-    const qint64 available_offset = std::max<qint64>(
-        0, static_cast<qint64>(settings.sdrSampleRateHz() / 2) -
-               static_cast<qint64>(settings.sdrDecoderBandwidthHz() / 2) -
-               1'000);
-    const qint64 offset = std::clamp(settings.sdrRadioLoOffsetHz(),
-                                     -available_offset, available_offset);
-    const auto decoder_center = std::clamp<std::uint64_t>(
-        *rx_rf_hz, 1ULL, 99'000'000'000ULL);
-    const qint64 requested_center =
-        static_cast<qint64>(decoder_center) + offset;
-    settings.setSdrCenterFrequencyHz(static_cast<qulonglong>(
-        std::clamp<qint64>(requested_center, 1LL, 99'000'000'000LL)));
-    settings.setSdrDecoderCenterFrequencyHz(
-        static_cast<qulonglong>(decoder_center));
+    settings.followSdrToRadioVfo();
   };
   const auto apply_sdr_input = [&settings, &replay_controller] {
     const qint64 sample_rate_hz = settings.sdrSampleRateHz();
@@ -332,9 +316,6 @@ int main(int argc, char* argv[]) {
       &settings, follow_sdr_to_radio_vfo);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::cat4omChanged,
-      &settings, follow_sdr_to_radio_vfo);
-  QObject::connect(
-      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &settings, follow_sdr_to_radio_vfo);
   QObject::connect(
       &settings,

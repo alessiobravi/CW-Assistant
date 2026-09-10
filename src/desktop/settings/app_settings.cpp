@@ -410,7 +410,7 @@ const QStringList& AppSettings::sdrDeviceNames() const noexcept {
   return sdr_device_names_;
 }
 int AppSettings::sdrDeviceIndex() const noexcept {
-  return sdr_device_ids_.indexOf(sdr_device_id_);
+  return sdr_device_ids_.indexOf(sdr_physical_device_id_);
 }
 const QString& AppSettings::sdrDeviceId() const noexcept {
   return sdr_device_id_;
@@ -421,6 +421,12 @@ QString AppSettings::sdrDeviceDisplayName() const {
              ? sdr_device_names_.at(index)
              : (sdr_device_name_.isEmpty() ? QStringLiteral("No SDR selected")
                                            : sdr_device_name_);
+}
+const QStringList& AppSettings::sdrOperatingModeNames() const noexcept {
+  return sdr_device_mode_names_;
+}
+int AppSettings::sdrOperatingModeIndex() const noexcept {
+  return sdr_device_mode_ids_.indexOf(sdr_device_id_);
 }
 const QString& AppSettings::sdrDiagnostic() const noexcept {
   return sdr_diagnostic_;
@@ -453,6 +459,22 @@ int AppSettings::sdrDecoderBandwidthHz() const noexcept {
 }
 bool AppSettings::sdrFollowRadioVfo() const noexcept {
   return sdr_follow_radio_vfo_;
+}
+int AppSettings::sdrTuningStepHz() const noexcept { return sdr_tuning_step_hz_; }
+QString AppSettings::sdrRadioSyncStatus() const {
+  if (!sdr_follow_radio_vfo_)
+    return QStringLiteral("Radio Sync is off; SDR tuning is independent.");
+  if (!observedRadioRxRfHz())
+    return QStringLiteral(
+        "Radio Sync is waiting for authoritative CAT RX readback.");
+  const bool writable = cwassistant::core::radio_has_capability(
+      radio_state_.capabilities,
+      cwassistant::core::RadioCapability::SetRxFrequency);
+  return writable
+             ? QStringLiteral(
+                   "Radio Sync is bidirectional; CAT readback remains authoritative.")
+             : QStringLiteral(
+                   "SDR follows CAT; this provider does not allow RX tuning.");
 }
 qint64 AppSettings::sdrRadioLoOffsetHz() const noexcept {
   return sdr_radio_lo_offset_hz_;
@@ -1032,6 +1054,17 @@ bool AppSettings::writeControlledRxDialFrequency(
                        "online, writable radio provider."));
     return false;
   }
+  return writeRadioRxDialFrequency(dial_frequency_hz);
+}
+
+bool AppSettings::writeRadioRxDialFrequency(
+    const std::uint64_t dial_frequency_hz) {
+  if (!radio_enabled_ ||
+      cwassistant::core::validate_radio_command(
+          radio_state_, cwassistant::core::SetRxFrequency{dial_frequency_hz}) !=
+          cwassistant::core::RadioCommandValidation::Valid) {
+    return false;
+  }
   if (frequency_backend_index_ == 0) {
 #ifdef Q_OS_WIN
     if (!writeOmniRigRxFrequency(dial_frequency_hz)) {
@@ -1406,6 +1439,7 @@ void AppSettings::setSdrSampleRateHz(const int value) {
   if (assign_if_changed(sdr_sample_rate_hz_, value)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
+    if (sdr_follow_radio_vfo_) followSdrToRadioVfo();
   }
 }
 void AppSettings::setSdrBandwidthHz(const int value) {
@@ -1426,6 +1460,7 @@ void AppSettings::setSdrDecoderBandwidthHz(const int value) {
   if (assign_if_changed(sdr_decoder_bandwidth_hz_, bounded)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
+    if (sdr_follow_radio_vfo_) followSdrToRadioVfo();
   }
 }
 void AppSettings::setSdrDecoderWindow(const qulonglong center_frequency_hz,
@@ -1442,8 +1477,103 @@ void AppSettings::setSdrDecoderWindow(const qulonglong center_frequency_hz,
     emit settingsChanged();
   }
 }
+
+std::optional<std::uint64_t> AppSettings::observedRadioRxRfHz() const noexcept {
+  if (!radio_enabled_ ||
+      radio_state_.rx_frequency.observation !=
+          cwassistant::core::RadioObservation::Known) {
+    return std::nullopt;
+  }
+  const auto resolved = cwassistant::core::resolve_frequencies(
+      {.rx_dial_hz = radio_state_.rx_frequency.hz,
+       .tx_dial_hz = radio_state_.rx_frequency.hz,
+       .split_enabled = false},
+      {.rx_offset_hz = rx_transverter_offset_hz_,
+       .tx_offset_hz = rx_transverter_offset_hz_});
+  return resolved ? std::optional<std::uint64_t>(resolved->rx_rf_hz)
+                  : std::nullopt;
+}
+
+void AppSettings::setSdrRadioWindow(const std::uint64_t rx_frequency_hz) {
+  const qint64 available_offset = std::max<qint64>(
+      0, static_cast<qint64>(sdr_sample_rate_hz_ / 2) -
+             static_cast<qint64>(sdr_decoder_bandwidth_hz_ / 2) - 1'000);
+  const qint64 offset =
+      std::clamp(sdr_radio_lo_offset_hz_, -available_offset, available_offset);
+  const qint64 acquisition_center =
+      std::clamp<qint64>(static_cast<qint64>(rx_frequency_hz) + offset, 1LL,
+                         99'000'000'000LL);
+  const bool center_changed = assign_if_changed(
+      sdr_center_frequency_hz_, static_cast<qulonglong>(acquisition_center));
+  const bool decoder_changed = assign_if_changed(
+      sdr_decoder_center_frequency_hz_,
+      static_cast<qulonglong>(rx_frequency_hz));
+  if (center_changed || decoder_changed) {
+    emit sdrSettingsChanged();
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::followSdrToRadioVfo() {
+  if (!sdr_follow_radio_vfo_) return;
+  const auto rx_frequency_hz = observedRadioRxRfHz();
+  if (rx_frequency_hz) setSdrRadioWindow(*rx_frequency_hz);
+}
+
+bool AppSettings::requestSdrRxFrequencyHz(const qulonglong frequency_hz) {
+  if (frequency_hz == 0U || frequency_hz > 99'000'000'000ULL) {
+    setStatusMessage(QStringLiteral(
+        "Select an SDR RX frequency between 1 Hz and 99 GHz."));
+    return false;
+  }
+  if (!sdr_follow_radio_vfo_) {
+    setSdrRadioWindow(static_cast<std::uint64_t>(frequency_hz));
+    setStatusMessage(
+        QStringLiteral("SDR RX frequency requested; CAT was not changed."));
+    return true;
+  }
+  const auto dial_frequency = cwassistant::core::resolve_dial_frequency(
+      static_cast<std::uint64_t>(frequency_hz), rx_transverter_offset_hz_);
+  if (!dial_frequency || !writeRadioRxDialFrequency(*dial_frequency)) {
+    setStatusMessage(QStringLiteral(
+        "Radio Sync could not apply the requested RX frequency through the selected CAT provider."));
+    return false;
+  }
+  rememberPendingRxFrequency(static_cast<std::uint64_t>(frequency_hz));
+  setSdrRadioWindow(static_cast<std::uint64_t>(frequency_hz));
+  setStatusMessage(QStringLiteral(
+      "Synchronized RX frequency requested; CAT readback remains authoritative."));
+  return true;
+}
+
+void AppSettings::stepSdrRxFrequency(const int direction) {
+  if (direction != -1 && direction != 1) {
+    setStatusMessage(QStringLiteral("SDR frequency step must be down or up."));
+    return;
+  }
+  const auto current =
+      static_cast<std::uint64_t>(sdr_decoder_center_frequency_hz_);
+  const auto step = static_cast<std::uint64_t>(sdr_tuning_step_hz_);
+  if ((direction < 0 && current <= step) ||
+      (direction > 0 && current > 99'000'000'000ULL - step)) {
+    setStatusMessage(QStringLiteral(
+        "The requested SDR frequency step is outside the supported range."));
+    return;
+  }
+  (void)requestSdrRxFrequencyHz(static_cast<qulonglong>(
+      direction < 0 ? current - step : current + step));
+}
+
 void AppSettings::setSdrFollowRadioVfo(const bool value) {
   if (assign_if_changed(sdr_follow_radio_vfo_, value)) {
+    emit sdrSettingsChanged();
+    emit settingsChanged();
+    if (value) followSdrToRadioVfo();
+  }
+}
+void AppSettings::setSdrTuningStepHz(const int value) {
+  const int bounded = std::clamp(value, 1, 10'000'000);
+  if (assign_if_changed(sdr_tuning_step_hz_, bounded)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
   }
@@ -1452,6 +1582,7 @@ void AppSettings::setSdrRadioLoOffsetHz(const qint64 value) {
   if (assign_if_changed(sdr_radio_lo_offset_hz_, value)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
+    if (sdr_follow_radio_vfo_) followSdrToRadioVfo();
   }
 }
 void AppSettings::setSdrAutomaticGain(const bool value) {
@@ -1869,25 +2000,62 @@ void AppSettings::refreshSdrDevices() {
   SdrReceiver receiver(makeSoapySdrReceiveBackend());
   const SdrDiscoveryReport report = receiver.discover();
 
+  const QString previous_variant_id = sdr_device_id_;
+  const QString previous_device_name = sdr_device_name_;
+  const QString previous_physical_id = sdr_physical_device_id_;
+  QString previous_mode_id = sdr_device_mode_id_;
+  if (previous_mode_id.isEmpty()) {
+    if (previous_device_name.contains(QStringLiteral("Single Tuner"),
+                                      Qt::CaseInsensitive)) {
+      previous_mode_id = QStringLiteral("ST");
+    } else if (previous_device_name.contains(QStringLiteral("Dual Tuner"),
+                                             Qt::CaseInsensitive)) {
+      previous_mode_id = QStringLiteral("DT");
+    } else if (previous_device_name.contains(QStringLiteral("Master"),
+                                             Qt::CaseInsensitive) &&
+               previous_device_name.contains(QStringLiteral("8Mhz"),
+                                             Qt::CaseInsensitive)) {
+      previous_mode_id = QStringLiteral("MA8");
+    } else if (previous_device_name.contains(QStringLiteral("Master"),
+                                             Qt::CaseInsensitive)) {
+      previous_mode_id = QStringLiteral("MA");
+    } else if (previous_device_name.contains(QStringLiteral("Slave"),
+                                             Qt::CaseInsensitive)) {
+      previous_mode_id = QStringLiteral("SL");
+    }
+  }
   QStringList names;
   QStringList ids;
-  for (const auto& device : report.devices) {
-    const QString id = QString::fromStdString(device.id);
-    if (id.isEmpty() || ids.contains(id)) continue;
-    QString label = QString::fromStdString(device.label).trimmed();
-    if (label.isEmpty()) label = QStringLiteral("Unnamed SDR device");
-    if (label.contains(QStringLiteral("RSPduo"), Qt::CaseInsensitive)) {
-      label +=
-          label.contains(QStringLiteral("Single Tuner"), Qt::CaseInsensitive)
-              ? QStringLiteral("  •  Recommended")
-              : QStringLiteral("  •  Advanced mode");
+  sdr_discovered_modes_.clear();
+  for (const auto& physical : groupSdrDevices(report.devices)) {
+    const QString physical_id =
+        QString::fromStdString(physical.id).trimmed();
+    if (physical_id.isEmpty() || ids.contains(physical_id)) continue;
+    QString physical_label = QString::fromStdString(physical.label).trimmed();
+    if (physical_label.isEmpty())
+      physical_label = QStringLiteral("Unnamed SDR device");
+    const auto& first = physical.modes.front();
+    const QString driver = QString::fromStdString(first.driver).trimmed();
+    const QString serial = QString::fromStdString(first.serial).trimmed();
+    if (!driver.isEmpty())
+      physical_label += QStringLiteral("  •  %1").arg(driver);
+    if (!serial.isEmpty())
+      physical_label += QStringLiteral("  •  S/N %1").arg(serial);
+    names.push_back(physical_label);
+    ids.push_back(physical_id);
+    for (const auto& mode : physical.modes) {
+      const QString variant_id = QString::fromStdString(mode.id).trimmed();
+      if (variant_id.isEmpty()) continue;
+      QString mode_name = QString::fromStdString(mode.mode_label).trimmed();
+      if (mode_name.isEmpty()) mode_name = QStringLiteral("Default");
+      sdr_discovered_modes_.push_back(
+          {.physical_id = physical_id,
+           .variant_id = variant_id,
+           .variant_name = QString::fromStdString(mode.label).trimmed(),
+           .mode_id = QString::fromStdString(mode.mode_id).trimmed(),
+           .mode_name = mode_name,
+           .recommended = mode.recommended_mode});
     }
-    const QString driver = QString::fromStdString(device.driver).trimmed();
-    const QString serial = QString::fromStdString(device.serial).trimmed();
-    if (!driver.isEmpty()) label += QStringLiteral("  •  %1").arg(driver);
-    if (!serial.isEmpty()) label += QStringLiteral("  •  S/N %1").arg(serial);
-    names.push_back(label);
-    ids.push_back(id);
   }
 
   sdr_backend_available_ = report.backend_available;
@@ -1907,6 +2075,25 @@ void AppSettings::refreshSdrDevices() {
   sdr_module_names_.sort(Qt::CaseInsensitive);
   sdr_device_names_ = std::move(names);
   sdr_device_ids_ = std::move(ids);
+  sdr_physical_device_id_.clear();
+  if (sdr_device_ids_.contains(previous_physical_id)) {
+    sdr_physical_device_id_ = previous_physical_id;
+  } else {
+    for (const auto& mode : sdr_discovered_modes_) {
+      const bool exact_variant = mode.variant_id == previous_variant_id;
+      const bool legacy_variant =
+          !previous_variant_id.isEmpty() &&
+          previous_variant_id.startsWith(mode.physical_id + QLatin1Char(':'));
+      const QString serial = mode.physical_id.section(QLatin1Char(':'), 1);
+      const bool saved_name_match =
+          !serial.isEmpty() && previous_device_name.contains(serial);
+      if (exact_variant || legacy_variant || saved_name_match) {
+        sdr_physical_device_id_ = mode.physical_id;
+        break;
+      }
+    }
+  }
+  rebuildSdrDeviceModes(previous_variant_id, previous_mode_id);
   sdr_diagnostic_ = QString::fromStdString(report.diagnostic).trimmed();
   if (sdr_diagnostic_.isEmpty()) {
     sdr_diagnostic_ =
@@ -1935,14 +2122,85 @@ void AppSettings::refreshSdrDevices() {
 
 void AppSettings::selectSdrDevice(const int index) {
   if (index < 0 || index >= sdr_device_ids_.size()) return;
-  sdr_device_id_ = sdr_device_ids_.at(index);
-  sdr_device_name_ = sdr_device_names_.at(index);
+  sdr_physical_device_id_ = sdr_device_ids_.at(index);
+  rebuildSdrDeviceModes();
   refreshSelectedSdrCapabilities();
   setStatusMessage(
       QStringLiteral("SDR receiver selected. This receive-only source remains "
                      "stopped until started by the operator."));
   emit sdrSettingsChanged();
   emit settingsChanged();
+}
+
+void AppSettings::selectSdrOperatingMode(const int index) {
+  if (index < 0 || index >= sdr_device_mode_ids_.size()) return;
+  sdr_device_id_ = sdr_device_mode_ids_.at(index);
+  sdr_device_mode_id_ = sdr_device_mode_keys_.at(index);
+  const auto mode = std::find_if(
+      sdr_discovered_modes_.cbegin(), sdr_discovered_modes_.cend(),
+      [this](const SdrModeChoice& candidate) {
+        return candidate.variant_id == sdr_device_id_;
+      });
+  sdr_device_name_ =
+      mode == sdr_discovered_modes_.cend() ? QString{} : mode->variant_name;
+  refreshSelectedSdrCapabilities();
+  setStatusMessage(
+      QStringLiteral("SDR operating mode selected. Reception remains stopped "
+                     "until started by the operator."));
+  emit sdrSettingsChanged();
+  emit settingsChanged();
+}
+
+void AppSettings::rebuildSdrDeviceModes(const QString& preferred_variant_id,
+                                        const QString& preferred_mode_id) {
+  sdr_device_mode_names_.clear();
+  sdr_device_mode_ids_.clear();
+  sdr_device_mode_keys_.clear();
+  QList<const SdrModeChoice*> available;
+  for (const auto& mode : sdr_discovered_modes_) {
+    if (mode.physical_id != sdr_physical_device_id_) continue;
+    available.push_back(&mode);
+    sdr_device_mode_names_.push_back(mode.mode_name);
+    sdr_device_mode_ids_.push_back(mode.variant_id);
+    sdr_device_mode_keys_.push_back(mode.mode_id);
+  }
+  if (available.isEmpty()) {
+    sdr_device_id_.clear();
+    sdr_device_mode_id_.clear();
+    return;
+  }
+  int selected = -1;
+  for (int index = 0; index < available.size(); ++index) {
+    if (!preferred_variant_id.isEmpty() &&
+        available.at(index)->variant_id == preferred_variant_id) {
+      selected = index;
+      break;
+    }
+  }
+  const QString desired_mode = preferred_mode_id.isEmpty()
+                                   ? sdr_device_mode_id_
+                                   : preferred_mode_id;
+  if (selected < 0 && !desired_mode.isEmpty()) {
+    for (int index = 0; index < available.size(); ++index) {
+      if (available.at(index)->mode_id == desired_mode) {
+        selected = index;
+        break;
+      }
+    }
+  }
+  if (selected < 0) {
+    for (int index = 0; index < available.size(); ++index) {
+      if (available.at(index)->recommended) {
+        selected = index;
+        break;
+      }
+    }
+  }
+  if (selected < 0) selected = 0;
+  const auto& mode = *available.at(selected);
+  sdr_device_id_ = mode.variant_id;
+  sdr_device_mode_id_ = mode.mode_id;
+  sdr_device_name_ = mode.variant_name;
 }
 
 void AppSettings::refreshSelectedSdrCapabilities() {
@@ -2230,6 +2488,10 @@ bool AppSettings::apply() {
                     audio_input_radio_linked_);
   settings.setValue(storageKey(QStringLiteral("receiver/inputType")),
                     receiver_input_type_index_);
+  settings.setValue(storageKey(QStringLiteral("sdr/physicalDeviceId")),
+                    sdr_physical_device_id_);
+  settings.setValue(storageKey(QStringLiteral("sdr/deviceMode")),
+                    sdr_device_mode_id_);
   settings.setValue(storageKey(QStringLiteral("sdr/deviceId")), sdr_device_id_);
   settings.setValue(storageKey(QStringLiteral("sdr/deviceName")),
                     sdr_device_name_);
@@ -2246,6 +2508,8 @@ bool AppSettings::apply() {
                     sdr_decoder_bandwidth_hz_);
   settings.setValue(storageKey(QStringLiteral("sdr/followRadioVfo")),
                     sdr_follow_radio_vfo_);
+  settings.setValue(storageKey(QStringLiteral("sdr/tuningStepHz")),
+                    sdr_tuning_step_hz_);
   settings.setValue(storageKey(QStringLiteral("sdr/radioLoOffsetHz")),
                     sdr_radio_lo_offset_hz_);
   settings.setValue(storageKey(QStringLiteral("sdr/automaticGain")),
@@ -2459,6 +2723,11 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("receiver/inputType")), 0)
           .toInt(),
       0, 1);
+  sdr_physical_device_id_ =
+      settings.value(storageKey(QStringLiteral("sdr/physicalDeviceId")))
+          .toString();
+  sdr_device_mode_id_ =
+      settings.value(storageKey(QStringLiteral("sdr/deviceMode"))).toString();
   sdr_device_id_ =
       settings.value(storageKey(QStringLiteral("sdr/deviceId"))).toString();
   sdr_device_name_ =
@@ -2492,6 +2761,10 @@ void AppSettings::load() {
   sdr_follow_radio_vfo_ =
       settings.value(storageKey(QStringLiteral("sdr/followRadioVfo")), false)
           .toBool();
+  sdr_tuning_step_hz_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("sdr/tuningStepHz")), 1'000)
+          .toInt(),
+      1, 10'000'000);
   sdr_radio_lo_offset_hz_ = std::clamp<qint64>(
       settings.value(storageKey(QStringLiteral("sdr/radioLoOffsetHz")), 0)
           .toLongLong(),
@@ -2980,6 +3253,8 @@ void AppSettings::resetInMemorySettings() {
   audio_upper_frequency_hz_ = 3'000.0;
   audio_input_radio_linked_ = false;
   receiver_input_type_index_ = 0;
+  sdr_physical_device_id_.clear();
+  sdr_device_mode_id_.clear();
   sdr_device_id_.clear();
   sdr_device_name_.clear();
   sdr_center_frequency_hz_ = 14'050'000ULL;
@@ -2992,6 +3267,7 @@ void AppSettings::resetInMemorySettings() {
   sdr_decoder_center_frequency_hz_ = 14'050'000ULL;
   sdr_decoder_bandwidth_hz_ = 24'000;
   sdr_follow_radio_vfo_ = false;
+  sdr_tuning_step_hz_ = 1'000;
   sdr_radio_lo_offset_hz_ = 0;
   sdr_automatic_gain_ = true;
   sdr_automatic_gain_available_ = true;

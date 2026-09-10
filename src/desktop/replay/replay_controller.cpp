@@ -915,6 +915,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &SdrCaptureWorker::start);
   connect(this, &ReplayController::sdrStopRequested, sdr_worker,
           &SdrCaptureWorker::stop);
+  connect(this, &ReplayController::sdrRetuneRequested, sdr_worker,
+          &SdrCaptureWorker::requestRetune);
   connect(this, &ReplayController::liveDspStartRequested, dsp_worker,
           &LiveAudioDspWorker::start);
   connect(this, &ReplayController::liveDspStopRequested, dsp_worker,
@@ -1034,6 +1036,16 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
       emit stateChanged();
     }
   });
+  connect(sdr_worker, &SdrCaptureWorker::retuned, this,
+          [this](const double center_frequency_hz) {
+            status_text_ = QStringLiteral("Live SDR retuned to %1 Hz")
+                               .arg(center_frequency_hz, 0, 'f', 0);
+            emit stateChanged();
+          });
+  connect(sdr_worker, &SdrCaptureWorker::retuneFailed, this,
+          [this](const QString& message) {
+            setStatus(QStringLiteral("Live SDR retune error: %1").arg(message));
+          });
   connect(sdr_worker, &SdrCaptureWorker::failed, this,
           [this](const QString& message) {
             live_capturing_ = false;
@@ -1961,9 +1973,9 @@ void ReplayController::setSdrInputSelection(
     const double gain_db,
     const qulonglong decoder_center_frequency_hz,
     const int decoder_bandwidth_hz) {
+  const bool center_changed = sdr_center_frequency_hz_ != center_frequency_hz;
   const bool restart = live_capturing_ && source_mode_ == 2 &&
       (sdr_device_id_ != device_id ||
-       sdr_center_frequency_hz_ != center_frequency_hz ||
        sdr_sample_rate_hz_ != sample_rate_hz ||
        sdr_bandwidth_hz_ != bandwidth_hz ||
        sdr_antenna_ != antenna ||
@@ -1986,7 +1998,11 @@ void ReplayController::setSdrInputSelection(
         static_cast<double>(sdr_decoder_center_frequency_hz_),
         static_cast<double>(sdr_decoder_bandwidth_hz_));
   }
-  if (restart) beginLiveSdrCapture();
+  if (restart) {
+    beginLiveSdrCapture();
+  } else if (center_changed && live_capturing_ && source_mode_ == 2) {
+    emit sdrRetuneRequested(static_cast<double>(sdr_center_frequency_hz_));
+  }
 }
 
 void ReplayController::openFile(const QUrl& url) {

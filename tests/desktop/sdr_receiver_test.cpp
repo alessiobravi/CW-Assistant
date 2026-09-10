@@ -38,7 +38,9 @@ class FakeBackend final : public cwassistant::desktop::SdrReceiveBackend {
       .automatic_gain = false,
       .gain_db = 17.0};
   bool open_result{true};
+  bool retune_result{true};
   bool opened{false};
+  int retune_calls{0};
   std::deque<cwassistant::desktop::SdrReadResult> reads;
   bool corrupt_next_sample{false};
 
@@ -68,6 +70,19 @@ class FakeBackend final : public cwassistant::desktop::SdrReceiveBackend {
     return open_result;
   }
 
+  bool retuneCenterFrequency(const double center_frequency_hz,
+                             double& actual_center_frequency_hz,
+                             std::string& error) override {
+    ++retune_calls;
+    if (!retune_result) {
+      error = "fake retune failed";
+      return false;
+    }
+    actual.center_frequency_hz = center_frequency_hz;
+    actual_center_frequency_hz = center_frequency_hz;
+    return true;
+  }
+
   cwassistant::desktop::SdrReadResult read(
       std::span<std::complex<float>> samples, long) override {
     if (reads.empty()) return {.timeout = true};
@@ -92,6 +107,58 @@ class FakeBackend final : public cwassistant::desktop::SdrReceiveBackend {
 
 int main() {
   using namespace cwassistant::desktop;
+
+  {
+    const std::vector<SdrDeviceDescriptor> variants{
+        {.id = "sdrplay:1806067C32:DT",
+         .label = "RSPduo dual",
+         .driver = "sdrplay",
+         .serial = "1806067C32",
+         .physical_id = "sdrplay:1806067C32",
+         .physical_label = "SDRplay RSPduo",
+         .mode_id = "DT",
+         .mode_label = "DT - Dual tuner"},
+        {.id = "sdrplay:1806067C32:ST",
+         .label = "RSPduo single",
+         .driver = "sdrplay",
+         .serial = "1806067C32",
+         .physical_id = "sdrplay:1806067C32",
+         .physical_label = "SDRplay RSPduo",
+         .mode_id = "ST",
+         .mode_label = "ST - Single tuner",
+         .recommended_mode = true},
+        {.id = "sdrplay:1806067C32:MA",
+         .label = "RSPduo master",
+         .driver = "sdrplay",
+         .serial = "1806067C32",
+         .physical_id = "sdrplay:1806067C32",
+         .physical_label = "SDRplay RSPduo",
+         .mode_id = "MA",
+         .mode_label = "MA - Master 6 MHz"},
+        {.id = "sdrplay:1806067C32:MA8",
+         .label = "RSPduo master 8 MHz",
+         .driver = "sdrplay",
+         .serial = "1806067C32",
+         .physical_id = "sdrplay:1806067C32",
+         .physical_label = "SDRplay RSPduo",
+         .mode_id = "MA8",
+         .mode_label = "MA8 - Master 8 MHz"},
+        {.id = "rtlsdr:00000001:0",
+         .label = "Generic RTL2832U",
+         .driver = "rtlsdr",
+         .serial = "00000001",
+         .physical_id = "rtlsdr:00000001",
+         .physical_label = "Generic RTL2832U",
+         .mode_id = "default",
+         .mode_label = "Default",
+         .recommended_mode = true}};
+    const auto grouped = groupSdrDevices(variants);
+    expect(grouped.size() == 2 && grouped.front().modes.size() == 4,
+           "same-serial SDR operating modes group as one physical receiver");
+    expect(grouped.front().modes.front().mode_id == "ST" &&
+               grouped.back().id == "rtlsdr:00000001",
+           "recommended mode sorts first without merging another receiver");
+  }
 
   {
     SdrReceiver unavailable(makeSoapySdrReceiveBackend());
@@ -158,6 +225,24 @@ int main() {
              block.sample_count == 3 && block.samples[2].real() == 2.0F,
          "IQ samples, sequence, and hardware timestamp are preserved");
 
+  expect(receiver.retuneCenterFrequency(14'075'000.0, error) &&
+             fake_view->retune_calls == 1 &&
+             receiver.diagnostics().running,
+         "center-only retune preserves the running receiver");
+  fake_view->reads.push_back({.sample_count = 2,
+                              .timestamp_ns = 22'000,
+                              .timestamp_valid = true});
+  expect(receiver.pump(block, 1) &&
+             block.stream.center_frequency_hz == 14'075'000.0 &&
+             receiver.diagnostics().discontinuities == 1,
+         "first retuned block carries authoritative RF and a discontinuity");
+  fake_view->retune_result = false;
+  expect(!receiver.retuneCenterFrequency(14'076'000.0, error) &&
+             receiver.diagnostics().running &&
+             receiver.actualConfiguration().center_frequency_hz ==
+                 14'075'000.0,
+         "failed retune leaves the current stream running and unchanged");
+
   fake_view->reads.push_back({.overflow = true});
   expect(!receiver.pump(block, 1), "device overflow produces no block");
   expect(receiver.diagnostics().overflows == 1,
@@ -165,8 +250,8 @@ int main() {
 
   fake_view->reads.push_back({.sample_count = 2});
   expect(receiver.pump(block, 1), "untimestamped IQ block is published");
-  expect(block.sequence == 2 && block.timestamp_ns == 21'000 &&
-             receiver.diagnostics().discontinuities == 1,
+  expect(block.sequence == 3 && block.timestamp_ns == 30'000 &&
+             receiver.diagnostics().discontinuities == 2,
          "overflow creates an explicit discontinuity before monotonic sample time resumes");
 
   fake_view->corrupt_next_sample = true;

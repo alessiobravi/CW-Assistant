@@ -8,6 +8,7 @@
 #include <QTimer>
 
 #include <memory>
+#include <optional>
 
 namespace cwassistant::desktop {
 
@@ -28,12 +29,15 @@ class SdrCaptureWorker final : public QObject {
              double sample_rate_hz, double bandwidth_hz,
              const QString& antenna, bool automatic_gain, double gain_db);
   void stop();
+  void requestRetune(double center_frequency_hz);
 
  signals:
   void started(const QString& device_id, double actual_center_frequency_hz,
                double actual_sample_rate_hz, double actual_bandwidth_hz,
                bool actual_automatic_gain, double actual_gain_db);
   void stopped();
+  void retuned(double actual_center_frequency_hz);
+  void retuneFailed(const QString& message);
   void failed(const QString& message);
   void diagnosticsChanged(qulonglong source_overruns,
                           qulonglong device_overflows,
@@ -42,11 +46,14 @@ class SdrCaptureWorker final : public QObject {
 
  private slots:
   void pump();
+  void applyPendingRetune();
 
  private:
   std::shared_ptr<LiveAudioPipe> pipe_;
   SdrReceiver receiver_;
   QTimer pump_timer_;
+  QTimer retune_timer_;
+  std::optional<double> pending_retune_hz_;
   bool running_{false};
   std::uint64_t reported_source_overruns_{0};
   std::uint64_t reported_device_overflows_{0};
