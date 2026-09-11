@@ -28,21 +28,32 @@
 #                 unknown, because a filter with a hole in it is a syntax
 #                 error on somebody else's server.
 #
-#                 The syntax differs by cluster software and is verified
-#                 against each server rather than assumed. DXSpider takes
-#                 `accept/spots 0 on {BAND}/cw` -- confirmed against GB7DJK,
-#                 which echoed it back as `filter0 accept on 20m/cw`.
+#                 {BANDNUM} is the same band as a bare number -- 20, not 20m
+#                 -- because the two networks disagree about the name and one
+#                 refuses the other's form.
 #
-#                 CC Cluster and AR-Cluster nodes carry no {BAND} command here
-#                 because none was verified. CC Cluster's own login banner
+#                 The syntax differs by cluster software and every command
+#                 here was watched being accepted by a live server rather than
+#                 taken from documentation:
+#
+#                   DXSpider     accept/spots 0 on {BAND}/cw
+#                                GB7DJK echoed it back through sh/filter as
+#                                `filter0 accept on 20m/cw`.
+#
+#                   AR-Cluster   set/dx filter band={BANDNUM} and mode=cw
+#                                NC7J rejected `band=20m and mode=cw` with
+#                                "did not pass validation" and accepted
+#                                `band=20 and mode=cw`, reporting it back as
+#                                `Filter: band = 20 and mode = cw`. The suffix
+#                                is the whole difference.
+#
+#                 CC Cluster nodes carry no band command. Its login banner
 #                 lists its whole command set and there is no band filter in
-#                 it; its band filtering belongs to the CC User client rather
-#                 than to plain telnet. Guessing a command to send to somebody
-#                 else's machine is not worth an "Unknown command" reply and a
-#                 filter that silently is not there, so those servers are
-#                 filtered on arrival instead, which happens for every server
-#                 regardless. Add a {BAND} command for one only after watching
-#                 that server accept it.
+#                 it, and nothing was seen to be accepted, so it is filtered
+#                 on arrival like every server is anyway. Add a command for a
+#                 server only after watching that server accept it: a guess
+#                 earns an error reply and a filter that quietly is not there,
+#                 submitted under the operator's callsign.
 # note            shown beside the entry in Settings.
 #
 # Blank lines and lines starting with '#' are ignored. A line that does not
@@ -68,7 +79,7 @@ Reverse Beacon Network (CW/RTTY)|telnet.reversebeacon.net|7000|rbn||Skimmers wor
 # can send several spots a second; one carrying only human spots sends a few
 # a minute. Both are useful, for different reasons.
 VE7CC (CC Cluster, Vancouver)|dxc.ve7cc.net|23|cluster|SET/SKIMMER;SET/NOFT8;SET/NOFT4;SET/NOBEACON|Well-run CC Cluster node. Skimmer spots enabled, FT8 and FT4 suppressed.
-NC7J (AR-Cluster, Utah)|dxc.nc7j.com|7373|cluster|SET/SKIMMER;SET/NOFT8|AR-Cluster v6 with an attached CW and RTTY skimmer server.
+NC7J (AR-Cluster, Utah)|dxc.nc7j.com|7373|cluster|SET/SKIMMER;SET/NOFT8;set/dx filter band={BANDNUM} and mode=cw|AR-Cluster v6 with an attached CW and RTTY skimmer server.
 DXFun (Spain)|dxfun.com|8000|cluster||Long-running European node with a large user base.
-W3LPL (Maryland)|dxc.w3lpl.net|7373|cluster|SET/SKIMMER;SET/NOFT8|North American node fed by the W3LPL skimmer array.
+W3LPL (Maryland)|dxc.w3lpl.net|7373|cluster|SET/SKIMMER;SET/NOFT8;set/dx filter band={BANDNUM} and mode=cw|North American node fed by the W3LPL skimmer array.
 GB7DJK (DXSpider, UK)|gb7djk.dxcluster.net|7300|cluster|accept/spots 0 on {BAND}/cw|DXSpider node run by the author of DXSpider; answers as GB7TLH.

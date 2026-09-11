@@ -702,6 +702,47 @@ bool resolvesTheBandTokenOnTheWire() {
   return cluster.received().filter(QStringLiteral("{BAND}")).isEmpty();
 }
 
+// AR-Cluster names a band by its bare number and refuses the ADIF suffix.
+//
+// Watched live on NC7J: `set/dx filter band=20m and mode=cw` came back as
+// "ERROR - The requested DX filter did not pass validation and was rejected",
+// while `set/dx filter band=20 and mode=cw` was accepted and reported back as
+// `Filter: band = 20 and mode = cw`. DXSpider wants the opposite -- `20m` --
+// so the two tokens are not interchangeable and a single one would leave half
+// the shipped servers unfiltered while looking configured.
+//
+// The failure this guards against is invisible in use: the command is sent,
+// the server answers with an error the operator never sees, and the feed
+// arrives unfiltered while Settings shows a band filter in force.
+bool resolvesTheBandNumberTokenForArCluster() {
+  FakeCluster cluster;
+  if (!cluster.start()) return false;
+  DxClusterClient client;
+  client.setServer(loopbackServer(
+      cluster.port(),
+      QStringList{QStringLiteral("set/dx filter band={BANDNUM} and mode=cw")}));
+  client.setLoginCallsign(QStringLiteral("IU0LFQ"));
+  client.setBandFilter(QStringLiteral("20m"));
+  client.setEnabled(true);
+  pumpUntil(
+      [&cluster] {
+        return cluster.received().contains(
+            QLatin1String("set/dx filter band=20 and mode=cw"));
+      },
+      4'000);
+  client.setEnabled(false);
+
+  if (!cluster.received().contains(
+          QLatin1String("set/dx filter band=20 and mode=cw"))) {
+    return false;
+  }
+  // The suffix is the whole difference, so its absence is the assertion.
+  if (!cluster.received().filter(QStringLiteral("band=20m")).isEmpty()) {
+    return false;
+  }
+  return cluster.received().filter(QStringLiteral("{BANDNUM}")).isEmpty();
+}
+
 // The quiet one. While the band is unknown there is nothing to put in the
 // hole, and a command with a hole in it -- `accept/spots 0 on /cw` -- is a
 // syntax error written to somebody else's machine under the operator's
@@ -823,6 +864,7 @@ int main(int argc, char** argv) {
   if (!agreesWithTheOneCallsignPolicy()) return 22;
 
   if (!resolvesTheBandTokenOnTheWire()) return 23;
+  if (!resolvesTheBandNumberTokenForArCluster()) return 26;
   if (!skipsATokenCommandWhileTheBandIsUnknown()) return 24;
   if (!resendsOnlyTheBandDependentCommandOnABandChange()) return 25;
 

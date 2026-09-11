@@ -696,10 +696,23 @@ void DxClusterClient::setStatus(QString message) {
 QStringList DxClusterClient::resolvedCommands(
     const bool band_dependent_only) const {
   const QString token = QStringLiteral("{BAND}");
+  // Two tokens, because the networks disagree about what a band is called.
+  // DXSpider wants the ADIF name -- `accept/spots 0 on 20m/cw` -- while
+  // AR-Cluster wants the bare number and rejects the suffix outright:
+  // `band=20m and mode=cw` was refused with "did not pass validation", and
+  // `band=20 and mode=cw` was accepted and echoed back. One token could not
+  // serve both without the server list carrying the difference as a string
+  // edit, which is exactly the kind of thing that silently stops matching.
+  const QString number_token = QStringLiteral("{BANDNUM}");
+  QString band_number = band_filter_;
+  while (!band_number.isEmpty() && !band_number.back().isDigit()) {
+    band_number.chop(1);
+  }
   QStringList resolved;
   resolved.reserve(server_.login_commands.size());
   for (const QString& command : server_.login_commands) {
-    const bool band_dependent = command.contains(token);
+    const bool band_dependent =
+        command.contains(token) || command.contains(number_token);
     // Asked for only the band-dependent ones: this is a band change on a live
     // session, and a command that does not mention the band was setup that the
     // server has already accepted.
@@ -712,9 +725,10 @@ QStringList DxClusterClient::resolvedCommands(
     // token replaced by nothing, produces `accept/spots 0 on /cw` -- a syntax
     // error on somebody else's machine, submitted under the operator's
     // callsign.
-    if (band_filter_.isEmpty()) continue;
+    if (band_filter_.isEmpty() || band_number.isEmpty()) continue;
     QString filled = command;
     filled.replace(token, band_filter_);
+    filled.replace(number_token, band_number);
     resolved.append(filled);
   }
   return resolved;

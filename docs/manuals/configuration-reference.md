@@ -737,13 +737,24 @@ again whenever the radio changes band, so what the server sends follows the
 receiver. This is the cheaper filter, because the spots never cross the
 network.
 
-Only DXSpider nodes currently carry a band filter, because that is the only
-syntax that was confirmed against a live server. CC Cluster's own login banner
-lists its whole command set and contains no band filter; its band filtering
-belongs to the CC User client rather than to plain telnet. A guessed command
-earns an "Unknown command" reply and a filter that quietly is not there, which
-is worse than not sending one, so those nodes rely on the arrival filter -- as
-every server does anyway.
+Every filter command shipped was watched being accepted by the live server it
+is listed against, because a guessed one earns an error reply the operator
+never sees and leaves a filter that quietly is not there:
+
+| Software | Command | Servers |
+| --- | --- | --- |
+| DXSpider | `accept/spots 0 on {BAND}/cw` | GB7DJK |
+| AR-Cluster | `set/dx filter band={BANDNUM} and mode=cw` | NC7J, W3LPL |
+
+The two tokens are not interchangeable. `{BAND}` is the ADIF band name, `20m`;
+`{BANDNUM}` is the bare number, `20`. AR-Cluster refuses the suffix outright --
+`band=20m` is rejected as failing validation while `band=20` is accepted -- and
+DXSpider wants the suffixed form, so a single token would leave half the
+servers unfiltered while appearing configured.
+
+CC Cluster nodes carry no band command. Their login banner lists the whole
+command set and there is no band filter in it, and none was seen to be
+accepted. They rely on the arrival filter, as every server does anyway.
 
 On arrival, always: reverse-beacon reports come in at roughly six a second
 worldwide across every band, and the reverse beacon network accepts no filter
@@ -766,7 +777,10 @@ name | host | port | source | login commands | note
 ```
 
 `source` is `rbn` for a reverse-beacon feed or `cluster` for human-entered
-spots. The two are weighed differently and agreement between them counts for
+spots. In the login commands, `{BAND}` is replaced by the ADIF band name of the
+frequency being received and `{BANDNUM}` by the bare number; a command
+containing either is sent again on every band change, and is not sent at all
+while the band is unknown. The two are weighed differently and agreement between them counts for
 more than either alone, so do not relabel one as the other. Login commands are
 separated by `;` and may be empty; they exist because cluster software differs
 in what it sends by default, and several withhold skimmer spots or send digital

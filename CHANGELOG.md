@@ -371,7 +371,13 @@ All notable changes to CW Buddy are recorded here. The format follows
   Spots are filtered twice, and neither filter replaces the other. On the
   server, the filter commands listed for it are sent at login and any naming a
   band is sent again when the radio changes band, so what the server sends
-  follows the receiver. On arrival, always, because the reverse beacon network
+  follows the receiver. Every such command was watched being accepted by the
+  server it is listed against rather than taken from documentation, because a
+  guessed one earns an error reply the operator never sees and leaves a filter
+  that quietly is not there. DXSpider takes `accept/spots 0 on 20m/cw`;
+  AR-Cluster refuses that band name outright and takes
+  `set/dx filter band=20 and mode=cw`, so the band is offered to the server
+  list under two names rather than one form being bent to fit both. On arrival, always, because the reverse beacon network
   accepts no filter commands at all and its feed runs at roughly six spots a
   second worldwide; anything outside the band being received is discarded
   before it is stored. When no receive frequency is known nothing is
