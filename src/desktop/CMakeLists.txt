@@ -114,37 +114,21 @@ qt_add_resources(cw-buddy-desktop "cwa_application_icons"
 # The CW dictionaries ship inside the binary so the decoder always has them,
 # and are copied to the operator's data directory on first run so they can be
 # edited there. The copy wins at startup when it exists.
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt" PROPERTIES
-  QT_RESOURCE_ALIAS cw-abbreviations.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt" PROPERTIES
-  QT_RESOURCE_ALIAS cw-word-gap-prefixes.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt" PROPERTIES
-  QT_RESOURCE_ALIAS morse-alphabet.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt" PROPERTIES
-  QT_RESOURCE_ALIAS cw-distinctive-tokens.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-ww-cw.txt" PROPERTIES
-  QT_RESOURCE_ALIAS contests/cq-ww-cw.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-wpx-cw.txt" PROPERTIES
-  QT_RESOURCE_ALIAS contests/cq-wpx-cw.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-field-day-cw.txt" PROPERTIES
-  QT_RESOURCE_ALIAS contests/arrl-field-day-cw.txt)
-set_source_files_properties(
-  "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-sweepstakes-cw.txt" PROPERTIES
-  QT_RESOURCE_ALIAS contests/arrl-sweepstakes-cw.txt)
+#
+# BASE rather than a QT_RESOURCE_ALIAS on each file. These paths are absolute
+# and outside this directory, and per-file source properties on such paths do
+# not resolve identically across generators; when the alias failed to apply the
+# resource landed somewhere other than :/dictionaries, the read returned
+# nothing, and an empty file was seeded that was then reused on every later
+# run. BASE computes every path from one rule and cannot come apart that way.
 qt_add_resources(cw-buddy-desktop "cwa_cw_dictionaries"
   PREFIX "/dictionaries"
+  BASE "${PROJECT_SOURCE_DIR}/dictionaries"
   FILES
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt"
-    "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-ww-cw.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-wpx-cw.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-field-day-cw.txt"

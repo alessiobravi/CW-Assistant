@@ -43,6 +43,11 @@ class CwMorseAlphabet {
 // startup; if it is still empty on first use it loads itself from
 // CWA_DICTIONARY_DIR when that names a readable directory.
 [[nodiscard]] const CwMorseAlphabet& cwSharedMorseAlphabet();
+
+// Whether the alphabet in use came from the compiled-in copy rather than a
+// loaded file. True means every attempt to read one failed, which is worth
+// reporting: the operator's copy is then being ignored.
+[[nodiscard]] bool cwMorseAlphabetLoadedFromBuiltin() noexcept;
 [[nodiscard]] CwMorseAlphabet& cwMutableSharedMorseAlphabet() noexcept;
 
 }  // namespace cwassistant::core

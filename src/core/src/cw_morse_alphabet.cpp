@@ -1,6 +1,8 @@
 #include "cwassistant/core/cw_morse_alphabet.hpp"
 
 #include <cctype>
+
+#include "cwassistant/core/cw_builtin_morse_alphabet.hpp"
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
@@ -18,6 +20,12 @@ std::string_view trim(std::string_view text) {
     text.remove_suffix(1);
   }
   return text;
+}
+
+std::size_t builtinAlphabetSymbolCount() {
+  CwMorseAlphabet builtin;
+  static_cast<void>(builtin.importText(kCwBuiltinMorseAlphabet));
+  return builtin.size();
 }
 
 }  // namespace
@@ -76,14 +84,29 @@ const CwMorseAlphabet& cwSharedMorseAlphabet() {
   // environment variable, so a caller that never loaded the alphabet recovers
   // here rather than returning an unknown symbol for every character.
   const char* directory = std::getenv("CWA_DICTIONARY_DIR");
-  if (directory == nullptr) return alphabet;
-  std::ifstream input(std::string(directory) + "/morse-alphabet.txt",
-                      std::ios::binary);
-  if (!input) return alphabet;
-  std::ostringstream buffer;
-  buffer << input.rdbuf();
-  static_cast<void>(alphabet.importText(buffer.str()));
+  if (directory != nullptr) {
+    std::ifstream input(std::string(directory) + "/morse-alphabet.txt",
+                        std::ios::binary);
+    if (input) {
+      std::ostringstream buffer;
+      buffer << input.rdbuf();
+      static_cast<void>(alphabet.importText(buffer.str()));
+    }
+  }
+  if (!alphabet.empty()) return alphabet;
+  // Last resort. An operator's file that is missing, empty, or unreadable must
+  // not leave the application tracking signals and decoding nothing, which is
+  // what it did: the alphabet was made data with no fallback, and a packaged
+  // build that failed to load it went silently deaf with no diagnostic. The
+  // text below is generated from the same shipped file at build time, so this
+  // is not a second table to keep in step -- it is the same one, compiled in.
+  static_cast<void>(alphabet.importText(kCwBuiltinMorseAlphabet));
   return alphabet;
+}
+
+bool cwMorseAlphabetLoadedFromBuiltin() noexcept {
+  return cwMutableSharedMorseAlphabet().size() ==
+      builtinAlphabetSymbolCount();
 }
 
 }  // namespace cwassistant::core

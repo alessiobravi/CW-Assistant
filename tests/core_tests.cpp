@@ -2169,6 +2169,32 @@ bool loadShippedDictionaries() {
 
 }  // namespace
 
+void test_cw_morse_alphabet_survives_missing_files() {
+  // The decoder must never be left without an alphabet. Making it data with no
+  // fallback shipped an application that tracked signals and decoded nothing,
+  // with no diagnostic, because a packaged build could not read the file. The
+  // compiled-in copy is generated from that same file at build time, so this
+  // guards availability without a second table to maintain.
+  auto& alphabet = cwassistant::core::cwMutableSharedMorseAlphabet();
+  alphabet.clear();
+  const char* previous = std::getenv("CWA_DICTIONARY_DIR");
+  const std::string saved = previous == nullptr ? std::string{} : previous;
+  unsetenv("CWA_DICTIONARY_DIR");
+
+  const auto& recovered = cwassistant::core::cwSharedMorseAlphabet();
+  expect(recovered.size() >= 56U,
+         "the alphabet recovers with no dictionary directory at all");
+  expect(recovered.symbolFor(".-") == "A" &&
+             recovered.symbolFor("...-.-") == "<SK>",
+         "the recovered alphabet decodes letters and prosigns");
+  expect(cwassistant::core::cwMorseAlphabetLoadedFromBuiltin(),
+         "the recovery is reported as coming from the compiled-in copy");
+
+  if (!saved.empty()) setenv("CWA_DICTIONARY_DIR", saved.c_str(), 1);
+  alphabet.clear();
+  static_cast<void>(cwassistant::core::cwSharedMorseAlphabet());
+}
+
 void test_cw_morse_alphabet() {
   // The alphabet has no compiled-in fallback, so an empty one decodes nothing
   // at all. Assert it is present and complete rather than discovering that as
@@ -3100,6 +3126,7 @@ int main() {
   test_soft_decision_keying_evidence();
   test_callsign_policy();
   test_callsign_policy_prosign_glue();
+  test_cw_morse_alphabet_survives_missing_files();
   test_cw_morse_alphabet();
   test_cw_context_rescorer();
   test_presented_speed_requires_evidence();

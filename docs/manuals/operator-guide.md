@@ -729,6 +729,11 @@ evidence alone, which works only while a match stays harder to counterfeit than
 the checks it stands in for. `CQ` and `599` belong there; a single letter, or
 anything noise assembles often, does not.
 
+The application also carries its own copy of the alphabet and falls back to it
+if the file cannot be read, so a missing or empty one cannot stop the decoder
+working. An empty file is replaced with that copy the next time the application
+starts; a file you have edited is never overwritten.
+
 `morse-alphabet.txt` in the same directory holds the alphabet itself: the
 element pattern on the left, the symbol it produces on the right. Extend it if
 you work stations sending accented letters or a prosign the decoder does not yet

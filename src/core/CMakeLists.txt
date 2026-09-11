@@ -43,3 +43,14 @@ if(MSVC)
 else()
   target_compile_options(cwa_core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
+
+# The Morse alphabet is data, but a decoder with no alphabet decodes nothing at
+# all, so the shipped file is also compiled in as a last-resort fallback. The
+# file remains the single source: this header is generated from it.
+include("${PROJECT_SOURCE_DIR}/cmake/GenerateBuiltinDictionary.cmake")
+cwa_generate_builtin_dictionary(
+  "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/cwassistant/core/cw_builtin_morse_alphabet.hpp"
+  kCwBuiltinMorseAlphabet)
+target_include_directories(cwa_core PUBLIC
+  "${CMAKE_CURRENT_BINARY_DIR}/generated")

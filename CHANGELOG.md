@@ -8,6 +8,21 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The decoder could be left with no Morse alphabet and would then track
+  signals and decode nothing at all, showing a strong carrier, a measured
+  signal-to-noise ratio, and no text or speed. Moving the alphabet into a
+  data file made the decoder's core function depend on a file load that
+  nothing verified, and a packaged build that failed to read it went
+  silently deaf. The shipped alphabet is now also compiled in and used when
+  every attempt to read a file fails; it is generated from that same file at
+  build time, so it is the one alphabet rather than a second copy to keep in
+  step. An empty copy in the operator's directory is repaired from the
+  built-in one instead of being preferred forever, which is how a single
+  failed read became permanent. The bundled files are addressed through one
+  base path rather than a per-file alias, because such aliases resolve
+  differently across build generators and a misplaced resource is what left
+  an empty file behind in the first place.
+
 - The live receive path can be measured per stage. `PERF-002` accepts an
   optimisation only after a before-and-after measurement, and there was no
   instrument to provide one. A profile now reports wall time for the

@@ -78,24 +78,37 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   const QDir directory(app_data_path + QStringLiteral("/dictionaries"));
   QDir().mkpath(directory.absolutePath());
 
-  const auto read = [&directory](const char* name) {
+  const auto bundled_contents = [](const char* name) {
+    QFile bundled(QStringLiteral(":/dictionaries/") +
+                  QString::fromLatin1(name));
+    if (!bundled.open(QIODevice::ReadOnly)) return QByteArray{};
+    return bundled.readAll();
+  };
+
+  const auto read = [&directory, &bundled_contents](const char* name) {
     const QString editable = directory.filePath(QString::fromLatin1(name));
     QFile file(editable);
-    if (!file.exists()) {
-      QFile bundled(QStringLiteral(":/dictionaries/") +
-                    QString::fromLatin1(name));
-      if (bundled.open(QIODevice::ReadOnly)) {
-        const QByteArray contents = bundled.readAll();
-        // Seed the editable copy, but never fail the load if the directory is
-        // read-only: the bundled contents are already in hand.
-        if (file.open(QIODevice::WriteOnly)) file.write(contents);
-        file.close();
-        return contents;
-      }
-      return QByteArray{};
+    QByteArray existing;
+    if (file.exists() && file.open(QIODevice::ReadOnly)) {
+      existing = file.readAll();
+      file.close();
     }
-    if (!file.open(QIODevice::ReadOnly)) return QByteArray{};
-    return file.readAll();
+    // An empty operator copy is repaired rather than used. One was written
+    // once, when the bundled read returned nothing, and from then on it
+    // existed -- so it was preferred on every later run and the application
+    // decoded nothing for good. A file the operator has actually written to
+    // is never touched; only an empty one is replaced.
+    if (!existing.isEmpty()) return existing;
+    const QByteArray contents = bundled_contents(name);
+    if (contents.isEmpty()) return contents;
+    QFile seed(editable);
+    // Never fail the load because the directory is read-only: the bundled
+    // contents are already in hand.
+    if (seed.open(QIODevice::WriteOnly)) {
+      seed.write(contents);
+      seed.close();
+    }
+    return contents;
   };
 
   auto& vocabulary = cwassistant::core::cwSharedVocabulary();

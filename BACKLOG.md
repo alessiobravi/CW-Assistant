@@ -6,7 +6,37 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-sixth entry) -- `PERF-002` has an instrument,
+Last reviewed: 2026-09-11 (forty-seventh entry) -- a released build decoded
+nothing, reported from the field against 0.1.155. The receiver was fine: the
+capture replays here and recovers its callsign, sender and speed. The decoder
+had no alphabet.
+
+Making the alphabet data put the decoder's core function behind a file load
+that no test covered. Every test sets `CWA_DICTIONARY_DIR`; the application's
+own path -- bundled resource, seeded into the operator's directory, read back
+-- was exercised by nothing. The failure is also silent by construction: with
+an empty alphabet every element pattern decodes to nothing, so tracks are
+acquired and never verified, and the interface shows a strong signal with no
+text and no speed, which is what was reported.
+
+Three changes. The shipped alphabet is compiled in as a last resort, generated
+from the same file at build time so it stays one alphabet rather than a second
+table. An empty operator copy is repaired rather than preferred, which is what
+made a single failed read permanent. And the bundled files are addressed with
+one base path instead of a per-file resource alias on absolute paths outside
+the target's directory, which is the most likely reason the read failed on the
+packaged build while working here.
+
+Verified by replaying the reported capture with no dictionary present at all:
+before, no output whatsoever; after, the same callsign and confidence as with
+the files in place.
+
+The lesson is narrower than "do not move data out of code". It is that moving
+something into data makes the loading path part of the function, and the
+loading path the application actually uses must then be tested -- not a
+substitute for it arranged by the test harness.
+
+Previous review: 2026-09-11 (forty-sixth entry) -- `PERF-002` has an instrument,
 and the first measurement is decisive. `cwa_receive_profile` reports wall time
 for the spectrum and sample stages against tracked signal count, on twenty
 seconds of audio per case:
