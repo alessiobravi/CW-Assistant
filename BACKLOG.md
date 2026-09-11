@@ -6,7 +6,40 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-second entry) -- the outstanding cleanups are
+Last reviewed: 2026-09-11 (forty-third entry) -- the unfinished-final-over
+defect is confirmed, measured, and the obvious fix rejected on the measurement.
+
+Confirmed: `CwMultiSpeedDecoder::flush` is called from tests only. Production
+completes a turn exclusively through `resumeInput`, which requires the same
+track to receive signal again after a sustained silence, and `CwChannelBank`
+erases expiring tracks without flushing them. A station that finishes an over
+and does not return to that frequency therefore leaves its last one open: never
+completed, never context-rescored, never among the track's transmissions.
+
+Flushing an expiring track recovers exactly one over across the twenty-two
+captures, 269 against 268. Two things were learned getting there. Flushing every
+expiring track manufactures overs out of noise -- the corpus produced turns
+reading "M", "IEE" and "E E" from tracks that never carried a signal -- so any
+such flush must be restricted to tracks that were verified. And the completed
+over does not reach a consumer without also holding the track for an extra
+cycle, because `updateSpectrum` erases it before `processSamples` rebuilds the
+snapshots that consumers actually read.
+
+That deferral is where the fix became disproportionate. Holding an expiring
+verified track one cycle longer broke three existing guarantees: replacement
+text inheritance, replacement refresh, and manual-probe expiry all depend on
+the current lifetime. Reverted: one recovered over in two hundred and sixty
+eight does not justify perturbing track lifetime, and the corpus cannot show
+whether live operation would benefit more.
+
+The correct shape, if this is taken up again, is to stop coupling a completed
+over to the track still existing. A completed over is a record about a
+transmission, not about a tracker; emitting it on its own path would let an
+expiring track be flushed and removed in the same cycle, with no lifetime
+change and none of the three breakages. That is an API addition rather than a
+repair, and should be scoped as one.
+
+Previous review: 2026-09-11 (forty-second entry) -- the outstanding cleanups are
 done. Cut numbers carried only `T` and `N`, so a serial sent as `ANU` read as
 letters instead of 123; the shipped contest files now declare the set an
 operator sends at speed, which was a data edit rather than a rebuild now that
