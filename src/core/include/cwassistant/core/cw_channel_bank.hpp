@@ -111,6 +111,18 @@ struct CwChannelBankConfig {
   double empty_track_retention_seconds{2.0};
   double decoded_track_retention_seconds{30.0};
   double unverified_track_retention_seconds{0.75};
+  // How long a track carried out of the processed passband by a receiver
+  // retune is held before it is given up.
+  //
+  // A signal that leaves the passband because the operator turned the dial has
+  // not been lost: its position is known exactly, and turning the dial back
+  // brings it to a computable place. Expiring it on the ordinary retention
+  // timeout destroyed the identity, the transcript and the audio monitor of a
+  // station the operator was deliberately tuning around, and it came back as a
+  // new, unrecognised track. Generous on purpose -- tuning away and back is
+  // measured in tens of seconds -- and bounded so a band-edge sweep cannot
+  // accumulate parked tracks without limit.
+  double parked_track_retention_seconds{180.0};
   // A verified frequency keeps its display color after the live track expires
   // so later passes from the same carrier do not look like different stations.
   double color_identity_retention_seconds{300.0};
@@ -413,6 +425,12 @@ class CwChannelBank {
     // Operator-facing center; independent from DSP and identity association.
     double presentation_frequency_hz;
     double drift_hz_per_second{0.0};
+    // Carried outside the processed passband by a receiver retune, and waiting
+    // for the dial to bring it back rather than being treated as a lost
+    // signal. A parked track is still published, so its marker keeps its place
+    // on the frequency it belongs to even while that place is off-screen.
+    bool parked{false};
+    std::uint64_t parked_since_ns{0};
     std::uint64_t last_detected_ns;
     std::uint64_t last_frequency_update_ns;
     std::uint64_t last_candidate_match_ns;

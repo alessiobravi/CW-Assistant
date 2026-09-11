@@ -41,11 +41,6 @@ namespace {
 
 constexpr auto kSchemaVersion = 1;
 
-// Long enough for any realistic feed address, including a query string, and
-// short enough that a settings file cannot hand the network layer an
-// unbounded string.
-constexpr int kMaximumDxSpotsEndpointLength = 512;
-
 // A hostname is at most 253 characters, and nothing longer can resolve. The
 // bound exists so a settings file cannot hand the socket layer an unbounded
 // string, not to judge whether the name is reachable.
@@ -1402,19 +1397,6 @@ const QString& AppSettings::localCallsignDatabasePath() const noexcept {
 const QString& AppSettings::localCallsignDatabaseStatus() const noexcept {
   return local_callsign_database_status_;
 }
-bool AppSettings::dxSpotsEnabled() const noexcept {
-  return dx_spots_enabled_;
-}
-bool AppSettings::dxSpotsReverseBeacon() const noexcept {
-  return dx_spots_reverse_beacon_;
-}
-bool AppSettings::dxSpotsCluster() const noexcept { return dx_spots_cluster_; }
-const QString& AppSettings::dxSpotsEndpoint() const noexcept {
-  return dx_spots_endpoint_;
-}
-int AppSettings::dxSpotsRefreshSeconds() const noexcept {
-  return dx_spots_refresh_seconds_;
-}
 int AppSettings::dxSpotsRetentionMinutes() const noexcept {
   return dx_spots_retention_minutes_;
 }
@@ -1793,9 +1775,6 @@ CWA_SETTER(setKeyingModel, keying_model_, const QString&)
 CWA_SETTER(setDebugCaptureMaximumSeconds, debug_capture_maximum_seconds_, int)
 CWA_SETTER(setOperatorRole, operator_role_, const QString&)
 
-CWA_SETTER(setDxSpotsEnabled, dx_spots_enabled_, bool)
-CWA_SETTER(setDxSpotsReverseBeacon, dx_spots_reverse_beacon_, bool)
-CWA_SETTER(setDxSpotsCluster, dx_spots_cluster_, bool)
 CWA_SETTER(setDxSpotsShowLabels, dx_spots_show_labels_, bool)
 
 void AppSettings::setDxClusterEnabled(const bool value) {
@@ -1811,24 +1790,6 @@ void AppSettings::setDxClusterEnabled(const bool value) {
     return;
   }
   if (assign_if_changed(dx_cluster_enabled_, value)) {
-    emit settingsChanged();
-  }
-}
-
-void AppSettings::setDxSpotsEndpoint(const QString& value) {
-  // Whitespace around a pasted address is the commonest way an endpoint fails
-  // to parse, and it is the one thing that can be corrected without guessing.
-  // Everything else about the address is left exactly as typed, so an operator
-  // who has mistyped it sees what they wrote rather than something else.
-  if (assign_if_changed(dx_spots_endpoint_,
-                        value.trimmed().left(kMaximumDxSpotsEndpointLength))) {
-    emit settingsChanged();
-  }
-}
-
-void AppSettings::setDxSpotsRefreshSeconds(const int value) {
-  const int clamped = std::clamp(value, 30, 600);
-  if (assign_if_changed(dx_spots_refresh_seconds_, clamped)) {
     emit settingsChanged();
   }
 }
@@ -2637,9 +2598,6 @@ bool AppSettings::apply() {
   // from the one that was just set.
   minimum_decode_snr_db_ =
       std::round(std::clamp(minimum_decode_snr_db_, 0.0, 40.0) * 10.0) / 10.0;
-  dx_spots_endpoint_ =
-      dx_spots_endpoint_.trimmed().left(kMaximumDxSpotsEndpointLength);
-  dx_spots_refresh_seconds_ = std::clamp(dx_spots_refresh_seconds_, 30, 600);
   dx_spots_retention_minutes_ = std::clamp(dx_spots_retention_minutes_, 1, 60);
   dx_spots_tolerance_hz_ = std::clamp(dx_spots_tolerance_hz_, 50, 1'000);
   dx_cluster_custom_host_ =
@@ -2869,16 +2827,14 @@ bool AppSettings::apply() {
   settings.setValue(
       storageKey(QStringLiteral("decoder/localCallsignDatabasePath")),
       local_callsign_database_path_);
-  settings.setValue(storageKey(QStringLiteral("dxSpots/enabled")),
-                    dx_spots_enabled_);
-  settings.setValue(storageKey(QStringLiteral("dxSpots/reverseBeacon")),
-                    dx_spots_reverse_beacon_);
-  settings.setValue(storageKey(QStringLiteral("dxSpots/cluster")),
-                    dx_spots_cluster_);
-  settings.setValue(storageKey(QStringLiteral("dxSpots/endpoint")),
-                    dx_spots_endpoint_);
-  settings.setValue(storageKey(QStringLiteral("dxSpots/refreshSeconds")),
-                    dx_spots_refresh_seconds_);
+  // The keys the deleted HTTPS spot provider owned are removed rather than
+  // merely no longer written, so a settings file from an earlier build cannot
+  // keep describing a feed that no longer exists.
+  settings.remove(storageKey(QStringLiteral("dxSpots/enabled")));
+  settings.remove(storageKey(QStringLiteral("dxSpots/reverseBeacon")));
+  settings.remove(storageKey(QStringLiteral("dxSpots/cluster")));
+  settings.remove(storageKey(QStringLiteral("dxSpots/endpoint")));
+  settings.remove(storageKey(QStringLiteral("dxSpots/refreshSeconds")));
   settings.setValue(storageKey(QStringLiteral("dxSpots/retentionMinutes")),
                     dx_spots_retention_minutes_);
   settings.setValue(storageKey(QStringLiteral("dxSpots/toleranceHz")),
@@ -3334,25 +3290,10 @@ void AppSettings::load() {
           .value(
               storageKey(QStringLiteral("decoder/localCallsignDatabasePath")))
           .toString();
-  dx_spots_enabled_ =
-      settings.value(storageKey(QStringLiteral("dxSpots/enabled")), false)
-          .toBool();
-  dx_spots_reverse_beacon_ =
-      settings.value(storageKey(QStringLiteral("dxSpots/reverseBeacon")), false)
-          .toBool();
-  dx_spots_cluster_ =
-      settings.value(storageKey(QStringLiteral("dxSpots/cluster")), false)
-          .toBool();
-  dx_spots_endpoint_ =
-      settings.value(storageKey(QStringLiteral("dxSpots/endpoint")))
-          .toString()
-          .trimmed()
-          .left(kMaximumDxSpotsEndpointLength);
-  dx_spots_refresh_seconds_ = std::clamp(
-      settings
-          .value(storageKey(QStringLiteral("dxSpots/refreshSeconds")), 120)
-          .toInt(),
-      30, 600);
+  // dxSpots/enabled, reverseBeacon, cluster, endpoint and refreshSeconds
+  // belonged to the deleted HTTPS spot provider and are deliberately not read:
+  // a stale stored value must not be able to describe a transport that is no
+  // longer built.
   dx_spots_retention_minutes_ = std::clamp(
       settings
           .value(storageKey(QStringLiteral("dxSpots/retentionMinutes")), 15)
@@ -3648,11 +3589,6 @@ void AppSettings::resetInMemorySettings() {
   local_callsign_database_path_.clear();
   local_callsign_database_status_ =
       QStringLiteral("Disabled. No local callsign list is in use.");
-  dx_spots_enabled_ = false;
-  dx_spots_reverse_beacon_ = false;
-  dx_spots_cluster_ = false;
-  dx_spots_endpoint_.clear();
-  dx_spots_refresh_seconds_ = 120;
   dx_spots_retention_minutes_ = 15;
   dx_spots_tolerance_hz_ = 250;
   dx_spots_show_labels_ = true;

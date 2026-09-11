@@ -1109,6 +1109,98 @@ void test_cw_channel_bank() {
            "leaving a negative-frequency candidate behind");
   }
 
+  // Tuning a station out of the passband and back must not cost its identity.
+  //
+  // A signal that leaves the processed band because the operator turned the
+  // dial has not been lost: its position is known exactly, and turning back
+  // puts it at a computable place. It used to expire on the ordinary retention
+  // timeout -- that was deliberate, and wrong -- so the identity, the
+  // transcript and the audio monitor of the very station being tuned around
+  // were destroyed, and it returned as a new unrecognised track. This is the
+  // operator's report "I still lose the CW stream if I move the VFO".
+  {
+    CwChannelBank park_bank;
+    std::vector<float> park_bins(1'001, -110.0F);
+    double park_phase = 0.0;
+    std::vector<bool> park_keying;
+    const auto append_park_units = [&park_keying](const bool keyed,
+                                                  const int units) {
+      park_keying.insert(park_keying.end(), units * 10, keyed);
+    };
+    const auto append_park_letter =
+        [&append_park_units](const std::string_view elements) {
+          for (std::size_t index = 0; index < elements.size(); ++index) {
+            append_park_units(true, elements[index] == '.' ? 1 : 3);
+            append_park_units(false, index + 1 == elements.size() ? 3 : 1);
+          }
+        };
+    append_park_letter("...");
+    append_park_letter("---");
+    append_park_letter("...");
+    append_park_units(false, 4);
+    const int park_steps = static_cast<int>(park_keying.size()) * 5;
+    std::uint64_t last_ns = 0;
+    for (int step = 0; step < park_steps; ++step) {
+      const bool keyed =
+          park_keying[static_cast<std::size_t>(step) % park_keying.size()];
+      park_bins.assign(park_bins.size(), -110.0F);
+      if (keyed) park_bins[500] = -68.0F;
+      last_ns = static_cast<std::uint64_t>(step) * 10'000'000;
+      static_cast<void>(
+          park_bank.updateSpectrum(last_ns, 0.0, 1'000.0, park_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = last_ns;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.25F * static_cast<float>(std::sin(park_phase)) : 0.0F,
+            0.0F};
+        park_phase += 2.0 * std::numbers::pi * 500.0 / sample_rate;
+      }
+      static_cast<void>(park_bank.processSamples(block));
+    }
+    expect(park_bank.channels().size() == 1,
+           "the park scenario creates exactly one track before the retune, so "
+           "the identity check below is not vacuous");
+    const auto parked_id = park_bank.channels().front().id;
+
+    // Tune away: +40 kHz carries the 500 Hz track far outside the 0-1 kHz
+    // processed band, the case that used to be left to expire.
+    park_bank.shiftTrackedFrequencies(40'000.0);
+    expect(park_bank.channels().size() == 1,
+           "a retune that carries a track out of the passband parks it rather "
+           "than dropping it: the operator turned the dial, the station is "
+           "not lost");
+
+    // Hold there, silent, well past the ordinary retention timeout. This is
+    // the step that failed before: the track expired while parked.
+    //
+    // 4'500 steps of 10 ms is 45 seconds -- comfortably beyond the 30-second
+    // decoded-track retention that used to end it, and comfortably inside the
+    // 180-second parked retention. An earlier version of this test used 400
+    // steps, four seconds, which neither retention would have ended, so it
+    // passed with the fix reverted and proved nothing.
+    for (int step = 1; step <= 4'500; ++step) {
+      park_bins.assign(park_bins.size(), -110.0F);
+      const std::uint64_t timestamp = last_ns +
+          static_cast<std::uint64_t>(step) * 10'000'000;
+      static_cast<void>(
+          park_bank.updateSpectrum(timestamp, 0.0, 1'000.0, park_bins));
+    }
+    // While parked the track is outside the processed band, so it is not
+    // published -- its marker would be off-screen regardless. What must
+    // survive is the identity, so that tuning back returns the same station
+    // rather than a new card.
+    park_bank.shiftTrackedFrequencies(-40'000.0);
+    expect(park_bank.channels().size() == 1 &&
+               park_bank.channels().front().id == parked_id,
+           "tuning a station out of the passband and back after far longer "
+           "than the ordinary retention timeout returns the SAME track, so "
+           "its transcript, colour and audio monitor follow the station "
+           "instead of a new card appearing for it");
+  }
+
   slow_bank.configure({.empty_track_retention_seconds = 2.0,
                        .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {

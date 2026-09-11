@@ -64,10 +64,9 @@ constexpr char16_t kFirstPrintableAscii = 0x0020;
 constexpr char16_t kDeleteAscii = 0x007F;
 
 // Nanoseconds since the Unix epoch, on the wall clock every spot is aged
-// against. Deliberately local to this file: the HTTPS provider exports the
-// same helper, and linking a telnet client against an HTTP client to borrow
-// one call to QDateTime would tie two independent features together for
-// nothing.
+// against. A steady clock cannot be used: an observation time arrives from a
+// remote station as a wall-clock instant, and only a wall clock can be
+// compared with it.
 [[nodiscard]] std::uint64_t currentUnixNanoseconds() noexcept {
   const qint64 epoch_ms = QDateTime::currentMSecsSinceEpoch();
   return epoch_ms <= 0 ? 0ULL

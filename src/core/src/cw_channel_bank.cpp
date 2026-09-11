@@ -263,6 +263,8 @@ void CwChannelBank::sanitizeConfig() noexcept {
       std::clamp(config_.unverified_track_retention_seconds, 0.2, 5.0);
   config_.color_identity_retention_seconds =
       std::clamp(config_.color_identity_retention_seconds, 300.0, 3'600.0);
+  config_.parked_track_retention_seconds =
+      std::clamp(config_.parked_track_retention_seconds, 5.0, 1'800.0);
   config_.color_identity_tolerance_hz = std::clamp(
       config_.color_identity_tolerance_hz, 5.0, config_.tracking_tolerance_hz);
   config_.narrowband_width_hz =
@@ -913,6 +915,17 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   }
 
   const auto expired = [&](const Track& track) {
+    // A parked track is waiting for the dial, not fading. It is held on its
+    // own generous clock so that tuning away from a station and back does not
+    // cost its identity, and bounded so sweeping the band cannot accumulate
+    // parked tracks without limit.
+    if (track.parked) {
+      if (timestamp_ns < track.parked_since_ns) return false;
+      const double parked_seconds =
+          static_cast<double>(timestamp_ns - track.parked_since_ns) /
+          1'000'000'000.0;
+      return parked_seconds > config_.parked_track_retention_seconds;
+    }
     const bool unverified_manual =
         track.operator_selected && !track.ever_verified;
     const std::uint64_t last_activity_ns =
@@ -1589,9 +1602,13 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           ? track.keying_mark_snr_db : track.snr_db;
       track.peak_decode_level_db =
           std::max(track.peak_decode_level_db, decode_level_db);
-      const bool loud_enough_to_decode = config_.decode_weak_signals ||
-          track.operator_selected ||
-          track.peak_decode_level_db >= config_.minimum_decode_snr_db;
+      // A parked track is outside the processed passband and there is nothing
+      // at its frequency to decode. Feeding it would append whatever noise sits
+      // at the filter's edge to a transcript the operator is keeping, so it
+      // holds its text untouched until the dial brings the station back.
+      const bool loud_enough_to_decode = !track.parked &&
+          (config_.decode_weak_signals || track.operator_selected ||
+           track.peak_decode_level_db >= config_.minimum_decode_snr_db);
       if (!candidate_match_held) {
         if (!track.decoder_input_suspended) {
           // Drain a possibly keyed acoustic segment once, but do not claim an
@@ -1766,14 +1783,43 @@ void CwChannelBank::shiftTrackedFrequencies(
                 [](const RetainedObservation& observation) {
                   return observation.snapshot.frequency_hz <= 0.0;
                 });
-  // A shift is meant to follow a signal that stays within the processed
-  // audio band as the VFO moves; repeated or large shifts (an operator
-  // tuning across the band, not centering on one station) can carry a
-  // track past 0 Hz, where it no longer corresponds to anything real and
-  // must not linger as a nonsensical negative-frequency candidate. A track
-  // shifted too far *positive* still needs no special handling here: it
-  // simply stops matching spectral peaks and expires through the existing
-  // retention timeout, exactly as an ordinary lost signal would.
+  // A retune can carry a track out of the processed passband, at either end.
+  // That is not a lost signal and must not be treated as one: the operator
+  // turned the dial, the station's position is known exactly, and turning the
+  // dial back puts it at a computable place. Letting it expire through the
+  // ordinary retention timeout -- which is what used to happen, deliberately
+  // -- destroyed the identity, the transcript and the audio monitor of the
+  // very station being tuned around, and it returned as a new, unrecognised
+  // track. Park it instead, and unpark it when the band comes back to it.
+  //
+  // The bounds are the spectrum last seen rather than a fixed range, because
+  // the processed band differs between an audio card and an IQ slice.
+  const bool bounds_known =
+      spectrum_range_initialized_ &&
+      last_spectrum_upper_frequency_hz_ > last_spectrum_lower_frequency_hz_;
+  for (Track& track : tracks_) {
+    const bool outside =
+        track.frequency_hz <= 0.0 ||
+        (bounds_known && (track.frequency_hz < last_spectrum_lower_frequency_hz_ ||
+                          track.frequency_hz > last_spectrum_upper_frequency_hz_));
+    if (outside) {
+      if (!track.parked) {
+        track.parked = true;
+        track.parked_since_ns = expected_sample_timestamp_ns_;
+      }
+      continue;
+    }
+    if (!track.parked) continue;
+    // Back inside the passband. Give it a fresh lease rather than leaving it
+    // holding a detection timestamp from before the excursion, which would
+    // expire it on the next sweep before it had a chance to re-acquire.
+    track.parked = false;
+    track.parked_since_ns = 0;
+    track.last_detected_ns = expected_sample_timestamp_ns_;
+    track.last_candidate_match_ns = expected_sample_timestamp_ns_;
+  }
+  // A track parked below zero has no meaningful position to return to, so it
+  // is the one case still dropped outright.
   std::erase_if(tracks_,
                 [](const Track& track) { return track.frequency_hz <= 0.0; });
   rebuildSnapshots(expected_sample_timestamp_ns_);

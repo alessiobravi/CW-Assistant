@@ -259,22 +259,17 @@ int main(int argc, char* argv[]) {
   // The spot feed is receive-only and carries no authority: it can place a
   // marker where another receiver reports a station, and can corroborate a
   // callsign this receiver decoded for itself, but it never supplies one.
-  const auto apply_dx_spots = [&settings, &replay_controller] {
-    replay_controller.configureDxSpots(
-        settings.dxSpotsEnabled(), settings.dxSpotsReverseBeacon(),
-        settings.dxSpotsCluster(), settings.dxSpotsEndpoint(),
-        settings.dxSpotsRefreshSeconds(), settings.dxSpotsRetentionMinutes(),
-        settings.dxSpotsToleranceHz());
-  };
-  // The cluster logs in as the station callsign rather than one of its own,
-  // so this has to be reapplied when the callsign changes and not only when a
+  //
+  // The cluster logs in as the station callsign rather than one of its own, so
+  // this has to be reapplied when the callsign changes and not only when a
   // dxcluster setting does. Both arrive on settingsChanged, so one connection
   // covers it.
   const auto apply_dx_cluster = [&settings, &replay_controller] {
     replay_controller.configureDxCluster(
         settings.dxClusterEnabled(), settings.dxClusterServerIndex(),
         settings.dxClusterCustomHost(), settings.dxClusterCustomPort(),
-        settings.ownCallsign());
+        settings.ownCallsign(), settings.dxSpotsRetentionMinutes(),
+        settings.dxSpotsToleranceHz());
   };
   const auto apply_radio_frequency = [&settings, &replay_controller] {
     const auto rx_rf_hz = settings.controlledRxRfHz();
@@ -393,7 +388,6 @@ int main(int argc, char* argv[]) {
   apply_radio_frequency();
   apply_decoded_signal_timeout();
   apply_weak_signal_decoding();
-  apply_dx_spots();
   apply_dx_cluster();
   apply_local_character_decoder();
   apply_callsign_database_correction();
@@ -424,9 +418,6 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_weak_signal_decoding);
-  QObject::connect(
-      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
-      &replay_controller, apply_dx_spots);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_dx_cluster);

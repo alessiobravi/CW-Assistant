@@ -7,6 +7,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QHash>
 #include <QIODevice>
@@ -36,13 +37,26 @@
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
 #include "../dxcluster/dx_cluster_client.hpp"
-#include "../dxcluster/dx_spot_provider.hpp"
 #include "../decoder/local_character_decoder.hpp"
 #include "../sdr/sdr_capture_worker.hpp"
 #include "live_audio_worker.hpp"
 
 namespace cwassistant::desktop {
 namespace {
+
+// Nanoseconds since the Unix epoch.
+//
+// Every timestamp that reaches CwSpotRegistry -- the observation times parsed
+// out of a feed and the "now" passed to expire() and nearFrequency() -- has to
+// be read from one clock, or a spot's age is the difference between two
+// unrelated origins and the retention window means nothing. A steady clock
+// cannot be used: an observation time arrives from a remote station as a
+// wall-clock instant, and only a wall clock can be compared with it.
+[[nodiscard]] std::uint64_t currentUnixTimeNs() noexcept {
+  const qint64 epoch_ms = QDateTime::currentMSecsSinceEpoch();
+  return epoch_ms <= 0 ? 0ULL
+                       : static_cast<std::uint64_t>(epoch_ms) * 1'000'000ULL;
+}
 
 QString encodedAudioDeviceId(const QAudioDevice& device) {
   return QString::fromLatin1(
@@ -1748,6 +1762,25 @@ qulonglong ReplayController::displayFrequencyToRfHz(
       ? static_cast<qulonglong>(*resolved) : 0U;
 }
 
+bool ReplayController::axisShowsRf() const noexcept {
+  if (source_mode_ == 2) return true;
+  return source_mode_ == 0 && radio_frequency_available_ &&
+         radio_rx_rf_hz_ != 0U;
+}
+
+double ReplayController::axisFrequencyHz(const double axis_hz) const noexcept {
+  if (!std::isfinite(axis_hz)) return axis_hz;
+  // Direct IQ frames are already described in absolute RF, so the axis is
+  // right as it stands.
+  if (source_mode_ == 2) return axis_hz;
+  const qulonglong rf_hz = displayFrequencyToRfHz(axis_hz);
+  // Zero means the mapping could not be made -- no radio, no dial reading, or
+  // a point that lands outside the spectrum entirely. Print the audio
+  // frequency rather than nothing: a ruler with gaps in it is harder to read
+  // than one that admits it is showing the passband.
+  return rf_hz == 0U ? axis_hz : static_cast<double>(rf_hz);
+}
+
 const QVariantList& ReplayController::dxSpots() const noexcept {
   return dx_spots_;
 }
@@ -1756,8 +1789,19 @@ const QString& ReplayController::dxSpotsStatus() const noexcept {
   return dx_spots_status_;
 }
 
-bool ReplayController::dxSpotsActive() const noexcept {
-  return dx_spots_enabled_ || dx_cluster_enabled_;
+bool ReplayController::dxClusterConnected() const noexcept {
+  // Not "enabled" and not "configured": connected. The indicator exists to
+  // answer whether the link is up this moment, and a client that is retrying a
+  // refused server is enabled the whole time it is failing.
+  return dx_cluster_enabled_ && dx_cluster_client_ != nullptr &&
+         dx_cluster_client_->connected();
+}
+
+QString ReplayController::dxClusterStatus() const {
+  if (!dx_cluster_enabled_ || dx_cluster_client_ == nullptr) {
+    return QStringLiteral("DX cluster is off.");
+  }
+  return dx_cluster_client_->statusMessage();
 }
 
 qulonglong ReplayController::receiveRfHz() const noexcept {
@@ -1809,14 +1853,14 @@ bool ReplayController::isSpotWithinReceivedBand(
 }
 
 void ReplayController::publishDxSpotsStatus() {
-  QString composed;
-  const auto append = [&composed](const QString& part) {
-    if (part.isEmpty()) return;
-    if (!composed.isEmpty()) composed += QStringLiteral(" · ");
-    composed += part;
-  };
-  if (dx_spot_provider_ != nullptr) append(dx_spot_provider_->statusMessage());
-  if (dx_cluster_client_ != nullptr) append(dx_cluster_client_->statusMessage());
+  const QString composed = dx_cluster_client_ != nullptr
+                               ? dx_cluster_client_->statusMessage()
+                               : QString();
+  // dxClusterStateChanged is emitted unconditionally, not only when the text
+  // moves: dxClusterConnected can change while the status line does not, and
+  // an indicator gated on the string would keep showing a link that has
+  // already dropped.
+  emit dxClusterStateChanged();
   if (dx_spots_status_ == composed) return;
   dx_spots_status_ = composed;
   emit dxSpotsChanged();
@@ -1837,20 +1881,8 @@ void ReplayController::publishDxClusterBandFilter() {
       QString::fromUtf8(band.data(), static_cast<qsizetype>(band.size())));
 }
 
-void ReplayController::ensureDxSpotProvider() {
-  if (dx_spot_provider_ != nullptr) return;
-  dx_spot_provider_ = new DxSpotProvider(this);
-  connect(dx_spot_provider_, &DxSpotProvider::spotsReceived, this,
-          &ReplayController::acceptDxSpots);
-  connect(dx_spot_provider_, &DxSpotProvider::stateChanged, this,
-          [this] { publishDxSpotsStatus(); });
-}
-
 void ReplayController::ensureDxClusterClient() {
   if (dx_cluster_client_ != nullptr) return;
-  // The same route as the HTTPS provider, into the same registry. A second
-  // path would make the two feeds disagree about what has been seen, and a
-  // spot that arrives twice by two routes is not corroboration.
   dx_cluster_client_ = new DxClusterClient(this);
   connect(dx_cluster_client_, &DxClusterClient::spotsReceived, this,
           &ReplayController::acceptDxSpots);
@@ -1862,8 +1894,27 @@ void ReplayController::configureDxCluster(const bool enabled,
                                           const int server_index,
                                           const QString& custom_host,
                                           const int custom_port,
-                                          const QString& login_callsign) {
-  const bool was_active = dxSpotsActive();
+                                          const QString& login_callsign,
+                                          const int retention_minutes,
+                                          const int tolerance_hz) {
+  const bool was_enabled = dx_cluster_enabled_;
+  const int bounded_retention_minutes = std::clamp(retention_minutes, 1, 60);
+  const int bounded_tolerance_hz = std::clamp(tolerance_hz, 50, 1'000);
+  if (bounded_retention_minutes != dx_spots_retention_minutes_ ||
+      bounded_tolerance_hz != dx_spots_tolerance_hz_) {
+    dx_spots_retention_minutes_ = bounded_retention_minutes;
+    dx_spots_tolerance_hz_ = bounded_tolerance_hz;
+    // The registry fixes its bounds at construction, so a changed retention
+    // window or match tolerance means a new one. What it currently holds is
+    // discarded rather than reinterpreted: those spots were admitted under the
+    // previous bounds, and a live cluster refills the store within minutes.
+    cwassistant::core::CwSpotRegistry::Limits limits;
+    limits.retention_ns =
+        static_cast<std::uint64_t>(dx_spots_retention_minutes_) * 60ULL *
+        1'000'000'000ULL;
+    limits.match_tolerance_hz = static_cast<double>(dx_spots_tolerance_hz_);
+    dx_spot_registry_ = cwassistant::core::CwSpotRegistry(limits);
+  }
   // A cluster cannot be joined anonymously, and inventing a callsign would put
   // a false identity on somebody else's machine. Without one this application
   // will actually send, the link simply stays off.
@@ -1896,11 +1947,12 @@ void ReplayController::configureDxCluster(const bool enabled,
   if (!dx_cluster_enabled_) {
     if (dx_cluster_client_ != nullptr) dx_cluster_client_->setEnabled(false);
     dx_cluster_reverse_beacon_ = false;
-    if (was_active && !dxSpotsActive()) {
+    if (was_enabled) {
       dx_spot_expiry_timer_.stop();
       dx_spot_registry_.clear();
     }
     rebuildDxSpotModel();
+    publishDxSpotsStatus();
     return;
   }
 
@@ -1915,63 +1967,12 @@ void ReplayController::configureDxCluster(const bool enabled,
   dx_cluster_client_->setEnabled(true);
   if (!dx_spot_expiry_timer_.isActive()) dx_spot_expiry_timer_.start();
   rebuildDxSpotModel();
-}
-
-void ReplayController::configureDxSpots(const bool enabled,
-                                        const bool reverse_beacon,
-                                        const bool cluster,
-                                        const QString& endpoint,
-                                        const int refresh_seconds,
-                                        const int retention_minutes,
-                                        const int tolerance_hz) {
-  const int bounded_retention_minutes = std::clamp(retention_minutes, 1, 60);
-  const int bounded_tolerance_hz = std::clamp(tolerance_hz, 50, 1'000);
-  const bool limits_changed =
-      bounded_retention_minutes != dx_spots_retention_minutes_ ||
-      bounded_tolerance_hz != dx_spots_tolerance_hz_;
-  dx_spots_enabled_ = enabled;
-  dx_spots_reverse_beacon_ = reverse_beacon;
-  dx_spots_cluster_ = cluster;
-  dx_spots_retention_minutes_ = bounded_retention_minutes;
-  dx_spots_tolerance_hz_ = bounded_tolerance_hz;
-  if (limits_changed) {
-    // The registry fixes its bounds at construction, so a changed retention
-    // window or match tolerance means a new one. What it currently holds is
-    // discarded rather than reinterpreted: those spots were admitted under the
-    // previous bounds, and the next poll refills the store within one interval.
-    cwassistant::core::CwSpotRegistry::Limits limits;
-    limits.retention_ns =
-        static_cast<std::uint64_t>(dx_spots_retention_minutes_) * 60ULL *
-        1'000'000'000ULL;
-    limits.match_tolerance_hz = static_cast<double>(dx_spots_tolerance_hz_);
-    dx_spot_registry_ = cwassistant::core::CwSpotRegistry(limits);
-  }
-  if (!dx_spots_enabled_) {
-    if (dx_spot_provider_ != nullptr) dx_spot_provider_->setEnabled(false);
-    // The store, its expiry timer and the published model are shared with the
-    // telnet cluster link. Switching the HTTPS feed off must not throw away
-    // what the cluster is still supplying.
-    if (!dxSpotsActive()) {
-      dx_spot_expiry_timer_.stop();
-      dx_spot_registry_.clear();
-    }
-    rebuildDxSpotModel();
-    return;
-  }
-  ensureDxSpotProvider();
-  // Strict parsing, never QUrl::fromUserInput: guessing a scheme for an
-  // address the operator half-typed would send a request somewhere they did
-  // not name, and an address that cannot be read as HTTPS has to fail visibly.
-  dx_spot_provider_->setEndpoint(QUrl(endpoint, QUrl::StrictMode));
-  dx_spot_provider_->setRefreshSeconds(refresh_seconds);
-  dx_spot_provider_->setEnabled(true);
-  if (!dx_spot_expiry_timer_.isActive()) dx_spot_expiry_timer_.start();
-  rebuildDxSpotModel();
+  publishDxSpotsStatus();
 }
 
 void ReplayController::acceptDxSpots(
     const std::vector<cwassistant::core::CwSpot>& spots) {
-  if (!dxSpotsActive() || spots.empty()) return;
+  if (!dx_cluster_enabled_ || spots.empty()) return;
   const std::uint64_t now_ns = currentUnixTimeNs();
   bool stored_any = false;
   for (const auto& spot : spots) {
@@ -1990,16 +1991,12 @@ void ReplayController::acceptDxSpots(
 
 void ReplayController::rebuildDxSpotModel() {
   QVariantList spots;
-  if (dxSpotsActive()) {
+  if (dx_cluster_enabled_) {
     // Joining a node is itself a request to see what that node sends, so the
-    // kind it supplies is displayed without also having to be ticked in the
-    // source list above, which describes the HTTPS feed.
-    const bool show_reverse_beacon =
-        dx_spots_reverse_beacon_ ||
-        (dx_cluster_enabled_ && dx_cluster_reverse_beacon_);
-    const bool show_cluster =
-        dx_spots_cluster_ ||
-        (dx_cluster_enabled_ && !dx_cluster_reverse_beacon_);
+    // kind it supplies is what is displayed; there is no second source list to
+    // tick it in.
+    const bool show_reverse_beacon = dx_cluster_reverse_beacon_;
+    const bool show_cluster = !dx_cluster_reverse_beacon_;
     const std::uint64_t now_ns = currentUnixTimeNs();
     dx_spot_registry_.expire(now_ns);
     for (const auto& match : dx_spot_registry_.all(now_ns)) {

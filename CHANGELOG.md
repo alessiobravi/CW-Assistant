@@ -8,6 +8,27 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Moving the VFO no longer costs a tracked stream. A signal carried out of the
+  processed passband by a retune was expired on the ordinary retention
+  timeout, exactly as if it had faded -- which was deliberate and wrong. The
+  operator turned the dial; the station's position is known exactly, and
+  turning back puts it at a computable place. Such a track is now parked
+  rather than expired, held for three minutes, kept out of the decoder so no
+  edge noise reaches its transcript, and restored with its own identity when
+  the band comes back to it. Its transcript, colour and audio monitor follow
+  the station instead of a new card appearing for it.
+
+- The spectrum's frequency axis reads in RF when the receiver's frequency is
+  known, instead of always in audio. On an audio card the axis carried the
+  passband -- nought to twenty-four kilohertz -- while the decoder cards beside
+  it already showed absolute RF, so one screen named the same signal two ways.
+  Sideband is honoured, and the axis falls back to audio when there is no dial
+  reading to map against, an honest passband being better than a blank ruler.
+
+- Spots from a cluster were never drawn. The spectrum overlay was gated on the
+  master switch of the web feed rather than on whether any spot source was
+  live, so joining a node produced markers the display then refused to show.
+
 - Direct SDR reception decoded nothing on any band but 20 m. The decoder is
   fed by a narrow slice taken from the wide capture, and the slice is refused
   outright unless it lies wholly inside the passband being acquired. Its
@@ -343,6 +364,18 @@ All notable changes to CW Buddy are recorded here. The format follows
   across for display only; detection is unaffected.
 
 ### Changed
+
+- The two spot subsystems are one. Spots arrived either from a polling web
+  feed or from a telnet cluster, each with its own settings, and the operator
+  had to understand a transport distinction that was never theirs to make. The
+  web feed has been removed outright: it accepted a document shape no public
+  service emits, so it never had an address that would work, and the two
+  checkboxes that chose between report kinds were meaningless once a node is
+  joined -- what kind of report a spot is arrives with the spot. What remains
+  is one node, one switch, and the retention, tolerance and label settings that
+  are about spots rather than about transport. It now lives under its own
+  Cluster tab instead of inside Decoder, and a status chip beside the transmit
+  state says whether the link is up.
 
 - The threshold below which a signal is not decoded is 4 dB, not 12 dB. The
   higher figure came from a corpus of twenty-two recordings made through a

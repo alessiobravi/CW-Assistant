@@ -75,6 +75,7 @@ Pane {
             TabButton { text: "SDR" }
             TabButton { text: "Decoder" }
             TabButton { text: "Radio" }
+            TabButton { text: "Cluster" }
             TabButton { text: "Keying" }
             TabButton { text: "Display" }
             TabButton { text: "Station" }
@@ -940,318 +941,6 @@ Pane {
                                 : "Enable and select an operator-supplied file first"
                         }
                     }
-
-                    Rectangle {
-                        Layout.columnSpan: 2
-                        Layout.fillWidth: true
-                        height: 1
-                        color: "#2b3541"
-                    }
-                    Label {
-                        Layout.columnSpan: 2
-                        Layout.fillWidth: true
-                        text: "DX Cluster / RBN"
-                        font.pixelSize: 15
-                        font.weight: Font.DemiBold
-                    }
-                    Label {
-                        Layout.columnSpan: 2
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        color: "#91a0b1"
-                        text: "Optionally receive what other listening stations report hearing. Spots place markers on the spectrum at the reported frequencies and give decoded callsigns a second opinion. The feed is receive-only: nothing is ever published, your station is never announced, and no spot can start transmission."
-                    }
-                    Label { text: "Spot feed" }
-                    CheckBox {
-                        objectName: "dxSpotsEnabledCheck"
-                        text: "Receive spots from an external feed"
-                        checked: appSettings.dxSpotsEnabled
-                        onToggled: appSettings.dxSpotsEnabled = checked
-                        ToolTip.visible: hovered
-                        ToolTip.text: "Off by default; enabling it only reads the configured provider"
-                    }
-                    Label { text: "Sources" }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        CheckBox {
-                            objectName: "dxSpotsReverseBeaconCheck"
-                            text: "Reverse Beacon Network"
-                            enabled: appSettings.dxSpotsEnabled
-                            checked: appSettings.dxSpotsReverseBeacon
-                            onToggled: appSettings.dxSpotsReverseBeacon = checked
-                        }
-                        CheckBox {
-                            objectName: "dxSpotsClusterCheck"
-                            text: "DX Cluster"
-                            enabled: appSettings.dxSpotsEnabled
-                            checked: appSettings.dxSpotsCluster
-                            onToggled: appSettings.dxSpotsCluster = checked
-                        }
-                        Label {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 4
-                            wrapMode: Text.WordWrap
-                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
-                            text: "The two sources are independent. Reverse-beacon reports come from automatic skimmers; cluster spots are entered by operators. Either may be used alone, both together, or neither."
-                        }
-                    }
-                    Label { text: "Provider endpoint" }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        TextField {
-                            id: dxSpotsEndpointField
-                            objectName: "dxSpotsEndpointField"
-                            Layout.fillWidth: true
-                            enabled: appSettings.dxSpotsEnabled
-                            text: appSettings.dxSpotsEndpoint
-                            placeholderText: "https://spots.example.org/api/v1/spots"
-                            inputMethodHints: Qt.ImhUrlCharactersOnly
-                                              | Qt.ImhNoPredictiveText
-                            validator: RegularExpressionValidator {
-                                regularExpression: /https:\/\/[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9](:[0-9]{1,5})?(\/[^\s]*)?/
-                            }
-                            onEditingFinished: {
-                                if (acceptableInput)
-                                    appSettings.dxSpotsEndpoint = text
-                                else
-                                    text = appSettings.dxSpotsEndpoint
-                            }
-                            ToolTip.visible: hovered
-                            ToolTip.text: "Address the spots are read from. Plain http is rejected: an unprotected feed can be rewritten in transit, and a rewritten spot is evidence that looks exactly like the real thing."
-                        }
-                        Label {
-                            objectName: "dxSpotsEndpointHintLabel"
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            color: dxSpotsEndpointField.acceptableInput
-                                   ? "#91a0b1" : "#f3bd55"
-                            text: dxSpotsEndpointField.acceptableInput
-                                  ? "Read over https only; the provider is polled and never written to."
-                                  : "Enter a complete https address, for example https://spots.example.org/api/v1/spots"
-                        }
-                    }
-                    Label { text: "Refresh interval" }
-                    RowLayout {
-                        spacing: 8
-                        SpinBox {
-                            objectName: "dxSpotsRefreshSecondsSpin"
-                            editable: true
-                            from: 30
-                            to: 600
-                            stepSize: 10
-                            enabled: appSettings.dxSpotsEnabled
-                            value: appSettings.dxSpotsRefreshSeconds
-                            onValueModified: appSettings.dxSpotsRefreshSeconds = value
-                            ToolTip.visible: hovered && enabled
-                            ToolTip.text: "How often the provider is polled. Below thirty seconds a public feed gains nothing and may refuse the request."
-                        }
-                        Label {
-                            text: "seconds"
-                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
-                        }
-                    }
-                    Label { text: "Spot retention" }
-                    RowLayout {
-                        spacing: 8
-                        SpinBox {
-                            objectName: "dxSpotsRetentionMinutesSpin"
-                            editable: true
-                            from: 1
-                            to: 60
-                            stepSize: 1
-                            enabled: appSettings.dxSpotsEnabled
-                            value: appSettings.dxSpotsRetentionMinutes
-                            onValueModified: appSettings.dxSpotsRetentionMinutes = value
-                            ToolTip.visible: hovered && enabled
-                            ToolTip.text: "How long a received spot stays on the spectrum before it is dropped. A station that has moved on leaves a marker that is no longer true."
-                        }
-                        Label {
-                            text: "minutes"
-                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
-                        }
-                    }
-                    Label { text: "Frequency match tolerance" }
-                    RowLayout {
-                        spacing: 8
-                        SpinBox {
-                            objectName: "dxSpotsToleranceHzSpin"
-                            editable: true
-                            from: 50
-                            to: 1000
-                            stepSize: 25
-                            enabled: appSettings.dxSpotsEnabled
-                            value: appSettings.dxSpotsToleranceHz
-                            onValueModified: appSettings.dxSpotsToleranceHz = value
-                            ToolTip.visible: hovered && enabled
-                            ToolTip.text: "How far a spot may sit from a tracked signal and still be treated as the same station. Wider settings match more spots, and match more of the wrong ones."
-                        }
-                        Label {
-                            text: "Hz"
-                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
-                        }
-                    }
-                    Label { text: "Spectrum labels" }
-                    CheckBox {
-                        objectName: "dxSpotsShowLabelsCheck"
-                        text: "Show spot labels on the spectrum"
-                        enabled: appSettings.dxSpotsEnabled
-                        checked: appSettings.dxSpotsShowLabels
-                        onToggled: appSettings.dxSpotsShowLabels = checked
-                        ToolTip.visible: hovered && enabled
-                        ToolTip.text: "Draw the spotted callsign beside its marker; turn this off to keep the markers without the text"
-                    }
-
-                    Label {
-                        Layout.columnSpan: 2
-                        Layout.topMargin: 6
-                        Layout.fillWidth: true
-                        text: "Live cluster connection"
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                    }
-                    Label {
-                        Layout.columnSpan: 2
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        color: "#91a0b1"
-                        text: "The spot feed above reads a web address. This instead joins a cluster or reverse-beacon node over telnet, which is the only way the Reverse Beacon Network publishes its live stream. Spots arrive the same way and are used for the same thing; only the transport differs. One node is joined at a time, and a node that refuses or drops the link is left alone for longer each time rather than retried in a loop."
-                    }
-                    Label { text: "Cluster node" }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        ComboBox {
-                            id: dxClusterServerCombo
-                            objectName: "dxClusterServerCombo"
-                            Layout.fillWidth: true
-                            // The last entry is always Custom, so its position
-                            // follows the loaded list rather than a constant
-                            // that a shorter server file would put out of step.
-                            readonly property int customIndex: count - 1
-                            readonly property var selectedServer:
-                                (appSettings.dxClusterServerIndex >= 0
-                                 && appSettings.dxClusterServerIndex < appSettings.dxClusterServers.length)
-                                ? appSettings.dxClusterServers[appSettings.dxClusterServerIndex]
-                                : null
-                            model: {
-                                var names = []
-                                for (var i = 0; i < appSettings.dxClusterServers.length; ++i)
-                                    names.push(appSettings.dxClusterServers[i].name)
-                                names.push("Custom…")
-                                return names
-                            }
-                            currentIndex: appSettings.dxClusterServerIndex < 0
-                                          ? customIndex
-                                          : Math.min(appSettings.dxClusterServerIndex, customIndex)
-                            onActivated: appSettings.dxClusterServerIndex =
-                                         (currentIndex === customIndex ? -1 : currentIndex)
-                            ToolTip.visible: hovered
-                            ToolTip.text: "Read from dictionaries/dx-cluster-servers.txt; edit that file to add or correct a node"
-                        }
-                        Label {
-                            objectName: "dxClusterServerNoteLabel"
-                            Layout.fillWidth: true
-                            visible: dxClusterServerCombo.currentIndex !== dxClusterServerCombo.customIndex
-                            wrapMode: Text.WordWrap
-                            color: "#91a0b1"
-                            text: dxClusterServerCombo.selectedServer
-                                  ? dxClusterServerCombo.selectedServer.host
-                                    + ":" + dxClusterServerCombo.selectedServer.port
-                                    + " — " + dxClusterServerCombo.selectedServer.note
-                                  : "No servers could be read from dictionaries/dx-cluster-servers.txt; choose Custom and enter a node."
-                        }
-                    }
-                    Label {
-                        text: "Custom node"
-                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
-                        RowLayout {
-                            spacing: 8
-                            Layout.fillWidth: true
-                            TextField {
-                                id: dxClusterCustomHostField
-                                objectName: "dxClusterCustomHostField"
-                                Layout.fillWidth: true
-                                text: appSettings.dxClusterCustomHost
-                                placeholderText: "cluster.example.org"
-                                inputMethodHints: Qt.ImhUrlCharactersOnly
-                                                  | Qt.ImhNoPredictiveText
-                                validator: RegularExpressionValidator {
-                                    regularExpression: /[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?/
-                                }
-                                onEditingFinished: {
-                                    if (acceptableInput)
-                                        appSettings.dxClusterCustomHost = text
-                                    else
-                                        text = appSettings.dxClusterCustomHost
-                                }
-                            }
-                            SpinBox {
-                                objectName: "dxClusterCustomPortSpin"
-                                editable: true
-                                from: 1
-                                to: 65535
-                                value: appSettings.dxClusterCustomPort
-                                onValueModified: appSettings.dxClusterCustomPort = value
-                                ToolTip.visible: hovered
-                                ToolTip.text: "Cluster nodes commonly listen on 23, 7300, 7373 or 8000; the Reverse Beacon Network CW stream is on 7000"
-                            }
-                        }
-                        Label {
-                            objectName: "dxClusterCustomHintLabel"
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            color: appSettings.dxClusterCustomHost.length > 0
-                                   ? "#91a0b1" : "#f3bd55"
-                            text: appSettings.dxClusterCustomHost.length > 0
-                                  ? "Joined over plain telnet, which is what cluster software speaks; there is no encrypted alternative to offer."
-                                  : "Enter the host name of the node to join, for example cluster.example.org"
-                        }
-                    }
-                    Label { text: "Cluster link" }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 4
-                        CheckBox {
-                            objectName: "dxClusterEnabledCheck"
-                            text: "Join the selected node and receive its spots"
-                            // A cluster login is the station callsign, and
-                            // there is no anonymous one, so the switch is not
-                            // reachable until a callsign has been set.
-                            enabled: appSettings.ownCallsign.length > 0
-                            checked: appSettings.dxClusterEnabled
-                            onToggled: appSettings.dxClusterEnabled = checked
-                        }
-                        // Plainly stated rather than tucked into a tooltip:
-                        // this is the one place the application speaks on the
-                        // network, and what it sends is on screen before the
-                        // switch above can be used.
-                        Label {
-                            objectName: "dxClusterLoginLabel"
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            color: "#91a0b1"
-                            text: appSettings.ownCallsign.length > 0
-                                  ? "Connects as " + appSettings.ownCallsign
-                                    + "; cluster logins are sent unencrypted. Nothing else is sent: no spots, no announcements, no replies."
-                                  : "Set your callsign on the Station tab first. A cluster login is sent as your callsign and cannot be made anonymously."
-                        }
-                    }
-
-                    Label { text: "" }
-                    Label {
-                        objectName: "dxSpotsAuthorityLabel"
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        color: "#f3bd55"
-                        text: "A spot is corroboration and never authority. It can lower how much evidence a decoded callsign needs before it is offered, and it can flag that an outside source disagrees with what was decoded here, but it never replaces a decoded callsign with a spotted one: reverse-beacon reports carry a measured error rate approaching two per cent per receiver, so a spot that contradicts good copy is as likely to be the mistaken one. What is decoded from the air remains the only source of the transcript."
-                    }
                 }
             }
 
@@ -1425,6 +1114,227 @@ Pane {
                                    ? "rigctld owns the physical radio and serial framing. CW Buddy configures only its loopback endpoint, VFO mapping, and write permission."
                                    : "CAT4OM owns the physical radio and serial framing. CW Buddy configures only its Control service connection; passwords are never saved.")
                               : "SWL mode processes receiver audio without CAT or key/PTT. Stored radio values are retained in case this profile is switched back to radio operation."
+                    }
+                }
+            }
+
+            ScrollView {
+                contentWidth: availableWidth
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 18
+                    rowSpacing: 12
+                    anchors.margins: 22
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Join one DX cluster or Reverse Beacon Network node and receive what other listening stations report hearing. Spots place markers on the spectrum at the reported frequencies and give decoded callsigns a second opinion. Whether a report was made by an automatic skimmer or typed by an operator arrives with the spot itself; there is nothing to choose here. The link is receive-only: nothing is ever published, your station is never announced, and no spot can start transmission."
+                    }
+                    Label { text: "Cluster node" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        ComboBox {
+                            id: dxClusterServerCombo
+                            objectName: "dxClusterServerCombo"
+                            Layout.fillWidth: true
+                            // The last entry is always Custom, so its position
+                            // follows the loaded list rather than a constant
+                            // that a shorter server file would put out of step.
+                            readonly property int customIndex: count - 1
+                            readonly property var selectedServer:
+                                (appSettings.dxClusterServerIndex >= 0
+                                 && appSettings.dxClusterServerIndex < appSettings.dxClusterServers.length)
+                                ? appSettings.dxClusterServers[appSettings.dxClusterServerIndex]
+                                : null
+                            model: {
+                                var names = []
+                                for (var i = 0; i < appSettings.dxClusterServers.length; ++i)
+                                    names.push(appSettings.dxClusterServers[i].name)
+                                names.push("Custom…")
+                                return names
+                            }
+                            currentIndex: appSettings.dxClusterServerIndex < 0
+                                          ? customIndex
+                                          : Math.min(appSettings.dxClusterServerIndex, customIndex)
+                            onActivated: appSettings.dxClusterServerIndex =
+                                         (currentIndex === customIndex ? -1 : currentIndex)
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Read from dictionaries/dx-cluster-servers.txt; edit that file to add or correct a node"
+                        }
+                        Label {
+                            objectName: "dxClusterServerNoteLabel"
+                            Layout.fillWidth: true
+                            visible: dxClusterServerCombo.currentIndex !== dxClusterServerCombo.customIndex
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: dxClusterServerCombo.selectedServer
+                                  ? dxClusterServerCombo.selectedServer.host
+                                    + ":" + dxClusterServerCombo.selectedServer.port
+                                    + " — " + dxClusterServerCombo.selectedServer.note
+                                  : "No servers could be read from dictionaries/dx-cluster-servers.txt; choose Custom and enter a node."
+                        }
+                    }
+                    Label {
+                        text: "Custom node"
+                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
+                        RowLayout {
+                            spacing: 8
+                            Layout.fillWidth: true
+                            TextField {
+                                id: dxClusterCustomHostField
+                                objectName: "dxClusterCustomHostField"
+                                Layout.fillWidth: true
+                                text: appSettings.dxClusterCustomHost
+                                placeholderText: "cluster.example.org"
+                                inputMethodHints: Qt.ImhUrlCharactersOnly
+                                                  | Qt.ImhNoPredictiveText
+                                validator: RegularExpressionValidator {
+                                    regularExpression: /[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?/
+                                }
+                                onEditingFinished: {
+                                    if (acceptableInput)
+                                        appSettings.dxClusterCustomHost = text
+                                    else
+                                        text = appSettings.dxClusterCustomHost
+                                }
+                            }
+                            SpinBox {
+                                objectName: "dxClusterCustomPortSpin"
+                                editable: true
+                                from: 1
+                                to: 65535
+                                value: appSettings.dxClusterCustomPort
+                                onValueModified: appSettings.dxClusterCustomPort = value
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Cluster nodes commonly listen on 23, 7300, 7373 or 8000; the Reverse Beacon Network CW stream is on 7000"
+                            }
+                        }
+                        Label {
+                            objectName: "dxClusterCustomHintLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: appSettings.dxClusterCustomHost.length > 0
+                                   ? "#91a0b1" : "#f3bd55"
+                            text: appSettings.dxClusterCustomHost.length > 0
+                                  ? "Joined over plain telnet, which is what cluster software speaks; there is no encrypted alternative to offer."
+                                  : "Enter the host name of the node to join, for example cluster.example.org"
+                        }
+                    }
+                    Label { text: "Cluster link" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        CheckBox {
+                            objectName: "dxClusterEnabledCheck"
+                            text: "Join the selected node and receive its spots"
+                            // A cluster login is the station callsign, and
+                            // there is no anonymous one, so the switch is not
+                            // reachable until a callsign has been set.
+                            enabled: appSettings.ownCallsign.length > 0
+                            checked: appSettings.dxClusterEnabled
+                            onToggled: appSettings.dxClusterEnabled = checked
+                        }
+                        // Plainly stated rather than tucked into a tooltip:
+                        // this is the one place the application speaks on the
+                        // network, and what it sends is on screen before the
+                        // switch above can be used.
+                        Label {
+                            objectName: "dxClusterLoginLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: appSettings.ownCallsign.length > 0
+                                  ? "Connects as " + appSettings.ownCallsign
+                                    + "; cluster logins are sent unencrypted. Nothing else is sent: no spots, no announcements, no replies."
+                                  : "Set your callsign on the Station tab first. A cluster login is sent as your callsign and cannot be made anonymously."
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "One node is joined at a time. A node that refuses or drops the link is left alone for longer each time rather than retried in a loop."
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#2b3541"
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        text: "Spots on the spectrum"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    Label { text: "Spot retention" }
+                    RowLayout {
+                        spacing: 8
+                        SpinBox {
+                            objectName: "dxSpotsRetentionMinutesSpin"
+                            editable: true
+                            from: 1
+                            to: 60
+                            stepSize: 1
+                            enabled: appSettings.dxClusterEnabled
+                            value: appSettings.dxSpotsRetentionMinutes
+                            onValueModified: appSettings.dxSpotsRetentionMinutes = value
+                            ToolTip.visible: hovered && enabled
+                            ToolTip.text: "How long a received spot stays on the spectrum before it is dropped. A station that has moved on leaves a marker that is no longer true."
+                        }
+                        Label {
+                            text: "minutes"
+                            color: appSettings.dxClusterEnabled ? "#91a0b1" : "#667586"
+                        }
+                    }
+                    Label { text: "Frequency match tolerance" }
+                    RowLayout {
+                        spacing: 8
+                        SpinBox {
+                            objectName: "dxSpotsToleranceHzSpin"
+                            editable: true
+                            from: 50
+                            to: 1000
+                            stepSize: 25
+                            enabled: appSettings.dxClusterEnabled
+                            value: appSettings.dxSpotsToleranceHz
+                            onValueModified: appSettings.dxSpotsToleranceHz = value
+                            ToolTip.visible: hovered && enabled
+                            ToolTip.text: "How far a spot may sit from a tracked signal and still be treated as the same station. Wider settings match more spots, and match more of the wrong ones."
+                        }
+                        Label {
+                            text: "Hz"
+                            color: appSettings.dxClusterEnabled ? "#91a0b1" : "#667586"
+                        }
+                    }
+                    Label { text: "Spectrum labels" }
+                    CheckBox {
+                        objectName: "dxSpotsShowLabelsCheck"
+                        text: "Show spot labels on the spectrum"
+                        enabled: appSettings.dxClusterEnabled
+                        checked: appSettings.dxSpotsShowLabels
+                        onToggled: appSettings.dxSpotsShowLabels = checked
+                        ToolTip.visible: hovered && enabled
+                        ToolTip.text: "Draw the spotted callsign beside its marker; turn this off to keep the markers without the text"
+                    }
+                    Label { text: "" }
+                    Label {
+                        objectName: "dxSpotsAuthorityLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#f3bd55"
+                        text: "A spot is corroboration and never authority. It can lower how much evidence a decoded callsign needs before it is offered, and it can flag that an outside source disagrees with what was decoded here, but it never replaces a decoded callsign with a spotted one: reverse-beacon reports carry a measured error rate approaching two per cent per receiver, so a spot that contradicts good copy is as likely to be the mistaken one. What is decoded from the air remains the only source of the transcript."
                     }
                 }
             }

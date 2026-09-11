@@ -37,7 +37,7 @@
 // `accept/spots 0 on 20m/cw` and echoed it back from `sh/filter` as
 // `filter0 accept on 20m/cw`.
 //
-// Required build wiring (a Qt-linked test, beside cwa_dx_spot_provider_test in
+// Required build wiring (a Qt-linked test, registered in
 // src/desktop/CMakeLists.txt):
 //
 //   qt_add_executable(cwa_dx_cluster_client_test

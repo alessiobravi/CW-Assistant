@@ -150,6 +150,64 @@ ApplicationWindow {
                 Label { text: appSettings.radioDisplayName; color: "#8d9aaa"; font.pixelSize: 11 }
             }
             Item { Layout.fillWidth: true }
+            // Cluster link state, immediately left of the transmit chip so the
+            // two read as one status pair. It is deliberately built from the
+            // transmit chip's own parts — same height, radius, plate colour,
+            // 11 px bold label — and it borrows the amber that chip uses for
+            // "armed", but never its red: on this bar red means the
+            // transmitter is keyed, and a receive-only link must never be
+            // mistaken for one.
+            Rectangle {
+                id: dxClusterChip
+                objectName: "dxClusterStatusChip"
+                // Reserve the widest state's width so the transmit chip beside
+                // it does not slide sideways every time the link changes.
+                implicitWidth: Math.max(dxClusterLabel.implicitWidth,
+                                        dxClusterWidest.width) + 24
+                implicitHeight: 30
+                radius: 15
+                color: "#202833"
+                readonly property bool linkEnabled: appSettings.dxClusterEnabled
+                readonly property bool linkUp:
+                    dxClusterChip.linkEnabled
+                    && replayController.dxClusterConnected
+                // Kept on screen and greyed when the feature is off rather
+                // than hidden. An empty spectrum is exactly the moment an
+                // operator asks why no spots are drawn, and a chip that has
+                // vanished answers nothing; the transmit chip beside it makes
+                // the same choice when it says "TX DISARMED".
+                ToolTip.visible: dxClusterHover.hovered
+                ToolTip.delay: 400
+                // Defended with || "" so the chip still renders its own
+                // wording in the moment before the controller has published a
+                // status line of its own.
+                readonly property string linkStatus:
+                    replayController.dxClusterStatus || ""
+                ToolTip.text: dxClusterChip.linkStatus.length > 0
+                              ? dxClusterChip.linkStatus
+                              : (dxClusterChip.linkEnabled
+                                 ? "Joining the selected cluster node."
+                                 : "Cluster spots are switched off in Settings > Decoder > Cluster link.")
+                HoverHandler { id: dxClusterHover }
+                TextMetrics {
+                    id: dxClusterWidest
+                    font: dxClusterLabel.font
+                    text: "CLUSTER LINKING"
+                }
+                Label {
+                    id: dxClusterLabel
+                    anchors.centerIn: parent
+                    text: !dxClusterChip.linkEnabled ? "CLUSTER OFF"
+                          : dxClusterChip.linkUp ? "CLUSTER LINKED"
+                          : "CLUSTER LINKING"
+                    // Grey off, amber while it is trying, and the application
+                    // accent teal once spots are arriving. Never "#ff6b6b".
+                    color: !dxClusterChip.linkEnabled ? "#718092"
+                           : dxClusterChip.linkUp ? "#43c6ac" : "#f3bd55"
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                }
+            }
             Rectangle {
                 implicitWidth: safeLabel.implicitWidth + 24
                 implicitHeight: 30
@@ -571,11 +629,26 @@ ApplicationWindow {
                             rightPadding: 5
                             topPadding: 1
                             bottomPadding: 1
-                            text: window.formatFrequency(
-                                      spectrumDisplay.lowerFrequencyHz
-                                      + fraction
-                                        * (spectrumDisplay.upperFrequencyHz
-                                           - spectrumDisplay.lowerFrequencyHz))
+                            // The axis carries whatever the analyser produced,
+                            // which for an audio card is the passband. An
+                            // operator reads a band in RF, and the decoder
+                            // cards already said RF, so labelling the ruler in
+                            // audio named the same signal two ways on one
+                            // screen. The VFO formatter is used for RF because
+                            // the coarse one rounds to a kilohertz, which is
+                            // wider than a CW signal.
+                            text: {
+                                var axisHz =
+                                    spectrumDisplay.lowerFrequencyHz
+                                    + fraction
+                                      * (spectrumDisplay.upperFrequencyHz
+                                         - spectrumDisplay.lowerFrequencyHz)
+                                var shownHz =
+                                    replayController.axisFrequencyHz(axisHz)
+                                return replayController.axisShowsRf
+                                    ? window.formatVfoFrequency(shownHz)
+                                    : window.formatFrequency(shownHz)
+                            }
                             color: "#dce7f2"
                             font.pixelSize: 13
                             font.weight: Font.DemiBold
@@ -1122,11 +1195,14 @@ ApplicationWindow {
                     id: dxSpotOverlay
                     objectName: "dxSpotOverlay"
                     anchors.fill: spectrumDisplay
-                    // The feed's own switch hides the overlay. The label
-                    // switch hides only the callsigns: a marker still says a
-                    // station was reported there, which is the part worth
-                    // keeping when a crowded band makes the text unreadable.
-                    visible: appSettings.dxSpotsEnabled
+                    // The cluster switch is the one master switch for the
+                    // feature, and it is the same switch that decides whether
+                    // the link is joined at all, so the overlay is shown for
+                    // exactly as long as spots can arrive. The label switch
+                    // hides only the callsigns: a marker still says a station
+                    // was reported there, which is the part worth keeping when
+                    // a crowded band makes the text unreadable.
+                    visible: appSettings.dxClusterEnabled
                              && replayController.activeSource
                              && spectrumDisplay.upperFrequencyHz
                                 > spectrumDisplay.lowerFrequencyHz

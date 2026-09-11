@@ -683,7 +683,9 @@ minimum power first.
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
 
-## DX Cluster / RBN
+## Cluster (DX Cluster / RBN)
+
+Its own tab in Settings, not part of Decoder.
 
 A receive-only feed of what other receivers report hearing. It places a marker
 on the separator between the spectrum and the waterfall where a station has
@@ -692,11 +694,7 @@ itself. It is off by default.
 
 | Setting | Meaning |
 | --- | --- |
-| Enable | Master switch. Off by default; everything below is inert while it is off. |
-| Reverse Beacon Network | Include reports from receivers that decoded a signal automatically. |
-| DX Cluster | Include reports posted by people. |
-| Endpoint | The `https` address of the feed. Nothing is ever sent but a request for spots: no credentials, no station announcement, no transmission. |
-| Refresh interval | How often the feed is read, 30 to 600 seconds. |
+| Cluster link | Master switch. Off by default; everything below is inert while it is off, and it cannot be turned on before the station callsign is set. |
 | Spot retention | How long a report is kept, 1 to 60 minutes. |
 | Match tolerance | How far from a reported frequency a station still counts as the same one, 50 to 1000 Hz. |
 | Show labels | Draw callsigns beside the markers. Turning this off keeps the markers, which is useful when a crowded band makes the text unreadable. |

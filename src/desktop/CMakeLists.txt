@@ -50,8 +50,6 @@ qt_add_executable(cw-buddy-desktop
   sdr/sdr_runtime_environment.hpp
   radio/cat4om_client.cpp
   radio/cat4om_client.hpp
-  dxcluster/dx_spot_provider.cpp
-  dxcluster/dx_spot_provider.hpp
   dxcluster/dx_cluster_servers.cpp
   dxcluster/dx_cluster_servers.hpp
   dxcluster/dx_cluster_client.cpp
@@ -320,8 +318,6 @@ if(CWA_BUILD_TESTS)
 
   qt_add_executable(cwa_desktop_render_startup_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/spectrum_waterfall_startup_test.cpp
-    dxcluster/dx_spot_provider.cpp
-    dxcluster/dx_spot_provider.hpp
     dxcluster/dx_cluster_servers.cpp
     dxcluster/dx_cluster_servers.hpp
     dxcluster/dx_cluster_client.cpp
@@ -375,26 +371,6 @@ if(CWA_BUILD_TESTS)
       ENVIRONMENT_MODIFICATION
         "PATH=path_list_prepend:${CWA_SOAPY_SDR_RUNTIME_ROOT}/bin")
   endif()
-
-  qt_add_executable(cwa_dx_spot_provider_test
-    ${PROJECT_SOURCE_DIR}/tests/desktop/dx_spot_provider_test.cpp
-    dxcluster/dx_spot_provider.cpp
-    dxcluster/dx_spot_provider.hpp
-    dxcluster/dx_cluster_servers.cpp
-    dxcluster/dx_cluster_servers.hpp
-    dxcluster/dx_cluster_client.cpp
-    dxcluster/dx_cluster_client.hpp)
-  target_link_libraries(cwa_dx_spot_provider_test PRIVATE
-    cwa_core Qt6::Core Qt6::Network)
-  target_include_directories(cwa_dx_spot_provider_test PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR})
-  target_compile_definitions(cwa_dx_spot_provider_test PRIVATE
-    CWA_APP_SETTINGS_HPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/settings/app_settings.hpp"
-    CWA_APP_SETTINGS_CPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/settings/app_settings.cpp"
-    CWA_REPLAY_CONTROLLER_HPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/replay/replay_controller.hpp"
-    CWA_REPLAY_CONTROLLER_CPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/replay/replay_controller.cpp"
-    CWA_DX_SPOT_PROVIDER_CPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/dxcluster/dx_spot_provider.cpp")
-  add_test(NAME cwa_dx_spot_provider_test COMMAND cwa_dx_spot_provider_test)
 
   qt_add_executable(cwa_dx_cluster_client_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/dx_cluster_client_test.cpp
