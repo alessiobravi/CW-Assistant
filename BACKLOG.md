@@ -6,7 +6,38 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-third entry) -- the unfinished-final-over
+Last reviewed: 2026-09-11 (forty-fourth entry) -- the retained-observation
+route for the unfinished final over was tried and does not work, which settles
+what the fix has to be.
+
+`retained_observations_` does hold a snapshot that outlives its track, so it
+looked like the decoupled record the previous entry asked for. It is not: those
+observations are refreshed from live tracks during the snapshot rebuild on the
+sample path, and both consumers -- the desktop worker and the replay tool --
+read that path and discard what the spectrum path returns. A track flushed and
+removed during the spectrum update is therefore already gone when the rebuild
+that consumers read happens, and its completed over goes with it. Measured: the
+corpus stayed at 268 of 268 with the flush writing into the retained
+observation, and reached 269 only when the track was additionally held alive
+into the next cycle.
+
+Holding it alive is what cannot be had. Replacement identity matching requires
+a predecessor to be absent before a successor can inherit its colour and text,
+so the two requirements are in direct opposition: publishing a final over needs
+the track present at the sample-path rebuild, and replacement inheritance needs
+it gone. Every attempt that recovered the over broke
+`genuine replacement inherits its predecessor text exactly once` and
+`refreshing a replacement cannot append its inherited prefix again`.
+
+So the conclusion of the previous entry stands and is now evidenced rather than
+argued: completed overs need an emission path of their own, independent of
+whether the producing track is still in the bank. That is an API addition and
+should be scoped as one. Splitting removal so only a track that finished an
+over lingers, and gating the flush on `ever_verified` so noise tracks cannot
+manufacture one, are both necessary and both already proven; neither is
+sufficient without the separate path.
+
+Previous review: 2026-09-11 (forty-third entry) -- the unfinished-final-over
 defect is confirmed, measured, and the obvious fix rejected on the measurement.
 
 Confirmed: `CwMultiSpeedDecoder::flush` is called from tests only. Production
