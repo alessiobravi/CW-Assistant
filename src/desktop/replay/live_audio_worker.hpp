@@ -154,6 +154,10 @@ class LiveAudioDspWorker final : public QObject {
   std::shared_ptr<LiveAudioPipe> pipe_;
   QTimer timer_;
   cwassistant::core::SpectrumAnalyzer analyzer_;
+  // Recorded in the diagnostics so a report of "decodes nothing" can be told
+  // apart from a detector that was never given a spectrum frame.
+  std::uint64_t detector_frames_{0};
+  std::uint64_t decoder_resets_{0};
   cwassistant::core::SpectrumAnalyzer decoder_analyzer_{
       {.fft_size = 8'192, .averaging_frames = 3, .frame_rate_hz = 60}};
   cwassistant::core::IqSubbandDecimator sdr_decoder_channelizer_;

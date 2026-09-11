@@ -1,6 +1,8 @@
 #include "live_audio_worker.hpp"
 
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_morse_alphabet.hpp"
+#include "cwassistant/core/cw_vocabulary.hpp"
 #include "decoder_channel_model.hpp"
 
 #include <QAudioDevice>
@@ -408,6 +410,47 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
                  static_cast<qint64>(diagnostics.verified_tracks));
   root.insert(QStringLiteral("summary"), summary);
 
+  // What the detector was actually given. A field report of "decodes nothing"
+  // could not be told apart from a configuration that excluded the signal,
+  // because none of this was recorded: the analyzer settings, whether any
+  // spectrum frame reached the detector at all, and whether the Morse
+  // alphabet in force came from a file or from the copy inside the
+  // application. Without them the only way to narrow it is to guess.
+  const auto analyzer_config = analyzer_.config();
+  QJsonObject detector;
+  detector.insert(QStringLiteral("fftSize"),
+                  static_cast<double>(analyzer_config.fft_size));
+  detector.insert(QStringLiteral("frameRateHz"),
+                  static_cast<double>(analyzer_config.frame_rate_hz));
+  detector.insert(QStringLiteral("averagingFrames"),
+                  static_cast<double>(analyzer_config.averaging_frames));
+  detector.insert(QStringLiteral("audioLowerHz"),
+                  analyzer_config.audio_lower_frequency_hz);
+  detector.insert(QStringLiteral("audioUpperHz"),
+                  analyzer_config.audio_upper_frequency_hz);
+  detector.insert(QStringLiteral("automaticBandwidth"),
+                  analyzer_config.audio_automatic_bandwidth);
+  detector.insert(QStringLiteral("automaticGain"),
+                  analyzer_config.audio_automatic_gain);
+  detector.insert(QStringLiteral("gainDb"),
+                  static_cast<double>(analyzer_config.audio_gain_db));
+  detector.insert(QStringLiteral("dcRejection"),
+                  analyzer_config.audio_dc_rejection);
+  detector.insert(QStringLiteral("spectrumFramesToDetector"),
+                  static_cast<double>(detector_frames_));
+  detector.insert(QStringLiteral("decoderResets"),
+                  static_cast<double>(decoder_resets_));
+  detector.insert(QStringLiteral("morseAlphabetSymbols"),
+                  static_cast<double>(
+                      cwassistant::core::cwSharedMorseAlphabet().size()));
+  detector.insert(QStringLiteral("morseAlphabetFromBuiltin"),
+                  cwassistant::core::cwMorseAlphabetLoadedFromBuiltin());
+  detector.insert(QStringLiteral("exchangeVocabularyTokens"),
+                  static_cast<double>(
+                      cwassistant::core::cwSharedVocabulary()
+                          .exchangeWordCount()));
+  root.insert(QStringLiteral("detector"), detector);
+
   // Recorded every snapshot (not just once) specifically so a reviewer can
   // tell, after the fact, whether/when the operator's RX VFO moved during
   // the capture window -- a VFO move is a common, easily overlooked
@@ -677,7 +720,10 @@ void LiveAudioDspWorker::configure(
       config.audio_lower_frequency_hz != previous.audio_lower_frequency_hz ||
       config.audio_upper_frequency_hz != previous.audio_upper_frequency_hz;
   static_cast<void>(analyzer_.configure(config));
-  if (signal_path_changed) decoder_.reset();
+  if (signal_path_changed) {
+    ++decoder_resets_;
+    decoder_.reset();
+  }
 }
 
 void LiveAudioDspWorker::setDebugCaptureMaximumSeconds(const double seconds) {
@@ -1009,6 +1055,7 @@ void LiveAudioDspWorker::drain() {
       // smoothing, so the operator's display averaging cannot change which
       // signals are discovered or how quickly they qualify.
       if (block.stream.kind != cwassistant::core::StreamKind::ComplexIq) {
+        ++detector_frames_;
         static_cast<void>(decoder_.updateSpectrum(
             snapshot.timestamp_ns, snapshot.lower_frequency_hz,
             snapshot.upper_frequency_hz, snapshot.instantaneous_bins_dbfs,
@@ -1036,6 +1083,7 @@ void LiveAudioDspWorker::drain() {
       const auto detector_bins = std::span<const float>(
           snapshot.instantaneous_bins_dbfs.data() + first_bin,
           last_bin - first_bin + 1U);
+      ++detector_frames_;
       static_cast<void>(decoder_.updateSpectrum(
           snapshot.timestamp_ns, detector_lower_hz,
           detector_lower_hz +

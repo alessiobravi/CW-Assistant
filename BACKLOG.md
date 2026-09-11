@@ -6,7 +6,40 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-seventh entry) -- a released build decoded
+Last reviewed: 2026-09-11 (forty-eighth entry) -- the field report is not
+explained yet, and the previous entry's diagnosis was wrong. The operator's
+Windows dictionaries were produced and inspected: all four files are present and
+parse exactly as the repository copies do, 56 symbols and 82 tokens, nothing
+rejected. So the alphabet was not missing and the fix in the previous entry,
+though worth having, did not address the reported fault.
+
+What is established. The receiver, the audio and the core decoder are all
+sound: the reported capture replays against a build of the exact released
+commit, using the operator's own dictionary files, and recovers the callsign,
+the sender and the speed at eight seconds. The application meanwhile produced
+no tracks at all for sixty seconds, and the slice the operator opened by hand
+sat unmatched for a further sixty-seven with forty decibels of signal and no
+spectral observations. Detection received nothing.
+
+What has been excluded: the dictionaries and the alphabet, since the capture
+decodes with the vocabulary files emptied; the spectrum analyzer change, which
+is additive and leaves the window sum and the bins untouched; the speed-anchor
+refactor, which resolves to the same index; the analyzer band, which automatic
+bandwidth pins to 100-3000 Hz around a signal at 892; transform size; and the
+settings and reset paths, which are unchanged since the last working release
+and guard against repetition. The only channel-bank change in the range affects
+verification rather than detection.
+
+The instruments cannot reach it. The core harness decodes the capture and the
+end-to-end worker test passes, so neither reproduces what the operator sees.
+Two things follow. The application must not depend on the data directory being
+correct -- the bundled copies are authoritative now and an operator copy is
+used only if it parses -- and the capture must record what the detector was
+given, which it now does: analyzer configuration, frames actually delivered to
+the detector, decoder resets, and whether the alphabet came from a file or the
+built-in copy. The next capture should identify this rather than narrow it.
+
+Previous review: 2026-09-11 (forty-seventh entry) -- a released build decoded
 nothing, reported from the field against 0.1.155. The receiver was fine: the
 capture replays here and recovers its callsign, sender and speed. The decoder
 had no alphabet.

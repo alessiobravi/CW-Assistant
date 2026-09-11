@@ -85,36 +85,58 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
     return bundled.readAll();
   };
 
-  const auto read = [&directory, &bundled_contents](const char* name) {
+  // The copy inside the application is authoritative and is always what gets
+  // used unless the operator's copy is both present and usable. An upgrade
+  // must never depend on what an earlier version left in the data directory:
+  // a file written by a previous release, truncated, or half-written, must
+  // not be able to change how a new version decodes. The operator's copy is
+  // therefore an override that has to earn its place, not the primary source.
+  const auto read = [&directory, &bundled_contents](
+                        const char* name, const auto& usable) {
+    const QByteArray bundled = bundled_contents(name);
     const QString editable = directory.filePath(QString::fromLatin1(name));
     QFile file(editable);
-    QByteArray existing;
+    QByteArray operator_copy;
     if (file.exists() && file.open(QIODevice::ReadOnly)) {
-      existing = file.readAll();
+      operator_copy = file.readAll();
       file.close();
     }
-    // An empty operator copy is repaired rather than used. One was written
-    // once, when the bundled read returned nothing, and from then on it
-    // existed -- so it was preferred on every later run and the application
-    // decoded nothing for good. A file the operator has actually written to
-    // is never touched; only an empty one is replaced.
-    if (!existing.isEmpty()) return existing;
-    const QByteArray contents = bundled_contents(name);
-    if (contents.isEmpty()) return contents;
-    QFile seed(editable);
-    // Never fail the load because the directory is read-only: the bundled
-    // contents are already in hand.
-    if (seed.open(QIODevice::WriteOnly)) {
-      seed.write(contents);
-      seed.close();
+    if (!operator_copy.isEmpty() && usable(operator_copy)) return operator_copy;
+    if (bundled.isEmpty()) return operator_copy;
+    // Replace a missing or unusable copy so the operator sees what is actually
+    // in force and can edit from it. A usable copy is never overwritten.
+    if (operator_copy.isEmpty() || !usable(operator_copy)) {
+      QFile seed(editable);
+      if (seed.open(QIODevice::WriteOnly)) {
+        seed.write(bundled);
+        seed.close();
+      }
     }
-    return contents;
+    return bundled;
+  };
+
+  // A dictionary is usable when it parses to something. The alphabet has to
+  // carry the letters and digits as well, because a file that parses to three
+  // entries would leave the decoder reading almost nothing.
+  const auto parses_to_tokens = [](const QByteArray& text) {
+    cwassistant::core::CwVocabulary probe;
+    return probe.importExchangeWords(
+               std::string_view(text.constData(),
+                                static_cast<std::size_t>(text.size())))
+               .inserted_tokens > 0U;
+  };
+  const auto parses_to_alphabet = [](const QByteArray& text) {
+    cwassistant::core::CwMorseAlphabet probe;
+    static_cast<void>(probe.importText(
+        std::string_view(text.constData(),
+                         static_cast<std::size_t>(text.size()))));
+    return probe.symbolFor(".-") == "A" && probe.symbolFor("-----") == "0";
   };
 
   auto& vocabulary = cwassistant::core::cwSharedVocabulary();
   vocabulary.clear();
-  const QByteArray words = read(kFiles[0]);
-  const QByteArray prefixes = read(kFiles[1]);
+  const QByteArray words = read(kFiles[0], parses_to_tokens);
+  const QByteArray prefixes = read(kFiles[1], parses_to_tokens);
   static_cast<void>(vocabulary.importExchangeWords(
       std::string_view(words.constData(),
                        static_cast<std::size_t>(words.size()))));
@@ -125,7 +147,7 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   // The alphabet has no compiled-in fallback: without it the decoder returns
   // an unknown symbol for every character, so this is loaded explicitly here
   // rather than left to the shared instance's environment-variable recovery.
-  const QByteArray distinctive = read(kFiles[3]);
+  const QByteArray distinctive = read(kFiles[3], parses_to_tokens);
   static_cast<void>(vocabulary.importDistinctiveTokens(
       std::string_view(distinctive.constData(),
                        static_cast<std::size_t>(distinctive.size()))));
@@ -153,7 +175,7 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
       (directory.absolutePath() + QStringLiteral("/contests"))
           .toStdString()));
 
-  const QByteArray alphabet = read(kFiles[2]);
+  const QByteArray alphabet = read(kFiles[2], parses_to_alphabet);
   auto& morse = cwassistant::core::cwMutableSharedMorseAlphabet();
   morse.clear();
   static_cast<void>(morse.importText(

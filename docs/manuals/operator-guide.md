@@ -729,6 +729,10 @@ evidence alone, which works only while a match stays harder to counterfeit than
 the checks it stands in for. `CQ` and `599` belong there; a single letter, or
 anything noise assembles often, does not.
 
+Upgrading never requires anything of you. The copies inside the application are
+what it uses unless your own copy is present and readable, so a file left by an
+older version cannot change how a new one decodes.
+
 The application also carries its own copy of the alphabet and falls back to it
 if the file cannot be read, so a missing or empty one cannot stop the decoder
 working. An empty file is replaced with that copy the next time the application

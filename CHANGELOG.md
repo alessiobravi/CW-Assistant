@@ -8,6 +8,22 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- An upgrade can no longer be affected by what an earlier version left in the
+  application data directory. The dictionaries carried inside the application
+  are authoritative, and a copy in the data directory is used only when it is
+  present and parses to something usable -- for the alphabet, only when it
+  actually carries the letters and digits. A missing or unusable copy is
+  replaced so an operator sees what is in force and can edit from it; a
+  usable one is never overwritten. Nothing an operator has to do by hand is
+  required when upgrading.
+
+- Debug captures record what the detector was given. A report that nothing
+  decodes could not be told apart from a configuration that excluded the
+  signal, because the analyzer settings, whether any spectrum frame reached
+  the detector at all, how many times the decoder had been reset, and whether
+  the alphabet in force came from a file or from the built-in copy were all
+  absent from the capture. They are recorded now.
+
 - The decoder could be left with no Morse alphabet and would then track
   signals and decode nothing at all, showing a strong carrier, a measured
   signal-to-noise ratio, and no text or speed. Moving the alphabet into a
