@@ -308,6 +308,33 @@ class AppSettings final : public QObject {
   Q_PROPERTY(
       QString localCallsignDatabaseStatus READ localCallsignDatabaseStatus
           NOTIFY localCallsignDatabaseChanged)
+  // Spots published by other receivers. They are corroboration and never
+  // authority: a spot may show that somebody else reported a station near a
+  // frequency, and it may never replace, rewrite, or auto-fill a decoded
+  // callsign. The whole feature is off by default because enabling it contacts
+  // a third-party server the operator has to choose for themselves.
+  Q_PROPERTY(bool dxSpotsEnabled READ dxSpotsEnabled WRITE setDxSpotsEnabled
+                 NOTIFY settingsChanged)
+  // The two kinds of report are selected separately because they fail
+  // differently: a reverse-beacon report is a receiver hearing a signal, and a
+  // cluster spot is a person saying they heard one.
+  Q_PROPERTY(bool dxSpotsReverseBeacon READ dxSpotsReverseBeacon WRITE
+                 setDxSpotsReverseBeacon NOTIFY settingsChanged)
+  Q_PROPERTY(bool dxSpotsCluster READ dxSpotsCluster WRITE setDxSpotsCluster
+                 NOTIFY settingsChanged)
+  // Empty by default. There is no default spot server: the operator names the
+  // read-only HTTPS address their own feed is published at, and until they do
+  // nothing is ever requested.
+  Q_PROPERTY(QString dxSpotsEndpoint READ dxSpotsEndpoint WRITE
+                 setDxSpotsEndpoint NOTIFY settingsChanged)
+  Q_PROPERTY(int dxSpotsRefreshSeconds READ dxSpotsRefreshSeconds WRITE
+                 setDxSpotsRefreshSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(int dxSpotsRetentionMinutes READ dxSpotsRetentionMinutes WRITE
+                 setDxSpotsRetentionMinutes NOTIFY settingsChanged)
+  Q_PROPERTY(int dxSpotsToleranceHz READ dxSpotsToleranceHz WRITE
+                 setDxSpotsToleranceHz NOTIFY settingsChanged)
+  Q_PROPERTY(bool dxSpotsShowLabels READ dxSpotsShowLabels WRITE
+                 setDxSpotsShowLabels NOTIFY settingsChanged)
   Q_PROPERTY(
       QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
@@ -469,6 +496,14 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool localCallsignDatabaseEnabled() const noexcept;
   [[nodiscard]] const QString& localCallsignDatabasePath() const noexcept;
   [[nodiscard]] const QString& localCallsignDatabaseStatus() const noexcept;
+  [[nodiscard]] bool dxSpotsEnabled() const noexcept;
+  [[nodiscard]] bool dxSpotsReverseBeacon() const noexcept;
+  [[nodiscard]] bool dxSpotsCluster() const noexcept;
+  [[nodiscard]] const QString& dxSpotsEndpoint() const noexcept;
+  [[nodiscard]] int dxSpotsRefreshSeconds() const noexcept;
+  [[nodiscard]] int dxSpotsRetentionMinutes() const noexcept;
+  [[nodiscard]] int dxSpotsToleranceHz() const noexcept;
+  [[nodiscard]] bool dxSpotsShowLabels() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -552,6 +587,14 @@ class AppSettings final : public QObject {
   void setDebugCaptureMaximumSeconds(int value);
   void setOperatorRole(const QString& value);
   void setLocalCallsignDatabaseEnabled(bool value);
+  void setDxSpotsEnabled(bool value);
+  void setDxSpotsReverseBeacon(bool value);
+  void setDxSpotsCluster(bool value);
+  void setDxSpotsEndpoint(const QString& value);
+  void setDxSpotsRefreshSeconds(int value);
+  void setDxSpotsRetentionMinutes(int value);
+  void setDxSpotsToleranceHz(int value);
+  void setDxSpotsShowLabels(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -811,6 +854,26 @@ class AppSettings final : public QObject {
   QString local_callsign_database_path_;
   QString local_callsign_database_status_{
       QStringLiteral("Disabled. No local callsign list is in use.")};
+  // Off by default: nothing is requested from any spot server until the
+  // operator turns the feature on and supplies an address.
+  bool dx_spots_enabled_{false};
+  bool dx_spots_reverse_beacon_{false};
+  bool dx_spots_cluster_{false};
+  QString dx_spots_endpoint_;
+  // Two minutes. A spot describes a station that was audible for minutes, so
+  // polling faster buys nothing and only costs somebody else's server; the
+  // floor of thirty seconds exists for the same reason.
+  int dx_spots_refresh_seconds_{120};
+  // How long a spot stays worth showing. Fifteen minutes is long enough for a
+  // station to still be working the pile-up it was spotted in and short enough
+  // that the display does not fill with stations that have long since gone.
+  int dx_spots_retention_minutes_{15};
+  // How far from a decoded signal a spot may sit and still be about the same
+  // station. A CW signal is a few hundred hertz wide once drift and the
+  // spotter's own tuning are counted, so 250 Hz corroborates without sweeping
+  // in the neighbouring station.
+  int dx_spots_tolerance_hz_{250};
+  bool dx_spots_show_labels_{true};
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

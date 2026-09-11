@@ -10,9 +10,11 @@
 # prosigns are the usual reason. A symbol may be more than one character, which
 # is how prosigns such as <SK> are represented.
 #
-# Receive only. What may be transmitted is fixed in code and deliberately
-# narrower: <SOS> is decoded here so an operator can read a distress call, and
-# is not in the transmit alphabet so this application cannot send one.
+# Receive only: editing this changes what can be read, never what can be sent.
+# What may be transmitted is a separate closed table in the application, and
+# <SOS> is in it -- sending a distress call is legal and appropriate in a
+# genuine emergency, and every message still passes arming, exact callsign
+# confirmation, a retyped preview and an explicit send action.
 
 # --- letters ---
 .-         A

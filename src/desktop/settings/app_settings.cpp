@@ -37,6 +37,11 @@ namespace {
 
 constexpr auto kSchemaVersion = 1;
 
+// Long enough for any realistic feed address, including a query string, and
+// short enough that a settings file cannot hand the network layer an
+// unbounded string.
+constexpr int kMaximumDxSpotsEndpointLength = 512;
+
 QString acceptancePlatformToken() {
 #ifdef Q_OS_WIN
   return QStringLiteral("windows");
@@ -1383,6 +1388,28 @@ const QString& AppSettings::localCallsignDatabasePath() const noexcept {
 const QString& AppSettings::localCallsignDatabaseStatus() const noexcept {
   return local_callsign_database_status_;
 }
+bool AppSettings::dxSpotsEnabled() const noexcept {
+  return dx_spots_enabled_;
+}
+bool AppSettings::dxSpotsReverseBeacon() const noexcept {
+  return dx_spots_reverse_beacon_;
+}
+bool AppSettings::dxSpotsCluster() const noexcept { return dx_spots_cluster_; }
+const QString& AppSettings::dxSpotsEndpoint() const noexcept {
+  return dx_spots_endpoint_;
+}
+int AppSettings::dxSpotsRefreshSeconds() const noexcept {
+  return dx_spots_refresh_seconds_;
+}
+int AppSettings::dxSpotsRetentionMinutes() const noexcept {
+  return dx_spots_retention_minutes_;
+}
+int AppSettings::dxSpotsToleranceHz() const noexcept {
+  return dx_spots_tolerance_hz_;
+}
+bool AppSettings::dxSpotsShowLabels() const noexcept {
+  return dx_spots_show_labels_;
+}
 const QString& AppSettings::statusMessage() const noexcept {
   return status_message_;
 }
@@ -1736,6 +1763,43 @@ CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
 CWA_SETTER(setKeyingModel, keying_model_, const QString&)
 CWA_SETTER(setDebugCaptureMaximumSeconds, debug_capture_maximum_seconds_, int)
 CWA_SETTER(setOperatorRole, operator_role_, const QString&)
+
+CWA_SETTER(setDxSpotsEnabled, dx_spots_enabled_, bool)
+CWA_SETTER(setDxSpotsReverseBeacon, dx_spots_reverse_beacon_, bool)
+CWA_SETTER(setDxSpotsCluster, dx_spots_cluster_, bool)
+CWA_SETTER(setDxSpotsShowLabels, dx_spots_show_labels_, bool)
+
+void AppSettings::setDxSpotsEndpoint(const QString& value) {
+  // Whitespace around a pasted address is the commonest way an endpoint fails
+  // to parse, and it is the one thing that can be corrected without guessing.
+  // Everything else about the address is left exactly as typed, so an operator
+  // who has mistyped it sees what they wrote rather than something else.
+  if (assign_if_changed(dx_spots_endpoint_,
+                        value.trimmed().left(kMaximumDxSpotsEndpointLength))) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxSpotsRefreshSeconds(const int value) {
+  const int clamped = std::clamp(value, 30, 600);
+  if (assign_if_changed(dx_spots_refresh_seconds_, clamped)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxSpotsRetentionMinutes(const int value) {
+  const int clamped = std::clamp(value, 1, 60);
+  if (assign_if_changed(dx_spots_retention_minutes_, clamped)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxSpotsToleranceHz(const int value) {
+  const int clamped = std::clamp(value, 50, 1'000);
+  if (assign_if_changed(dx_spots_tolerance_hz_, clamped)) {
+    emit settingsChanged();
+  }
+}
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
@@ -2461,6 +2525,11 @@ bool AppSettings::apply() {
   // from the one that was just set.
   minimum_decode_snr_db_ =
       std::round(std::clamp(minimum_decode_snr_db_, 0.0, 40.0) * 10.0) / 10.0;
+  dx_spots_endpoint_ =
+      dx_spots_endpoint_.trimmed().left(kMaximumDxSpotsEndpointLength);
+  dx_spots_refresh_seconds_ = std::clamp(dx_spots_refresh_seconds_, 30, 600);
+  dx_spots_retention_minutes_ = std::clamp(dx_spots_retention_minutes_, 1, 60);
+  dx_spots_tolerance_hz_ = std::clamp(dx_spots_tolerance_hz_, 50, 1'000);
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -2672,6 +2741,22 @@ bool AppSettings::apply() {
   settings.setValue(
       storageKey(QStringLiteral("decoder/localCallsignDatabasePath")),
       local_callsign_database_path_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/enabled")),
+                    dx_spots_enabled_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/reverseBeacon")),
+                    dx_spots_reverse_beacon_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/cluster")),
+                    dx_spots_cluster_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/endpoint")),
+                    dx_spots_endpoint_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/refreshSeconds")),
+                    dx_spots_refresh_seconds_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/retentionMinutes")),
+                    dx_spots_retention_minutes_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/toleranceHz")),
+                    dx_spots_tolerance_hz_);
+  settings.setValue(storageKey(QStringLiteral("dxSpots/showLabels")),
+                    dx_spots_show_labels_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -3113,6 +3198,37 @@ void AppSettings::load() {
           .value(
               storageKey(QStringLiteral("decoder/localCallsignDatabasePath")))
           .toString();
+  dx_spots_enabled_ =
+      settings.value(storageKey(QStringLiteral("dxSpots/enabled")), false)
+          .toBool();
+  dx_spots_reverse_beacon_ =
+      settings.value(storageKey(QStringLiteral("dxSpots/reverseBeacon")), false)
+          .toBool();
+  dx_spots_cluster_ =
+      settings.value(storageKey(QStringLiteral("dxSpots/cluster")), false)
+          .toBool();
+  dx_spots_endpoint_ =
+      settings.value(storageKey(QStringLiteral("dxSpots/endpoint")))
+          .toString()
+          .trimmed()
+          .left(kMaximumDxSpotsEndpointLength);
+  dx_spots_refresh_seconds_ = std::clamp(
+      settings
+          .value(storageKey(QStringLiteral("dxSpots/refreshSeconds")), 120)
+          .toInt(),
+      30, 600);
+  dx_spots_retention_minutes_ = std::clamp(
+      settings
+          .value(storageKey(QStringLiteral("dxSpots/retentionMinutes")), 15)
+          .toInt(),
+      1, 60);
+  dx_spots_tolerance_hz_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("dxSpots/toleranceHz")), 250)
+          .toInt(),
+      50, 1'000);
+  dx_spots_show_labels_ =
+      settings.value(storageKey(QStringLiteral("dxSpots/showLabels")), true)
+          .toBool();
   local_callsign_database_status_ =
       !local_callsign_database_enabled_
           ? QStringLiteral("Disabled. No local callsign list is in use.")
@@ -3360,6 +3476,14 @@ void AppSettings::resetInMemorySettings() {
   local_callsign_database_path_.clear();
   local_callsign_database_status_ =
       QStringLiteral("Disabled. No local callsign list is in use.");
+  dx_spots_enabled_ = false;
+  dx_spots_reverse_beacon_ = false;
+  dx_spots_cluster_ = false;
+  dx_spots_endpoint_.clear();
+  dx_spots_refresh_seconds_ = 120;
+  dx_spots_retention_minutes_ = 15;
+  dx_spots_tolerance_hz_ = 250;
+  dx_spots_show_labels_ = true;
   applyReferenceDefaults(0);
 }
 

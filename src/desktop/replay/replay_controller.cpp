@@ -34,6 +34,7 @@
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
+#include "../dxcluster/dx_spot_provider.hpp"
 #include "../decoder/local_character_decoder.hpp"
 #include "../sdr/sdr_capture_worker.hpp"
 #include "live_audio_worker.hpp"
@@ -760,6 +761,14 @@ class ReplayWorker final : public QObject {
 
 ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   qRegisterMetaType<SpectrumFrame>();
+  // A spot ages whether or not anything new arrives, so the published model is
+  // rebuilt on a slow cadence as well as on receipt. Five seconds is finer
+  // than anything this drives -- spot ages are read in minutes -- and the
+  // timer only runs while the operator has the feature switched on.
+  dx_spot_expiry_timer_.setSingleShot(false);
+  dx_spot_expiry_timer_.setInterval(5'000);
+  connect(&dx_spot_expiry_timer_, &QTimer::timeout, this,
+          [this] { rebuildDxSpotModel(); });
   qRegisterMetaType<CwCharacterFeatureWindowPtr>();
   qRegisterMetaType<CwCharacterHypothesisPtr>();
   auto* character_worker = new LocalCharacterInferenceWorker;
@@ -1665,6 +1674,7 @@ void ReplayController::setRadioFrequencyContext(
                                           radio_split_active_);
   emit radioFrequencyChanged();
   rebuildDecoderModels();
+  rebuildDxSpotModel();
 }
 
 double ReplayController::rfFrequencyToDisplayHz(
@@ -1700,6 +1710,130 @@ qulonglong ReplayController::displayFrequencyToRfHz(
       cw_sideband_index_ == 0);
   return resolved && *resolved <= 99'000'000'000ULL
       ? static_cast<qulonglong>(*resolved) : 0U;
+}
+
+const QVariantList& ReplayController::dxSpots() const noexcept {
+  return dx_spots_;
+}
+
+const QString& ReplayController::dxSpotsStatus() const noexcept {
+  return dx_spots_status_;
+}
+
+void ReplayController::ensureDxSpotProvider() {
+  if (dx_spot_provider_ != nullptr) return;
+  dx_spot_provider_ = new DxSpotProvider(this);
+  connect(dx_spot_provider_, &DxSpotProvider::spotsReceived, this,
+          &ReplayController::acceptDxSpots);
+  connect(dx_spot_provider_, &DxSpotProvider::stateChanged, this, [this] {
+    if (dx_spots_status_ == dx_spot_provider_->statusMessage()) return;
+    dx_spots_status_ = dx_spot_provider_->statusMessage();
+    emit dxSpotsChanged();
+  });
+}
+
+void ReplayController::configureDxSpots(const bool enabled,
+                                        const bool reverse_beacon,
+                                        const bool cluster,
+                                        const QString& endpoint,
+                                        const int refresh_seconds,
+                                        const int retention_minutes,
+                                        const int tolerance_hz) {
+  const int bounded_retention_minutes = std::clamp(retention_minutes, 1, 60);
+  const int bounded_tolerance_hz = std::clamp(tolerance_hz, 50, 1'000);
+  const bool limits_changed =
+      bounded_retention_minutes != dx_spots_retention_minutes_ ||
+      bounded_tolerance_hz != dx_spots_tolerance_hz_;
+  dx_spots_enabled_ = enabled;
+  dx_spots_reverse_beacon_ = reverse_beacon;
+  dx_spots_cluster_ = cluster;
+  dx_spots_retention_minutes_ = bounded_retention_minutes;
+  dx_spots_tolerance_hz_ = bounded_tolerance_hz;
+  if (limits_changed) {
+    // The registry fixes its bounds at construction, so a changed retention
+    // window or match tolerance means a new one. What it currently holds is
+    // discarded rather than reinterpreted: those spots were admitted under the
+    // previous bounds, and the next poll refills the store within one interval.
+    cwassistant::core::CwSpotRegistry::Limits limits;
+    limits.retention_ns =
+        static_cast<std::uint64_t>(dx_spots_retention_minutes_) * 60ULL *
+        1'000'000'000ULL;
+    limits.match_tolerance_hz = static_cast<double>(dx_spots_tolerance_hz_);
+    dx_spot_registry_ = cwassistant::core::CwSpotRegistry(limits);
+  }
+  if (!dx_spots_enabled_) {
+    if (dx_spot_provider_ != nullptr) dx_spot_provider_->setEnabled(false);
+    dx_spot_expiry_timer_.stop();
+    dx_spot_registry_.clear();
+    rebuildDxSpotModel();
+    return;
+  }
+  ensureDxSpotProvider();
+  // Strict parsing, never QUrl::fromUserInput: guessing a scheme for an
+  // address the operator half-typed would send a request somewhere they did
+  // not name, and an address that cannot be read as HTTPS has to fail visibly.
+  dx_spot_provider_->setEndpoint(QUrl(endpoint, QUrl::StrictMode));
+  dx_spot_provider_->setRefreshSeconds(refresh_seconds);
+  dx_spot_provider_->setEnabled(true);
+  if (!dx_spot_expiry_timer_.isActive()) dx_spot_expiry_timer_.start();
+  rebuildDxSpotModel();
+}
+
+void ReplayController::acceptDxSpots(
+    const std::vector<cwassistant::core::CwSpot>& spots) {
+  if (!dx_spots_enabled_ || spots.empty()) return;
+  const std::uint64_t now_ns = currentUnixTimeNs();
+  for (const auto& spot : spots) {
+    // The registry decides what it will hold. A spot it refuses is simply not
+    // stored; nothing here retries, repairs, or works around that refusal.
+    static_cast<void>(dx_spot_registry_.add(spot, now_ns));
+  }
+  rebuildDxSpotModel();
+}
+
+void ReplayController::rebuildDxSpotModel() {
+  QVariantList spots;
+  if (dx_spots_enabled_) {
+    const std::uint64_t now_ns = currentUnixTimeNs();
+    dx_spot_registry_.expire(now_ns);
+    for (const auto& match : dx_spot_registry_.all(now_ns)) {
+      // The two switches decide what is shown, not what is true. A station
+      // reported by both a skimmer and a person keeps both marks even when
+      // only one of the two kinds is being displayed, because hiding half of
+      // what corroborates a callsign would misrepresent the evidence.
+      if (!(match.reverse_beacon && dx_spots_reverse_beacon_) &&
+          !(match.cluster && dx_spots_cluster_)) {
+        continue;
+      }
+      QVariantMap entry;
+      entry.insert(QStringLiteral("callsign"),
+                   QString::fromStdString(match.callsign));
+      entry.insert(QStringLiteral("frequencyHz"), match.frequency_hz);
+      const auto rf_hz =
+          std::isfinite(match.frequency_hz) && match.frequency_hz > 0.0
+              ? static_cast<qulonglong>(std::llround(match.frequency_hz))
+              : 0ULL;
+      // Not a number whenever the spot cannot be placed on the axis the
+      // operator is looking at -- no radio frequency is known, or the source
+      // is a recording. A spot drawn at a guessed position would be worse than
+      // one that is not drawn.
+      entry.insert(QStringLiteral("displayFrequencyHz"),
+                   rfFrequencyToDisplayHz(rf_hz));
+      entry.insert(QStringLiteral("reverseBeacon"), match.reverse_beacon);
+      entry.insert(QStringLiteral("cluster"), match.cluster);
+      const std::uint64_t age_ns = now_ns > match.newest_observation_ns
+                                       ? now_ns - match.newest_observation_ns
+                                       : 0ULL;
+      entry.insert(QStringLiteral("ageSeconds"),
+                   static_cast<int>(age_ns / 1'000'000'000ULL));
+      entry.insert(QStringLiteral("observations"),
+                   static_cast<int>(match.observations));
+      spots.append(entry);
+    }
+  }
+  if (dx_spots_ == spots) return;
+  dx_spots_ = std::move(spots);
+  emit dxSpotsChanged();
 }
 
 void ReplayController::setMonitorMode(const int mode) {
@@ -1933,6 +2067,7 @@ void ReplayController::setSourceMode(const int value) {
   source_mode_ = clamped;
   if (source_mode_ == 2 && monitor_mode_ == 1) setMonitorMode(0);
   rebuildDecoderModels();
+  rebuildDxSpotModel();
   emit sourceReset();
   emit stateChanged();
 }

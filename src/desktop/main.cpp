@@ -144,9 +144,9 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
       std::string_view(prefixes.constData(),
                        static_cast<std::size_t>(prefixes.size()))));
 
-  // The alphabet has no compiled-in fallback: without it the decoder returns
-  // an unknown symbol for every character, so this is loaded explicitly here
-  // rather than left to the shared instance's environment-variable recovery.
+  // Loaded explicitly rather than left to the shared instance's own recovery,
+  // so that the operator's copy is what takes effect when there is one. The
+  // compiled-in copy behind it is a last resort, not the normal path.
   const QByteArray distinctive = read(kFiles[3], parses_to_tokens);
   static_cast<void>(vocabulary.importDistinctiveTokens(
       std::string_view(distinctive.constData(),
@@ -255,6 +255,16 @@ int main(int argc, char* argv[]) {
         settings.audioGainDb(), settings.audioAutomaticGainTargetDbfs(),
         settings.audioAutomaticBandwidth(), settings.audioLowerFrequencyHz(),
         settings.audioUpperFrequencyHz(), settings.waterfallRate());
+  };
+  // The spot feed is receive-only and carries no authority: it can place a
+  // marker where another receiver reports a station, and can corroborate a
+  // callsign this receiver decoded for itself, but it never supplies one.
+  const auto apply_dx_spots = [&settings, &replay_controller] {
+    replay_controller.configureDxSpots(
+        settings.dxSpotsEnabled(), settings.dxSpotsReverseBeacon(),
+        settings.dxSpotsCluster(), settings.dxSpotsEndpoint(),
+        settings.dxSpotsRefreshSeconds(), settings.dxSpotsRetentionMinutes(),
+        settings.dxSpotsToleranceHz());
   };
   const auto apply_radio_frequency = [&settings, &replay_controller] {
     const auto rx_rf_hz = settings.controlledRxRfHz();
@@ -373,6 +383,7 @@ int main(int argc, char* argv[]) {
   apply_radio_frequency();
   apply_decoded_signal_timeout();
   apply_weak_signal_decoding();
+  apply_dx_spots();
   apply_local_character_decoder();
   apply_callsign_database_correction();
   apply_keying_model();
@@ -402,6 +413,9 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_weak_signal_decoding);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_dx_spots);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_callsign_database_correction);

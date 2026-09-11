@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include "cwassistant/core/cw_spot_registry.hpp"
+
 namespace cwassistant::core {
 
 // External data can describe activity or directory membership, but it is not
@@ -49,6 +51,45 @@ struct CallsignProviderEvidence {
   std::string rationale;
 };
 
+// What other receivers reported near the frequency a span was decoded on, as
+// the spot registry hands it over. Supplying nothing is the ordinary case:
+// most real contacts are never spotted, so an empty list says nothing at all
+// about any candidate and never counts against one.
+struct CallsignCorroborationInput {
+  std::vector<CwSpotMatch> spots;
+  // The receive frequency the span was decoded on. A non-positive or
+  // non-finite value disables corroboration entirely, because "near the same
+  // frequency" cannot be checked without knowing where the decode happened.
+  double decode_frequency_hz{0.0};
+  // A clock reading on the same scale as CwSpotMatch::newest_observation_ns,
+  // used to age each observation.
+  std::uint64_t now_ns{0};
+};
+
+// How an external observation supported one ranked candidate. It is reported
+// apart from the acoustic fields and apart from provider provenance so that a
+// caller can always tell the operator which part of a suggestion was heard on
+// the air and which part is only somebody else's receiver agreeing.
+//
+// Corroboration can lower how much of its own evidence a decoded callsign
+// needs before it is offered. It can never supply a callsign: a candidate that
+// no acoustic hypothesis produced is never ranked, whatever is spotted.
+struct CallsignCorroboration {
+  bool corroborated{false};
+  bool reverse_beacon{false};
+  bool cluster{false};
+  std::size_t observations{0};
+  std::chrono::seconds age{0};
+  // Signed offset of the observation from the decoded frequency, for display.
+  std::int64_t frequency_delta_hz{0};
+  // The support actually added to the ranking score, after every cap. It
+  // spends the same bounded external budget as provider weight, so it is zero
+  // once providers have used that budget up.
+  float applied_weight{0.0F};
+  // One operator-facing sentence saying why the support was granted.
+  std::string rationale;
+};
+
 struct CallsignSuggestion {
   std::string raw_span;
   std::string candidate;
@@ -58,6 +99,9 @@ struct CallsignSuggestion {
   // Relative ordering score only; deliberately not named confidence.
   float ranking_score{0.0F};
   std::vector<CallsignProviderEvidence> provenance;
+  // External agreement, kept out of provider_weight and out of provenance so
+  // acoustic evidence and outside opinion stay separable at the call site.
+  CallsignCorroboration corroboration;
 };
 
 struct CallsignRankConfig {
@@ -94,5 +138,26 @@ struct CallsignRankConfig {
     const std::vector<CallsignRawHypothesis>& hypotheses,
     const std::vector<CallsignProviderEvidence>& provider_evidence,
     CallsignRankConfig config = {});
+
+// The same ranking, additionally allowing an already-ranked candidate to be
+// corroborated by an external observation of the same callsign near the same
+// frequency. Corroboration only adjusts how much of its own evidence a decoded
+// callsign needs before it is offered. It never introduces a candidate, never
+// rewrites a character, and cannot lift a candidate that has no acoustic
+// support, because only acoustic hypotheses are ever ranked in the first
+// place. Its influence spends the same maximum_total_provider_weight budget as
+// provider evidence, so no external channel gains influence merely by arriving
+// through a different door, and a candidate absent from every spot is never
+// penalised.
+//
+// The corroboration argument follows the configuration rather than preceding
+// it so that an existing four-argument call with a braced configuration stays
+// unambiguous.
+[[nodiscard]] std::vector<CallsignSuggestion> rank_callsign_suggestions(
+    const std::string& raw_span,
+    const std::vector<CallsignRawHypothesis>& hypotheses,
+    const std::vector<CallsignProviderEvidence>& provider_evidence,
+    CallsignRankConfig config,
+    const CallsignCorroborationInput& corroboration);
 
 }  // namespace cwassistant::core

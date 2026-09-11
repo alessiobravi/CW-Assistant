@@ -10,9 +10,16 @@ time of each release. The current baseline is ADIF 3.1.7 (2026-03-22).
   CW Buddy release. Updating the version is a reviewed code/data change,
   never only a documentation edit.
 - Export the recommended QSO identity fields: `QSO_DATE`, `TIME_ON`, `CALL`,
-  `MODE`, and `FREQ` and/or `BAND`.
+  `MODE`, and `FREQ` and/or `BAND`. The record serializer emits those together
+  with `BAND_RX`, `FREQ_RX`, `PROP_MODE`, `SAT_NAME`, `SAT_MODE`, `RST_SENT`,
+  `RST_RCVD`, `STATION_CALLSIGN`, `MY_RIG` and `MY_ANTENNA`, omits every field
+  whose value is empty, and terminates the record with `<EOR>`.
 - Enforce field types, enumerations, dependencies, valid date ranges, and the
-  distinction between current, import-only/deprecated, and deleted values.
+  distinction between current, import-only/deprecated, and deleted values. What
+  the record builder enforces today is narrower: it resolves both bands from
+  the actual RF frequencies and refuses to modify the record at all when either
+  band, the frequency calculation, or a satellite's name and mode is missing.
+  The remaining checks belong to the field model described below.
 - Never export import-only values. Preserve unknown supported input data where
   the selected storage/export path permits round-tripping.
 - Satellite QSOs export `PROP_MODE=SAT`, `SAT_NAME`, `SAT_MODE`, station transmit
@@ -21,23 +28,31 @@ time of each release. The current baseline is ADIF 3.1.7 (2026-03-22).
   `MY_ANTENNA`. Contacted-station `RIG` is never inferred from local profiles.
 - Frequencies are calculated with integer hertz. ADI MHz numbers use six
   fractional digits so transverter conversion does not lose precision.
-- ADI record streaming for logger integrations and full ADI file export share
-  one validated field model. ADX support will use the official versioned XML
-  schema rather than a separately interpreted model.
+- ADI record streaming for logger integrations is produced from a single
+  record structure. A full ADI file export must reuse that same structure and
+  its validation rather than growing a second field model beside it; neither
+  the file export nor the validated model exists yet. ADX support will use the
+  official versioned XML schema rather than a separately interpreted model, and
+  has no writer today.
 
 ## Verification
 
-- Unit tests cover field length, escaping/validation, band boundaries, signed
-  transverter offsets, split semantics, satellite dependencies, and rejection
-  of contradictory or unrepresentable records.
-- CI downloads a pinned checksum-verified copy of the official versioned table
-  exports, schemas, and test QSO archive. Fixtures are never uploaded to a live
-  logging or award service.
-- ADX output is schema-validated. ADI output is parsed by an independent test
-  parser and round-tripped through the project's parser.
-- Release candidates are tested with the configured Log4OM integration, and a
-  conformance report records specification version, fixtures, validator output,
-  known optional fields, and any certification submission result.
+- Unit tests cover the length-prefixed field encoding and record termination,
+  band resolution at the edges of the band table, signed transverter offsets in
+  both directions, split semantics, the satellite field set, and rejection of
+  frequencies that fall outside every band or that underflow. Length prefixes
+  make escaping unnecessary in ADI, so nothing tests for it.
+- CI will download a pinned checksum-verified copy of the official versioned
+  table exports, schemas, and test QSO archive; it does not do so yet. Fixtures
+  are never uploaded to a live logging or award service.
+- ADX output is to be schema-validated, and ADI output parsed by an independent
+  test parser and round-tripped through the project's own parser. Neither
+  parser exists yet.
+- Release candidates are to be tested against Log4OM's inbound ADIF UDP
+  service, which the record format already targets although no transport sends
+  to it yet, and a conformance report will record specification version,
+  fixtures, validator output, known optional fields, and any certification
+  submission result.
 
 Official references:
 

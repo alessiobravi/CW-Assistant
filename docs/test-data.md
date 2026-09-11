@@ -50,11 +50,28 @@ out-of-order, noncanonical, checksum-mismatched, or out-of-range data fails
 closed. An uncertain event is frequency-matched so its real track is not called
 a false publication, but it is excluded from CER, WER, and callsign scores.
 
+A registered test exercises the parser: it reads the committed fixture at
+`tests/fixtures/receiver_annotations_v1.tsv`, checks the fixture's own SHA-256,
+and then feeds the parser deliberately broken sidecars so that overlapping
+coverage, an event outside its coverage, coverage declared in a version 1 file,
+a malformed checksum field, reversed or out-of-order intervals, and
+noncanonical text are each shown to fail closed. The fixture is a deterministic
+version 1 sidecar carrying three events and names no receiver recording, so the
+parser stays covered without a capture in the repository.
+
 Run an annotated receiver report with:
 
 ```sh
 cwa_capture_replay --annotations reviewed.tsv audio.wav
 ```
+
+That target is built with the rest of the test suite but is deliberately not
+registered as a ctest, because operator captures are private and are therefore
+not CI fixtures; it is run by hand against a local recording. The same applies
+to the receive-path profiler, which reports per-stage wall time rather than
+gating anything. The spacing benchmark, which needs no external recording
+because it generates its own jittered contacts, is registered and runs with a
+600-second timeout.
 
 The report matches a track using its frequency during the annotated interval,
 then prints character/word error, timestamped published-callsign
@@ -71,5 +88,8 @@ bundled.
 
 Generate deterministic cases across WPM, weighting, tone frequency, SNR,
 frequency drift, fading, impulsive noise, overlapping callers, and timing
-jitter. Generated callsigns must include portable and compound forms. The exact
-range will be fixed after the supported WPM/prosign requirements are agreed.
+jitter. Generated callsigns must include portable and compound forms. The
+supported WPM and prosign requirements that bound this matrix are now settled:
+speeds run from 8 to 60 WPM, and the transmittable prosigns are the closed set
+of seven, so a generated case outside those bounds measures something the
+project does not claim.

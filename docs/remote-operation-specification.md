@@ -1,12 +1,23 @@
 # Secure remote operation specification
 
-Status: implementation-ready design
+Status: specification of planned work. Only the control-plane types named
+below exist in the tree today.
 
 This specification defines how CW Buddy operates as a station server and as
 one or more remote clients. It refines the security boundary accepted in
 [ADR 0002](decisions/0002-secure-remote-operation.md). The station is always
 authoritative for receiver state, radio control, decoding, logging and every
 transmit safety decision.
+
+Nothing described here is a shipped feature. What the tree contains today is a
+small group of control-plane types in `cwassistant/core/remote_control.hpp`:
+the `ApplicationRole` enumeration, the `RemoteBandwidthProfile` enumeration,
+the `RemoteProtocolVersion` structure that defaults to major 1 and minor 0, the
+`RemoteCwTransmitRequest` structure, and `ControlLeaseManager`, which the core
+unit tests exercise. The desktop application references none of them, and there
+is no server, client, transport, pairing ceremony or audit record anywhere in
+the tree. Every requirement below therefore describes work still to be done,
+and the diagrams mark which elements already exist.
 
 The words **MUST**, **MUST NOT**, **REQUIRED**, **SHOULD**, **SHOULD NOT** and
 **MAY** are normative requirements.
@@ -72,24 +83,24 @@ station identifier; pairing and authentication remain mandatory.
 
 ```mermaid
 flowchart LR
-  subgraph CLIENTS["Authenticated remote clients"]
-    O1["Observer A"]
-    O2["Observer B"]
-    OP["Lease-holding operator"]
+  subgraph CLIENTS["Authenticated remote clients (planned)"]
+    O1["Observer A (planned)"]
+    O2["Observer B (planned)"]
+    OP["Lease-holding operator (planned)"]
   end
-  subgraph SECURE["Mutually authenticated TLS 1.3"]
-    CTRL["control and event channel"]
-    MEDIA["bounded media subscriptions"]
+  subgraph SECURE["Mutually authenticated TLS 1.3 (planned)"]
+    CTRL["control and event channel (planned)"]
+    MEDIA["bounded media subscriptions (planned)"]
   end
-  subgraph SERVER["Station server — authoritative"]
-    AUTH["identity, role and revocation"]
-    LEASE["single station control lease"]
-    STATE["snapshot and ordered state"]
-    RX["receiver, DSP and decoder"]
-    CAT["radio-control providers"]
-    SAFE["TX safety supervisor"]
-    SCHED["station-local Morse scheduler"]
-    AUDIT["security audit"]
+  subgraph SERVER["Station server role (planned);<br/>the parts it would own already run locally"]
+    AUTH["identity, role and revocation (planned)"]
+    LEASE["ControlLeaseManager (built, per rig)"]
+    STATE["snapshot and ordered state (planned)"]
+    RX["SpectrumAnalyzer and CwChannelBank (built)"]
+    CAT["OmniRig, Hamlib rigctld and CAT4OM backends (built)"]
+    SAFE["TransmitGuard (built)"]
+    SCHED["CwTransmitScheduler (built)"]
+    AUDIT["security audit (planned)"]
   end
   O1 --> CTRL
   O2 --> CTRL
@@ -105,7 +116,7 @@ flowchart LR
   LEASE --> CAT
   LEASE --> SAFE
   SAFE --> SCHED
-  SCHED --> HW["local KEY / PTT hardware"]
+  SCHED --> HW["DirectKeyingAdapter KEY / PTT lines (built)"]
   AUTH --> AUDIT
   LEASE --> AUDIT
   SAFE --> AUDIT
@@ -116,6 +127,10 @@ state changes, but TX still passes through the independent station safety
 supervisor and station-local scheduler.
 
 ## Runtime roles
+
+The three roles are the enumerators of `ApplicationRole`. Only `Standalone`
+describes how the application behaves today; `StationServer` and `RemoteClient`
+name the behaviour specified here and have no implementation.
 
 ### Standalone
 
@@ -153,11 +168,14 @@ stores the client's private key.
 
 ### Pairing ceremony
 
+No part of this ceremony exists yet. The diagram fixes the order the
+implementation must follow.
+
 ```mermaid
 sequenceDiagram
   participant L as Local station operator
-  participant S as Station server
-  participant C as New client
+  participant S as Station server (planned)
+  participant C as New client (planned)
   L->>S: Open bounded pairing window
   S-->>L: Display station fingerprint and one-use token
   C->>S: TLS connection pinned to displayed fingerprint
@@ -238,6 +256,10 @@ There is exactly one station-wide **control lease** per station profile. It
 covers all coupled RX radios, TX radios, VFOs, audio routing, SDRs, transverter
 offsets, CAT providers, keyers and QSO/TX workflows. This prevents two clients
 from independently controlling resources that affect the same station.
+`ControlLeaseManager` as built holds at most one lease per rig identifier and
+clamps every requested lifetime between two and thirty seconds, so widening
+that scope from one rig to the whole station profile is part of the work
+described here.
 
 Only the lease holder may change RX/TX frequency, mode, split, filters, shared
 routing or selected devices; edit operational QSO state; arm/disarm remote TX;
@@ -250,20 +272,30 @@ acquiring the lease.
 
 ```mermaid
 stateDiagram-v2
+  state "Releasing (planned)" as Releasing
+  state "Revoked (planned)" as Revoked
   [*] --> Free
-  Free --> Held: authorized acquire
-  Held --> Held: authenticated heartbeat
-  Held --> Releasing: voluntary release
-  Held --> Revoked: admin takeover / revocation
-  Held --> Expired: heartbeat or connection lost
-  Releasing --> Free: cancel queue; release KEY then PTT
-  Revoked --> Free: disarm; cancel; release hardware
-  Expired --> Free: disarm; cancel; release hardware
+  Free --> Held: acquire (built)
+  Held --> Held: renew (built)
+  Held --> Releasing: release (built)
+  Held --> Revoked: admin takeover / revocation (planned)
+  Held --> Expired: expire (built)
+  Releasing --> Free: cancel queue; release KEY then PTT (planned)
+  Revoked --> Free: disarm; cancel; release hardware (planned)
+  Expired --> Free: disarm; cancel; release hardware (planned)
 ```
 
-The lease has a unique generation and short monotonic expiry. A heartbeat
-renews only the same authenticated session and generation. A prior connection's
-lease ID is invalid. Voluntary transfer requires release before acquisition.
+The lease already has the short monotonic expiry, taken from a steady clock so
+that no wall-clock change can extend it. `release` and `expire` exist today and
+return the rig straight to `Free`; the intermediate `Releasing` and `Revoked`
+states, with the queue cancellation and hardware release they carry, arrive
+with the server. The unique generation is still to be
+added, and with it the rule that a heartbeat renews only the same authenticated
+session and generation and that a prior connection's lease ID is invalid.
+`ControlLeaseManager` already refuses a renewal or a release from any client
+other than the current holder and refuses an acquisition while another client
+holds the rig, so voluntary transfer already requires release before
+acquisition.
 
 Forced takeover is an administrator action shown at both ends. It first
 disarms TX, cancels queued work and invokes emergency KEY-then-PTT release. The
@@ -288,9 +320,11 @@ incomplete command.
 
 ## Receive subscriptions
 
-Independent profiles include events only; decoded events plus sparse spectrum;
-Opus audio plus normal spectrum/waterfall; high-rate visual data; and explicitly
-enabled IQ within capacity.
+`RemoteBandwidthProfile` already names the four independent profiles:
+`EventsOnly`, `SpectrumAndEvents`, `AudioSpectrumAndEvents` and
+`IqSpectrumAndEvents`, with IQ enabled explicitly and only within capacity.
+Nothing consumes the enumeration yet, so the ceilings below remain requirements
+rather than settings.
 
 Every profile has fixed rate, resolution, queue-depth and bandwidth ceilings.
 When a client falls behind, superseded visual frames are dropped and quality is
@@ -332,9 +366,13 @@ even when RX and TX use separate devices.
 
 ## Transmit protocol and safety
 
-The client submits a complete normalized CW message with WPM, weighting,
-target, expected radio state, exact operator-confirmed callsign, confirmation
-nonce and idempotency key. It never submits timed element edges.
+The client submits a complete normalized CW message and never submits timed
+element edges. `RemoteCwTransmitRequest` already carries most of what that
+requires: a request identifier that doubles as the idempotency key, the client
+and rig identifiers, the exact operator-confirmed callsign, the message text,
+the speed in words per minute, the weighting as a percentage, and a flag
+recording that the operator confirmed the message. The expected radio state and
+a separate confirmation nonce are still to be added.
 
 The station independently validates authenticated identity; current lease;
 local remote-TX permission; explicit client arming; exact confirmation;
@@ -343,27 +381,30 @@ fresh idempotency key; and every local interlock.
 
 ```mermaid
 flowchart TD
-  R["Authenticated TX request"] --> L{"Current exclusive lease?"}
-  L -- no --> X["Reject and audit"]
-  L -- yes --> A{"Locally permitted and explicitly armed?"}
+  R["Authenticated TX request (planned)"] --> L{"Lease held?<br/>ControlLeaseManager::owns (built)"}
+  L -- no --> X["Reject and audit (planned)"]
+  L -- yes --> A{"Locally permitted and explicitly armed? (planned)"}
   A -- no --> X
-  A -- yes --> C{"Exact confirmation and fresh nonce?"}
+  A -- yes --> C{"Exact confirmation and fresh nonce? (planned)"}
   C -- no --> X
-  C -- yes --> S{"Radio state and all interlocks valid?"}
+  C -- yes --> S{"Radio state and local interlocks valid?<br/>TransmitController and TransmitGuard (built)"}
   S -- no --> X
-  S -- yes --> I{"New idempotency key and bounded plan?"}
+  S -- yes --> I{"New idempotency key and bounded plan? (planned)"}
   I -- no --> X
-  I -- yes --> Q["Station-local Morse scheduler"]
-  Q --> W["Independent watchdogs"]
-  W --> H["KEY / PTT adapter"]
-  H --> E["KEY then PTT release on completion or fault"]
+  I -- yes --> Q["CwTransmitScheduler (built)"]
+  Q --> W["TransmitGuard key-down and tune watchdogs (built)"]
+  W --> H["DirectKeyingAdapter (built)"]
+  H --> E["DirectKeyingAdapter::releaseAll, KEY then PTT (built)"]
 ```
 
 Independent stops include continuous KEY and message-duration limits, bounded
-queue depth, PTT lead/tail limits, heartbeat/lease expiry, cancellation,
+queue depth, PTT lead and hang limits, heartbeat/lease expiry, cancellation,
 emergency stop, physical inhibit, CAT mismatch, device removal, adapter error
-and shutdown. TUNE retains its hard 15-second limit. Faults latch a safe state
-requiring explicit reset.
+and shutdown. The continuous-KEY limit of three seconds, the maximum message
+duration, the PTT lead and hang limits, cancellation and emergency release
+already stop local transmission; a bounded message queue, a physical inhibit
+input and a CAT-mismatch check do not exist yet. TUNE retains its hard
+15-second limit. Faults latch a safe state requiring explicit reset.
 
 Decoder output, contextual inference, callsign suggestions and Auto-QSO may
 create visible proposals only. They cannot create exact confirmation or bypass

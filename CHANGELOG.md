@@ -8,6 +8,29 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Stations other receivers report hearing can be shown and used as
+  corroboration. A receive-only feed places a marker on the separator between
+  the spectrum and the waterfall where a station has been reported, with a
+  square before the callsign for reverse-beacon evidence and a circle after it
+  for cluster evidence, both appearing when the two independent sources agree.
+  The same reports can raise a decoded callsign's standing among close
+  candidates, spending the existing bounded provider budget rather than a new
+  one, decaying with age, and matching only on exact equality. A spot can
+  never supply a callsign, rewrite a character, or let a candidate with no
+  acoustic support win, because reverse-beacon reports carry a measured error
+  rate approaching two per cent per receiver. Nothing is ever sent to the
+  feed but a request for spots, and nothing it returns can reach the transmit
+  path. The whole feature is off by default.
+
+- Documentation was reviewed against the source rather than against itself.
+  Among the corrections: multiple-pass weak-signal decoding and alternative
+  width selection were described as planned although both ship; a trained
+  key-down likelihood model was described as existing although no such
+  artifact or training code does; four operating modes and six scene-graph
+  classes were described as present although none exist; and the transmit
+  alphabet was still documented as unable to send a distress prosign after
+  that decision was reversed and implemented.
+
 - Moving the VFO could lose an identified stream and its audio monitor. The
   decoder carries every tracked signal with the dial so that identity
   survives a retune, but the request to do so was only made when the radio

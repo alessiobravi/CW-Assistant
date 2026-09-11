@@ -683,6 +683,38 @@ minimum power first.
   32 frames; higher values steady the trace but react more slowly.
 - **Reference grid:** shows or hides functional frequency/level guide lines.
 
+## DX Cluster / RBN
+
+A receive-only feed of what other receivers report hearing. It places a marker
+on the separator between the spectrum and the waterfall where a station has
+been reported, and it can corroborate a callsign this receiver decoded for
+itself. It is off by default.
+
+| Setting | Meaning |
+| --- | --- |
+| Enable | Master switch. Off by default; everything below is inert while it is off. |
+| Reverse Beacon Network | Include reports from receivers that decoded a signal automatically. |
+| DX Cluster | Include reports posted by people. |
+| Endpoint | The `https` address of the feed. Nothing is ever sent but a request for spots: no credentials, no station announcement, no transmission. |
+| Refresh interval | How often the feed is read, 30 to 600 seconds. |
+| Spot retention | How long a report is kept, 1 to 60 minutes. |
+| Match tolerance | How far from a reported frequency a station still counts as the same one, 50 to 1000 Hz. |
+| Show labels | Draw callsigns beside the markers. Turning this off keeps the markers, which is useful when a crowded band makes the text unreadable. |
+
+A square before a callsign marks reverse-beacon evidence and a circle after it
+marks cluster evidence; both appear when the two independent sources agree.
+Markers are drawn in a neutral colour that is never one of the identities given
+to decoded streams, and they sit beneath them, so a report is never mistaken
+for something this receiver copied.
+
+**A spot is corroboration and never authority.** It can reduce how much of its
+own evidence a decoded callsign needs before being offered, and it can show that
+an outside source disagrees. It can never replace a decoded callsign with a
+spotted one, never rewrite a character, and never let a callsign with no
+acoustic support win: reverse-beacon reports carry a measured error rate
+approaching two per cent per receiver, and a confidently wrong callsign is worse
+than none.
+
 ## CW vocabulary files
 
 Read at startup from `dictionaries/` in the application data directory, and
@@ -716,8 +748,8 @@ contest does not remove the others.
 
 The alphabet is receive-only. What may be transmitted is fixed in the
 application and is deliberately narrower: `<SOS>` is decoded so that a distress
-call can be read, and is absent from the transmit alphabet so this application
-cannot send one. Editing `morse-alphabet.txt` cannot change that.
+call can be read, and is transmittable, because sending one is legal and
+appropriate in a genuine emergency. Editing `morse-alphabet.txt` cannot change that.
 
 Blank lines and lines beginning with `#` are ignored. A line carrying any other
 character is rejected whole rather than trimmed, so a malformed entry never

@@ -124,6 +124,10 @@ target_compile_definitions(cwa_update_notice_qml_test PRIVATE
   CWA_MAIN_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/Main.qml")
 add_test(NAME cwa_update_notice_qml_test COMMAND cwa_update_notice_qml_test)
 
+add_executable(cwa_spot_registry_tests cw_spot_registry_tests.cpp)
+target_link_libraries(cwa_spot_registry_tests PRIVATE cwa_core)
+add_test(NAME cwa_spot_registry_tests COMMAND cwa_spot_registry_tests)
+
 add_executable(cwa_callsign_evidence_tests callsign_evidence_tests.cpp)
 target_link_libraries(cwa_callsign_evidence_tests PRIVATE cwa_core)
 add_test(NAME cwa_callsign_evidence_tests COMMAND cwa_callsign_evidence_tests)
@@ -238,10 +242,10 @@ target_link_libraries(cwa_capture_replay PRIVATE cwa_core)
 target_compile_definitions(cwa_capture_replay PRIVATE
   CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")
 
-# The Morse alphabet is data with no compiled-in fallback, so a target that
-# decodes without loading it would return an unknown symbol for every
-# character. Point every test in this directory at the shipped dictionaries
-# rather than relying on each one to remember.
+# The Morse alphabet is data. A target that decodes without loading it would
+# fall back to the compiled-in copy, which is correct but hides whether the
+# shipped files actually work. Point every test in this directory at them so
+# the files themselves are what is exercised.
 get_property(cwa_directory_tests DIRECTORY PROPERTY TESTS)
 foreach(cwa_test IN LISTS cwa_directory_tests)
   set_property(TEST ${cwa_test} APPEND PROPERTY ENVIRONMENT

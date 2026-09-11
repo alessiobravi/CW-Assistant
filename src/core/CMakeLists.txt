@@ -9,6 +9,7 @@ add_library(cwa_core
   src/cw_character_lane_frontend.cpp
   src/cw_channel_bank.cpp
   src/cw_context_rescorer.cpp
+  src/cw_spot_registry.cpp
   src/cw_vocabulary.cpp
   src/cw_morse_alphabet.cpp
   src/conversation_profile_file.cpp

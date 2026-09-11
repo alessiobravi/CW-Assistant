@@ -2,7 +2,11 @@
 
 Reference configurations are editable starting points. They never guess a COM
 port, open a device during discovery, arm transmission, or replace the radio and
-cable manuals.
+cable manuals. Two are built in, identified as `yaesu-ft-450d` and
+`yaesu-ft-818`. Both leave the serial port blank, poll at five hundred
+milliseconds with a four-second timeout, and select OmniRig slot 1 for
+frequency control; a Hamlib `rigctld` connection and the CAT4OM bridge are the
+other two backends a profile may name.
 
 ## Yaesu FT-450D
 
@@ -35,10 +39,20 @@ The starting mapping is RTS for PTT and DTR for KEY on an independently selected
 serial interface. Polarity is adapter-dependent and is always configurable; the
 initial high-active value is not permission to connect hardware or transmit.
 
-The first safe hardware procedure will require a disconnected-radio line-level
-test, then a dummy-load test at minimum power. The application must initialize
-both lines inactive, remain disarmed after every open/reconnect, enforce maximum
-key-down time, and provide emergency release before any on-air test.
+The acceptance procedure is an ordered, operator-evidence workflow that never
+opens a port or moves a line itself. It requires a disconnected-radio line-level
+test, then a physical loopback test that observes both lines transition and
+return inactive, and only then a dummy-load test at minimum power that also
+observes message keying, cancellation, watchdog and emergency release. Each step
+is recorded against a digest of the effective keying configuration and the
+platform, so a restored record is accepted only as a complete, ordered prefix of
+the workflow for exactly that configuration. The record deliberately holds no
+device path, callsign, operator name, note or electrical measurement.
+
+The application opens the keying interface only after both lines are known
+inactive, stays disarmed after every open and reconnect, limits continuous
+key-down to three seconds and a TUNE hold to fifteen, and offers an emergency
+release that returns only once KEY and then PTT have been commanded inactive.
 
 Official references:
 

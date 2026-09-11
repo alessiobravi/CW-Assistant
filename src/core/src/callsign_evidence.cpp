@@ -18,6 +18,14 @@ constexpr std::size_t kAbsoluteHypothesisLimit = 256;
 constexpr std::size_t kAbsoluteSuggestionLimit = 64;
 constexpr std::size_t kAbsoluteProviderRecordLimit = 1'024;
 constexpr std::size_t kAbsoluteProvenanceLimit = 64;
+constexpr std::uint64_t kNanosecondsPerSecond = 1'000'000'000ULL;
+
+// A single external source is worth half of what the two sources are worth
+// together. A reverse-beacon receiver and a human cluster spotter fail in
+// different ways, so their agreement is genuinely stronger than either report
+// alone, while one report on its own stays firmly in hint territory: measured
+// reverse-beacon callsign error rates approach two per cent per receiver.
+constexpr float kSingleSourceCorroborationShare = 0.5F;
 
 std::string trim(const std::string_view value) {
   const auto first = value.find_first_not_of(" \t\r\n");
@@ -245,6 +253,102 @@ bool validProviderEvidence(
   return false;
 }
 
+std::string describeCorroborationSources(const bool reverse_beacon,
+                                        const bool cluster) {
+  if (reverse_beacon && cluster) {
+    return "a reverse-beacon receiver and a cluster spotter independently "
+           "report";
+  }
+  if (reverse_beacon) return "a reverse-beacon receiver reports";
+  return "a cluster spotter reports";
+}
+
+// Finds external agreement for one already-ranked acoustic candidate.
+//
+// The comparison against the candidate is exact on purpose. Allowing the
+// bounded edit distance here would let a spot rename a decode, which is the
+// one thing corroboration must never do; the edit distance exists to align an
+// acoustic candidate with the raw span it came from, not to align an outside
+// opinion with a candidate. Only the newest observation of a station is
+// scored, because two records describing one station are one station rather
+// than two independent confirmations.
+CallsignCorroboration corroborationForCandidate(
+    const std::string& candidate,
+    const CallsignCorroborationInput& input,
+    const CallsignRankConfig& config) {
+  CallsignCorroboration result;
+  if (config.maximum_spot_age <= std::chrono::seconds::zero() ||
+      !std::isfinite(input.decode_frequency_hz) ||
+      input.decode_frequency_hz <= 0.0) {
+    return result;
+  }
+  const auto maximum_age_ns =
+      static_cast<std::uint64_t>(config.maximum_spot_age.count()) *
+      kNanosecondsPerSecond;
+  const auto maximum_delta_hz =
+      static_cast<double>(config.maximum_spot_frequency_delta_hz);
+
+  const CwSpotMatch* newest = nullptr;
+  std::uint64_t newest_age_ns = 0;
+  const auto spot_count =
+      std::min(input.spots.size(), config.maximum_provider_records);
+  for (std::size_t index = 0; index < spot_count; ++index) {
+    const auto& spot = input.spots[index];
+    if (spot.observations == 0 ||
+        (!spot.reverse_beacon && !spot.cluster) ||
+        !std::isfinite(spot.frequency_hz) || spot.frequency_hz <= 0.0 ||
+        uppercase(trim(spot.callsign)) != candidate) {
+      continue;
+    }
+    // An observation stamped in the future is a clock fault rather than
+    // evidence, and an expired one has already stopped meaning anything.
+    if (spot.newest_observation_ns > input.now_ns) continue;
+    const std::uint64_t age_ns = input.now_ns - spot.newest_observation_ns;
+    if (age_ns > maximum_age_ns) continue;
+    if (std::abs(spot.frequency_hz - input.decode_frequency_hz) >
+        maximum_delta_hz) {
+      continue;
+    }
+    if (newest == nullptr || age_ns < newest_age_ns) {
+      newest = &spot;
+      newest_age_ns = age_ns;
+    }
+  }
+  if (newest == nullptr) return result;
+
+  // Linear decay reaches exactly zero at the retention limit, so support fades
+  // out instead of vanishing in a step the operator cannot account for.
+  const double remaining_life =
+      maximum_age_ns == 0
+          ? 0.0
+          : 1.0 - static_cast<double>(newest_age_ns) /
+                      static_cast<double>(maximum_age_ns);
+  const auto decay = static_cast<float>(std::clamp(remaining_life, 0.0, 1.0));
+  const bool both_sources = newest->reverse_beacon && newest->cluster;
+  const float base_weight =
+      config.maximum_weight_per_provider *
+      (both_sources ? 1.0F : kSingleSourceCorroborationShare);
+
+  result.corroborated = true;
+  result.reverse_beacon = newest->reverse_beacon;
+  result.cluster = newest->cluster;
+  result.observations = newest->observations;
+  result.age = std::chrono::seconds{
+      static_cast<std::int64_t>(newest_age_ns / kNanosecondsPerSecond)};
+  result.frequency_delta_hz = static_cast<std::int64_t>(
+      std::llround(newest->frequency_hz - input.decode_frequency_hz));
+  result.applied_weight =
+      std::min(base_weight * decay, config.maximum_weight_per_provider);
+  result.rationale =
+      "External corroboration: " +
+      describeCorroborationSources(newest->reverse_beacon, newest->cluster) +
+      " this callsign " + std::to_string(result.age.count()) +
+      " s ago, " + std::to_string(result.frequency_delta_hz) +
+      " Hz from the decoded frequency. The decoded characters are unchanged "
+      "and the acoustic evidence still decides what is offered.";
+  return result;
+}
+
 }  // namespace
 
 bool is_callsign_like_span(const std::string& span,
@@ -288,6 +392,16 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
     const std::vector<CallsignRawHypothesis>& hypotheses,
     const std::vector<CallsignProviderEvidence>& provider_evidence,
     CallsignRankConfig config) {
+  return rank_callsign_suggestions(raw_span, hypotheses, provider_evidence,
+                                   config, CallsignCorroborationInput{});
+}
+
+std::vector<CallsignSuggestion> rank_callsign_suggestions(
+    const std::string& raw_span,
+    const std::vector<CallsignRawHypothesis>& hypotheses,
+    const std::vector<CallsignProviderEvidence>& provider_evidence,
+    CallsignRankConfig config,
+    const CallsignCorroborationInput& corroboration) {
   config.maximum_hypotheses =
       std::clamp<std::size_t>(config.maximum_hypotheses, 1,
                               kAbsoluteHypothesisLimit);
@@ -383,6 +497,7 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
         .provider_weight = 0.0F,
         .ranking_score = 0.0F,
         .provenance = {},
+        .corroboration = {},
     };
 
     // Score at most one contribution from each provider. Multiple records
@@ -431,10 +546,30 @@ std::vector<CallsignSuggestion> rank_callsign_suggestions(
     }
     suggestion.provider_weight =
         std::min(provider_weight, config.maximum_total_provider_weight);
+
+    // Corroboration is looked up only for a candidate that already survived
+    // every acoustic gate above, so a spotted callsign that no hypothesis
+    // produced is never ranked at all and cannot be substituted for a decode.
+    suggestion.corroboration =
+        corroborationForCandidate(hypothesis.candidate, corroboration, config);
+
+    // External agreement spends the same bounded budget as provider evidence
+    // rather than opening a second one. Whatever the providers have already
+    // taken is subtracted first, so no outside channel can buy extra influence
+    // merely by arriving through a different door. A candidate nobody spotted
+    // simply contributes zero here, which is not a penalty: most real contacts
+    // are never spotted, so absence of a spot is not evidence of absence.
+    const float external_headroom = std::max(
+        0.0F,
+        config.maximum_total_provider_weight - suggestion.provider_weight);
+    suggestion.corroboration.applied_weight =
+        std::min(suggestion.corroboration.applied_weight, external_headroom);
+
     suggestion.ranking_score =
         hypothesis.acoustic_support -
         config.acoustic_edit_cost_weight * hypothesis.acoustic_edit_cost +
-        suggestion.provider_weight;
+        suggestion.provider_weight +
+        suggestion.corroboration.applied_weight;
     suggestions.push_back(std::move(suggestion));
   }
 

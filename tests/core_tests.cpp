@@ -2144,7 +2144,8 @@ namespace {
 
 // Loads the dictionaries the application ships. Returns false if either file
 // is missing or empty, which is itself a failure worth reporting: the decoder
-// has no compiled-in fallback and would silently lose all spacing evidence.
+// would otherwise fall back to the compiled-in copy, which is correct but
+// would hide whether the shipped files themselves are usable.
 bool loadShippedDictionaries() {
   const auto read = [](const std::string& path) {
     std::ifstream input(path, std::ios::binary);
@@ -2230,7 +2231,7 @@ void test_cw_morse_alphabet_survives_missing_files() {
 }
 
 void test_cw_morse_alphabet() {
-  // The alphabet has no compiled-in fallback, so an empty one decodes nothing
+  // An alphabet that reached the decoder empty would decode nothing at all,
   // at all. Assert it is present and complete rather than discovering that as
   // a wall of unknown symbols in some unrelated benchmark.
   const auto& alphabet = cwassistant::core::cwSharedMorseAlphabet();

@@ -1,9 +1,11 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cwassistant/core/callsign_evidence.hpp"
@@ -57,6 +59,49 @@ cwassistant::core::CallsignProviderEvidence spotEvidence(
   evidence.spotter = "ol7m";
   evidence.rationale = "recent CW report near checked RF";
   return evidence;
+}
+
+// A clock reading far enough from zero that an observation can be aged
+// backwards from it without underflowing the unsigned nanosecond stamp.
+constexpr std::uint64_t kNowNs = 3'600ULL * 1'000'000'000ULL;
+constexpr double kDecodeFrequencyHz = 14'023'400.0;
+// Comfortably inside the default 250 Hz corroboration window.
+constexpr double kSpotOffsetHz = 40.0;
+
+cwassistant::core::CwSpotMatch testSpot(std::string callsign,
+                                        const bool reverse_beacon,
+                                        const bool cluster,
+                                        const int age_seconds) {
+  using namespace cwassistant::core;
+  CwSpotMatch match;
+  match.callsign = std::move(callsign);
+  match.frequency_hz = kDecodeFrequencyHz + kSpotOffsetHz;
+  match.reverse_beacon = reverse_beacon;
+  match.cluster = cluster;
+  match.newest_observation_ns =
+      kNowNs - static_cast<std::uint64_t>(age_seconds) * 1'000'000'000ULL;
+  match.observations = 1;
+  return match;
+}
+
+cwassistant::core::CallsignCorroborationInput testCorroboration(
+    std::vector<cwassistant::core::CwSpotMatch> spots) {
+  using namespace cwassistant::core;
+  CallsignCorroborationInput input;
+  input.spots = std::move(spots);
+  input.decode_frequency_hz = kDecodeFrequencyHz;
+  input.now_ns = kNowNs;
+  return input;
+}
+
+const cwassistant::core::CallsignSuggestion* findSuggestion(
+    const std::vector<cwassistant::core::CallsignSuggestion>& ranked,
+    const std::string& candidate) {
+  const auto found = std::find_if(
+      ranked.cbegin(), ranked.cend(), [&candidate](const auto& suggestion) {
+        return suggestion.candidate == candidate;
+      });
+  return found == ranked.cend() ? nullptr : &*found;
 }
 
 void test_span_validation() {
@@ -265,6 +310,271 @@ void test_non_callsign_input_and_database_absence() {
          "absence from provider data is not negative evidence");
 }
 
+
+void test_corroboration_lifts_a_match_within_the_cap() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  // A margin of 0.02 is narrower than the external budget, which is exactly
+  // the situation corroboration is allowed to decide.
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA1EYL", .acoustic_support = 0.70F,
+       .acoustic_edit_cost = 0.0F},
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.68F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const CallsignRankConfig config;
+  const auto uncorroborated =
+      rank_callsign_suggestions(raw, hypotheses, {}, config, {});
+  expect(uncorroborated.size() == 2 &&
+             uncorroborated.front().candidate == "EA1EYL",
+         "acoustic support alone decides the order without any observation");
+
+  const auto ranked = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 0)}));
+  expect(ranked.size() == 2 && ranked.front().candidate == "EA7EYL",
+         "a corroborated candidate can overturn a margin smaller than the "
+         "external budget");
+
+  const auto* const lifted = findSuggestion(ranked, "EA7EYL");
+  expect(lifted != nullptr && lifted->corroboration.corroborated,
+         "the corroborated candidate reports that it was corroborated");
+  expect(lifted != nullptr &&
+             lifted->corroboration.applied_weight <=
+                 config.maximum_weight_per_provider + 0.0001F,
+         "a single external channel cannot exceed the per-provider cap");
+  expect(lifted != nullptr &&
+             lifted->corroboration.applied_weight +
+                     lifted->provider_weight <=
+                 config.maximum_total_provider_weight + 0.0001F,
+         "acoustic and external influence together respect the total cap");
+  expect(lifted != nullptr && lifted->corroboration.reverse_beacon &&
+             lifted->corroboration.cluster &&
+             lifted->corroboration.observations == 1 &&
+             lifted->corroboration.frequency_delta_hz == 40 &&
+             !lifted->corroboration.rationale.empty(),
+         "corroboration is reported in enough detail to show the operator why");
+  expect(lifted != nullptr && lifted->provenance.empty(),
+         "external agreement is reported apart from provider provenance so "
+         "acoustic and outside evidence stay distinguishable");
+  expect(lifted != nullptr &&
+             std::abs(lifted->ranking_score - lifted->acoustic_support -
+                      lifted->corroboration.applied_weight) < 0.0001F,
+         "the ranking score moves by exactly the reported external support");
+}
+
+void test_agreement_from_both_sources_outweighs_one() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.68F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const CallsignRankConfig config;
+  const auto both = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 0)}));
+  const auto beacon_only = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, false, 0)}));
+  const auto cluster_only = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", false, true, 0)}));
+  expect(both.size() == 1 && beacon_only.size() == 1 &&
+             cluster_only.size() == 1,
+         "corroboration never changes how many acoustic candidates exist");
+  expect(both.front().corroboration.applied_weight >
+                 beacon_only.front().corroboration.applied_weight &&
+             both.front().corroboration.applied_weight >
+                 cluster_only.front().corroboration.applied_weight,
+         "two sources that fail differently are worth more than either alone");
+  expect(std::abs(beacon_only.front().corroboration.applied_weight -
+                  cluster_only.front().corroboration.applied_weight) < 0.0001F,
+         "neither single source is privileged over the other");
+  expect(both.front().corroboration.applied_weight <=
+             config.maximum_weight_per_provider + 0.0001F,
+         "agreement between both sources still stays inside the existing cap");
+  expect(beacon_only.front().corroboration.applied_weight > 0.0F,
+         "one source still supplies some support");
+}
+
+void test_corroboration_decays_with_observation_age() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.68F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const CallsignRankConfig config;
+  const auto fresh = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 0)}));
+  const auto middling = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 60)}));
+  const auto expired = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 121)}));
+  expect(fresh.front().corroboration.applied_weight >
+             middling.front().corroboration.applied_weight,
+         "support falls as the observation ages");
+  expect(middling.front().corroboration.applied_weight > 0.0F,
+         "an observation inside the retention window still counts");
+  expect(middling.front().corroboration.age == std::chrono::seconds{60},
+         "the reported age is the age of the newest observation");
+  expect(!expired.front().corroboration.corroborated &&
+             expired.front().corroboration.applied_weight == 0.0F,
+         "an observation past the spot age limit supplies nothing");
+  expect(std::abs(expired.front().ranking_score -
+                  fresh.front().acoustic_support) < 0.0001F,
+         "an expired observation leaves the acoustic score exactly as it was");
+}
+
+void test_an_unspotted_candidate_is_never_penalised() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA1EYL", .acoustic_support = 0.70F,
+       .acoustic_edit_cost = 0.2F},
+  };
+  const CallsignRankConfig config;
+  const auto without_spots =
+      rank_callsign_suggestions(raw, hypotheses, {}, config, {});
+  // Somebody else is spotted on this frequency. That says nothing whatever
+  // about this candidate: most real contacts are never spotted at all.
+  const auto with_other_spots = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 0)}));
+  expect(without_spots.size() == 1 && with_other_spots.size() == 1,
+         "an unmatched observation neither adds nor removes a candidate");
+  expect(std::abs(without_spots.front().ranking_score -
+                  with_other_spots.front().ranking_score) < 0.0001F,
+         "absence from the spot registry is not evidence of absence");
+  expect(!with_other_spots.front().corroboration.corroborated &&
+             with_other_spots.front().corroboration.applied_weight == 0.0F &&
+             with_other_spots.front().corroboration.rationale.empty(),
+         "an uncorroborated candidate reports no external support at all");
+}
+
+void test_a_spot_can_never_supply_a_callsign() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const CallsignRankConfig config;
+  const auto corroboration =
+      testCorroboration({testSpot("EA7EYL", true, true, 0)});
+
+  // A station everybody else hears, that this receiver did not decode, must
+  // not appear at all. A confidently wrong callsign is worse than none.
+  const std::vector<CallsignRawHypothesis> only_other{
+      {.raw_span = raw, .candidate = "EA1EYL", .acoustic_support = 0.70F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const auto unheard = rank_callsign_suggestions(raw, only_other, {}, config,
+                                                 corroboration);
+  expect(unheard.size() == 1 && unheard.front().candidate == "EA1EYL" &&
+             findSuggestion(unheard, "EA7EYL") == nullptr,
+         "a spotted callsign that no acoustic hypothesis produced is never "
+         "ranked");
+
+  // Acoustic support below the floor is filtered before corroboration runs,
+  // so a spot cannot rescue a candidate the audio does not support.
+  const std::vector<CallsignRawHypothesis> barely_heard{
+      {.raw_span = raw, .candidate = "EA1EYL", .acoustic_support = 0.70F,
+       .acoustic_edit_cost = 0.0F},
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.10F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const auto floored = rank_callsign_suggestions(raw, barely_heard, {}, config,
+                                                 corroboration);
+  expect(floored.size() == 1 && floored.front().candidate == "EA1EYL",
+         "a spot cannot lift a candidate below the minimum acoustic support");
+
+  // A decisive acoustic margin is wider than the whole external budget, so
+  // corroboration adjusts how much evidence is needed and never replaces it.
+  const std::vector<CallsignRawHypothesis> decisive{
+      {.raw_span = raw, .candidate = "EA1EYL", .acoustic_support = 0.90F,
+       .acoustic_edit_cost = 0.0F},
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.60F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const auto ranked = rank_callsign_suggestions(raw, decisive, {}, config,
+                                                corroboration);
+  expect(ranked.size() == 2 && ranked.front().candidate == "EA1EYL",
+         "a spot cannot overturn an acoustic margin wider than the cap");
+  expect(ranked.front().candidate == "EA1EYL" &&
+             !ranked.front().corroboration.corroborated,
+         "the acoustic winner is not credited with somebody else's spot");
+
+  // The spotted characters are never written into a decoded span.
+  const auto rewritten = rank_callsign_suggestions(
+      raw, only_other, {}, config,
+      testCorroboration({testSpot("EB1EYL", true, true, 0)}));
+  expect(rewritten.size() == 1 && rewritten.front().candidate == "EA1EYL" &&
+             rewritten.front().raw_span == raw &&
+             !rewritten.front().corroboration.corroborated,
+         "a near-miss spot never rewrites a decoded character");
+}
+
+void test_corroboration_shares_the_bounded_external_budget() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.68F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const CallsignRankConfig config;
+  const auto directory = activityEvidence("EA7EYL", "directory");
+  const auto beacon_list = activityEvidence("EA7EYL", "beacon-list");
+  const auto ranked = rank_callsign_suggestions(
+      raw, hypotheses, {directory, beacon_list}, config,
+      testCorroboration({testSpot("EA7EYL", true, true, 0)}));
+  expect(ranked.size() == 1, "the single acoustic candidate is retained");
+  expect(std::abs(ranked.front().provider_weight - 0.12F) < 0.0001F,
+         "two providers alone already spend the whole external budget");
+  expect(ranked.front().corroboration.corroborated &&
+             ranked.front().corroboration.applied_weight == 0.0F,
+         "corroboration is still reported honestly once the budget is spent, "
+         "but it opens no second budget of its own");
+  expect(ranked.front().ranking_score <=
+             ranked.front().acoustic_support +
+                 config.maximum_total_provider_weight + 0.0001F,
+         "every external channel together stays inside the total cap");
+}
+
+void test_corroboration_requires_a_usable_observation() {
+  using namespace cwassistant::core;
+  const std::string raw = "EA?EYL";
+  const std::vector<CallsignRawHypothesis> hypotheses{
+      {.raw_span = raw, .candidate = "EA7EYL", .acoustic_support = 0.68F,
+       .acoustic_edit_cost = 0.0F},
+  };
+  const CallsignRankConfig config;
+
+  auto distant = testSpot("EA7EYL", true, true, 0);
+  distant.frequency_hz = kDecodeFrequencyHz + 400.0;
+  const auto sourceless = testSpot("EA7EYL", false, false, 0);
+  auto unobserved = testSpot("EA7EYL", true, true, 0);
+  unobserved.observations = 0;
+  auto from_the_future = testSpot("EA7EYL", true, true, 0);
+  from_the_future.newest_observation_ns = kNowNs + 1'000'000'000ULL;
+  const auto ranked = rank_callsign_suggestions(
+      raw, hypotheses, {}, config,
+      testCorroboration({distant, sourceless, unobserved, from_the_future}));
+  expect(ranked.size() == 1 && !ranked.front().corroboration.corroborated &&
+             ranked.front().corroboration.applied_weight == 0.0F,
+         "an off-frequency, sourceless, empty, or future-stamped observation "
+         "supplies no support");
+
+  auto unknown_frequency =
+      testCorroboration({testSpot("EA7EYL", true, true, 0)});
+  unknown_frequency.decode_frequency_hz = 0.0;
+  const auto without_frequency = rank_callsign_suggestions(
+      raw, hypotheses, {}, config, unknown_frequency);
+  expect(!without_frequency.front().corroboration.corroborated,
+         "proximity cannot be checked without knowing the decode frequency, "
+         "so nothing is credited");
+}
+
 }  // namespace
 
 int main() {
@@ -276,6 +586,13 @@ int main() {
   test_provider_metadata_is_required();
   test_processing_and_output_are_hard_bounded();
   test_non_callsign_input_and_database_absence();
+  test_corroboration_lifts_a_match_within_the_cap();
+  test_agreement_from_both_sources_outweighs_one();
+  test_corroboration_decays_with_observation_age();
+  test_an_unspotted_candidate_is_never_penalised();
+  test_a_spot_can_never_supply_a_callsign();
+  test_corroboration_shares_the_bounded_external_budget();
+  test_corroboration_requires_a_usable_observation();
   if (failures != 0) {
     std::cerr << failures << " callsign evidence test(s) failed\n";
     return EXIT_FAILURE;

@@ -17,8 +17,9 @@ sending, and a duration model that suits machine-sent, weighted and Farnsworth
 keying. Direct reception from a software-defined receiver and guarded direct
 keying are both implemented and documented below; keying requires a measured
 electrical loopback before it will arm, and on-air use additionally requires the
-operator-performed dummy-load procedure. Weak-signal refinement, logging
-connection, and remote-station runtime remain under implementation.
+operator-performed dummy-load procedure. Multiple-pass weak-signal recovery,
+the logging connection, and the remote-station runtime remain under
+implementation.
 A saved profile does not arm or key a transmitter.
 
 The replay core accepts little-endian RIFF/WAVE PCM at 8, 16, 24, or 32 bits and
@@ -37,27 +38,38 @@ a deterministic test spectrum to exercise waterfall texture creation.
 ```mermaid
 flowchart TB
   subgraph WIN["Application window"]
-    TOOL["Receiver toolbar — source, start and stop, radio link, settings"]
+    HEAD["Title bar — profile and radio names,<br/>TX state badge, Profiles, Settings"]
+    RAIL["Left rail — RX, CALLS, QSO, LOG, REMOTE<br/>only RX and QSO open anything today"]
+    TOOL["Receiver toolbar — source, Listen OFF/RX and level,<br/>start and stop"]
     subgraph MAIN["Workspace"]
       direction LR
       SPEC["Spectrum and waterfall<br/>channel markers, callsign labels,<br/>CALLING YOU alert, selection cursor"]
       CARDS["Decoder cards — one per open stream<br/>transcript, callsign and LISTED badge,<br/>speed, signal-to-noise ratio, confidence"]
     end
-    STATUS["Status line — device, sample rate, radio frequency, capture state"]
+    STATUS["Status line — source and sample rate,<br/>input overruns, frames and lines per second"]
   end
-  TOOL --> MAIN --> STATUS
+  HEAD --> RAIL --> TOOL --> MAIN --> STATUS
   SPEC -->|"click a marker"| CARDS
 ```
 
-The window is a toolbar above a workspace above a status line. The workspace
+A title bar runs across the top carrying the application version, the open
+station profile and the linked radio's name, a **TX DISARMED** / **TX ARMED** /
+**TX ON AIR** badge, and the **Profiles** and **Settings** buttons. A narrow
+rail down the left lists **RX**, **CALLS**, **QSO**, **LOG** and **REMOTE**;
+**RX** is the receiver workspace you are already looking at and **QSO** opens
+the guarded transmit controls, while the other three name workspaces that do
+not exist yet and say so when hovered. The rest of the window is a receiver
+toolbar above a workspace above a status line. The workspace
 holds the spectrum and waterfall on one side and the open decoder cards on the
 other; the application opens maximized so both remain usable. Every tracked
 signal appears as a marker on the spectrum carrying its
 callsign once one is decoded; clicking a marker opens that stream as a decoder
 card, which is where the transcript, the callsign and its corroboration badge,
 the speed, the signal-to-noise ratio and the confidence are shown. The status
-line reports the audio device and sample rate, the linked radio's frequency
-where one is connected, and whether a debug capture is running.
+line reports the source and its sample rate, the running input-overrun count,
+and the configured frame and waterfall line rates. The linked radio's frequency
+is on the Radio Control faceplate rather than the status line, and debug-capture
+progress appears under the CW Decoder heading below it.
 
 Two operators in an ordinary simplex QSO normally alternate on the same
 carrier. When the stable text contains a complete `CALL1 DE CALL2` handover,
@@ -102,7 +114,7 @@ card.
 Each enabled card passes through its own carrier-following narrow filter and is
 moved to the configured CW reference tone. Enable several card speakers to mix
 several isolated streams; disable the last speaker to return monitoring to
-**OFF**. The speaker and guarded **TX call** action stay in the card's lower
+**OFF**. The speaker and the guarded **TX** action stay in the card's lower
 action row while text and activity state update; they do not become conditional
 on the carrier currently being keyed. A card without a confirmed callsign does
 not invent a placeholder callsign or expose a callsign TX action. Opening or
@@ -139,13 +151,15 @@ device.
    dependencies. On Windows, CW Buddy provides the SoapySDRPlay3 bridge but
    requires the separately installed [SDRplay Hardware API 3.15](https://www.sdrplay.com/hardware-api/)
    and service; the
-   API installed for a current SDRUno installation satisfies that prerequisite.
-   Close SDRUno before discovery because only one application can own an RSP.
+   API that the vendor's own receiver application installs satisfies that
+   prerequisite. Close any other application that already owns the RSP before
+   discovery, because only one application can own one at a time.
    macOS and Linux additionally require a compatible SoapySDRPlay3 module. A
    custom source build must be configured with `-DCWA_ENABLE_SOAPY_SDR=ON`.
    On Windows, **Installed modules** should include `sdrPlaySupport.dll` after
    opening Settings → SDR. If it is listed but fails to load, reinstall API
-   3.15; if it loads but the RSP is absent, close SDRUno/SDRconnect and refresh.
+   3.15; if it loads but the RSP is absent, close whichever other application
+   is holding the receiver and refresh.
 2. Open **Settings → SDR**. The page performs one discovery scan after it
    renders; choose the physical receiver and, when offered, its operating mode.
    An RSPduo is one receiver even though its driver exposes Single Tuner, Dual
@@ -183,7 +197,8 @@ device.
 
    Enable hardware AGC only when that receiver provides it, otherwise select a
    manual gain.
-4. Set the **Decoder window center** and choose a 6–96 kHz decoder bandwidth.
+4. Set the **Decoder window center (kHz)** and choose one of the offered
+   **Decoder bandwidth** values: 6, 12, 24, 48, or 96 kHz.
    CW Buddy will continue to draw the complete acquired passband, but only this
    bounded, down-converted and decimated window reaches CW detection and the
    stream decoder bank. The 24 kHz default is a practical starting point.
@@ -224,8 +239,9 @@ state and the guarded TX/keying endpoint; selecting an SDR never grants that
 receiver transmit authority.
 
 This direct-SDR path is receive-only. It exposes no SDR transmit, PTT, or KEY
-command. Debug capture still records sound-card audio only; interoperable IQ
-recording is tracked separately. If a current official package reports the
+command. Debug capture records an SDR source as interoperable IQ rather than as
+audio, which is described under Recording receiver IQ for later analysis below.
+If a current official package reports the
 SoapySDR backend unavailable, the installation is incomplete or damaged. If
 the backend is ready but no receiver appears, check the USB connection,
 platform device access, and the device-specific module/vendor driver. Linux
@@ -251,21 +267,23 @@ profile configuration. The panel collapses to a slim header when the pointer
 leaves it; hover over the header to reveal it, or select **Pin** while making
 several adjustments.
 
-The waterfall always represents the selected fixed number of **History**
-seconds from top to bottom. At startup, unavailable older time stays dark rather
+The waterfall always represents the number of seconds set by
+**History (seconds)**, from top to bottom, anywhere between five and thirty. At
+startup, unavailable older time stays dark rather
 than stretching the first received rows over the pane. Resizing changes only
 the pixel height, and capture gaps remain visible as dark time. Display
-controls do not change what is decoded: **Avg** is a presentation setting only,
-and any **Lines/s** value of 60 or more supplies the decoder with identical
-evidence. Below 60 lines/s the detector receives fewer spectrum observations
-and may acquire a signal more slowly, so prefer 60 or more while decoding.
+controls do not change what is decoded: **Averaging** is a presentation setting
+only, and any **Lines / second** value of 60 or more supplies the decoder with
+identical evidence. Below 60 lines/s the detector receives fewer spectrum
+observations and may acquire a signal more slowly, so prefer 60 or more while
+decoding.
 Adjusting these controls no longer restarts decoding either — only changing the
 processing bandwidth, DC rejection, or gain resets tracks and transcripts.
-**Lines/s**
+**Lines / second**
 controls genuine overlapping analysis updates without changing the window
 duration; use 60–120 lines/s when inspecting high-speed dit/dah traces, subject
-to available CPU. Reduce **Avg** to 1–2 frames for crisper element edges; raise
-it only when a steadier but less time-sharp display is more useful.
+to available CPU. Reduce **Averaging** to 1–2 frames for crisper element edges;
+raise it only when a steadier but less time-sharp display is more useful.
 
 For timing inspection, select **CW symbols**. Unlike **Audio spectrum**, this
 is intentionally sparse: only active, verified channels' carrier-on states are
@@ -299,7 +317,7 @@ The slice uses real narrowband evidence but does not claim that the signal is
 CW: its text and callsign remain hidden and it is excluded from the detected
 count until the normal cadence, timing, symbol, and coherence gates pass. A
 verified region becomes the ordinary colored stream with the same session; an
-unverified region expires after the configured **Decoded stream timeout**.
+unverified region expires after the configured **Decoded signal timeout**.
 Click again to refresh it. Manual
 centers within 12 Hz reuse the slice, while more distant centers can remain
 separate for close pileup inspection. Radio retuning remains a separate,
@@ -307,11 +325,23 @@ capability-checked operation rather than a consequence of this click.
 Left-click remains reserved for opening an already detected colored stream.
 
 For a quieter waterfall, open the **Display** live-control tab, leave **Suppress
-noise** enabled, and start with a 6 dB margin. Automatic levels maintain a
+audio noise** enabled, and start with a 6 dB **Audio margin**. Automatic levels
+maintain a
 minimum 60 dB span and follow falling peaks slowly, preventing receiver-noise
 changes from repeatedly driving the palette yellow. A radio's own AGC may still
 change the audio level delivered by the sound card; this application does not
 yet control radio AGC through CAT.
+
+The trace and the waterfall deliberately use different bottoms, taken from the
+same continuously estimated noise floor. The trace's baseline, which is what
+the level axis is labelled with, sits twelve decibels below that estimate: put
+it on the noise instead and the floor lies flat along the bottom of the plot,
+where neither its shape nor a signal's distance above it can be read. The
+waterfall palette starts higher, nearer the noise, so that none of its colour
+range is spent colouring noise. Both are derived from the same smoothed bound
+and move together while **Auto levels** is on; with manual levels the bounds
+you set are used directly. The noise-floor estimate itself rises quickly and
+falls slowly, so a passing burst does not drag the whole display with it.
 
 The receiver scans every frequency inside the processed audio bandwidth for
 both live audio and WAV replay. Spectral peaks begin as private candidates and
@@ -329,7 +359,8 @@ thinner line inside that area flashes
 with the live keying state. Click anywhere in that colored area to open its
 decoded session in the right-hand panel. Its larger decoded-text window wraps
 the latest output and follows new text while its viewport is at the bottom.
-When a stream contains **Settings -> Station -> Own callsign**, its marker on
+When a stream contains **Settings -> Station -> Own station callsign**, its
+marker on
 the spectrum blinks and reads **CALLING YOU** in red. That happens on the
 spectrum rather than only inside an opened decoder card, because the point is
 to find the stream in the first place; click the marker to open it and follow
@@ -387,6 +418,19 @@ the span you chose and never widen it back out on their own. Retuning keeps it
 too: moving the tuned frequency re-centres the display at that same span
 rather than returning to full span.
 
+Retuning keeps the waterfall history as well. A row is a history of frequency,
+so when the receiver moves that history is still true and simply sits at
+different bins; the rows are therefore slid sideways by the same number of bins
+the band moved, and what was already drawn stays under the frequency it belongs
+to. Bins that come into view carry no history and are filled with the row's own
+quietest value, so newly exposed spectrum reads as empty rather than as a copy
+of the old edge. Only a pure translation can be slid: if the span itself
+changes, the bins no longer mean the same width and the old rows are dropped.
+The per-bin conditioning baseline cannot be slid meaningfully across a retune,
+so it alone is re-established, and it converges again in well under a second.
+The noise-floor estimate that sets the display range is not disturbed by a
+slide, so the levels you are reading stay where they were.
+
 A debug capture also records what the decoder was working from: the analyzer
 settings in force, how many spectrum frames reached signal detection, how many
 times the decoder was restarted, and whether the Morse alphabet came from your
@@ -395,18 +439,24 @@ that capture usually answers why without further questions.
 
 ### Recording receiver IQ for later analysis
 
-**Debug capture** records a direct SDR source as interoperable IQ. The result is
-a SigMF pair — a `.sigmf-data` file of interleaved complex samples and a
-`.sigmf-meta` sidecar describing sample rate, centre frequency, sample format
+The **Debug capture** button records a direct SDR source as interoperable IQ.
+The result is
+a SigMF pair — `iq.sigmf-data`, holding interleaved complex samples, and an
+`iq.sigmf-meta` sidecar describing sample rate, centre frequency, sample format
 and start time — so the recording can be replayed in other software rather than
-only in this application.
+only in this application. Samples are written as `ci16_le`, which is lossless
+for the receivers this application records (an RSPduo digitises at fourteen bits
+and an RTL-SDR at eight) and half the size of 32-bit float; at megasample rates
+that halving is what decides whether a capture is usable at all. A retune
+mid-recording starts a new capture segment rather than silently mislabelling
+the samples that follow it.
 
 Two limits apply, and at receiver sample rates the size limit usually reaches
-first: recording stops at whichever of the byte budget or the **Stop
-automatically after** duration is reached, and the reason is reported when it
-finishes. A megasample per second produces roughly a quarter of a gigabyte per
-minute, so plan captures in tens of seconds rather than minutes unless you have
-reduced the sample rate.
+first: recording stops at whichever of the four-gibibyte payload budget or the
+**Stop automatically after** duration is reached, and the reason is reported
+when it finishes. A megasample per second produces roughly a quarter of a
+gigabyte per minute, so plan captures in tens of seconds rather than minutes
+unless you have reduced the sample rate.
 
 Each recording also stores the receiver's gain state and its own level
 measurements — peak magnitude, how often samples approached full scale, and the
@@ -439,14 +489,17 @@ polarity change disarms before keying; a change observed while KEY/PTT is active
 causes an emergency release and latched fault.
 
 Choose **TX** on a decoder card whose callsign was decoded exactly. Retype that
-station before preparing **Send my call**, the editable report/exchange, a
-profile-configured quick macro, or operator-authored free text. CW Buddy
+station and press **Confirm station** before preparing **Send my call**, the
+editable report/exchange, a profile-configured quick macro, or
+operator-authored free text. CW Buddy
 normalizes the message to uppercase
 Morse-compatible text and shows its duration at the selected 5–80 WPM; retype
-that exact preview as a separate confirmation. **Transmit confirmed message**
-then schedules the immutable Morse plan on the direct adapter. **Cancel
-transmission** and **EMERGENCY RELEASE** synchronously release KEY before PTT;
-emergency release also latches a fault and requires an explicit reset.
+that exact preview and press **Confirm preview** as a separate confirmation.
+**TRANSMIT PREPARED MESSAGE**
+then schedules the immutable Morse plan on the direct adapter. **CANCEL TX**
+and **EMERGENCY RELEASE** synchronously release KEY before PTT;
+emergency release also latches a fault and requires an explicit reset, which is
+offered as **Reset fault (stays disarmed)**.
 While active, elapsed/remaining time and progress come from the worker's
 monotonic schedule rather than an optimistic UI timer and clear on completion,
 cancellation, or fault.
@@ -473,17 +526,44 @@ transmission.
 
 ### How many signals can be decoded at once
 
-Decoding cost grows with the number of signals being tracked, not with the
-width of the band you are watching. Building the spectrum costs the same
-whether one signal is present or twenty-four; each tracked signal then adds its
-own filtering on top.
+Decoding cost grows with the number of signals actually being decoded, not with
+the width of the band you are watching and not simply with the number being
+tracked. Building the spectrum costs the same
+whether one signal is present or twenty-four; each signal that reaches a
+decoder then adds its own filtering on top, and a tracked signal that will not
+be decoded is skipped before that filtering rather than paying for it.
 
-Measured on a current desktop, a single tracked signal uses around eight per
+Measured on a current desktop, a single decoded signal uses around eight per
 cent of one processor core in real time, and twenty-four — the maximum the
 decoder tracks — reaches real time, meaning the machine is doing a second of
 work for every second of radio. A slower machine will reach that ceiling
 sooner. If a crowded band feels sluggish, narrowing the decoder window so fewer
 signals are tracked helps far more than reducing the spectrum's resolution.
+
+### Decoding weak signals
+
+**Settings → Decoder → Weak signals** decides which tracked signals are handed
+to a decoder at all. It is off by default, and the threshold beside it,
+**Decode only above**, starts at 12.0 dB above the noise floor. A signal that
+has not reached that level is still detected, still followed, and still drawn
+in the spectrum; only its decoding is withheld. It is not suspended, and it is
+not hidden.
+
+The level that decides is the highest the track has reached rather than the
+level of the moment, because a signal is necessarily weak while it is still
+being acquired, and every new track is filtered for a fixed warm-up period
+before the threshold can apply to it at all. A track you select yourself is
+always decoded regardless of level, and so is one you are monitoring through a
+card speaker.
+
+The default is measured rather than chosen for comfort: across the capture
+corpus the weakest track that carried a correctly recovered callsign sat at
+19.5 dB, which leaves more than seven decibels of margin under the gate. Below
+it the decoder receives fragments rather than copy, so the transcript fills
+with nothing while each such track costs a full decoder's work. Tick
+**Decode every tracked signal** when you would rather have that fragmentary
+output than none — when chasing a signal you know is there and can barely
+hear — and expect both the transcript and the processor cost to reflect it.
 
 For initial hardware acceptance, connect the transceiver to a dummy load, use
 minimum power, keep an independent means of removing power available, and
@@ -717,12 +797,23 @@ carrier, keep silence active, replace raw text, or initiate transmission.
 Treat `?` as retained acoustic uncertainty, not as a character that a directory
 has disproved.
 
+A run of six or more of the one- and two-element characters — E, T, I, A, N and
+M, with any spaces inside the run counted as part of the same damage — is
+replaced in the published transcript by a single space. When keying evidence
+breaks up, those are the characters it breaks up into, and a long run of them
+is the signature of that rather than of copy. The run is replaced rather than
+deleted so the gap says plainly that something here was not readable, instead
+of joining unrelated text together. Six is the shortest run that is safe:
+ordinary copy really does reach four and five, and a track that has recovered a
+correct callsign several times can still produce a run of ten between the good
+passes, which is why only the run is suppressed and never the whole track.
+
 ### The CW vocabulary the decoder reads
 
 The abbreviations, Q-codes and prosigns the decoder recognises are plain text
 files you can edit, not a fixed list inside the application. On first run they
-are written to `dictionaries/` inside the application data directory; from then
-on your copies are the ones loaded at startup, so an edit survives an upgrade.
+are written to `dictionaries/` inside the application data directory, and an
+edit you make there survives an upgrade.
 `cw-abbreviations.txt` holds the vocabulary itself, one token per line, with
 blank lines and lines beginning with `#` ignored. `cw-word-gap-prefixes.txt`
 holds the smaller set that may run straight into a callsign, which is what turns
@@ -735,21 +826,36 @@ evidence alone, which works only while a match stays harder to counterfeit than
 the checks it stands in for. `CQ` and `599` belong there; a single letter, or
 anything noise assembles often, does not.
 
-Upgrading never requires anything of you. The copies inside the application are
-what it uses unless your own copy is present and readable, so a file left by an
-older version cannot change how a new one decodes.
+Upgrading never requires anything of you. The copy inside the application is
+the authoritative one, and your copy is an override that has to earn its place:
+it is used only when it is present and actually parses to something usable, and
+for the alphabet only when it still carries the letters and digits. A file left
+by an older version, truncated or half-written, therefore cannot change how a
+new version decodes. A missing or unusable file is rewritten from the copy
+inside the application so that what you see on disk is what is in force; a
+usable file you have edited is never overwritten.
 
-The application also carries its own copy of the alphabet and falls back to it
-if the file cannot be read, so a missing or empty one cannot stop the decoder
-working. An empty file is replaced with that copy the next time the application
-starts; a file you have edited is never overwritten.
+The four contest exchange profiles in `dictionaries/contests/` are seeded the
+same way and read back from your directory, so an updated or added contest
+needs no new build. Each profile describes what a contest exchange looks like —
+which fields are sent and received, and how they may be abbreviated — and a
+profile can never arm a transmitter or relax a safety gate. A profile you add
+yourself is read alongside them; only the four carried inside the application
+are ever written out.
+
+The alphabet goes one step further than the other files. A copy of it is
+compiled into the application at build time, generated from the same shipped
+file so the two can never drift apart, and that copy is used if every attempt
+to read a file fails. A decoder with no alphabet decodes nothing at all, so a
+missing or empty one cannot stop it working.
 
 `morse-alphabet.txt` in the same directory holds the alphabet itself: the
 element pattern on the left, the symbol it produces on the right. Extend it if
 you work stations sending accented letters or a prosign the decoder does not yet
-name. It is read only for receiving; what the application may transmit is fixed
-and deliberately narrower, so adding `<SOS>` there lets you read a distress call
-and still does not let this application send one.
+name. It is read only for receiving. What the application may transmit is a
+separate, shorter list held in code rather than in any file, precisely because
+what may go on the air is a safety boundary; adding a prosign here therefore
+lets you read it and never adds it to what can be sent.
 
 These lists only ever choose between readings that carry exactly the same
 characters, so adding a token can move a word boundary and can never change a
@@ -821,13 +927,16 @@ under both and keep whichever reads better.
 
 ## Tell the decoder what you are doing
 
-The current release provides the neutral behavior described below. Planned
-left-rail modes will make **Standard**, **PileUp Chaser**, **PileUp Slicer**, and
-**Runner** separate operator workspaces. Chaser first learns a runner's
-listening pattern without transmitting; Slicer ranks comparatively clear slots;
-Runner organizes callers in simplex or split operation. See the public
-[operating-mode specification](../operating-modes.md). These modes do not yet
-appear in the application and none bypasses TX arming or confirmation.
+The current release provides the neutral behavior described below. The four
+first-level operating modes — **Standard**, **PileUp Chaser**, **PileUp
+Slicer**, and **Runner** — are planned rather than implemented: no part of the
+application offers them today, and the left rail lists **RX**, **CALLS**,
+**QSO**, **LOG** and **REMOTE** instead. As specified, Chaser would first learn
+a runner's listening pattern without transmitting, Slicer would rank
+comparatively clear slots, and Runner would organize callers in simplex or
+split operation. See the public
+[operating-mode specification](../operating-modes.md). None of them would
+bypass TX arming or confirmation.
 
 **Settings → Station → Operating role** tells the decoder whose callsign a
 stream is expected to carry. It matters because the text alone is sometimes
@@ -852,12 +961,16 @@ corrects, or invents the decoded text itself.
 ## Debug capture
 
 When a visible signal will not decode and the on-demand **Diagnostics**
-readout is not enough to explain why, use **Debug capture**, in the decoder
-panel header or under **Settings → Decoder**. It is only available while live
+readout is not enough to explain why, use **Debug capture** in the decoder
+panel header, or **Start capture** under **Settings → Decoder**. Both run the
+same recording, and it is only available while live
 RX is running. Selecting it
 starts a bounded recording:
 
-- The exact raw audio feeding the decoder, written to `audio.wav`.
+- The exact samples feeding the decoder. A sound-card source is written to
+  `audio.wav`; a direct SDR source is written instead as the SigMF IQ pair
+  described above, because discarding the quadrature component would destroy
+  the sideband distinction that a later RF analysis needs.
 - A private per-track diagnostic log, `diagnostics.jsonl`, with one line per
   second listing every currently tracked frequency — including tracks that
   never become visible — with its SNR, narrowband coherence, filter width,
@@ -874,7 +987,7 @@ starts a bounded recording:
   file shows whether (and exactly when) the VFO moved during the capture —
   a common explanation for a signal that stops decoding partway through.
 
-Both files are written to a timestamped folder under the application's
+The files are written to a timestamped folder under the application's
 standard per-user data location; the panel shows the exact path while
 recording and after it stops, and **Settings → Decoder** has an **Open capture
 folder** button that opens it in your file manager. Capture stops itself after
@@ -882,8 +995,8 @@ the **Stop automatically after** value in Settings (30 to 1800 seconds, 300 by
 default) and always requires an explicit click to start; it is never silent or
 automatic. Select **Stop capture** to end it early. Raise the limit for a signal
 that only misbehaves occasionally; lower it for a quick reproduction, so there
-is less to review before sharing. Because the WAV file is exactly what the
-selected audio input picked up, review its contents before sharing the
+is less to review before sharing. Because the recording is exactly what the
+selected input picked up, review its contents before sharing the
 capture folder with anyone.
 
 ## Replay a receiver recording
@@ -998,9 +1111,10 @@ replaces its validated local data cache.
 The Back and Next controls live in a fixed wizard footer and remain visible when
 a setup page must scroll on a small or scaled display.
 
-Finishing the wizard saves settings only. Hardware ownership, a keying loopback
-test, and the transmit guard will be required before transmission is enabled in
-a later milestone.
+Finishing the wizard saves settings only; it never opens a keying port and
+never transmits. Hardware ownership, the measured keying loopback, and the
+transmit guard all remain required before anything can be keyed, and they are
+performed from Settings → Keying and the QSO panel rather than from the wizard.
 
 Selecting SWL mode persists that choice per profile, disables radio/keying
 validation, and labels the workspace as receive-only. Previously entered radio
@@ -1009,9 +1123,10 @@ discard configuration.
 
 The current build discovers, displays, and saves audio-input selection, including
 an unavailable marker when a previously selected device is disconnected. Live
-sound-card capture, input level metering, channel/sample-rate selection, and
-buffer controls are still under implementation; use **Open WAV** for the active
-signal-processing path in this build.
+sound-card capture runs from that selection, as described under Receive live
+radio audio. The advanced input controls — level metering and explicit
+channel, sample-rate and buffer selection — are still planned; live RX asks the
+device for 48 kHz mono float and otherwise takes its preferred format.
 
 ## Multiple radios and application instances
 
@@ -1057,7 +1172,8 @@ audio decoder. The faceplate disappears
 entirely for receive-only SWL setups, WAV replay, and whenever no radio is
 currently linked, rather than showing a stale or meaningless value. Note
 that showing this readout at all requires **both** Settings → Radio
-**Radio enabled** and the **audio input linked to radio** toggle — enabling
+**Radio enabled** and Settings → Audio **This input carries RX audio from
+the configured radio** — enabling
 the radio alone is not enough.
 
 When the linked provider is writable, click the green LCD-style **RX**
@@ -1150,8 +1266,10 @@ the actual TX/RX bands.
 - Decoder output never starts transmission.
 - The first transmission of a QSO requires operator confirmation of the exact
   selected callsign.
-- Ignored callsigns are excluded from display, queueing, QSO selection, and TX
-  authorization.
+- An ignored callsign is refused by the transmit guard and excluded from
+  display, queueing, QSO selection, and TX authorization. The desktop shell
+  does not yet offer a control for adding one to that list.
 - Direct key/PTT is separate from frequency control.
 - Network receivers are receive-only and cannot own TX.
-- Remote operation keeps final interlocks and CW timing at the station server.
+- Remote operation, which is still a specification rather than a shipped
+  feature, keeps final interlocks and CW timing at the station server.

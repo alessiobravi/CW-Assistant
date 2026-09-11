@@ -1,7 +1,16 @@
 # Operating modes
 
-Status: planned product specification. The current application behavior is
-**Standard** mode; the other modes below are not yet available.
+Status: specification for planned behavior. None of the modes described here
+exists in the application. There is no navigation rail, no mode selector, and
+no mode machinery of any kind, so an operator cannot choose a mode today. What
+the receiver does now is what the **Standard** row describes, but it does so
+because that is the only behavior there is and not because a mode was selected.
+The conversation roles and conversation kinds the core already carries are
+separate machinery serving the QSO workflow; one of the conversation roles is
+also called Runner, and one of the conversation kinds describes a DX pileup,
+but neither implements a mode described below. The rest of this document is written in
+the present tense of a specification, so read each statement as what the mode
+must do once it is built rather than as something the application does.
 
 CW Buddy will expose the operating mode as a first-level choice in the left
 navigation rail. A mode changes receiver interpretation, presentation, and

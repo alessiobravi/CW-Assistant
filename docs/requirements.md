@@ -5,9 +5,10 @@ Version: 0.1, 2026-08-30
 ## Operating scope
 
 CW Buddy receives either demodulated audio or SDR IQ, discovers CW signals
-within the visible passband, decodes each tracked signal independently, and
-shows candidates on a spectrum/waterfall. The operator can select a decoded
-callsign and, after confirmation, conduct a guided CW QSO.
+within the visible passband, decodes independently of one another those tracked
+signals that reach the configured decoding level, and shows candidates on a
+spectrum/waterfall. The operator can select a decoded callsign and, after
+confirmation, conduct a guided CW QSO.
 
 The initial workflows are ordinary QSO, DX pileup, and contest. Workflows use
 editable structured panels rather than unrestricted scripts at first. A panel
@@ -17,13 +18,16 @@ Conversation profiles must be distinct: ordinary/general CW remains open-ended,
 while every contest profile versions its own rule-derived exchange grammar and
 decoding hints rather than sharing one assumed contest sequence.
 
-The receiver workspace provides four first-level operating modes in its left
+The receiver workspace is to offer four first-level operating modes in a left
 navigation rail: **Standard**, **PileUp Chaser**, **PileUp Slicer**, and
-**Runner**. Their behavior, adaptive-learning lifecycle, frequency-control
-authority, and fail-closed rules are specified in
+**Runner**. None of them is implemented yet and the application has no mode
+selector, so an operator cannot choose one today; current behavior is what
+Standard describes. Their behavior, adaptive-learning lifecycle,
+frequency-control authority, and fail-closed rules are specified in
 [`operating-modes.md`](operating-modes.md). A mode may change interpretation or
 request an explicitly enabled VFO B position; it never grants transmission
-authority.
+authority. The conversation roles and conversation kinds that the core already
+carries are a different mechanism and do not implement these modes.
 
 ## Functional requirements
 
@@ -73,6 +77,16 @@ authority.
   improve.
 - Schedule candidates by signal strength, arrival order, or explicit operator
   selection. Manual selection always has a configurable priority boost.
+- Decide by measured level which tracked signals are decoded rather than
+  decoding everything that is tracked. A track whose own peak keying level
+  stays below the configured decoding threshold is still acquired, followed,
+  and drawn in the spectrum, but it is neither filtered to baseband nor fed to
+  a decoder; it is not suspended, because suspension means association loss.
+  The gate reads the strongest level a track has reached rather than the level
+  of the moment, since a signal is weak while it is still being acquired, and
+  it applies only after a fixed warm-up during which every track is filtered. A
+  monitored or operator-selected track is always decoded, and an operator
+  setting decodes weak signals unconditionally at the cost of the saved work.
 - Display decoded text, estimated WPM, tone frequency, SNR, confidence, and
   callsign candidates without blocking capture.
 - Display a callsign on a trace only after the CW track is verified. Classical
@@ -570,4 +584,6 @@ These were open questions and are now fixed requirements, testable as written.
 ## Decisions still required
 
 - Minimum supported Debian/Ubuntu versions and reference Windows 11 x64 hardware.
-(WPM range, character set, prosigns and break-in scope are settled below.)
+
+The WPM range, character set, prosigns and break-in scope were once listed here
+and are settled in [Keying scope](#keying-scope) above.

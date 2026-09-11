@@ -8,6 +8,11 @@ Pane {
     signal done()
     signal setupRequested()
     property bool sdrDiscoveryRequested: false
+    // True from the moment a device scan is asked for until the settings
+    // object publishes a result. It is deliberately driven by the request and
+    // by the completion notification rather than by an assumed duration, so it
+    // never claims progress it cannot observe.
+    property bool sdrDiscoveryRunning: false
 
     function formatFrequencyKhz(frequencyHz) {
         return Number((Number(frequencyHz) / 1000).toFixed(3)).toString()
@@ -24,8 +29,18 @@ Pane {
         if (sdrDiscoveryRequested)
             return
         sdrDiscoveryRequested = true
-        // Let the SDR page render before a vendor module probes USB. Discovery
-        // remains receive-only and does not open or start any returned device.
+        root.beginSdrDiscovery()
+    }
+
+    function beginSdrDiscovery() {
+        if (sdrDiscoveryRunning)
+            return
+        // Raise the waiting state first, then let the SDR page render before a
+        // vendor module probes USB. Enumeration still runs on the interface
+        // thread, so this one deferred turn is what gives the busy state a
+        // chance to appear. Discovery remains receive-only and does not open or
+        // start any returned device.
+        sdrDiscoveryRunning = true
         Qt.callLater(function() { appSettings.refreshSdrDevices() })
     }
 
@@ -242,18 +257,52 @@ Pane {
                             : "No SoapySDR receiver modules detected"
                     }
                     Label { text: "Physical SDR" }
-                    ComboBox {
-                        objectName: "sdrDeviceCombo"
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        model: appSettings.sdrDeviceNames
-                        currentIndex: appSettings.sdrDeviceIndex
-                        enabled: appSettings.sdrBackendAvailable
-                                 && appSettings.sdrDeviceNames.length > 0
-                        onActivated: appSettings.selectSdrDevice(currentIndex)
-                        ToolTip.visible: hovered
-                        ToolTip.text: enabled
-                            ? "Select one physical receive-only SDR; alternative operating modes of the same serial number are grouped together"
-                            : "Install the matching SoapySDR hardware module, connect the receiver, then refresh"
+                        spacing: 6
+                        ComboBox {
+                            objectName: "sdrDeviceCombo"
+                            Layout.fillWidth: true
+                            visible: !root.sdrDiscoveryRunning
+                            model: appSettings.sdrDeviceNames
+                            currentIndex: appSettings.sdrDeviceIndex
+                            enabled: appSettings.sdrBackendAvailable
+                                     && appSettings.sdrDeviceNames.length > 0
+                            onActivated: appSettings.selectSdrDevice(currentIndex)
+                            ToolTip.visible: hovered
+                            ToolTip.text: enabled
+                                ? "Select one physical receive-only SDR; alternative operating modes of the same serial number are grouped together"
+                                : "Install the matching SoapySDR hardware module, connect the receiver, then refresh"
+                        }
+                        RowLayout {
+                            objectName: "sdrDiscoveryBusyRow"
+                            Layout.fillWidth: true
+                            visible: root.sdrDiscoveryRunning
+                            spacing: 10
+                            BusyIndicator {
+                                objectName: "sdrDiscoveryBusyIndicator"
+                                running: root.sdrDiscoveryRunning
+                                implicitWidth: 26
+                                implicitHeight: 26
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Label {
+                                    objectName: "sdrDiscoveryBusyLabel"
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: "#f3bd55"
+                                    text: "Scanning for receivers…"
+                                }
+                                Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: "#91a0b1"
+                                    text: "Each installed vendor module is asked what hardware it can see, which can take several seconds. Nothing is opened or started."
+                                }
+                            }
+                        }
                     }
                     Label { text: "Operating mode" }
                     ComboBox {
@@ -295,16 +344,25 @@ Pane {
                         Layout.fillWidth: true
                         Button {
                             objectName: "refreshSdrDevicesButton"
-                            text: "Refresh devices"
-                            onClicked: appSettings.refreshSdrDevices()
+                            text: root.sdrDiscoveryRunning
+                                  ? "Scanning…" : "Refresh devices"
+                            enabled: !root.sdrDiscoveryRunning
+                            onClicked: root.beginSdrDiscovery()
                             ToolTip.visible: hovered
-                            ToolTip.text: "Rescan SoapySDR modules and attached receivers without starting reception"
+                            ToolTip.text: enabled
+                                ? "Rescan SoapySDR modules and attached receivers without starting reception"
+                                : "A scan is already in progress"
                         }
                         Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             color: appSettings.sdrBackendAvailable ? "#91a0b1" : "#f3bd55"
-                            text: appSettings.sdrDiagnostic
+                            // While a scan runs the stored text still describes
+                            // the previous result, so it is withheld rather
+                            // than presented as the current state.
+                            text: root.sdrDiscoveryRunning
+                                  ? "Scanning for receivers…"
+                                  : appSettings.sdrDiagnostic
                         }
                     }
                     Label { text: "SDR center frequency (kHz)" }
@@ -882,6 +940,176 @@ Pane {
                                 : "Enable and select an operator-supplied file first"
                         }
                     }
+
+                    Rectangle {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        height: 1
+                        color: "#2b3541"
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        text: "DX Cluster / RBN"
+                        font.pixelSize: 15
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Optionally receive what other listening stations report hearing. Spots place markers on the spectrum at the reported frequencies and give decoded callsigns a second opinion. The feed is receive-only: nothing is ever published, your station is never announced, and no spot can start transmission."
+                    }
+                    Label { text: "Spot feed" }
+                    CheckBox {
+                        objectName: "dxSpotsEnabledCheck"
+                        text: "Receive spots from an external feed"
+                        checked: appSettings.dxSpotsEnabled
+                        onToggled: appSettings.dxSpotsEnabled = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Off by default; enabling it only reads the configured provider"
+                    }
+                    Label { text: "Sources" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        CheckBox {
+                            objectName: "dxSpotsReverseBeaconCheck"
+                            text: "Reverse Beacon Network"
+                            enabled: appSettings.dxSpotsEnabled
+                            checked: appSettings.dxSpotsReverseBeacon
+                            onToggled: appSettings.dxSpotsReverseBeacon = checked
+                        }
+                        CheckBox {
+                            objectName: "dxSpotsClusterCheck"
+                            text: "DX Cluster"
+                            enabled: appSettings.dxSpotsEnabled
+                            checked: appSettings.dxSpotsCluster
+                            onToggled: appSettings.dxSpotsCluster = checked
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            Layout.topMargin: 4
+                            wrapMode: Text.WordWrap
+                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
+                            text: "The two sources are independent. Reverse-beacon reports come from automatic skimmers; cluster spots are entered by operators. Either may be used alone, both together, or neither."
+                        }
+                    }
+                    Label { text: "Provider endpoint" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        TextField {
+                            id: dxSpotsEndpointField
+                            objectName: "dxSpotsEndpointField"
+                            Layout.fillWidth: true
+                            enabled: appSettings.dxSpotsEnabled
+                            text: appSettings.dxSpotsEndpoint
+                            placeholderText: "https://spots.example.org/api/v1/spots"
+                            inputMethodHints: Qt.ImhUrlCharactersOnly
+                                              | Qt.ImhNoPredictiveText
+                            validator: RegularExpressionValidator {
+                                regularExpression: /https:\/\/[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9](:[0-9]{1,5})?(\/[^\s]*)?/
+                            }
+                            onEditingFinished: {
+                                if (acceptableInput)
+                                    appSettings.dxSpotsEndpoint = text
+                                else
+                                    text = appSettings.dxSpotsEndpoint
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Address the spots are read from. Plain http is rejected: an unprotected feed can be rewritten in transit, and a rewritten spot is evidence that looks exactly like the real thing."
+                        }
+                        Label {
+                            objectName: "dxSpotsEndpointHintLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: dxSpotsEndpointField.acceptableInput
+                                   ? "#91a0b1" : "#f3bd55"
+                            text: dxSpotsEndpointField.acceptableInput
+                                  ? "Read over https only; the provider is polled and never written to."
+                                  : "Enter a complete https address, for example https://spots.example.org/api/v1/spots"
+                        }
+                    }
+                    Label { text: "Refresh interval" }
+                    RowLayout {
+                        spacing: 8
+                        SpinBox {
+                            objectName: "dxSpotsRefreshSecondsSpin"
+                            editable: true
+                            from: 30
+                            to: 600
+                            stepSize: 10
+                            enabled: appSettings.dxSpotsEnabled
+                            value: appSettings.dxSpotsRefreshSeconds
+                            onValueModified: appSettings.dxSpotsRefreshSeconds = value
+                            ToolTip.visible: hovered && enabled
+                            ToolTip.text: "How often the provider is polled. Below thirty seconds a public feed gains nothing and may refuse the request."
+                        }
+                        Label {
+                            text: "seconds"
+                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
+                        }
+                    }
+                    Label { text: "Spot retention" }
+                    RowLayout {
+                        spacing: 8
+                        SpinBox {
+                            objectName: "dxSpotsRetentionMinutesSpin"
+                            editable: true
+                            from: 1
+                            to: 60
+                            stepSize: 1
+                            enabled: appSettings.dxSpotsEnabled
+                            value: appSettings.dxSpotsRetentionMinutes
+                            onValueModified: appSettings.dxSpotsRetentionMinutes = value
+                            ToolTip.visible: hovered && enabled
+                            ToolTip.text: "How long a received spot stays on the spectrum before it is dropped. A station that has moved on leaves a marker that is no longer true."
+                        }
+                        Label {
+                            text: "minutes"
+                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
+                        }
+                    }
+                    Label { text: "Frequency match tolerance" }
+                    RowLayout {
+                        spacing: 8
+                        SpinBox {
+                            objectName: "dxSpotsToleranceHzSpin"
+                            editable: true
+                            from: 50
+                            to: 1000
+                            stepSize: 25
+                            enabled: appSettings.dxSpotsEnabled
+                            value: appSettings.dxSpotsToleranceHz
+                            onValueModified: appSettings.dxSpotsToleranceHz = value
+                            ToolTip.visible: hovered && enabled
+                            ToolTip.text: "How far a spot may sit from a tracked signal and still be treated as the same station. Wider settings match more spots, and match more of the wrong ones."
+                        }
+                        Label {
+                            text: "Hz"
+                            color: appSettings.dxSpotsEnabled ? "#91a0b1" : "#667586"
+                        }
+                    }
+                    Label { text: "Spectrum labels" }
+                    CheckBox {
+                        objectName: "dxSpotsShowLabelsCheck"
+                        text: "Show spot labels on the spectrum"
+                        enabled: appSettings.dxSpotsEnabled
+                        checked: appSettings.dxSpotsShowLabels
+                        onToggled: appSettings.dxSpotsShowLabels = checked
+                        ToolTip.visible: hovered && enabled
+                        ToolTip.text: "Draw the spotted callsign beside its marker; turn this off to keep the markers without the text"
+                    }
+                    Label { text: "" }
+                    Label {
+                        objectName: "dxSpotsAuthorityLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#f3bd55"
+                        text: "A spot is corroboration and never authority. It can lower how much evidence a decoded callsign needs before it is offered, and it can flag that an outside source disagrees with what was decoded here, but it never replaces a decoded callsign with a spotted one: reverse-beacon reports carry a measured error rate approaching two per cent per receiver, so a spot that contradicts good copy is as likely to be the mistaken one. What is decoded from the air remains the only source of the transcript."
+                    }
                 }
             }
 
@@ -1413,6 +1641,18 @@ Pane {
                 ToolTip.visible: hovered
                 ToolTip.text: "Validate and save all settings in this profile"
             }
+        }
+    }
+
+    Connections {
+        target: appSettings
+        // Discovery publishes everything it found through this one
+        // notification, which is the only observable end of a scan available
+        // today. Clearing on it can end the waiting state early if an
+        // unrelated setting changes mid-scan; it can never leave it running
+        // after the results are in.
+        function onSdrSettingsChanged() {
+            root.sdrDiscoveryRunning = false
         }
     }
 

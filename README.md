@@ -26,8 +26,15 @@ bank detects multiple spectral peaks, then derives independent keying evidence
 from the original samples through a phase-continuous narrowband filter for each
 frequency. It evaluates bounded 8–60 WPM timing hypotheses, maintains adaptive
 timing state, and shows color-linked spectrum markers and decode rows. The
-700 Hz guide is visual only. Multiple-pass weak-signal decoding remains under
-active implementation.
+700 Hz guide is visual only. At a checkpoint or a completed turn the same run
+lattice is re-decoded against nearby timing hypotheses, and a different pass
+replaces the live one only when it covers substantially the same interval and
+improves acoustic cost by both an absolute and a relative margin. Decoding a
+signal below the measured decode threshold is an operator setting that is off
+by default: under it a track is still acquired, followed, and drawn, and once
+it has had long enough to show its level it is neither filtered nor decoded, so
+the cost of a busy band follows the signals actually being copied rather than
+every signal tracked.
 
 ## Current and planned capabilities
 
@@ -40,28 +47,49 @@ active implementation.
   module. Physical-device qualification remains in progress.
 - Selectable receive-only network SDR directory, with KiwiSDR streaming first
   and browser handoff for receiver types without an authorized client API
+  (planned; only the receiver-protocol boundary exists today)
 - Debug capture of a direct SDR source as an interoperable SigMF IQ pair
   (`ci16_le` by default), bounded by an explicit byte and duration budget
 - Live-source and WAV-replay spectrum with scrolling waterfall
 - Alternative-width/drift refinement of the implemented raw-sample narrowband
   full-passband multi-channel decoder
+- Suppression of uncopyable text, in which a run of six or more one- and
+  two-element characters is replaced by a single space rather than deleted, so
+  the transcript says plainly that something there could not be copied
+- Operator-editable data files for the exchange vocabulary, the word-gap
+  prefixes, the distinctive tokens, the Morse alphabet, and one exchange
+  profile per contest; the copies installed with the application are
+  authoritative and an operator copy is used only when it parses, and the
+  alphabet is additionally compiled in as a last-resort fallback generated from
+  the same file
 - Strongest-signal, arrival-queue, and operator-selected channel scheduling
 - Configurable 2D spectrum bounds, FPS, waterfall speed, averaging, peak hold,
-  palettes, overlays, and delayed callsign detail cards
-- Persistent callsign ignore list enforced by display, queue, and TX safety
+  and grid/callsign overlays; the spectrum trace keeps twelve decibels of
+  headroom below the estimated noise floor, the waterfall palette starts above
+  that baseline so none of its range is spent coloring noise, and retuning
+  slides the existing waterfall history by the bins the band moved instead of
+  erasing it
+- Callsign ignore list enforced by display, queue, and TX safety (the policy
+  is implemented in the core; persistence and its operator control are planned)
 - Standalone, station-server, and remote-client roles with secure control,
-  receive audio/spectrum streaming, and station-local CW timing
+  receive audio/spectrum streaming, and station-local CW timing (planned; the
+  control-lease and transmit-request types exist in the core, and no role
+  beyond standalone is wired into the application yet)
 - Multiple saved station profiles with a startup chooser and isolated settings,
   allowing separate application instances to operate separate radios
 - Windows OmniRig, portable Hamlib, and CAT4OM network frequency-control paths
 - Yaesu FT-450D and FT-818/FT-818ND editable reference configurations
 - Separate configurable serial port and RTS/DTR lines for PTT and keying
 - Human-confirmed QSO initiation with ordinary, DX-pileup, and contest panels
+- Transmission of the seven prosigns `<AR>`, `<AS>`, `<BK>`, `<CT>`, `<KN>`,
+  `<SK>` and `<SOS>`, each keyed as one symbol with no character gap between
+  its letters; the table is closed and lives in the application rather than a
+  data file, because what may be transmitted is a safety boundary
 - ADIF 3 records sent to Log4OM 2 through its inbound UDP integration
 - Deterministic replay of audio and IQ captures for decoder regression tests
-- A documented high-accuracy decoder plan with explainable timing, optional
-  compact causal inference, multiple-pass weak-signal refinement, and
-  same-frequency pileup separation
+- A documented high-accuracy decoder strategy with explainable timing and an
+  optional compact causal inference backend, both implemented, alongside
+  same-frequency pileup separation, which is not yet built
 
 ## Architecture
 
@@ -76,7 +104,7 @@ See [the architecture](docs/architecture.md), [requirements](docs/requirements.m
 [roadmap](docs/roadmap.md). Operator-facing setup and examples are maintained in
 the [user manuals](docs/manuals/README.md). The graphical architecture is recorded in
 [ADR 0001](docs/decisions/0001-qt-quick-spectrum-renderer.md).
-The proposed decoder pipeline and measurable acceptance gates are in the
+The decoder pipeline and its measurable acceptance gates are recorded in the
 [high-accuracy decoder strategy](docs/decoder-strategy.md).
 ADIF release gates and official-fixture verification are documented in the
 [ADIF conformance policy](docs/adif-conformance.md).
@@ -112,8 +140,8 @@ The development host starts in a hardware-safe state:
 ./build/dev/src/app/cw-buddy
 ```
 
-The Qt desktop shell requires Qt 6.5 or newer with Quick, Quick Controls, QML,
-SerialPort, and WebSockets:
+The Qt desktop shell requires Qt 6.5 or newer with Core, Gui, Multimedia,
+Network, QML, Quick, Quick Controls, Quick Dialogs, SerialPort, and WebSockets:
 
 ```sh
 cmake -S . -B build/desktop -DCWA_BUILD_DESKTOP=ON
@@ -144,8 +172,12 @@ changelog, and backlog.
 
 Decoded text can never directly assert PTT or KEY. Transmission starts
 disarmed, requires an explicit arm action, a selected callsign, a matching
-operator confirmation, and a healthy keying adapter. Timeouts and emergency
-release are required before hardware TX is enabled.
+operator confirmation, a preview of the exact message and a confirmation of
+that text, and a healthy keying adapter. A continuous-key watchdog independent
+of the transmit path latches a fault if the line stays asserted outside a
+guarded transmission or beyond a fixed deadline, and an emergency release
+drops every line. Timeouts and emergency release are required before hardware
+TX is enabled.
 
 ## License
 

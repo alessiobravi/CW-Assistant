@@ -5,14 +5,17 @@
 This document is the implementation proposal for the complete M2 decoder. A
 receive-only full-processed-passband peak tracker and bounded channel bank are
 now implemented. Every frequency track owns a phase-continuous complex mixer,
-three-stage 120 Hz raw-sample filter, adjacent-band noise references, independent
+a three-stage raw-sample filter selected from 60, 120 and 240 Hz paths and
+starting at 120 Hz, adjacent-band noise references, independent
 soft SNR likelihood, adaptive timing decoder, provisional/stable text contract,
-stable color, and expiry lifecycle. Sub-bin drift tracking, alternative-width
-selection, confidence calibration, and multiple-pass weak-signal recovery
-remain planned. Initial bounded multi-speed timing is now
-delivered: nine 8–60 WPM paths compete during a provisional acquisition window,
-then the selected path adapts continuously and may reacquire after a bounded
-transmission gap. The complete decoder's goal
+stable color, and expiry lifecycle. Parabolic sub-bin peak interpolation, a
+bounded carrier and drift predictor, hysteretic width selection, and a first
+segment-pass slice that re-decodes a completed turn's retained run lattice are
+all delivered; calibrated confidence and the remaining refinement passes are
+still planned. Bounded multi-speed timing is delivered: nine 8–60 WPM paths are
+seeded together and every one of them keeps processing for the whole segment,
+so the early acquisition window fixes only which path is presented, and the
+best complete path is selected again at silence or flush. The complete decoder's goal
 is high weak-signal accuracy with bounded CPU, memory, and latency on ordinary
 desktop hardware.
 Every claimed improvement must survive the same held-out replay corpus and must
@@ -30,26 +33,50 @@ flowchart TB
   FFT["shared wide FFT"] --> TRK["candidate tone tracker"]
   TRK --> MIX["complex mixer, narrow multirate filter bank,<br/>adaptive noise estimate"]
   MIX --> FEAT["physical narrowband features"]
-  FEAT --> DET["deterministic key likelihood"]
-  FEAT --> MODEL["tiny causal likelihood model (optional)"]
-  DET --> FUSE["calibrated probability fusion"]
-  MODEL --> FUSE
-  FUSE --> SEARCH["semi-Markov Morse n-best search"]
+  FEAT --> DET["deterministic key likelihood<br/>(two-level envelope model)"]
+  FEAT -.-> MODEL["tiny causal likelihood model<br/>(planned)"]
+  DET --> SEARCH["semi-Markov Morse n-best search"]
+  DET -.-> FUSE["calibrated probability fusion<br/>(planned)"]
+  MODEL -.-> FUSE
+  FUSE -.-> SEARCH
   SEARCH --> OUT["provisional text, stable text,<br/>confidence, evidence"]
-  OUT --> RANK["optional context and callsign re-ranking<br/>(always labelled separately)"]
+  OUT --> RANK["context and callsign re-ranking<br/>(always labelled separately)"]
 ```
 
 One wide FFT feeds a candidate tone tracker. Each candidate is mixed down
 through a narrow multirate filter bank against an adaptive noise estimate to
 yield physical narrowband features. Those features drive a deterministic key
-likelihood and, optionally, a small causal likelihood model; the two are fused
-as calibrated probabilities before a semi-Markov Morse n-best search produces
-provisional text, stable text, confidence and evidence. Any context or
-callsign re-ranking happens after that and is always labelled separately.
+likelihood, which today is the two-level envelope model described below and is
+what the semi-Markov Morse n-best search consumes; that search produces
+provisional text, stable text, confidence and evidence. The small causal
+likelihood model and the calibrated fusion that would combine it with the
+deterministic likelihood are drawn dashed because neither is built: nothing in
+the tree fuses two likelihoods, and no learned artifact ships. Context and
+callsign re-ranking happens after the search and is always labelled separately.
 
 A tracked signal is state, not a dedicated operating-system thread. One FFT is
 shared by all candidates and bounded worker-pool jobs process active tracks.
 Inactive or low-value tracks do not invoke the optional learned path.
+
+Decode cost is deliberately tied to the number of signals being copied rather
+than to the number being followed. A track whose strongest measured level has
+stayed below the minimum decode level, twelve decibels by default, is still
+acquired, followed and drawn in the spectrum, but it is not fed to its decoder,
+and its baseband chain of three oscillators and five three-stage complex
+cascades per sample is skipped before it runs. It is deliberately not
+suspended, because suspension is the association-loss path and a track
+suspended for being quiet would never be decoded again once it grew loud. The
+gate reads the peak level the track has reached rather than the level of the
+moment, since a signal is weak while it is still being acquired, and a fixed
+warm-up of a hundred and fifty blocks filters every new track regardless, so
+that nothing is judged before it has had time to show its level. A monitored
+track and an operator-selected track are always filtered and always decoded,
+and an operator setting decodes everything when it is turned on. The margin
+behind the default is measured: the weakest track that carried a correctly
+recovered callsign across the capture corpus sat at 19.5 dB. This is where the
+pipeline's ceiling is set, because the per-track chain grows at roughly nine
+tenths of a second per track per twenty seconds of audio while building the
+spectrum costs the same for one signal as for twenty-four.
 
 ## Selectable keying models
 
@@ -159,11 +186,29 @@ threshold produce a probability of key-down rather than a hard on/off decision.
 
 The current measured baseline implements parabolic sub-bin peak interpolation,
 a bounded carrier/drift predictor, and parallel 60/120/240 Hz three-stage paths.
-Initial acquisition stays at 120 Hz; WPM, drift, local SNR, and a centered-tone
-check drive hysteretic selection afterward. Lower and upper noise references
+Initial acquisition stays at 120 Hz. Selection afterwards follows the keying
+bandwidth the signal actually needs, about 3.5 element rates, so 120 Hz serves
+speeds to roughly 41 WPM and 240 Hz beyond, while the 60 Hz path is further
+restricted to signals at or below 15 WPM because its three cascaded sections
+cost 15.9 ms of group delay, a sixth of a 12 WPM element but a quarter of a
+20 WPM one. Drift of 30 Hz per second or more forces the widest path whatever
+the speed, and a change of width takes effect only once twenty consecutive
+observations agree. The per-width SNR and the centered-tone localization
+measured alongside are reported evidence and a verification gate respectively;
+neither chooses the width, because selecting on comparative filter power put
+ordinary signals into a filter too narrow to resolve their own dits.
+
+Lower and upper noise references
 are smoothed independently and combined geometrically so neither one quiet
 side nor one adjacent interferer dominates the local threshold. A per-track
-responsive two-level envelope model normalizes the keying evidence. A bounded
+responsive two-level envelope model supplies the keying evidence, as the
+log-likelihood ratio between its mark and space hypotheses in linear amplitude,
+each level carrying its own measured scatter. Unequal scatter moves the
+decision off half amplitude deliberately: a mark carries signal plus noise and
+a space carries noise alone, so the boundary sits nearer the mark and noise
+excursions stop producing marks, which is the whole weak-signal gain. The slope
+is measured rather than chosen, so it flattens toward zero -- meaning no
+information -- on a channel carrying no CW. A bounded
 recent amplitude history regularizes its space and mark levels only when a
 robust split has support, at least 6 dB power separation, and at least 70%
 explained variation; this supplies separation without the level collapse
@@ -302,7 +347,9 @@ published corpus gates.
 Ordinary CW does not contain the fixed framing or forward-error-correction bits
 of a structured weak-signal digital mode. Multiple passes therefore cannot
 create missing information, but they can make better use of observations that a
-low-latency causal pass could not yet interpret.
+low-latency causal pass could not yet interpret. Of the five passes below, the
+live pass and a first slice of the segment pass are implemented, as described
+at the end of this section; the other three are design.
 
 1. **Live pass:** updates element and provisional-character hypotheses with the
    lowest latency. It never waits for a complete transmission.
@@ -323,7 +370,8 @@ low-latency causal pass could not yet interpret.
    same RF signal, align and combine confidence or narrowband evidence. A poor
    source must be rejected rather than reducing the stronger source's result.
 
-The rolling store should hold decimated narrowband samples or features, not a
+No rolling narrowband store exists yet. When it is built it should hold
+decimated narrowband samples or features, not a
 duplicate full-rate stream for every channel. At 3.2 kHz mono int16, 30 seconds
 is about 192 kB per track before metadata; its total size and track count remain
 hard-limited. Refinement work runs only inside a configured CPU budget and is
@@ -344,7 +392,9 @@ filter envelope would not be a valid acoustic comparison.
 
 Several callers may occupy the same displayed frequency at a runner station.
 They must be modeled as a mixture of operators inside one channel, not as one
-malformed keyer. The separator first maintains soft identity fingerprints from:
+malformed keyer. No separator is built: what follows is the design, and only
+the timing fingerprint described further down exists in the tree today. The
+separator would first maintain soft identity fingerprints from:
 
 - sub-bin carrier offset, phase evolution, chirp, and short-term drift;
 - WPM plus separate dit, dah, intra-character, character, and word-spacing
@@ -362,14 +412,17 @@ contains no callsign, carrier identity, or inferred sender. Carrier/phase
 features still require a separately timestamp-aligned source before the
 fingerprint can participate in operator association.
 
-A bounded factorial semi-Markov model jointly estimates the key-up/key-down and
+A bounded factorial semi-Markov model would jointly estimate the key-up/key-down
+and
 timing state of two callers first, expanding to three only when evidence and CPU
 budget justify it. The strongest high-confidence hypothesis is reconstructed as
 a complex keyed carrier, including its measured envelope and phase trajectory.
 Successive interference cancellation then retries the residual, while a joint
-beam keeps alternative assignments when operator identities could swap.
+beam keeps alternative assignments when operator identities could swap. None of
+that is implemented, and neither is the interference-cancellation pass listed
+among the multiple passes above.
 
-The separator is evaluated across relative power, sub-bin frequency difference,
+The separator is to be evaluated across relative power, sub-bin frequency difference,
 speed difference, cadence similarity, overlap percentage, fading, and number of
 callers. Operator lock lets a human seed or retain one fingerprint without
 forcing decoded characters. Contextual callsign completion can re-rank an
@@ -425,9 +478,11 @@ name a sender from explicit handover evidence. Broader role inference operates
 on those segments and n-best decoded tokens; it must not concatenate every
 operator on a frequency into one asserted identity. It selects an explicit
 conversation profile rather than assuming all
-traffic is a contest. Profiles cover ordinary directed QSOs, general CQ,
-DX/pileup, special-event operation, beacons, and contest-specific exchanges;
-an unknown/free-text profile supplies no language prior. The following is the
+traffic is a contest. The profile kinds that exist are an ordinary directed
+QSO, a DX pileup, special-event operation, a contest-specific exchange, and a
+neutral monitoring profile that makes no assumption and supplies no language
+prior; monitoring is the default. A beacon profile has not been written. The
+following is the
 initial bounded runner/pileup state machine, not a universal grammar:
 
 1. a runner solicitation (`CQ`, optionally a contest qualifier, `DE`, a
@@ -456,15 +511,22 @@ indistinguishable, the role stays unknown and competing calls remain visibly
 provisional. Context can rank acoustically possible hypotheses; it cannot split
 an inseparable waveform or replace incorrectly decoded dits and dahs.
 
-Each contest profile is separately versioned from its published rules and
-declares exchange fields, legal abbreviations, serial/report formats, role
-transitions, and optional operator-editable macros. Ordinary-QSO profiles allow
+Each contest profile is a separately revisioned data file carrying the address
+of its published rules and the dates the exchange applies between. It declares
+the fields each side sends, their kinds and lengths, the whole-token aliases
+and character-by-character cut-number readings that count as legal, and the
+order in which the runner and the caller send them. It declares nothing else:
+the conversation flow, its states, and every transmit safety gate are built by
+the application, and no profile file can name them, arm a transmitter, change
+a key-down timeout, or relax callsign confirmation. Ordinary-QSO profiles allow
 open-ended name/QTH/rig/weather/conversation text and must avoid forcing it into
-a contest exchange. Suggested or automatic replies are a separate guarded
-action: exact counterpart identity and current context must be confirmed, the
-profile must explicitly enable automation, TX must be armed, the maximum-key-
-down and emergency-release paths remain active, and the operator receives a
-cancellable preview. Decoder confidence alone never triggers a reply.
+a contest exchange. A suggested reply is a separate guarded action: exact
+counterpart identity and current context must be confirmed, TX must be armed,
+the maximum-key-down and emergency-release paths remain active, and the
+operator receives a cancellable preview and must still take an explicit send
+action. Those gates are invariants in code rather than profile settings, and a
+decoder event has no route to transmission at all, so decoder confidence can
+never trigger a reply.
 
 ## Stable text and uncertainty
 
@@ -481,6 +543,18 @@ repair only word boundaries while preserving the exact non-whitespace decoded
 character sequence. It is never fed back into raw/stable evidence, callsign
 confirmation, verification, or transmit control.
 
+One further presentation rule applies to both the primary and the refined
+transcript as they are published. A run of six or more of the one- and
+two-element characters — E, T, I, A, N and M, with any spaces inside the run
+counted as part of the same damage — is replaced by a single space. Such a run
+is what an envelope broken into fragments reads as, and a single space says
+plainly that something here was not copyable, where deleting it would join
+unrelated text together. Six is the shortest safe length: real copy does reach
+runs of four and five. The same measure cannot be applied to a whole track,
+because tracks that recovered a correct callsign themselves reach runs of ten
+between the parts they copied. Nothing upstream sees this; the decoded record
+and every gate that reads it are unchanged.
+
 Every character carries confidence, pass number, time interval, selected track,
 and acoustic-versus-context contribution. Low-confidence intervals produce a
 visible unknown/alternative rather than a plausible-looking fabrication.
@@ -489,7 +563,8 @@ because a model emits a large probability.
 
 Callsign lists and QSO grammar are optional search priors. They never replace
 raw text, never turn absence into “invalid,” and never independently authorize
-transmission. The operator can disable them immediately from the decoding view.
+transmission. The operator can disable the callsign lists, managed and
+operator-supplied alike, on the decoder page of Settings.
 
 ## Training and test data
 
@@ -543,13 +618,47 @@ clean and moderately jittered messages are a deterministic regression floor,
 not receiver calibration: weak-SNR curves, revision rate, co-channel overlap,
 and annotated real-audio accuracy remain required.
 
-A disjoint generated receiver-path gate adds manual weighting, timing jitter,
+A disjoint generated receiver-path gate (`cwa_receiver_holdout_benchmark`) adds
+manual weighting, timing jitter,
 drift, fading, publication/revision measurements, exact callsign scoring, and a
 30-second no-CW hard negative. Its current production-path baseline is CER
 0.458, WER 0.786, exact-call precision 1.0, recall 0.333, maximum publication
-latency 7.13 seconds, and zero hard-negative publications. These deliberately
+latency 7.13 seconds, and zero hard-negative publications. The limits it
+actually enforces sit above those figures on purpose: character error at or
+below 0.55, word error at or below 0.95, exact callsign precision of one with
+no wrong callsign at all, recall of at least a third, publication latency
+within eight seconds, and not one publication on the hard negative. These
+deliberately
 weak accuracy figures are a regression ceiling, not a receiver-quality claim.
-The checksum-bound annotation replay described in `test-data.md` is the path to
+
+Two further gates measure what those cannot. A generated speed-and-noise
+surface (`cwa_decoder_surface_benchmark`) synthesises keyed audio and drives it
+through the spectrum analyzer and the channel bank, so unlike the injection
+benchmarks it measures the front end as well as the timing decoder; it reports
+mean character error per seed set over a grid of speeds and signal-to-noise
+ratios, counts callsigns asserted wrongly as well as correctly, and prints the
+spread across its seed sets as the resolution below which a difference is not a
+result. The registered run covers 16, 25 and 40 WPM at 20 and 12 dB over three
+seed sets; a `--full` argument widens it to 12 through 50 WPM at 30, 20, 15 and
+12 dB, and a second argument selects the semi-Markov keying model so that a
+regression in the model an operator can choose is not invisible. It
+deliberately gates on a paired comparison between two paths run on
+the same audio in the same process rather than on any absolute error figure,
+because that absolute figure moves with the noise draw. A spacing benchmark
+(`cwa_spacing_benchmark`) covers word-boundary placement, which is the only
+thing the context vocabulary is permitted to change and which neither the
+synthetic surface nor the capture corpus can see; it is compiled against the
+repository dictionaries and allowed ten minutes.
+
+Two more tools are built but deliberately not registered as tests. A receive
+profiler (`cwa_receive_profile`) reports per-stage wall time for the live
+receive path against the number of tracked signals; it reports rather than
+gates, because its absolute figures depend on the machine, and it exists so
+that an optimisation is accepted only after a measurement. A capture replay
+(`cwa_capture_replay`) replays a private recording and, when given an
+annotation sidecar whose SHA-256 matches the audio, scores the decoder against
+it; operator captures are private and are therefore not CI fixtures. That
+checksum-bound annotation replay is the path to
 replacing generated limits with reviewed over-the-air evidence.
 
 Receiver reports distinguish two callsign questions: whether the application
@@ -586,18 +695,24 @@ gain is repeatable and its resource cost is within the published budget.
 ## Delivery sequence
 
 1. Build deterministic synthetic/noise fixtures and the benchmark runner.
+   (Delivered, including the end-to-end audio surface and the annotation-bound
+   capture replay.)
 2. Implement tone tracking, initial raw-sample narrowband evidence, and the
    explainable timing baseline. (Initial path and bounded multi-speed delivered.)
-3. Add provisional/stable text and calibrated confidence contracts.
+3. Add provisional/stable text and calibrated confidence contracts. (The
+   provisional/stable contract is delivered; calibrated confidence is not.)
 4. Extend the delivered bounded recent evidence and continuous fixed-anchor
    evaluation with safe mid-segment consensus switching and multi-pass
-   refinement.
+   refinement. (The completed-turn segment pass is delivered; mid-segment
+   switching is not.)
 5. Re-establish the learned-likelihood experiment, compare compact causal
    candidates, and ship one only after receiver character gain, hard-negative,
    license, provenance, checksum, fallback, and resource checks pass.
 6. Add conservative strongest-track cancellation and optional diversity input.
 7. Add two-source then bounded three-source joint co-channel separation.
-8. Add separately labeled QSO/callsign re-ranking and operator controls.
+8. Add separately labeled QSO/callsign re-ranking and operator controls. (The
+   completed-turn context rescorer and the operating-role setting are
+   delivered; the cluster and spot priors below are not.)
 
 The re-ranking stage operates only after acoustic alternatives exist. Unknown
 symbols and uncertain gap boundaries remain explicit lattice branches; a

@@ -9,11 +9,11 @@ the same product.
 
 ## Build entirely on GitHub
 
-Every push and pull request starts the desktop workflow on GitHub-hosted
-runners. It installs the pinned Qt modules, including native multimedia device
-discovery, configures with CMake, builds the
+Every push to the default branch and every pull request starts the desktop
+workflow on GitHub-hosted runners. It installs the pinned Qt 6.11.2 modules,
+including native multimedia device discovery, configures with CMake, builds the
 desktop application and core tests, runs the tests, stages runtime dependencies,
-and uploads one artifact for each platform:
+and uploads a downloadable artifact for each platform:
 
 - Windows 11 x64
 - Ubuntu Linux x64
@@ -37,17 +37,19 @@ also been published; a failed run leaves the prior known-good downloads and
 marker untouched. When replacing an existing prerelease, binaries and
 `SHA256SUMS` are uploaded first and `latest.json` last, leaving the previous
 manifest reachable until the replacement set is complete. The in-app updater
-also retries transient publication/network failures three times. Release asset
-replacement itself uses bounded backoff because GitHub can briefly retain an
-old filename after accepting its deletion; an exhausted retry sequence leaves
-the verified tag unchanged and reports a publication failure.
+also makes up to three attempts when a publication or network failure looks
+transient. Release asset replacement itself uses bounded backoff because GitHub
+can briefly retain an old filename after accepting its deletion; an exhausted
+retry sequence leaves the verified tag unchanged and reports a publication
+failure.
 
 For private-repository automation that can push through Git SSH but cannot read
-the Actions API, each matrix leg publishes a temporary annotated
-`ci-status/<platform>-<commit>` tag containing the outcome of Qt installation,
-configure, build, test, staging, archive, upload, and package steps. A release
-failure publishes the same kind of marker. Successful release publication
-removes those diagnostic tags and advances `continuous`.
+the Actions API, each matrix leg of a default-branch push publishes a temporary
+annotated `ci-status/<platform>-<commit>` tag containing the outcome of
+dependency preparation, Qt installation, configure, build, test, staging,
+archive, upload, and package steps. A release failure publishes the same kind
+of marker. Successful release publication advances `continuous` and removes
+those diagnostic tags.
 Each diagnostic tag push uses bounded retry so a transient Git transport error
 after successful platform validation does not immediately invalidate that
 matrix leg; exhausting the retries still fails the job and blocks publication.
@@ -73,10 +75,11 @@ run, and scroll to **Artifacts**. Workflow artifacts expire after 14 days;
 continuous-release assets remain available until superseded. Both are unsigned
 and intended for testing until the signing workflow is complete.
 
-The push workflow is the superset verification path: it builds the desktop and
-core tests on every supported architecture. The lighter core-only workflow is
-retained for pull requests and manual diagnostics instead of duplicating every
-push run.
+The desktop workflow is the broader verification path: it builds the desktop
+application and the core tests on every supported architecture. The lighter
+core-only workflow builds the core library, the command-line development host,
+and the same tests; it is retained for pull requests and manual diagnostics
+instead of duplicating every push run.
 
 Before packaging, each platform also exercises the empty spectrum/waterfall
 render path directly and loads the complete QML desktop shell in an offscreen
@@ -138,10 +141,15 @@ runtime and license records. The normal RTL-SDR Windows USB driver must still
 be installed for the dongle itself.
 
 Development installers are currently unsigned, so Windows may identify the
-publisher as unknown. Verify `SHA256SUMS` before continuing. Automatic in-app
-download/install is intentionally not enabled until the MSI, update manifest,
-and channel metadata are cryptographically signed. For now, update by
-downloading and running the newer MSI from the same continuous release page.
+publisher as unknown. Verify `SHA256SUMS` before continuing, or let
+**Settings → About** do it: **Check for updates** reads the published manifest,
+**Download update** fetches this platform's package and compares its SHA-256
+against the published `SHA256SUMS`, and a download whose checksum does not
+match is discarded rather than kept. **Open Installer** then hands the verified
+file to the operating-system installer, and **Show in File Explorer** reveals
+it in the downloads folder. Installation itself is always started
+deliberately: unattended installation stays disabled until the MSI, update
+manifest, and channel metadata are cryptographically signed.
 
 ### Build version identity
 
@@ -153,8 +161,8 @@ bundle, Debian package, installed `share/doc/cw-buddy/VERSION` file, and the
 revision `0`.
 
 On macOS, the self-contained application stores the same machine-readable
-record at `CW Buddy.app/Contents/Resources/VERSION`; Windows and Linux use
-`share/doc/cw-buddy/VERSION` inside the staged installation. The hosted
+record at `cw-buddy-desktop.app/Contents/Resources/VERSION`; Windows and Linux
+use `share/doc/cw-buddy/VERSION` inside the staged installation. The hosted
 build checks these records and the native executable/bundle metadata before it
 publishes any package.
 
@@ -213,7 +221,12 @@ cw-buddy-desktop
 ```
 
 The package includes the application, deployed Qt/QML runtime components,
-desktop entry, 512 px application icon, license, and user manuals. The package is built on
+desktop entry, AppStream metainfo, 512 px application icon, license, and user
+manuals. The CW dictionaries, the Morse alphabet, and the contest exchange
+profiles are not separate package files: they are compiled into the executable
+and written into the operator's data directory whenever no usable copy is
+there, so they can be edited and a usable edited copy is never overwritten by
+an upgrade. The package is built on
 Ubuntu 24.04, so runtime validation on supported Debian and Ubuntu releases is a
 release gate. A signed APT repository is planned; until it exists, installing a
 downloaded `.deb` is not the same as subscribing to an APT repository.
@@ -236,9 +249,12 @@ number of times and uses only the runner's signed Ubuntu source definition;
 unrelated preinstalled third-party repositories are excluded from this package
 build through an explicit empty auxiliary-source directory; no mirror URI name
 is assumed. The release is still withheld if installation cannot finish.
-The Windows dependency build pins both upstream revisions and their accepted CMake
-policy compatibility floor. Configure-stage CMake failures use the same bounded
-status diagnostic path, and the application configure resolves SoapySDR from
+The Windows dependency build pins every upstream revision it compiles, together
+with the package registry it resolves them through, the SDRplay API version and
+its checksum, and the accepted CMake policy compatibility floor; the prepared
+runtime records all of them and is rejected if any one does not match.
+Configure-stage CMake failures use the same bounded status diagnostic path, and
+the application configure resolves SoapySDR from
 the verified platform-specific CMake directory in the prepared runtime root
 rather than a build-machine package registry.
 Before package staging, the Windows UI smoke resolves its linked SDR DLLs from
@@ -252,8 +268,8 @@ SoapySDRPlay3 bridge and locates the registered 64-bit vendor runtime, but it
 does not contain SDRplay's proprietary API, service, or driver. macOS and Linux
 also require a compatible separately installed SoapySDRPlay3 module. Packaged
 module paths do not hide compatible modules in normal system or operator-
-provided SoapySDR search paths. Close SDRUno or any other RSP owner before CW
-Buddy discovery.
+provided SoapySDR search paths. Close any other application that already owns
+the RSP before CW Buddy discovery.
 
 Because the hosted package deploys its pinned Qt runtime, available Qt SDK
 license texts are installed under
@@ -263,10 +279,22 @@ installed as `/usr/share/doc/cw-buddy/licensing.md`.
 ## Local developer build (optional)
 
 Local compilation remains useful for contributors but is not required merely
-to obtain a test build:
+to obtain a test build. The project needs CMake 3.24 or newer and a C++20
+compiler:
 
 ```sh
 cmake -S . -B build -DCWA_BUILD_DESKTOP=ON
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
+
+The desktop application is off by default, and `-DCWA_BUILD_DESKTOP=ON` is what
+requires Qt 6.5 or newer with its Core, Gui, Multimedia, Network, Qml, Quick,
+Quick Controls, Quick Dialogs, Serial Port, and WebSockets components. Omit that
+option and the same three commands build the core library, the command-line
+development host, and the core tests with no Qt installation at all. The
+optional local character decoder (`-DCWA_ENABLE_ONNX_CHARACTER_DECODER=ON`,
+resolved through `CWA_ONNXRUNTIME_ROOT`) and direct SDR device support
+(`-DCWA_ENABLE_SOAPY_SDR=ON`) are off by default as well. Set
+`-DCWA_PACKAGE_REVISION=<number>` to stamp a local build with something other
+than revision `0`.

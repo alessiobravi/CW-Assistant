@@ -25,17 +25,18 @@ compatibility.
 In **Settings → Radio**:
 
 ```text
-Frequency control: CAT4OM network service
-Control URL:       ws://127.0.0.1:5001/
-Radio ID:          run
-Password:          leave empty if this Control endpoint is open
+Frequency control:  CAT4OM network service
+CAT4OM Control URL: ws://127.0.0.1:5001/
+CAT4OM radio ID:    run
+CAT4OM password:    leave empty if this Control endpoint is open
 ```
 
-Select **Test read-only**. The client connects as an observer, does not join the
-ownership election, and displays the selected radio's pushed RX/TX frequency
-and split state. Leaving Radio ID empty selects the first visible radio, which
-is convenient for a one-radio group but not recommended for a stable multi-radio
-profile.
+Select **Test read-only**. The client connects as an observer without sending
+any password, so the read-only test succeeds on an open endpoint even when the
+password field is blank. It does not join the ownership election, and it
+displays the selected radio's pushed RX/TX frequency and split state. Leaving
+the radio ID empty selects the first visible radio, which is convenient for a
+one-radio group but not recommended for a stable multi-radio profile.
 
 ## Control connection and ownership
 
@@ -69,8 +70,8 @@ interlock, watchdog, and station-server architecture.
 ## Remote example
 
 ```text
-Control URL: wss://station.example.internal/radio-group/
-Radio ID:    hf-main
+CAT4OM Control URL: wss://station.example.internal/radio-group/
+CAT4OM radio ID:    hf-main
 ```
 
 Use `wss://` only when a trusted TLS reverse proxy maps that URL to the CAT4OM
@@ -83,8 +84,9 @@ briefly and can be attacked offline if the password is weak.
 
 - **Connection refused:** confirm the group is running, the Control port is
   correct, and the server bind-address policy permits this client.
-- **Wrong endpoint:** a Management `managementWelcome` is rejected; use the
-  group's Control port.
+- **Wrong endpoint:** a welcome that does not name the `control` endpoint is
+  rejected, as is a first message that is not a welcome at all; use the group's
+  Control port.
 - **Authentication rejected:** check the group password and both computers'
   UTC clocks. The proof uses the current UTC minute.
 - **No radio state:** enter the exact case-sensitive radio ID, or clear it to
@@ -92,6 +94,7 @@ briefly and can be attacked offline if the password is weak.
 - **Cannot write:** connect as a normal control client, then request ownership.
 - **Frequency write unavailable:** the radio state must advertise the relevant
   command and report a connected state.
-- **Reconnect after server restart:** the client compares server instance IDs,
-  discards stale cached state, performs a new handshake, and does not assume it
-  still owns control.
+- **Reconnect after server restart:** unless the operator selected
+  **Disconnect**, the client retries on its own with a bounded, increasing
+  delay. It compares server instance IDs, discards stale cached state, performs
+  a new handshake, and does not assume it still owns control.

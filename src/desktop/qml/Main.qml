@@ -1103,6 +1103,360 @@ ApplicationWindow {
                                         + " Hz/s drift"
                     }
                 }
+                // Stations that other receivers report hearing. A spot is
+                // somebody else's evidence, never this receiver's: it does not
+                // become a decoded stream, it never fills in or alters a
+                // decoded callsign, and it is drawn in one neutral instrument
+                // colour on the spectrum/waterfall separator so an operator
+                // cannot read it as a signal verified here. The decoded-stream
+                // markers keep z 5 for the same reason: where an external
+                // report and a local decode land on the same hertz, this
+                // receiver's own evidence wins the pixels.
+                Item {
+                    id: dxSpotOverlay
+                    objectName: "dxSpotOverlay"
+                    anchors.fill: spectrumDisplay
+                    // The feed's own switch hides the overlay. The label
+                    // switch hides only the callsigns: a marker still says a
+                    // station was reported there, which is the part worth
+                    // keeping when a crowded band makes the text unreadable.
+                    visible: appSettings.dxSpotsEnabled
+                             && replayController.activeSource
+                             && spectrumDisplay.upperFrequencyHz
+                                > spectrumDisplay.lowerFrequencyHz
+                    // A zoomed or panned view must not paint a spot off-plot.
+                    // The span filter in layoutSpots() drops everything that
+                    // is out of view, and clipping stops a marker sitting on
+                    // the very first or last hertz from bleeding into the
+                    // panel margin.
+                    clip: true
+                    z: 4
+
+                    // The renderer puts the trace in the top 0.36 of the panel
+                    // and starts the waterfall 8 px below it. The spot ticks
+                    // live in the lower half of that gutter, clear of the
+                    // retained-stream marks just above it, and the callsigns
+                    // hang beneath them on the waterfall side.
+                    readonly property real separatorY: Math.round(height * 0.36)
+                    readonly property real waterfallTopY: separatorY + 8
+                    // Deliberately one flat colour from the axis/chrome family
+                    // rather than anything in the 24 decoded-stream identity
+                    // colours, the teal decode window or the pink TX slice.
+                    readonly property color spotColor: "#9fb3c8"
+                    // A spot is fresh for two minutes and fully faded after
+                    // half an hour, so age reads off the overlay itself
+                    // without opening a tooltip.
+                    readonly property real freshSeconds: 120
+                    readonly property real staleSeconds: 1800
+                    readonly property real fadedStrength: 0.38
+                    // Density limits. Markers stay long after labels stop
+                    // fitting, because the marker is the part that carries the
+                    // frequency; CALL-008 owns real decluttering.
+                    readonly property int maximumMarkers: 240
+                    readonly property int maximumLabels: 26
+                    readonly property real labelGapPx: 6
+                    readonly property real tickWidthPx: 15
+
+                    function ageStrength(ageSeconds) {
+                        var age = Number(ageSeconds)
+                        if (!Number.isFinite(age) || age <= freshSeconds)
+                            return 1.0
+                        if (age >= staleSeconds)
+                            return fadedStrength
+                        return 1.0 - (1.0 - fadedStrength)
+                                     * (age - freshSeconds)
+                                       / (staleSeconds - freshSeconds)
+                    }
+
+                    function formatSpotAge(ageSeconds) {
+                        var age = Math.max(0, Number(ageSeconds) || 0)
+                        if (age < 90)
+                            return Math.round(age) + " s ago"
+                        if (age < 5400)
+                            return Math.round(age / 60) + " min ago"
+                        return (age / 3600).toFixed(1) + " h ago"
+                    }
+
+                    function spotSourceText(spot) {
+                        if (spot.reverseBeacon && spot.cluster)
+                            return "reverse beacon and cluster agree"
+                        if (spot.reverseBeacon)
+                            return "reverse beacon"
+                        if (spot.cluster)
+                            return "cluster"
+                        return "source not stated"
+                    }
+
+                    // No font metrics are available while laying out, so this
+                    // is deliberately generous: over-estimating costs a little
+                    // extra air between callsigns, under-estimating prints two
+                    // of them on top of each other.
+                    function estimatedLabelWidth(spot) {
+                        return 12 + spot.callsign.length * 7.4
+                               + (spot.reverseBeacon ? 11 : 0)
+                               + (spot.cluster ? 11 : 0)
+                    }
+
+                    // Strongest evidence first: two independent sources that
+                    // agree, then the freshest report, then the most repeated
+                    // one. The frequency tie-break keeps the result stable
+                    // from frame to frame instead of letting equal spots swap
+                    // their labels while the operator reads them.
+                    function compareSpotEvidence(first, second) {
+                        var firstBoth = first.reverseBeacon && first.cluster
+                                        ? 1 : 0
+                        var secondBoth = second.reverseBeacon && second.cluster
+                                         ? 1 : 0
+                        if (firstBoth !== secondBoth)
+                            return secondBoth - firstBoth
+                        if (first.ageSeconds !== second.ageSeconds)
+                            return first.ageSeconds - second.ageSeconds
+                        if (first.observations !== second.observations)
+                            return second.observations - first.observations
+                        return first.displayHz - second.displayHz
+                    }
+
+                    // Reserves the horizontal room one callsign needs, or
+                    // leaves it unlabelled when a stronger neighbour already
+                    // holds that space.
+                    function claimLabelSpace(spot, taken, plotWidth) {
+                        var labelWidth = estimatedLabelWidth(spot)
+                        var left = Math.max(0, Math.min(
+                            plotWidth - labelWidth,
+                            spot.pixelX - labelWidth / 2))
+                        var right = left + labelWidth
+                        for (var other = 0; other < taken.length; ++other) {
+                            if (left < taken[other].right + labelGapPx
+                                    && right + labelGapPx > taken[other].left)
+                                return false
+                        }
+                        spot.showLabel = true
+                        taken.push({ left: left, right: right })
+                        return true
+                    }
+
+                    function layoutSpots(source, lowerHz, upperHz, plotWidth) {
+                        var placed = []
+                        if (!source || plotWidth <= 0 || upperHz <= lowerHz)
+                            return placed
+                        for (var index = 0; index < source.length; ++index) {
+                            var spot = source[index]
+                            if (!spot)
+                                continue
+                            var displayHz = Number(spot.displayFrequencyHz)
+                            if (!Number.isFinite(displayHz)
+                                    || displayHz < lowerHz
+                                    || displayHz > upperHz)
+                                continue
+                            var callsign = String(spot.callsign || "")
+                                           .trim().toUpperCase()
+                            if (callsign.length === 0)
+                                continue
+                            var reportedHz = Number(spot.frequencyHz)
+                            var ageSeconds = Number(spot.ageSeconds)
+                            placed.push({
+                                callsign: callsign,
+                                reverseBeacon: spot.reverseBeacon === true,
+                                cluster: spot.cluster === true,
+                                observations: Math.max(0, Math.round(
+                                    Number(spot.observations) || 0)),
+                                ageSeconds: Number.isFinite(ageSeconds)
+                                            ? Math.max(0, ageSeconds) : 0,
+                                displayHz: displayHz,
+                                // A spot is always reported against real RF,
+                                // so it is presented the way an RF stream is.
+                                frequencyText: Number.isFinite(reportedHz)
+                                    ? window.formatStreamFrequency({
+                                          displayFrequencyHz: reportedHz,
+                                          frequencyKind: "RF"
+                                      })
+                                    : window.formatFrequency(displayHz),
+                                pixelX: window.hzToX(displayHz)
+                                        - spectrumDisplay.x,
+                                showLabel: false
+                            })
+                        }
+                        var ranked = placed.slice()
+                        ranked.sort(compareSpotEvidence)
+                        if (ranked.length > maximumMarkers)
+                            ranked = ranked.slice(0, maximumMarkers)
+                        // Thin the labels instead of stacking them: walk the
+                        // strongest evidence first and keep only the callsigns
+                        // that still have room of their own. Everything that
+                        // loses its label keeps its marker, so a dense band
+                        // stays honest about how many stations were reported.
+                        var taken = []
+                        for (var rank = 0;
+                             rank < ranked.length
+                             && taken.length < maximumLabels;
+                             ++rank) {
+                            claimLabelSpace(ranked[rank], taken, plotWidth)
+                        }
+                        // Left to right, so the paint order on screen matches
+                        // the order on the axis.
+                        ranked.sort(function(first, second) {
+                            return first.pixelX - second.pixelX
+                        })
+                        return ranked
+                    }
+
+                    readonly property var placedSpots:
+                        visible
+                        ? layoutSpots(replayController.dxSpots,
+                                      spectrumDisplay.lowerFrequencyHz,
+                                      spectrumDisplay.upperFrequencyHz,
+                                      width)
+                        : []
+
+                    // Hover is read from the existing spectrum hit area rather
+                    // than a MouseArea of its own, exactly as the decoded
+                    // stream markers do it. This overlay stays read-only: it
+                    // never accepts a click and never covers the probe, pan,
+                    // zoom or decoder-span gestures underneath it.
+                    readonly property int hoveredIndex: {
+                        if (!manualSliceHitArea.containsMouse
+                                || manualSliceHitArea.hoveredStreamId !== 0)
+                            return -1
+                        var pointerY = manualSliceHitArea.mouseY
+                        if (pointerY < separatorY
+                                || pointerY > waterfallTopY + 18)
+                            return -1
+                        var pointerX = manualSliceHitArea.mouseX
+                        var nearest = -1
+                        var nearestDistance = tickWidthPx / 2 + 3
+                        for (var index = 0;
+                             index < placedSpots.length; ++index) {
+                            var distance = Math.abs(
+                                placedSpots[index].pixelX - pointerX)
+                            if (distance <= nearestDistance) {
+                                nearestDistance = distance
+                                nearest = index
+                            }
+                        }
+                        return nearest
+                    }
+
+                    Repeater {
+                        model: dxSpotOverlay.placedSpots
+                        delegate: Item {
+                            id: dxSpotMarker
+                            required property var modelData
+                            required property int index
+                            readonly property bool pointerHovered:
+                                dxSpotOverlay.hoveredIndex === index
+                            readonly property real ageOpacity:
+                                pointerHovered
+                                ? 1.0
+                                : dxSpotOverlay.ageStrength(
+                                      modelData.ageSeconds)
+                            // A plain geometric container: the tick sits on
+                            // the exact frequency while the callsign below is
+                            // free to slide along the plot to stay readable.
+                            width: dxSpotOverlay.width
+                            height: dxSpotOverlay.height
+
+                            Rectangle {
+                                objectName: "dxSpotTick"
+                                x: modelData.pixelX
+                                   - dxSpotOverlay.tickWidthPx / 2
+                                y: dxSpotOverlay.separatorY + 4
+                                width: dxSpotOverlay.tickWidthPx
+                                height: 2
+                                color: dxSpotOverlay.spotColor
+                                opacity: dxSpotMarker.ageOpacity
+                                ToolTip.visible: dxSpotMarker.pointerHovered
+                                ToolTip.delay: 450
+                                ToolTip.text:
+                                    modelData.callsign + "\n"
+                                    + modelData.frequencyText + "\n"
+                                    + dxSpotOverlay.spotSourceText(modelData)
+                                    + "  •  " + modelData.observations
+                                    + (modelData.observations === 1
+                                       ? " report" : " reports")
+                                    + "  •  "
+                                    + dxSpotOverlay.formatSpotAge(
+                                          modelData.ageSeconds)
+                                    + "\nReported by another receiver. "
+                                    + "Nothing here was decoded from this "
+                                    + "signal."
+                            }
+                            Rectangle {
+                                id: dxSpotLabelPlate
+                                objectName: "dxSpotLabelPlate"
+                                // Like every other label on this panel, drawn
+                                // straight over live waterfall speckle, so it
+                                // carries its own semi-opaque plate.
+                                visible: modelData.showLabel
+                                         && appSettings.dxSpotsShowLabels
+                                x: Math.max(0, Math.min(
+                                       dxSpotOverlay.width - width,
+                                       modelData.pixelX - width / 2))
+                                y: dxSpotOverlay.waterfallTopY + 2
+                                // The two evidence marks are placed by hand
+                                // rather than by a positioner so that both
+                                // stay centred on the callsign's own height
+                                // and the plate keeps a constant 5 px inset
+                                // whichever of them is present.
+                                readonly property real markSize: 7
+                                readonly property real markStride: markSize + 4
+                                readonly property real leadingMarkWidth:
+                                    modelData.reverseBeacon ? markStride : 0
+                                readonly property real trailingMarkWidth:
+                                    modelData.cluster ? markStride : 0
+                                width: 10 + leadingMarkWidth
+                                       + dxSpotCallLabel.implicitWidth
+                                       + trailingMarkWidth
+                                height: dxSpotCallLabel.implicitHeight + 4
+                                radius: 3
+                                color: "#c8080f16"
+                                border.color: dxSpotMarker.pointerHovered
+                                              ? dxSpotOverlay.spotColor
+                                              : "transparent"
+                                border.width: 1
+                                opacity: dxSpotMarker.ageOpacity
+                                Rectangle {
+                                    // Square before the call: reverse-beacon
+                                    // evidence.
+                                    objectName: "dxSpotReverseBeaconMark"
+                                    visible: modelData.reverseBeacon
+                                    x: 5
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: dxSpotLabelPlate.markSize
+                                    height: dxSpotLabelPlate.markSize
+                                    color: "transparent"
+                                    border.color: dxSpotOverlay.spotColor
+                                    border.width: 1
+                                }
+                                Label {
+                                    id: dxSpotCallLabel
+                                    x: 5 + dxSpotLabelPlate.leadingMarkWidth
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: modelData.callsign
+                                    color: dxSpotOverlay.spotColor
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: 0.4
+                                }
+                                Rectangle {
+                                    // Circle after the call: cluster evidence.
+                                    // Both marks appear when the two
+                                    // independent sources agree.
+                                    objectName: "dxSpotClusterMark"
+                                    visible: modelData.cluster
+                                    x: dxSpotCallLabel.x
+                                       + dxSpotCallLabel.implicitWidth + 4
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: dxSpotLabelPlate.markSize
+                                    height: dxSpotLabelPlate.markSize
+                                    radius: dxSpotLabelPlate.markSize / 2
+                                    color: "transparent"
+                                    border.color: dxSpotOverlay.spotColor
+                                    border.width: 1
+                                }
+                            }
+                        }
+                    }
+                }
                 Label {
                     visible: txSliceGuideOverlay.visible
                     anchors.top: parent.top

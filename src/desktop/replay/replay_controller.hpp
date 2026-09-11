@@ -6,6 +6,7 @@
 #include <QList>
 #include <QString>
 #include <QThread>
+#include <QTimer>
 #include <QUrl>
 #include <QVariantList>
 #include <QVariantMap>
@@ -15,15 +16,19 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <vector>
 
 #include "../visualization/spectrum_frame.hpp"
 #include "cwassistant/core/cw_character_decoder.hpp"
+#include "cwassistant/core/cw_spot_registry.hpp"
 #include "cwassistant/core/offline_callsign_database.hpp"
 
 class QAudioSink;
 class QIODevice;
 
 namespace cwassistant::desktop {
+
+class DxSpotProvider;
 
 // Keeps QML decoder-card delegates alive while rapidly changing transcript,
 // level, and key-state roles are updated. A QVariantList model resets every
@@ -157,6 +162,16 @@ class ReplayController final : public QObject {
   Q_PROPERTY(QString monitorStatus READ monitorStatus NOTIFY monitorChanged)
   Q_PROPERTY(double monitorLevel READ monitorLevel WRITE setMonitorLevel
                  NOTIFY monitorChanged)
+  // What other receivers currently report hearing, as read-only presentation
+  // data. Each entry carries callsign, frequencyHz, displayFrequencyHz,
+  // reverseBeacon, cluster, ageSeconds and observations.
+  //
+  // This is corroboration and never authority. Nothing here may replace,
+  // rewrite, or auto-fill a decoded callsign, nothing here changes what the
+  // decoder believes, and nothing here reaches the transmit path. It says what
+  // somebody else reported; the operator decides what that is worth.
+  Q_PROPERTY(QVariantList dxSpots READ dxSpots NOTIFY dxSpotsChanged)
+  Q_PROPERTY(QString dxSpotsStatus READ dxSpotsStatus NOTIFY dxSpotsChanged)
 
  public:
   explicit ReplayController(QObject* parent = nullptr);
@@ -199,6 +214,8 @@ class ReplayController final : public QObject {
   [[nodiscard]] QVariantList monitoredChannelIds() const;
   [[nodiscard]] const QString& monitorStatus() const noexcept;
   [[nodiscard]] double monitorLevel() const noexcept;
+  [[nodiscard]] const QVariantList& dxSpots() const noexcept;
+  [[nodiscard]] const QString& dxSpotsStatus() const noexcept;
   void setAveragingFrames(int value);
   void setSpectrumProcessing(bool dc_rejection, bool automatic_gain,
                              double gain_db,
@@ -224,6 +241,14 @@ class ReplayController final : public QObject {
                                       const QString& metadata_path);
   void configureOfflineCallsignDatabase(bool enabled,
                                         const QString& database_path);
+  // The operator's whole DX spot preference in one call, because the pieces
+  // are only meaningful together: an endpoint with the feature off contacts
+  // nobody, and a retention window means nothing without knowing which kinds
+  // of report are being kept. Presentation-only preferences such as whether
+  // labels are drawn stay in the settings object and never reach here.
+  void configureDxSpots(bool enabled, bool reverse_beacon, bool cluster,
+                        const QString& endpoint, int refresh_seconds,
+                        int retention_minutes, int tolerance_hz);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setSdrInputSelection(QString device_id, QString display_name,
                             qulonglong center_frequency_hz,
@@ -277,6 +302,7 @@ class ReplayController final : public QObject {
   void averagingFramesChanged();
   void decoderChanged();
   void monitorChanged();
+  void dxSpotsChanged();
 
   void openRequested(const QString& path);
   void playRequested();
@@ -372,6 +398,9 @@ class ReplayController final : public QObject {
   void writeMonitorAudio(const QByteArray& float_mono_audio,
                          double sample_rate_hz);
   void stopMonitorOutput();
+  void ensureDxSpotProvider();
+  void acceptDxSpots(const std::vector<cwassistant::core::CwSpot>& spots);
+  void rebuildDxSpotModel();
 
   QThread worker_thread_;
   QObject* worker_{nullptr};
@@ -457,6 +486,18 @@ class ReplayController final : public QObject {
   std::unique_ptr<QAudioSink> monitor_audio_sink_;
   QIODevice* monitor_audio_device_{nullptr};
   int monitor_audio_sample_rate_{0};
+  // Built only once the operator first enables DX spots, so a station that
+  // never uses the feature never creates a network stack for it.
+  DxSpotProvider* dx_spot_provider_{nullptr};
+  cwassistant::core::CwSpotRegistry dx_spot_registry_;
+  QTimer dx_spot_expiry_timer_;
+  QVariantList dx_spots_;
+  QString dx_spots_status_;
+  bool dx_spots_enabled_{false};
+  bool dx_spots_reverse_beacon_{false};
+  bool dx_spots_cluster_{false};
+  int dx_spots_retention_minutes_{15};
+  int dx_spots_tolerance_hz_{250};
 };
 
 }  // namespace cwassistant::desktop
