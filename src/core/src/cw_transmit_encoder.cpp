@@ -29,6 +29,39 @@ constexpr std::array<MorseEntry, 54> kMorseTable{{
     {'@', ".--.-."}, {' ', ""},
 }};
 
+// Prosigns are sent as one symbol: the letters run together with no character
+// gap between them, which is exactly what distinguishes <AR> from A R. They
+// are written <XX> in a message and are a deliberate, closed table in code
+// rather than operator-editable data, because what may be transmitted is a
+// safety boundary and must not be extendable from a file.
+//
+// SOS is included. Sending a distress call is legal and appropriate in a
+// genuine emergency, and the risk that matters -- transmitting one by accident
+// -- is already carried by the gates every message passes: an armed station,
+// exact callsign confirmation, a message preview, an explicit send action, and
+// a decoder that can never initiate transmission at all.
+struct ProsignEntry {
+  std::string_view name;
+  std::string_view elements;
+};
+
+constexpr std::array<ProsignEntry, 7> kProsignTable{{
+    {"AR", ".-.-."},      // end of message
+    {"AS", ".-..."},      // wait
+    {"BK", "-...-.-"},    // break in
+    {"CT", "-.-.-"},      // start of message, also written KA
+    {"KN", "-.--."},      // go ahead, addressed station only
+    {"SK", "...-.-"},     // end of contact
+    {"SOS", "...---..."}, // distress
+}};
+
+std::string_view prosignElements(const std::string_view name) noexcept {
+  for (const auto& entry : kProsignTable) {
+    if (entry.name == name) return entry.elements;
+  }
+  return {};
+}
+
 std::string_view elementsFor(const char character) noexcept {
   for (const auto& entry : kMorseTable) {
     if (entry.character == character) return entry.elements;
@@ -52,6 +85,11 @@ bool appendSpan(std::vector<CwTransmitSpan>& spans, const bool key_down,
 }
 
 }  // namespace
+
+bool CwTransmitEncoder::is_transmittable_prosign(
+    const std::string_view name) noexcept {
+  return !prosignElements(name).empty();
+}
 
 std::optional<CwTransmitPlan> CwTransmitEncoder::encode(
     const std::string_view normalized_text,
@@ -77,7 +115,22 @@ std::optional<CwTransmitPlan> CwTransmitEncoder::encode(
       continue;
     }
 
-    const std::string_view elements = elementsFor(character);
+    // A prosign occupies one iteration and emits no internal character gap.
+    // An unrecognised or unterminated one rejects the whole message rather
+    // than being sent as letters: an operator who wrote <XX> meant a prosign,
+    // and transmitting something else in its place is worse than refusing.
+    std::string_view elements;
+    if (character == '<') {
+      const auto close = normalized_text.find('>', character_index + 1U);
+      if (close == std::string_view::npos) return std::nullopt;
+      elements = prosignElements(
+          normalized_text.substr(character_index + 1U,
+                                 close - character_index - 1U));
+      if (elements.empty()) return std::nullopt;
+      character_index = close;
+    } else {
+      elements = elementsFor(character);
+    }
     if (elements.empty()) return std::nullopt;
     for (std::size_t element_index = 0; element_index < elements.size();
          ++element_index) {

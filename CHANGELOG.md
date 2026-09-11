@@ -8,6 +8,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Prosigns can be transmitted. The encoder is keyed by character and could
+  not represent a multi-character symbol, so an operator closing a contact
+  had to send the letters, which is not what `<SK>` means on the air. Seven
+  are now keyed as single symbols with no character gap between their
+  letters: `<AR>`, `<AS>`, `<BK>`, `<CT>`, `<KN>`, `<SK>` and `<SOS>`. The
+  table is closed and lives in the application rather than a data file,
+  because what may be transmitted is a safety boundary, and a bracketed
+  token that names none of them is refused during normalization rather than
+  reaching a staged message. A distress call is included: sending one is
+  legal and appropriate, and transmitting one unintentionally is already
+  prevented by arming, exact callsign confirmation, message preview, an
+  explicit send action, and a decoder that can never initiate a
+  transmission.
+
 - Contest cut numbers were incomplete. Only `T` for zero and `N` for nine
   were declared, so a serial sent as `ANU` read as letters rather than 123 --
   a wrong exchange logged as though it were right. The shipped contest files

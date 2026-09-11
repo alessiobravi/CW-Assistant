@@ -445,6 +445,26 @@ While active, elapsed/remaining time and progress come from the worker's
 monotonic schedule rather than an optimistic UI timer and clear on completion,
 cancellation, or fault.
 
+### Sending prosigns
+
+Write a prosign in angle brackets and it is keyed as one symbol, with no gap
+between its letters — which is the whole difference between `<AR>` and `A R`.
+Seven can be sent: `<AR>` end of message, `<AS>` wait, `<BK>` break in, `<CT>`
+start of message, `<KN>` go ahead addressed station only, `<SK>` end of
+contact, and `<SOS>`.
+
+Anything else in brackets is refused when the message is normalized, so it
+never reaches the preview. That includes a misspelled prosign and an
+unterminated one: the message is rejected rather than keyed as loose letters,
+because writing `<XX>` means you intended a prosign and sending something else
+in its place would be worse than sending nothing.
+
+A distress call is included deliberately. It is legal and appropriate to send
+one in a genuine emergency, and it passes exactly the same gates as any other
+message — armed station, exact callsign confirmation, retyped preview, and an
+explicit send action. Nothing the decoder hears can ever initiate a
+transmission.
+
 For initial hardware acceptance, connect the transceiver to a dummy load, use
 minimum power, keep an independent means of removing power available, and
 verify a message, cancellation, watchdog release, and emergency release before

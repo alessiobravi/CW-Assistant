@@ -1,5 +1,7 @@
 #include "cwassistant/core/transmit_guard.hpp"
 
+#include "cwassistant/core/cw_transmit_encoder.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <utility>
@@ -12,13 +14,38 @@ std::string TransmitGuard::normalize_message(const std::string_view message) {
   std::string result;
   result.reserve(std::min(message.size(), maximum_message_characters));
   bool pending_space = false;
-  for (const unsigned char raw : message) {
+  for (std::size_t index = 0; index < message.size(); ++index) {
+    const unsigned char raw = static_cast<unsigned char>(message[index]);
     if (std::isspace(raw) != 0) {
       pending_space = !result.empty();
       continue;
     }
     if (raw > 0x7fU) return {};
     const char character = static_cast<char>(std::toupper(raw));
+    // A bracketed token is admitted only when it names a prosign this
+    // application may transmit. Passing the brackets through and leaving the
+    // decision to the encoder would let arbitrary bracketed text survive into
+    // a staged message, so the whole token is judged here, where every other
+    // character is judged.
+    if (character == '<') {
+      const auto close = message.find('>', index + 1U);
+      if (close == std::string_view::npos) return {};
+      std::string name;
+      for (std::size_t scan = index + 1U; scan < close; ++scan) {
+        const unsigned char inner = static_cast<unsigned char>(message[scan]);
+        if (inner > 0x7fU) return {};
+        name.push_back(static_cast<char>(std::toupper(inner)));
+      }
+      if (!CwTransmitEncoder::is_transmittable_prosign(name)) return {};
+      if (pending_space) result.push_back(' ');
+      pending_space = false;
+      result.push_back('<');
+      result.append(name);
+      result.push_back('>');
+      if (result.size() > maximum_message_characters) return {};
+      index = close;
+      continue;
+    }
     const bool supported = (character >= 'A' && character <= 'Z') ||
         (character >= '0' && character <= '9') ||
         supported_punctuation.find(character) != std::string_view::npos;

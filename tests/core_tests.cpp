@@ -1747,6 +1747,16 @@ void test_transmit_guard() {
   expect(guard.confirm("I1ABC"), "operator confirms selected call");
   expect(!guard.stage_message("CQ <SCRIPT>"),
          "free text rejects unsupported or executable-looking syntax");
+  // A bracketed token is admitted only when it names a real prosign, so the
+  // check above cannot be satisfied by anything an operator might paste.
+  expect(guard.stage_message("TU <SK>"),
+         "a message closing with a prosign is accepted");
+  expect(guard.stage_message("<SOS> <SOS>"),
+         "a distress call can be staged for transmission");
+  expect(!guard.stage_message("CQ <AR"),
+         "an unterminated prosign is refused");
+  expect(!guard.stage_message("CQ <>"),
+         "an empty bracketed token is refused");
   expect(guard.stage_message("  de iu0lfq   pse k  "),
          "operator can stage bounded Morse free text");
   expect(guard.pending_message() == "DE IU0LFQ PSE K",
@@ -1823,6 +1833,40 @@ void test_transmit_guard() {
 
 void test_cw_transmit_encoder() {
   using cwassistant::core::CwTransmitEncoder;
+  // A prosign is one symbol: its letters run together with no character gap,
+  // which is the whole difference between <AR> and A R. <AR> is 9 units of
+  // elements plus 4 internal element gaps; A R spelled out is the same
+  // elements with a 3-unit character gap in the middle, so 2 units longer.
+  const auto prosign = CwTransmitEncoder::encode("<AR>", 20U);
+  const auto spelled = CwTransmitEncoder::encode("AR", 20U);
+  expect(prosign.has_value() && spelled.has_value(),
+         "a prosign and its spelled-out letters both encode");
+  if (prosign.has_value() && spelled.has_value()) {
+    const auto total = [](const auto& plan) {
+      std::uint64_t units = 0U;
+      for (const auto& span : plan->spans) units += span.duration_units;
+      return units;
+    };
+    expect(total(prosign) + 2U == total(spelled),
+           "a prosign is sent without the character gap that separates "
+           "the same two letters");
+    bool any_three_unit_gap = false;
+    for (const auto& span : prosign->spans)
+      if (!span.key_down && span.duration_units >= 3U) any_three_unit_gap = true;
+    expect(!any_three_unit_gap,
+           "a prosign contains no character gap at all");
+  }
+  // The owner's decision: a distress call is sendable. It passes the same
+  // arming, confirmation, preview and explicit-send gates as any other
+  // message, and the decoder can never initiate one.
+  expect(CwTransmitEncoder::encode("<SOS>", 20U).has_value(),
+         "a distress prosign can be transmitted");
+  expect(!CwTransmitEncoder::encode("<XX>", 20U).has_value(),
+         "an unknown prosign rejects the message instead of keying letters");
+  expect(!CwTransmitEncoder::encode("<AR", 20U).has_value(),
+         "an unterminated prosign rejects the message");
+  expect(CwTransmitEncoder::encode("TU <SK>", 20U).has_value(),
+         "a prosign closing an ordinary message encodes");
   const auto plan = CwTransmitEncoder::encode("SOS TEST", 20U);
   expect(plan.has_value(), "confirmed free text has a Morse timing plan");
   if (plan.has_value()) {

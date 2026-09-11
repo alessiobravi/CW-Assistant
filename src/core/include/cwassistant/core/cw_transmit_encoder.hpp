@@ -27,6 +27,14 @@ class CwTransmitEncoder final {
  public:
   [[nodiscard]] static std::optional<CwTransmitPlan> encode(
       std::string_view normalized_text, std::uint16_t words_per_minute);
+
+  // Whether a bracketed token names a prosign this application may transmit.
+  // The table is closed and lives in code: what may be sent is a safety
+  // boundary and must not be extendable from a file. The transmit guard
+  // consults this so an unknown bracketed token is refused during
+  // normalization rather than surviving into a staged message.
+  [[nodiscard]] static bool is_transmittable_prosign(
+      std::string_view name) noexcept;
 };
 
 }  // namespace cwassistant::core

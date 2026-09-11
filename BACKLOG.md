@@ -6,7 +6,29 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-fourth entry) -- the retained-observation
+Last reviewed: 2026-09-11 (forty-fifth entry) -- `REQ-001` is answered and
+closed, which clears the only blocked item in the backlog. The owner fixed the
+speed range at 8 to 60 WPM, which is what the anchors and every quoted accuracy
+figure already assume; put international characters out of scope so the ASCII
+set becomes a stated claim rather than an omission; and kept break-in at semi
+for the initial scope.
+
+Prosigns needed real work rather than a statement. The transmit encoder is
+keyed by character and could not represent a multi-character symbol at all, so
+seven are now encoded as single symbols with no internal character gap, which
+is the entire difference between `<AR>` and `A R`. The owner overruled the
+proposal to exclude a distress call, and was right to: it is legal and
+appropriate to send one, and unintentional transmission is already prevented by
+arming, exact callsign confirmation, preview, explicit send, and a decoder that
+can never initiate a transmission.
+
+One thing the tests caught. Admitting the brackets in the guard and leaving the
+prosign decision to the encoder made the guard accept `CQ <SCRIPT>`, which an
+existing test rejects by design. The guard now judges the whole bracketed token
+against the encoder's closed table, so an unknown one is refused during
+normalization and never reaches a staged message.
+
+Previous review: 2026-09-11 (forty-fourth entry) -- the retained-observation
 route for the unfinished final over was tried and does not work, which settles
 what the fix has to be.
 
@@ -1281,7 +1303,7 @@ translucent band rather than two signal-like lines.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | DEC-001 | done | Select an OSI-approved project license | GPL-3.0-or-later text and dependency/license policy are committed. |
-| REQ-001 | blocked | Fix supported WPM, prosigns, character sets, and break-in scope | Requirements contain testable ranges. Owner input required. |
+| REQ-001 | done | Fix supported WPM, prosigns, character sets, and break-in scope | Settled by the repository owner and written into `docs/requirements.md` as testable requirements: 8-60 WPM, ASCII character set with international characters out of scope, seven transmittable prosigns keyed as single symbols, and semi break-in for the initial scope with full QSK deliberately not foreclosed. A distress prosign is transmittable; it is not specially excluded because unintentional transmission is already prevented by arming, exact callsign confirmation, preview, explicit send, and a decoder that can never initiate one. Transmit prosigns are a closed table in the application rather than a data file, and an unrecognised bracketed token is refused during normalization. |
 | HW-001 | active | Validate initial Yaesu radios and direct serial keying | FT-450D and FT-818 editable defaults and preliminary safety notes are recorded; physical adapter polarity and disconnected/dummy-load procedures still require validation. |
 | SAFE-001 | active | Implement independent maximum-key-down watchdog | The dependency-free guard rejects out-of-state KEY, limits message elements to three continuous seconds, gives operator-only TUNE a distinct hard 15-second limit, and latches emergency release/fault until an explicit reset. The controller opens the configured adapter safely inactive only after a configuration-bound measured loopback and authoritative station-state confirmation, observes KEY independently, and disarms or emergency-releases on changed state. The worker enforces its own monotonic TUNE deadline, exposes authoritative elapsed/remaining progress, and revision-orders cross-thread snapshots; cancellation/error/shutdown release KEY before PTT. Remaining: execute physical device-error/process-shutdown/line-loopback and dummy-load tests on Windows/macOS/Linux. |
 | ARCH-001 | done | Select graphical rendering architecture | ADR 0001 records the scene-graph approach, modular boundaries, 2D scope, and fallback policy. |

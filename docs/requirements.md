@@ -533,9 +533,41 @@ selected by startup calibration, with user overrides. A safe starting worker
 count is `max(1, hardware_concurrency - 2)`, capped by the configured channel
 limit.
 
+## Keying scope
+
+These were open questions and are now fixed requirements, testable as written.
+
+- **Speed range is 8 to 60 WPM.** The decoder evaluates nine anchors spanning
+  that range and its configured bounds match it, so every accuracy figure the
+  project quotes is measured across it. A signal outside the range may still
+  decode; nothing outside it is a supported claim.
+- **Farnsworth sending is supported on receive.** Character speed and overall
+  speed are estimated separately, and a gap stretched beyond standard spacing
+  does not change the character speed reported.
+- **The character set is ASCII.** A to Z, 0 to 9, and
+  `. , ? ' / ! ( ) & : ; = + - " $ @`, with `_` additionally decoded. Accented
+  and other international characters are deliberately out of scope; the
+  alphabet is a data file, so an operator may extend it locally for receive,
+  but no international character is a supported claim.
+- **Seven prosigns may be transmitted:** `<AR>`, `<AS>`, `<BK>`, `<CT>`,
+  `<KN>`, `<SK>`, `<SOS>`. Each is keyed as one symbol, with no character gap
+  between its letters. The table is closed and lives in the application rather
+  than a data file, because what may be transmitted is a safety boundary. A
+  bracketed token that does not name one of these is refused during
+  normalization, so it can never reach a staged message.
+- **A distress call is transmittable.** Sending one is legal and appropriate in
+  a genuine emergency. It is not given a special exclusion, because the risk
+  that matters -- transmitting one unintentionally -- is already carried by the
+  gates every message passes: an armed station, exact callsign confirmation, a
+  message preview, an explicit send action, and a decoder that can never
+  initiate a transmission.
+- **Break-in is semi break-in.** The station transmits and releases to receive
+  between overs. Full break-in, receiving between individual elements, is out
+  of the initial scope; it requires rig-side QSK support and decoding through
+  the station's own keying, and no interface should be shaped in a way that
+  forecloses it.
+
 ## Decisions still required
 
 - Minimum supported Debian/Ubuntu versions and reference Windows 11 x64 hardware.
-- Expected WPM range, Farnsworth behavior, international characters, and
-  prosigns.
-- Whether full break-in or semi-break-in operation is in the initial scope.
+(WPM range, character set, prosigns and break-in scope are settled below.)
