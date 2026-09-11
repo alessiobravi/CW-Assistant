@@ -182,7 +182,12 @@ constexpr double kEpochSecondsUpperBound = 100'000'000'000.0;
                                        : *numeric);
   }
   if (!epoch_ms || *epoch_ms <= 0) return received_ns;
-  const auto observed_ns =
+  // Named with the exact type rather than deduced. A `ULL` literal promotes
+  // the product to `unsigned long long`, which on a platform where `uint64_t`
+  // is `unsigned long` is a different type of the same width, and `std::min`
+  // deduces one type from both arguments. It compiles on the platforms where
+  // those two spellings happen to agree and fails on the one where they do not.
+  const std::uint64_t observed_ns =
       static_cast<std::uint64_t>(*epoch_ms) * 1'000'000ULL;
   return std::min(observed_ns, received_ns);
 }
