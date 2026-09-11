@@ -8,12 +8,14 @@
 # in step by hand, because it is produced from the same file at build time.
 function(cwa_generate_builtin_dictionary source_path output_path symbol)
   file(READ "${source_path}" contents)
+  # Name the file, not the machine it was built on.
+  get_filename_component(source_name "${source_path}" NAME)
   if(contents MATCHES "\\)CWADICT\"")
     message(FATAL_ERROR
       "${source_path} contains the raw string delimiter used to embed it")
   endif()
   set(generated
-"// Generated from ${source_path} at build time. Do not edit.\n\
+"// Generated from ${source_name} at build time. Do not edit.\n\
 #pragma once\n\
 \n\
 namespace cwassistant::core {\n\

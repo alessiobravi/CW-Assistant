@@ -6,7 +6,28 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-eighth entry) -- the field report is not
+Last reviewed: 2026-09-11 (forty-ninth entry) -- the Windows build was broken
+by the previous change and neither of the two releases since was green. The
+regression test added with the built-in alphabet clears the dictionary
+directory from the environment, and did so with `unsetenv` and `setenv`, which
+are POSIX and absent under MSVC. Linux and both macOS jobs compiled it happily,
+so nothing local caught it: the core tests link no Qt, so `qputenv` is not
+available either, and the fix is a small guarded helper around `_putenv_s`.
+
+Two things worth recording. Nothing here can compile for MSVC, so a
+platform-only construct is invisible until the Windows job runs, and the habit
+of pushing without then reading that job is what let two releases go out red.
+And the generated built-in alphabet embedded the absolute path of the machine
+that produced it in a comment; it names only the file now.
+
+The earlier theory that a per-file resource alias failed on Windows does not
+survive this either. The operator's data directory contains correctly seeded
+dictionary files with the right contents, which means the bundled resources
+were found and read correctly on that platform all along. The change to a
+single base path remains worth keeping as the more robust form, but it was not
+the fault.
+
+Previous review: 2026-09-11 (forty-eighth entry) -- the field report is not
 explained yet, and the previous entry's diagnosis was wrong. The operator's
 Windows dictionaries were produced and inspected: all four files are present and
 parse exactly as the repository copies do, 56 symbols and 82 tokens, nothing

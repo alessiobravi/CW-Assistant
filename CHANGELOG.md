@@ -8,6 +8,12 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The Windows build failed. A test added with the built-in alphabet used the
+  POSIX `setenv` and `unsetenv`, which MSVC does not provide, so the core
+  tests did not compile there while Linux and both macOS builds passed. The
+  test uses a small portable helper now. The generated built-in alphabet also
+  no longer records the full path of the machine that produced it.
+
 - An upgrade can no longer be affected by what an earlier version left in the
   application data directory. The dictionaries carried inside the application
   are authoritative, and a copy in the data directory is used only when it is

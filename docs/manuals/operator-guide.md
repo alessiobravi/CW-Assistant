@@ -387,6 +387,12 @@ the span you chose and never widen it back out on their own. Retuning keeps it
 too: moving the tuned frequency re-centres the display at that same span
 rather than returning to full span.
 
+A debug capture also records what the decoder was working from: the analyzer
+settings in force, how many spectrum frames reached signal detection, how many
+times the decoder was restarted, and whether the Morse alphabet came from your
+file or the application's own copy. If you report that nothing is decoding,
+that capture usually answers why without further questions.
+
 ### Recording receiver IQ for later analysis
 
 **Debug capture** records a direct SDR source as interoperable IQ. The result is

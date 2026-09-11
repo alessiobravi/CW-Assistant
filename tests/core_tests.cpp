@@ -2169,6 +2169,22 @@ bool loadShippedDictionaries() {
 
 }  // namespace
 
+// setenv and unsetenv are POSIX and do not exist under MSVC, which provides
+// _putenv_s instead; there an empty value removes the variable. The core tests
+// link no Qt, so qputenv is not available here.
+void setDictionaryDirectoryEnvironment(const char* value) {
+#if defined(_WIN32)
+  static_cast<void>(
+      _putenv_s("CWA_DICTIONARY_DIR", value == nullptr ? "" : value));
+#else
+  if (value == nullptr) {
+    static_cast<void>(unsetenv("CWA_DICTIONARY_DIR"));
+  } else {
+    static_cast<void>(setenv("CWA_DICTIONARY_DIR", value, 1));
+  }
+#endif
+}
+
 void test_cw_morse_alphabet_survives_missing_files() {
   // The decoder must never be left without an alphabet. Making it data with no
   // fallback shipped an application that tracked signals and decoded nothing,
@@ -2179,7 +2195,7 @@ void test_cw_morse_alphabet_survives_missing_files() {
   alphabet.clear();
   const char* previous = std::getenv("CWA_DICTIONARY_DIR");
   const std::string saved = previous == nullptr ? std::string{} : previous;
-  unsetenv("CWA_DICTIONARY_DIR");
+  setDictionaryDirectoryEnvironment(nullptr);
 
   const auto& recovered = cwassistant::core::cwSharedMorseAlphabet();
   expect(recovered.size() >= 56U,
@@ -2190,7 +2206,7 @@ void test_cw_morse_alphabet_survives_missing_files() {
   expect(cwassistant::core::cwMorseAlphabetLoadedFromBuiltin(),
          "the recovery is reported as coming from the compiled-in copy");
 
-  if (!saved.empty()) setenv("CWA_DICTIONARY_DIR", saved.c_str(), 1);
+  if (!saved.empty()) setDictionaryDirectoryEnvironment(saved.c_str());
   alphabet.clear();
   static_cast<void>(cwassistant::core::cwSharedMorseAlphabet());
 }
