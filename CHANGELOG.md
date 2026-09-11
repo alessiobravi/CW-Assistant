@@ -8,6 +8,15 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The live receive path can be measured per stage. `PERF-002` accepts an
+  optimisation only after a before-and-after measurement, and there was no
+  instrument to provide one. A profile now reports wall time for the
+  spectrum and sample stages against the number of tracked signals. It shows
+  the spectrum stage costing the same for one signal as for twenty-four
+  while the sample stage grows in proportion to them, reaching real time at
+  the twenty-four the decoder tracks: the cost is per tracked signal, not
+  per unit of bandwidth.
+
 - Prosigns can be transmitted. The encoder is keyed by character and could
   not represent a multi-character symbol, so an operator closing a contact
   had to send the letters, which is not what `<SK>` means on the air. Seven

@@ -6,7 +6,39 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-fifth entry) -- `REQ-001` is answered and
+Last reviewed: 2026-09-11 (forty-sixth entry) -- `PERF-002` has an instrument,
+and the first measurement is decisive. `cwa_receive_profile` reports wall time
+for the spectrum and sample stages against tracked signal count, on twenty
+seconds of audio per case:
+
+| tracks | spectrum | samples | real-time factor |
+| --- | --- | --- | --- |
+| 1 | 0.71 s | 0.80 s | 0.076 |
+| 8 | 0.73 s | 6.68 s | 0.370 |
+| 16 | 0.74 s | 12.95 s | 0.684 |
+| 24 | 0.74 s | 21.00 s | 1.087 |
+
+The spectrum stage is flat: building it costs the same for one signal as for
+twenty-four. The sample stage is linear at roughly 0.88 s per track and crosses
+real time at twenty-four, which is exactly `maximum_tracks`. So the pipeline's
+ceiling is the number of signals tracked, not the bandwidth watched, and the
+configured maximum sits on the wrong side of it.
+
+Reading the per-track chain against that: each track mixes with three
+oscillators and runs five three-stage complex cascades per sample -- the three
+centre widths plus a lower and an upper noise reference. Only the selected
+width feeds keying evidence. The other two centre widths exist solely for the
+centre-localisation ratio, and the lower and upper pair solely for the noise
+reference; width selection itself is made from measured WPM and not from
+comparative filter power. Four of the five cascades therefore produce summary
+figures that the transform the spectrum stage already computes could supply,
+and for every track except the monitored one the complex result is consumed
+only by `std::norm`. That is the optimisation, and it is now justified by
+measurement rather than by inspection. It changes measured quantities the
+decoder acts on, so it must be validated against the surface benchmark, the
+capture corpus and the spacing benchmark before it is accepted.
+
+Previous review: 2026-09-11 (forty-fifth entry) -- `REQ-001` is answered and
 closed, which clears the only blocked item in the backlog. The owner fixed the
 speed range at 8 to 60 WPM, which is what the anchors and every quoted accuracy
 figure already assume; put international characters out of scope so the ASCII

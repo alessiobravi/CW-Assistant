@@ -465,6 +465,20 @@ message — armed station, exact callsign confirmation, retyped preview, and an
 explicit send action. Nothing the decoder hears can ever initiate a
 transmission.
 
+### How many signals can be decoded at once
+
+Decoding cost grows with the number of signals being tracked, not with the
+width of the band you are watching. Building the spectrum costs the same
+whether one signal is present or twenty-four; each tracked signal then adds its
+own filtering on top.
+
+Measured on a current desktop, a single tracked signal uses around eight per
+cent of one processor core in real time, and twenty-four — the maximum the
+decoder tracks — reaches real time, meaning the machine is doing a second of
+work for every second of radio. A slower machine will reach that ceiling
+sooner. If a crowded band feels sluggish, narrowing the decoder window so fewer
+signals are tracked helps far more than reducing the spectrum's resolution.
+
 For initial hardware acceptance, connect the transceiver to a dummy load, use
 minimum power, keep an independent means of removing power available, and
 verify a message, cancellation, watchdog release, and emergency release before

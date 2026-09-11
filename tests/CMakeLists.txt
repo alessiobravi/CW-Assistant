@@ -200,6 +200,13 @@ add_test(NAME cwa_receiver_holdout_benchmark
 # Word-boundary placement is the only thing the context vocabulary can change,
 # and neither the synthetic surface nor the capture corpus can see it: the
 # surface never reaches the rescorer and the corpus scores callsign recovery.
+# Per-stage wall time for the live receive path, as a function of tracked
+# signal count. PERF-002 accepts an optimisation only after a measurement, and
+# this is the instrument that provides one. Not a gate: it reports, and the
+# absolute figures depend on the machine.
+add_executable(cwa_receive_profile cw_receive_profile.cpp)
+target_link_libraries(cwa_receive_profile PRIVATE cwa_core)
+
 add_executable(cwa_spacing_benchmark cw_spacing_benchmark.cpp)
 target_link_libraries(cwa_spacing_benchmark PRIVATE cwa_core)
 target_compile_definitions(cwa_spacing_benchmark PRIVATE
