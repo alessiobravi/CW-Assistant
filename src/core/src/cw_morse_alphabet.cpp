@@ -22,16 +22,10 @@ std::string_view trim(std::string_view text) {
   return text;
 }
 
-std::size_t builtinAlphabetSymbolCount() {
-  CwMorseAlphabet builtin;
-  static_cast<void>(builtin.importText(kCwBuiltinMorseAlphabet));
-  return builtin.size();
-}
-
 }  // namespace
 
 CwMorseAlphabetImportResult CwMorseAlphabet::importText(
-    const std::string_view text) {
+    const std::string_view text, const CwMorseAlphabetSource source) {
   CwMorseAlphabetImportResult result;
   result.accepted = true;
   std::size_t offset = 0;
@@ -59,6 +53,11 @@ CwMorseAlphabetImportResult CwMorseAlphabet::importText(
     if (newline == std::string_view::npos) break;
     offset = newline + 1U;
   }
+  // The last import that actually contributed a symbol defines the origin of
+  // the contents. Nothing here merges two origins in practice: a host clears
+  // the alphabet before loading a file, and the compiled-in copy is only ever
+  // imported into an alphabet that is still empty.
+  if (result.inserted_symbols > 0) source_ = source;
   return result;
 }
 
@@ -70,7 +69,18 @@ std::string_view CwMorseAlphabet::symbolFor(
 
 std::size_t CwMorseAlphabet::size() const noexcept { return symbols_.size(); }
 bool CwMorseAlphabet::empty() const noexcept { return symbols_.empty(); }
-void CwMorseAlphabet::clear() noexcept { symbols_.clear(); }
+
+CwMorseAlphabetSource CwMorseAlphabet::source() const noexcept {
+  return source_;
+}
+
+void CwMorseAlphabet::clear() noexcept {
+  symbols_.clear();
+  // An emptied alphabet has no origin. Leaving the previous one in place would
+  // let a host that clears and then fails to load report the origin of symbols
+  // that are no longer there.
+  source_ = CwMorseAlphabetSource::kNone;
+}
 
 CwMorseAlphabet& cwMutableSharedMorseAlphabet() noexcept {
   static CwMorseAlphabet alphabet;
@@ -100,13 +110,14 @@ const CwMorseAlphabet& cwSharedMorseAlphabet() {
   // build that failed to load it went silently deaf with no diagnostic. The
   // text below is generated from the same shipped file at build time, so this
   // is not a second table to keep in step -- it is the same one, compiled in.
-  static_cast<void>(alphabet.importText(kCwBuiltinMorseAlphabet));
+  static_cast<void>(alphabet.importText(kCwBuiltinMorseAlphabet,
+                                        CwMorseAlphabetSource::kBuiltin));
   return alphabet;
 }
 
 bool cwMorseAlphabetLoadedFromBuiltin() noexcept {
-  return cwMutableSharedMorseAlphabet().size() ==
-      builtinAlphabetSymbolCount();
+  return cwMutableSharedMorseAlphabet().source() ==
+      CwMorseAlphabetSource::kBuiltin;
 }
 
 }  // namespace cwassistant::core

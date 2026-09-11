@@ -2206,6 +2206,24 @@ void test_cw_morse_alphabet_survives_missing_files() {
   expect(cwassistant::core::cwMorseAlphabetLoadedFromBuiltin(),
          "the recovery is reported as coming from the compiled-in copy");
 
+  // The other half of that report, and the one that used to be wrong. The
+  // flag was derived by comparing symbol counts, but the shipped file and the
+  // compiled-in copy are generated from one source and hold exactly the same
+  // entries, so a perfectly healthy file load described itself as the
+  // fallback -- the opposite of the fault the flag exists to reveal. Load the
+  // shipped file the way the application does and the report must follow.
+  alphabet.clear();
+  std::ifstream shipped_alphabet(
+      std::string(CWA_DICTIONARY_DIR) + "/morse-alphabet.txt",
+      std::ios::binary);
+  std::ostringstream shipped_alphabet_text;
+  shipped_alphabet_text << shipped_alphabet.rdbuf();
+  static_cast<void>(alphabet.importText(shipped_alphabet_text.str()));
+  expect(alphabet.size() >= 56U,
+         "the shipped alphabet file loads through a host-style import");
+  expect(!cwassistant::core::cwMorseAlphabetLoadedFromBuiltin(),
+         "an alphabet a caller loaded from file is not reported as built-in");
+
   if (!saved.empty()) setDictionaryDirectoryEnvironment(saved.c_str());
   alphabet.clear();
   static_cast<void>(cwassistant::core::cwSharedMorseAlphabet());

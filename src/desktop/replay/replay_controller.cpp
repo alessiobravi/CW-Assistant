@@ -627,6 +627,16 @@ class ReplayWorker final : public QObject {
                             static_cast<double>(std::clamp(seconds, 5, 120))});
   }
 
+  // No reset here, deliberately, for the same reason the live worker does not
+  // reset: this setting changes which of the already tracked signals are worth
+  // decoding, never the audio the detector receives, so the bank applies it on
+  // its next update without losing a track, transcript or confirmed callsign.
+  void setWeakSignalDecoding(const bool enabled,
+                             const double minimum_decode_snr_db) {
+    decoder_.setWeakSignalDecoding(enabled,
+                                   static_cast<float>(minimum_decode_snr_db));
+  }
+
   void setLocalCharacterFrontendEnabled(const bool enabled) {
     character_frontends_.setEnabled(enabled);
   }
@@ -819,6 +829,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &ReplayWorker::configure);
   connect(this, &ReplayController::decodedSignalTimeoutRequested, worker,
           &ReplayWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::weakSignalDecodingRequested, worker,
+          &ReplayWorker::setWeakSignalDecoding);
   connect(this, &ReplayController::ownCallsignRequested, worker,
           &ReplayWorker::setOwnCallsign);
   connect(this, &ReplayController::keyingModelRequested, worker,
@@ -1937,11 +1949,18 @@ void ReplayController::setWeakSignalDecoding(
                        minimum_decode_snr_db_ != minimum_decode_snr_db;
   decode_weak_signals_ = enabled;
   minimum_decode_snr_db_ = minimum_decode_snr_db;
+  // Both decode paths are told, so the choice holds whether the operator is on
+  // live audio or replaying a capture. Sending only the live one left WAV
+  // replay gating on the channel bank's built-in defaults, which is exactly
+  // where a weak recording is most likely to be examined.
+  //
   // Resent even when nothing changed. The decoded-signal timeout reaches the
   // channel bank through configure(), which replaces the whole configuration
   // with a fresh one, so any later timeout update would otherwise silently
   // restore the bank's built-in weak-signal defaults over the operator's
   // choice. Resending costs nothing and keeps the gate authoritative.
+  emit weakSignalDecodingRequested(decode_weak_signals_,
+                                   minimum_decode_snr_db_);
   emit liveWeakSignalDecodingRequested(decode_weak_signals_,
                                        minimum_decode_snr_db_);
   if (changed) emit weakSignalDecodingChanged();

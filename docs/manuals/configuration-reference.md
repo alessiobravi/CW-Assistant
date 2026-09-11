@@ -389,7 +389,10 @@ crowded band where the transcript is filling with noise.
 
 Both values are stored per profile, and changing either keeps every open track,
 transcript, and confirmed callsign: the setting selects which tracked signals
-are decoded and never alters the audio the detector receives.
+are decoded and never alters the audio the detector receives. They apply to
+both decode paths, so a WAV recording opened for replay is gated exactly as
+live audio is, which matters because a marginal signal is usually studied in a
+recording rather than as it passes.
 
 ### Debug capture
 

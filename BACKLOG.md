@@ -6,7 +6,33 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fifty-first entry) -- fragment runs are suppressed
+Last reviewed: 2026-09-11 (fifty-second entry) -- the exact envelope densities
+are settled in the negative, and the reason the earlier entries gave for trying
+them again was wrong.
+
+The evidence chain is not miscalibrated. Working it through: evidence is
+midpoint plus scale times the bounded ratio, and probability is a sigmoid of
+evidence minus midpoint over the same scale, so the two cancel and the chain
+reduces to the sigmoid of the ratio clamped to the evidence bound. That is
+exactly the Bayesian posterior for a log-likelihood ratio in nats. The fortieth
+entry's claim that a statistic in true nats cannot be dropped in is therefore
+false; the only free parameter is the bound.
+
+What actually defeated the Rician and Rayleigh densities is that a per-sample
+ratio assumes independent samples, while the detector runs at the sample rate
+behind a filter a few hundred hertz wide. Scaling the ratio for that and
+sweeping the factor gives: 0.3843 at 0.6, 0.3735 at 0.3, 0.4282 at 1.0, 0.4352
+at 3.0, 0.4946 at 0.1, and 0.9198 at 0.01, against 0.3356 for the fitted
+Gaussian. Worse at every scale, with no interior optimum. Reverted.
+
+The conclusion is worth stating so a fourth attempt is not made. The levels the
+decoder tracks are not the true Rician and Rayleigh parameters; they are
+smoothed estimates of an envelope that has already been filtered, and the
+two-level Gaussian with per-level scatter fits that observation better than the
+idealised single-sample densities fit it. Improving the keying evidence means
+changing what is measured, not which density is assumed of it.
+
+Previous review: 2026-09-11 (fifty-first entry) -- fragment runs are suppressed
 and `PERF-002`'s ceiling is cleared, both measured rather than argued.
 
 Fragmentation is regional, not per-track. The obvious reading of the previous

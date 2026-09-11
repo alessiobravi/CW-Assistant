@@ -8,6 +8,16 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- A debug capture reported that the Morse alphabet came from the copy inside
+  the application whether it did or not. The flag compared symbol counts, and
+  the shipped file and the built-in copy are generated from the same source,
+  so they can never differ that way. The origin is recorded when the alphabet
+  is imported instead.
+
+- The weak-signal setting now applies to WAV replay as well as live audio. It
+  reached only the live path, so replaying a recording decoded by different
+  rules than hearing it live.
+
 - Runs of fragments are removed from decoded text while the copy around them
   is kept. When keying evidence breaks up, what comes out is a run of the
   one- and two-element characters, and that happens inside an otherwise good

@@ -1,15 +1,19 @@
 // Source contract: the operator's weak-signal decoding preference must reach
-// the live decoder without costing the operator anything already on screen.
+// both decoders -- live audio and WAV replay -- without costing the operator
+// anything already on screen.
 //
-// Three properties are worth pinning down. The preference has to persist per
+// Four properties are worth pinning down. The preference has to persist per
 // profile like its neighbours, or it silently reverts on the next launch. The
 // threshold control has to go inert while every signal is decoded, because a
 // number that still looks editable while deciding nothing misleads the
-// operator about what the decoder is doing. And the worker slot must not reset
-// the decoder: this setting changes only which tracked signals are decoded,
-// never the audio the detector receives, so resetting would throw away every
-// track, transcript and confirmed callsign for a preference the channel bank
-// honours from its next update.
+// operator about what the decoder is doing. The preference has to reach the
+// WAV replay decoder as well as the live one, because a setting that quietly
+// stops applying when a recording is opened is worst exactly where a weak
+// signal is most likely to be studied. And neither worker slot may reset its
+// decoder: this setting changes only which tracked signals are decoded, never
+// the audio the detector receives, so resetting would throw away every track,
+// transcript and confirmed callsign for a preference the channel bank honours
+// from its next update.
 //
 // This is a text-level contract because the wiring lives in Qt objects and a
 // QML document that the dependency-free test suite cannot instantiate.
@@ -89,6 +93,21 @@ bool forwardsThePairToTheLiveWorker(const std::string& controller_header,
                   "          &LiveAudioDspWorker::setWeakSignalDecoding);");
 }
 
+// The same pair must also reach the WAV replay decoder, over the replay
+// worker's own signal and slot, exactly as every neighbouring decoder setting
+// is delivered to both paths.
+bool forwardsThePairToTheReplayWorker(const std::string& controller_header,
+                                      const std::string& controller_source) {
+  return contains(controller_header,
+                  "void weakSignalDecodingRequested(bool enabled,") &&
+         contains(controller_source,
+                  "emit weakSignalDecodingRequested(decode_weak_signals_,") &&
+         contains(controller_source,
+                  "connect(this, &ReplayController::"
+                  "weakSignalDecodingRequested, worker,\n"
+                  "          &ReplayWorker::setWeakSignalDecoding);");
+}
+
 std::string weakSignalSlot(const std::string& worker) {
   const auto begin =
       worker.find("void LiveAudioDspWorker::setWeakSignalDecoding(");
@@ -105,6 +124,18 @@ bool workerSlotDoesNotResetTheDecoder(const std::string& slot) {
          !contains(slot, "decoder_.reset()") &&
          !contains(slot, "character_frontends_.reset()") &&
          !contains(slot, "decoder_analyzer_.reset()");
+}
+
+// The replay worker is a private class inside the controller's own source, so
+// its slot is bounded by the member's closing brace rather than a file-scope
+// one.
+std::string replayWeakSignalSlot(const std::string& controller_source) {
+  const auto begin = controller_source.find(
+      "void setWeakSignalDecoding(const bool enabled,");
+  if (begin == std::string::npos) return {};
+  const auto end = controller_source.find("\n  }\n", begin);
+  if (end == std::string::npos) return {};
+  return controller_source.substr(begin, end - begin);
 }
 
 // An operator preference about which signals are decoded may never acquire a
@@ -137,6 +168,7 @@ int main() {
 
   const std::string section = weakSignalSection(settings_qml);
   const std::string slot = weakSignalSlot(live_worker);
+  const std::string replay_slot = replayWeakSignalSlot(controller_source);
   if (section.empty()) return 7;
   if (slot.empty()) return 8;
 
@@ -147,6 +179,14 @@ int main() {
     return 11;
   if (!workerSlotDoesNotResetTheDecoder(slot)) return 12;
   if (!staysReceiveOnly(section, slot)) return 13;
+  // The replay checks take fresh numbers rather than being folded into the
+  // ones above, so that an exit code recorded in an earlier CI run still
+  // names the same broken property.
+  if (replay_slot.empty()) return 14;
+  if (!forwardsThePairToTheReplayWorker(controller_header, controller_source))
+    return 15;
+  if (!workerSlotDoesNotResetTheDecoder(replay_slot)) return 16;
+  if (!staysReceiveOnly(section, replay_slot)) return 17;
 
   return 0;
 }

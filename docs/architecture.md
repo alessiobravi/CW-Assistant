@@ -77,7 +77,7 @@ optional character inference worker, and transmit -- rather than a pool.
 
 A bounded work queue feeding a fixed worker pool, which would let independent
 channels run in parallel, remains the intended evolution rather than something
-delivered; it is tracked under `PERF-002`. The boundaries above are already
+delivered; it is tracked under `DSP-003`. The boundaries above are already
 shaped for it, since per-channel state is owned by the channel object and
 carries its own sequence numbers.
 
@@ -415,8 +415,16 @@ rendering decision and accepted constraints.
 
 - Capture never waits. If its SPSC ring is full, the new block is rejected and
   an overrun is recorded with its sequence number.
-- DSP work is bounded. The scheduler can pause the lowest-priority unselected
-  channels when the latency budget is exceeded.
+- DSP work is bounded by need rather than by a priority scheduler today: a
+  track whose measured level stays below the decode threshold after a fixed
+  warm-up, and that is neither monitored nor operator-selected, skips its
+  per-sample filtering and evidence work entirely, so per-track cost scales
+  with the signals actually being decoded rather than with every tracked
+  frequency. Building the spectrum costs the same for one tracked signal as
+  for twenty-four; the per-track chain is what grows, in proportion to how
+  many are decoded. A queue that additionally pauses the lowest-priority
+  channels under a latency budget remains intended evolution tracked under
+  `DSP-003`, not something delivered.
 - UI snapshots are replaceable. The renderer consumes the newest complete
   spectrum/waterfall row and may skip older display-only snapshots.
 - Logging uses a durable outbox because losing a log record is materially

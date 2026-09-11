@@ -318,6 +318,8 @@ class ReplayController final : public QObject {
   void liveKeyingModelRequested(const QString& model);
   void keyingModelChanged();
   void liveDecodedSignalTimeoutRequested(int seconds);
+  void weakSignalDecodingRequested(bool enabled,
+                                   double minimum_decode_snr_db);
   void liveWeakSignalDecodingRequested(bool enabled,
                                        double minimum_decode_snr_db);
   void weakSignalDecodingChanged();
