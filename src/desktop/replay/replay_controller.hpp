@@ -30,6 +30,7 @@ class QIODevice;
 namespace cwassistant::desktop {
 
 class DxSpotProvider;
+class DxClusterClient;
 
 // Keeps QML decoder-card delegates alive while rapidly changing transcript,
 // level, and key-state roles are updated. A QVariantList model resets every
@@ -250,6 +251,18 @@ class ReplayController final : public QObject {
   void configureDxSpots(bool enabled, bool reverse_beacon, bool cluster,
                         const QString& endpoint, int refresh_seconds,
                         int retention_minutes, int tolerance_hz);
+  // The live telnet cluster link, configured as one call for the same reason:
+  // a node with no callsign to log in as contacts nobody, and a callsign with
+  // no node chosen goes nowhere. server_index is an index into the loaded
+  // server list, or -1 for the operator's own host and port.
+  //
+  // login_callsign is the station callsign. It is the only thing this
+  // application ever writes to a cluster, and an unusable one leaves the link
+  // off rather than connecting anonymously, which no cluster permits.
+  Q_INVOKABLE void configureDxCluster(bool enabled, int server_index,
+                                      const QString& custom_host,
+                                      int custom_port,
+                                      const QString& login_callsign);
   void setAudioInputSelection(QString encoded_id, QString display_name);
   void setSdrInputSelection(QString device_id, QString display_name,
                             qulonglong center_frequency_hz,
@@ -391,6 +404,15 @@ class ReplayController final : public QObject {
   void beginLiveAudioCapture();
   void beginLiveSdrCapture();
   void publishSpectrumConfiguration();
+  // Publishes the decoder window the IQ decimator can actually admit.
+  //
+  // The decimator refuses a block whose requested window does not lie wholly
+  // inside the acquired passband, and the overview spectrum is produced before
+  // that refusal -- so a stranded window shows a perfectly live waterfall with
+  // nothing ever reaching the detector. The stored window is an operator
+  // preference that outlives any one receiver setting, so it is re-centred on
+  // the capture rather than obeyed blindly.
+  void publishSdrDecoderWindow();
   void acceptDecoderChannels(const QVariantList& channels);
   void rebuildDecoderModels();
   void publishLivePresentationDiagnostics(bool force);
@@ -400,8 +422,30 @@ class ReplayController final : public QObject {
                          double sample_rate_hz);
   void stopMonitorOutput();
   void ensureDxSpotProvider();
+  void ensureDxClusterClient();
   void acceptDxSpots(const std::vector<cwassistant::core::CwSpot>& spots);
   void rebuildDxSpotModel();
+  // True while any spot source is switched on. The store, its expiry timer and
+  // the published model are shared by the HTTPS feed and the telnet link, so
+  // neither may gate them on its own switch alone.
+  [[nodiscard]] bool dxSpotsActive() const noexcept;
+  // The frequency the receiver is actually listening on, in hertz, or 0 when
+  // that is unknown -- no radio, no SDR, or a recording whose real frequency
+  // nothing here can know.
+  [[nodiscard]] qulonglong receiveRfHz() const noexcept;
+  // Whether a spot is worth storing at all, given where the receiver is
+  // listening. See the comment on the definition: the reverse-beacon feed is a
+  // firehose and this is the only place that knows the receive frequency.
+  [[nodiscard]] bool isSpotWithinReceivedBand(
+      double frequency_hz) const noexcept;
+  // Tells the cluster which band the receiver is on, so a node that accepts
+  // filter commands stops sending the rest of the planet. Called from every
+  // place the receive frequency can move.
+  void publishDxClusterBandFilter();
+  // One status line for both spot sources. They share a published property
+  // because they are one feature to the operator, and letting each overwrite
+  // the other would show whichever spoke last rather than what is running.
+  void publishDxSpotsStatus();
 
   QThread worker_thread_;
   QObject* worker_{nullptr};
@@ -499,6 +543,16 @@ class ReplayController final : public QObject {
   bool dx_spots_cluster_{false};
   int dx_spots_retention_minutes_{15};
   int dx_spots_tolerance_hz_{250};
+  // Built only once the operator first joins a cluster, for the same reason as
+  // the HTTPS provider: a station that never uses the feature never opens a
+  // socket for it.
+  DxClusterClient* dx_cluster_client_{nullptr};
+  bool dx_cluster_enabled_{false};
+  // Which kind of report the joined node supplies. Choosing a reverse-beacon
+  // node is itself a request to see reverse-beacon spots, so the node's own
+  // kind is displayed without also having to tick it in the feed's source
+  // list, which describes the HTTPS feed.
+  bool dx_cluster_reverse_beacon_{false};
 };
 
 }  // namespace cwassistant::desktop

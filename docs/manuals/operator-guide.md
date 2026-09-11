@@ -544,7 +544,7 @@ signals are tracked helps far more than reducing the spectrum's resolution.
 
 **Settings → Decoder → Weak signals** decides which tracked signals are handed
 to a decoder at all. It is off by default, and the threshold beside it,
-**Decode only above**, starts at 12.0 dB above the noise floor. A signal that
+**Decode only above**, starts at 4.0 dB above the noise floor. A signal that
 has not reached that level is still detected, still followed, and still drawn
 in the spectrum; only its decoding is withheld. It is not suspended, and it is
 not hidden.
@@ -556,11 +556,14 @@ before the threshold can apply to it at all. A track you select yourself is
 always decoded regardless of level, and so is one you are monitoring through a
 card speaker.
 
-The default is measured rather than chosen for comfort: across the capture
-corpus the weakest track that carried a correctly recovered callsign sat at
-19.5 dB, which leaves more than seven decibels of margin under the gate. Below
-it the decoder receives fragments rather than copy, so the transcript fills
-with nothing while each such track costs a full decoder's work. Tick
+The default was 12 dB, a figure taken from the capture corpus, where the
+weakest track carrying a correctly recovered callsign sat at 19.5 dB. That
+corpus is twenty-two recordings made through one receiver, and it was never the
+whole population: on air the gate proved aggressive enough to suppress workable
+signals, so the default is 4 dB. Corpus recovery is unchanged at the lower
+setting. Below the threshold the decoder receives fragments rather than copy,
+so the transcript fills with nothing while each such track costs a full
+decoder's work. Tick
 **Decode every tracked signal** when you would rather have that fragmentary
 output than none — when chasing a signal you know is there and can barely
 hear — and expect both the transcript and the processor cost to reflect it.

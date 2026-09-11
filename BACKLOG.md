@@ -6,7 +6,47 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fifty-fifth entry) -- external spot evidence is
+Last reviewed: 2026-09-11 (fifty-sixth entry) -- direct SDR reception decoded
+nothing outside 20 m, and the spot provider has no feed it can parse.
+
+The SDR fault was not in detection. The decoder is fed a narrow slice cut from
+the wide capture, and `IqSubbandDecimator::process` refuses a block outright
+unless that slice lies wholly inside the passband being acquired. The slice's
+centre defaulted to 14.050 MHz and moved only when the operator dragged a
+selection in the zoomed view, so any receiver started on another band had every
+block refused. Because `drain()` publishes the overview spectrum before it ever
+consults the decimator, the failure presented as a perfectly live spectrum and
+waterfall with nothing identified -- which is why it survived several rounds of
+looking at the detector. The slice now follows the capture. The test drives the
+controller rather than the decimator, and then feeds the published window to a
+real decimator, so it fails if either side's idea of an admissible window moves:
+it returns 77 against the old code.
+
+Probing the public spot feeds established that the HTTPS provider cannot parse
+any of them, because it defines a document shape rather than reading what the
+services send; and that the cluster network is telnet, so live RBN is out of
+reach of an HTTPS client entirely. Recorded as INT-003 and INT-004.
+
+INT-004 was then built in four parallel lanes against contract headers fixed
+first, and every server and every command was verified against the live network
+rather than against documentation. DXSpider accepts `accept/spots 0 on 20m/cw`
+and echoes it back through `sh/filter`; CC Cluster's own login banner lists its
+whole command set and has no band filter in it, so those nodes carry none and
+are filtered on arrival like every other server. A naive client that writes its
+callsign on connect has it swallowed by VE7CC's banner, which is why the
+callsign is sent only in answer to a recognised prompt.
+
+The lanes caught each other's defects, which is the point of running them apart.
+The test lane found two the implementation lane had not: `DX de :` parsed to a
+spot with an empty spotter -- corroboration attributed to nobody -- and a bare
+carriage return inside a login command in the operator-editable server list
+survived `trimmed()` and would have reached a stranger's socket as a second
+command line. Reconciliation found a third: the HTTPS provider and the telnet
+client had each defined `kMinimumSpotFrequencyHz` and `kMaximumSpotFrequencyHz`
+with the same names and different values, so the same report was accepted by one
+path and refused by the other. One definition now lives in the shared header.
+
+Previous review: 2026-09-11 (fifty-fifth entry) -- external spot evidence is
 delivered, and the documentation was reviewed against the source rather than
 against itself.
 
@@ -1683,6 +1723,8 @@ translucent band rather than two signal-like lines.
 | LOG-004 | active | Resolve station equipment by actual-RF band | Ordered ADIF-band rules and `MY_RIG`/`MY_ANTENNA` cross-band serialization are tested; profile rule editor, persistence, overlap diagnostics, and logger acceptance remain. |
 | SAT-001 | todo | Add complete satellite/transverter operating profiles | A named profile stores independent signed RX/downlink and TX/uplink transverter offsets, radio dial versus actual-RF presentation, radio/control backend, antenna and converter-chain descriptions, and optional satellite defaults suitable for full-duplex operation such as QO-100. RX and TX bindings are independent: a profile can receive from one radio, SDR, audio device or audio channel while transmitting through another radio/control provider and, where applicable, another audio device/channel; it must not impose a shared-device or simplex assumption. The faceplate presents these as logical `VFO A / RX` and `VFO B / TX` endpoints even when A and B belong to two different physical devices, and names each bound device rather than implying both VFOs live in one rig. QSO logging resolves the profile at contact time and emits the applicable ADIF fields: exact `FREQ`/`FREQ_RX`, `BAND`/`BAND_RX`, `PROP_MODE=SAT`, `SAT_NAME`, `SAT_MODE`, and local-station `MY_RIG`/`MY_ANTENNA`; it never puts local equipment into contacted-station `RIG`. The editor validates frequency arithmetic, ADIF dependencies/enumerations, overlapping equipment rules, missing satellite identity, device/channel ownership, and unsafe or ambiguous RX/TX mappings before CAT, audio, TX, or logging use. Cross-link implementation with CAT-003, LOG-003, LOG-004, and the audio/SDR adapters rather than creating separate frequency or ADIF models. |
 | INT-001 | active | Add read-only DX-cluster spot service | Verified calls can be served with CQ-only filtering, authentication option, bounded clients, and loopback-safe defaults. The receive-only ingestion half is delivered through the spot provider and registry; serving spots outward remains. |
+| INT-003 | todo | Ingest spots from a real feed | The HTTPS provider accepts a document shape (`callsign`/`frequencyHz`/`time`) that no public service emits, so it currently has no endpoint it can parse. Probed 2026-09-11: DXHeat (`https://dxheat.com/source/spots/`) sends `DXCall`/`Frequency`/`Spotter`/`Time`+`Date`; POTA (`https://api.pota.app/spot/activator`) sends `activator`/`spotTime`/`source`, including RBN-relayed CW spots carrying SNR and WPM; DXSummit answers over plain HTTP only, with no HTTPS host, so the provider refuses it; SOTA reports frequency in MHz at 0.1 resolution, far coarser than the marker tolerance. Needs a per-source adapter, and a source list held in `dictionaries/` rather than compiled in, with a custom entry and a reachability check whose result is cached rather than probed on every start. |
+| INT-004 | active | Add a DX cluster telnet client | The cluster network is telnet; HTTPS reaches only aggregators. A telnet client is the only route to DXFun, VE7CC, W3LPL, K3LR, OH2AQ and, importantly, live RBN (`telnet.reversebeacon.net:7000`), which has no public JSON API at all and which the existing reverse-beacon setting therefore cannot currently feed. Unlike the HTTPS provider this cannot be strictly send-nothing: a cluster login requires sending a callsign, in clear, over an unencrypted socket, and that has to be stated to the operator rather than buried. Clusters are a shared volunteer resource, so the client must hold one connection, back off on failure instead of reconnecting in a loop, and never issue commands the operator did not ask for. Spots parse into the same `CwSpot` values the registry already holds, and the existing prohibition stands unchanged: a spot corroborates, and can never supply or rewrite a decoded callsign. Delivered: the client, the operator-editable server list, band filtering on the server where the syntax was verified and on arrival always, and the settings section. Remaining: verify a band-filter syntax for CC Cluster and AR-Cluster nodes against a live server, and decide whether a cluster login may carry an SSID such as `CALL-1`, which `CallsignPolicy::normalize` currently refuses. |
 | INT-002 | todo | Add UDP spectrum export | Versioned timestamped spectrum frames interoperate with a documented logger/contest consumer fixture. |
 | REC-001 | active | Add interoperable audio/IQ recorder | A dependency-free PCM16 WAV writer exists (round-trip tested against the existing WAV reader) and is used by the OBS-003 debug capture; RF64, IQ, metadata, rotation, looping, and a dedicated operator-facing recorder UI (independent of debug capture) remain. |
 | SDR-001 | active | Add SoapySDR stream adapter | The RX-only adapter and official-package integration enumerate modules/devices, query standard sample-rate/RF-bandwidth/antenna/gain capabilities, choose supported values, read CF32 channel 0, preserve absolute RF, and produce validated timestamped IQ blocks with distinct telemetry. Discovery groups operating variants by stable physical receiver identity while retaining the selected opaque driver mode. A bounded-rate overview retains the complete acquired passband; a separate shared DDC, anti-alias filter and decimator feeds only the configured 6–96 kHz CW decoder window instead of processing every track at the hardware rate. Wheel zoom, middle-button pan, full-span reset, right-click window recenter/probe, Shift+left-drag decoder-window selection, waterfall-edge SDR stepping, and the operational SDR faceplate make the wide view operable without returning to Settings. Center-only changes retune the active RX stream without reopening it. Optional bidirectional radio synchronization uses provider-neutral command/observation separation and a bounded signed SDR LO offset without touching TX. Windows/macOS packages carry the redistributable runtime; Linux packages bundle it or declare the module dependency. Every staged package must load the RTL factory without hardware. Remaining: expose complete telemetry and overload state in Diagnostics, add only capability-backed driver-specific controls, capture IQ under REC-001, measure wide-passband CPU limits, and complete physical-device acceptance. |

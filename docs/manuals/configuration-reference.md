@@ -369,7 +369,7 @@ so it survives future additions to the list.
 or merely watched. It is off by default, and while it is off a signal has to
 reach **Decode only above … dB above the noise floor** before the decoder is
 given it. The threshold accepts 0.0 to 40.0 dB in tenths of a decibel and
-defaults to 12.0 dB; the field is disabled while the toggle is on, because the
+defaults to 4.0 dB; the field is disabled while the toggle is on, because the
 threshold no longer applies then.
 
 Nothing disappears from the display either way. A signal under the threshold is
@@ -700,6 +700,80 @@ itself. It is off by default.
 | Spot retention | How long a report is kept, 1 to 60 minutes. |
 | Match tolerance | How far from a reported frequency a station still counts as the same one, 50 to 1000 Hz. |
 | Show labels | Draw callsigns beside the markers. Turning this off keeps the markers, which is useful when a crowded band makes the text unreadable. |
+
+### Connecting to a cluster
+
+The cluster network speaks telnet and nothing else. The public HTTPS feeds are
+aggregators, and the Reverse Beacon Network -- the one source here that is
+itself a receiver rather than a person -- publishes no web interface at all;
+its live stream is telnet or nothing. So a server is chosen from the list
+rather than an address typed into the endpoint field.
+
+| Setting | Meaning |
+| --- | --- |
+| Server | One of the servers in `dictionaries/dx-cluster-servers.txt`, or **Custom…** to give a host and port yourself. The note beside each says what you are joining. |
+
+A cluster is joined with your station callsign, which is what the network is
+for and how every cluster client has always worked. The callsign configured for
+the station is used; there is no second one to set, and the cluster cannot be
+enabled before the station callsign is. Cluster logins are unencrypted, as the
+protocol has always been.
+
+Beyond the login and the setup commands listed for that server, the client
+sends nothing: no spots, no announcements, and no reply to anything the server
+or its users send.
+
+These are volunteer machines shared by thousands of operators, so one
+connection is held at a time and a failed one is retried after a wait that
+lengthens with each failure rather than in a loop.
+
+### Filtering
+
+Spots are filtered twice, and the two are not redundant.
+
+On the server, where the cluster software supports it: the filter commands
+listed for that server are sent at login, and any of them naming a band is sent
+again whenever the radio changes band, so what the server sends follows the
+receiver. This is the cheaper filter, because the spots never cross the
+network.
+
+Only DXSpider nodes currently carry a band filter, because that is the only
+syntax that was confirmed against a live server. CC Cluster's own login banner
+lists its whole command set and contains no band filter; its band filtering
+belongs to the CC User client rather than to plain telnet. A guessed command
+earns an "Unknown command" reply and a filter that quietly is not there, which
+is worse than not sending one, so those nodes rely on the arrival filter -- as
+every server does anyway.
+
+On arrival, always: reverse-beacon reports come in at roughly six a second
+worldwide across every band, and the reverse beacon network accepts no filter
+commands on its telnet port at all, so its feed can only be filtered here.
+Anything outside the band being received is discarded before it is stored. A
+spot you could not possibly hear is not corroboration, and keeping it would
+cost the slot of one you could.
+
+When the receive frequency is unknown -- no radio, no receiver running --
+nothing is discarded and no band filter is sent. A filter that silently threw
+everything away because it did not know where the radio was pointed would be
+worse than no filter at all.
+
+### Editing the server list
+
+`dictionaries/dx-cluster-servers.txt`, one server per line:
+
+```
+name | host | port | source | login commands | note
+```
+
+`source` is `rbn` for a reverse-beacon feed or `cluster` for human-entered
+spots. The two are weighed differently and agreement between them counts for
+more than either alone, so do not relabel one as the other. Login commands are
+separated by `;` and may be empty; they exist because cluster software differs
+in what it sends by default, and several withhold skimmer spots or send digital
+modes this application cannot use.
+
+A line that does not parse is skipped rather than taking the rest of the file
+with it, so one bad edit cannot leave you with no servers at all.
 
 A square before a callsign marks reverse-beacon evidence and a circle after it
 marks cluster evidence; both appear when the two independent sources agree.

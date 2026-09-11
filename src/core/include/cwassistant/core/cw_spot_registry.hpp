@@ -14,6 +14,23 @@ namespace cwassistant::core {
 // different ways. Agreement between them is stronger evidence than either.
 enum class CwSpotSource { ReverseBeacon, Cluster };
 
+// The frequencies a spot may plausibly name, in hertz.
+//
+// One definition, because there is only one question being asked. The HTTPS
+// provider and the telnet client had grown a constant of the same name with
+// different values -- 100 kHz to 300 GHz against 1 kHz to 10 GHz -- which
+// meant the same report was accepted by one path and refused by the other for
+// no reason either file could state.
+//
+// The range is the amateur spectrum, honestly bounded: the lowest allocation
+// is 2200 m at about 136 kHz and the highest run past 240 GHz. It is
+// deliberately not narrowed to catch a feed that sends hertz where kilohertz
+// were meant. That is not this check's job, and a spot landing at an
+// implausible frequency is discarded downstream anyway, because it cannot fall
+// in the band being received.
+inline constexpr double kMinimumSpotFrequencyHz = 100'000.0;
+inline constexpr double kMaximumSpotFrequencyHz = 300'000'000'000.0;
+
 struct CwSpot {
   std::string callsign;
   double frequency_hz{0.0};

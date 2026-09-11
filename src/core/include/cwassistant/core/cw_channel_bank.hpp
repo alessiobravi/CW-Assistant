@@ -89,10 +89,14 @@ struct CwChannelBankConfig {
   // Below it what reaches the decoder is fragments rather than copy: on the
   // capture corpus such tracks emit streams of one- and two-element characters
   // that fill a transcript with nothing and spend a decoder's worth of
-  // processor time each. The threshold is measured rather than chosen -- the
-  // weakest track that carried a correctly recovered callsign across the
-  // corpus sits at 19.5 dB, so this leaves over seven decibels of margin.
-  float minimum_decode_snr_db{12.0F};
+  // processor time each. The default was first set at twelve decibels from the
+  // capture corpus, where the weakest track carrying a correctly recovered
+  // callsign sits at 19.5 dB. On the air that proved far too aggressive and
+  // suppressed signals an operator could work, so the repository owner set it
+  // to four. The corpus was never the whole population: it is twenty-two
+  // recordings made on one receiver, and a threshold fitted to it does not
+  // transfer to a different front end or a quieter band.
+  float minimum_decode_snr_db{4.0F};
   // Decode every tracked signal regardless of level. Off by default because
   // the cost is paid in both transcript quality and processor time.
   bool decode_weak_signals{false};

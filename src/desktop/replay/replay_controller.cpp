@@ -35,6 +35,7 @@
 #include "cwassistant/core/frequency_plan.hpp"
 #include "cwassistant/core/wav_replay_source.hpp"
 #include "decoder_channel_model.hpp"
+#include "../dxcluster/dx_cluster_client.hpp"
 #include "../dxcluster/dx_spot_provider.hpp"
 #include "../decoder/local_character_decoder.hpp"
 #include "../sdr/sdr_capture_worker.hpp"
@@ -1412,6 +1413,37 @@ void ReplayController::publishSpectrumConfiguration() {
       audio_upper_frequency_hz_);
 }
 
+void ReplayController::publishSdrDecoderWindow() {
+  // IqSubbandDecimator::process() refuses a block unless
+  //   |decoder centre - capture centre| + decoder bandwidth / 2 < Nyquist,
+  // and drain() publishes the wide overview spectrum *before* consulting the
+  // decimator. A window left outside the current capture therefore produces
+  // the exact fault an operator cannot diagnose: signals painting normally on
+  // the spectrum and waterfall while not one sample ever reaches detection.
+  //
+  // The stored window defaults to 14.050 MHz and only ever moved when the
+  // operator dragged a selection in the zoomed view, so every receiver tuned
+  // away from 20 m decoded nothing at all.
+  const auto capture_center = static_cast<double>(sdr_center_frequency_hz_);
+  const auto bandwidth = static_cast<double>(sdr_decoder_bandwidth_hz_);
+  // A margin below Nyquist, because the decimator's anti-alias response is
+  // only meaningful with some spectrum left above the window edge.
+  constexpr double kEdgeMarginHz = 2'000.0;
+  const double reach = static_cast<double>(sdr_sample_rate_hz_) * 0.5 -
+                       bandwidth * 0.5 - kEdgeMarginHz;
+  auto center = static_cast<double>(sdr_decoder_center_frequency_hz_);
+  if (reach <= 0.0 || std::abs(center - capture_center) > reach) {
+    center = capture_center;
+    sdr_decoder_center_frequency_hz_ =
+        static_cast<qulonglong>(std::llround(center));
+  }
+  emit liveSdrDecoderWindowRequested(center, bandwidth);
+  // The decoder window is where an SDR operator is listening, so the cluster
+  // band filter and the spot model both follow it.
+  publishDxClusterBandFilter();
+  rebuildDxSpotModel();
+}
+
 void ReplayController::acceptDecoderChannels(const QVariantList& channels) {
   raw_decoder_channels_ = channels;
   rebuildDecoderModels();
@@ -1675,6 +1707,9 @@ void ReplayController::setRadioFrequencyContext(
                                           radio_split_active_);
   emit radioFrequencyChanged();
   rebuildDecoderModels();
+  // The cluster filter follows the radio: a node that accepts filter commands
+  // is told the new band without the link being dropped and rebuilt.
+  publishDxClusterBandFilter();
   rebuildDxSpotModel();
 }
 
@@ -1721,16 +1756,165 @@ const QString& ReplayController::dxSpotsStatus() const noexcept {
   return dx_spots_status_;
 }
 
+bool ReplayController::dxSpotsActive() const noexcept {
+  return dx_spots_enabled_ || dx_cluster_enabled_;
+}
+
+qulonglong ReplayController::receiveRfHz() const noexcept {
+  // The SDR decodes inside a window of its own; that window, not the capture
+  // centre, is where the operator is actually listening.
+  if (source_mode_ == 2) {
+    return sdr_decoder_center_frequency_hz_ != 0U
+               ? sdr_decoder_center_frequency_hz_
+               : sdr_center_frequency_hz_;
+  }
+  return radio_frequency_available_ ? radio_rx_rf_hz_ : 0U;
+}
+
+bool ReplayController::isSpotWithinReceivedBand(
+    const double frequency_hz) const noexcept {
+  // Why this exists, so it is not later removed as redundant with the
+  // registry's own bounds. The reverse-beacon telnet feed was measured at six
+  // spots a second -- the server announced "Spot rate: 6/s (21,998/h)" --
+  // worldwide, across every band and mode. The registry deduplicates per
+  // source and callsign and holds 4096 entries for fifteen minutes, which
+  // collapses twenty skimmers hearing one CQ into one entry but does nothing
+  // about the other twenty-three bands: an operator on 20 m would have their
+  // store filled with 160 m and 10 m stations they cannot hear, and every
+  // arriving spot costs a linear scan of up to 4096 entries to find that out.
+  //
+  // This is arrival filtering, and it is not the same thing as the band filter
+  // pushed to the server in publishDxClusterBandFilter(). Both are needed:
+  // the reverse beacon network accepts no filter commands on its telnet port,
+  // so its feed can only be narrowed here, while a cluster that does accept
+  // them should not be made to send what is going to be discarded anyway.
+  const qulonglong rx_rf_hz = receiveRfHz();
+  // Nothing known about where the receiver is pointed. Keeping everything is
+  // the safe failure: a filter that silently discarded every spot because it
+  // could not place the radio would be worse than no filter at all.
+  if (rx_rf_hz == 0U) return true;
+  if (!std::isfinite(frequency_hz) || frequency_hz <= 0.0) return false;
+  const auto receiver_band = cwassistant::core::adif_band_from_frequency(
+      static_cast<std::uint64_t>(rx_rf_hz));
+  // A receiver sitting outside every amateur band -- a transverter's
+  // intermediate frequency, a general-coverage tune -- gives nothing to
+  // compare against, so nothing is rejected.
+  if (receiver_band.empty()) return true;
+  // Deliberately the whole band rather than the visible span. An operator
+  // retunes constantly, and a spot 40 kHz away is exactly the one worth
+  // showing as a marker to tune towards.
+  return cwassistant::core::adif_band_from_frequency(
+             static_cast<std::uint64_t>(std::llround(frequency_hz))) ==
+         receiver_band;
+}
+
+void ReplayController::publishDxSpotsStatus() {
+  QString composed;
+  const auto append = [&composed](const QString& part) {
+    if (part.isEmpty()) return;
+    if (!composed.isEmpty()) composed += QStringLiteral(" · ");
+    composed += part;
+  };
+  if (dx_spot_provider_ != nullptr) append(dx_spot_provider_->statusMessage());
+  if (dx_cluster_client_ != nullptr) append(dx_cluster_client_->statusMessage());
+  if (dx_spots_status_ == composed) return;
+  dx_spots_status_ = composed;
+  emit dxSpotsChanged();
+}
+
+void ReplayController::publishDxClusterBandFilter() {
+  if (dx_cluster_client_ == nullptr) return;
+  const qulonglong rx_rf_hz = receiveRfHz();
+  // Empty when the receive frequency is unknown. The client reads that as
+  // "unknown" and withholds the band-dependent commands rather than sending a
+  // malformed one, so a receiver with no frequency asks the server for
+  // everything instead of asking it for nothing.
+  const std::string_view band =
+      rx_rf_hz == 0U ? std::string_view{}
+                     : cwassistant::core::adif_band_from_frequency(
+                           static_cast<std::uint64_t>(rx_rf_hz));
+  dx_cluster_client_->setBandFilter(
+      QString::fromUtf8(band.data(), static_cast<qsizetype>(band.size())));
+}
+
 void ReplayController::ensureDxSpotProvider() {
   if (dx_spot_provider_ != nullptr) return;
   dx_spot_provider_ = new DxSpotProvider(this);
   connect(dx_spot_provider_, &DxSpotProvider::spotsReceived, this,
           &ReplayController::acceptDxSpots);
-  connect(dx_spot_provider_, &DxSpotProvider::stateChanged, this, [this] {
-    if (dx_spots_status_ == dx_spot_provider_->statusMessage()) return;
-    dx_spots_status_ = dx_spot_provider_->statusMessage();
-    emit dxSpotsChanged();
-  });
+  connect(dx_spot_provider_, &DxSpotProvider::stateChanged, this,
+          [this] { publishDxSpotsStatus(); });
+}
+
+void ReplayController::ensureDxClusterClient() {
+  if (dx_cluster_client_ != nullptr) return;
+  // The same route as the HTTPS provider, into the same registry. A second
+  // path would make the two feeds disagree about what has been seen, and a
+  // spot that arrives twice by two routes is not corroboration.
+  dx_cluster_client_ = new DxClusterClient(this);
+  connect(dx_cluster_client_, &DxClusterClient::spotsReceived, this,
+          &ReplayController::acceptDxSpots);
+  connect(dx_cluster_client_, &DxClusterClient::stateChanged, this,
+          [this] { publishDxSpotsStatus(); });
+}
+
+void ReplayController::configureDxCluster(const bool enabled,
+                                          const int server_index,
+                                          const QString& custom_host,
+                                          const int custom_port,
+                                          const QString& login_callsign) {
+  const bool was_active = dxSpotsActive();
+  // A cluster cannot be joined anonymously, and inventing a callsign would put
+  // a false identity on somebody else's machine. Without one this application
+  // will actually send, the link simply stays off.
+  const bool joinable =
+      enabled && DxClusterClient::isAcceptableLoginCallsign(login_callsign);
+
+  // Read once per process. The server list is file data shared by every
+  // profile, and a settings change must not re-read it from disk.
+  static const DxClusterServerList kServers = DxClusterServerList::load();
+
+  DxClusterServer server;
+  if (joinable) {
+    const auto& servers = kServers.servers();
+    if (server_index >= 0 &&
+        server_index < static_cast<int>(servers.size())) {
+      server = servers[static_cast<std::size_t>(server_index)];
+    } else {
+      // The custom entry. Described as a cluster rather than a reverse-beacon
+      // feed because the two are weighed differently and nothing here can tell
+      // which one a typed-in host is; claiming the stronger of the two for an
+      // unknown node would overstate what its spots are worth.
+      server.host = custom_host.trimmed();
+      server.name = server.host;
+      server.port = static_cast<std::uint16_t>(std::clamp(custom_port, 1, 65'535));
+      server.source = cwassistant::core::CwSpotSource::Cluster;
+    }
+  }
+
+  dx_cluster_enabled_ = joinable && server.isValid();
+  if (!dx_cluster_enabled_) {
+    if (dx_cluster_client_ != nullptr) dx_cluster_client_->setEnabled(false);
+    dx_cluster_reverse_beacon_ = false;
+    if (was_active && !dxSpotsActive()) {
+      dx_spot_expiry_timer_.stop();
+      dx_spot_registry_.clear();
+    }
+    rebuildDxSpotModel();
+    return;
+  }
+
+  dx_cluster_reverse_beacon_ =
+      server.source == cwassistant::core::CwSpotSource::ReverseBeacon;
+  ensureDxClusterClient();
+  dx_cluster_client_->setServer(server);
+  dx_cluster_client_->setLoginCallsign(login_callsign);
+  // Before enabling, so the first login already carries the operator's band
+  // rather than opening on the whole planet and narrowing a moment later.
+  publishDxClusterBandFilter();
+  dx_cluster_client_->setEnabled(true);
+  if (!dx_spot_expiry_timer_.isActive()) dx_spot_expiry_timer_.start();
+  rebuildDxSpotModel();
 }
 
 void ReplayController::configureDxSpots(const bool enabled,
@@ -1764,8 +1948,13 @@ void ReplayController::configureDxSpots(const bool enabled,
   }
   if (!dx_spots_enabled_) {
     if (dx_spot_provider_ != nullptr) dx_spot_provider_->setEnabled(false);
-    dx_spot_expiry_timer_.stop();
-    dx_spot_registry_.clear();
+    // The store, its expiry timer and the published model are shared with the
+    // telnet cluster link. Switching the HTTPS feed off must not throw away
+    // what the cluster is still supplying.
+    if (!dxSpotsActive()) {
+      dx_spot_expiry_timer_.stop();
+      dx_spot_registry_.clear();
+    }
     rebuildDxSpotModel();
     return;
   }
@@ -1782,19 +1971,35 @@ void ReplayController::configureDxSpots(const bool enabled,
 
 void ReplayController::acceptDxSpots(
     const std::vector<cwassistant::core::CwSpot>& spots) {
-  if (!dx_spots_enabled_ || spots.empty()) return;
+  if (!dxSpotsActive() || spots.empty()) return;
   const std::uint64_t now_ns = currentUnixTimeNs();
+  bool stored_any = false;
   for (const auto& spot : spots) {
+    // Filtered before the store, not after. A spot from a band the receiver
+    // cannot hear would occupy one of 4096 slots and cost a linear scan on
+    // every later arrival; see isSpotWithinReceivedBand().
+    if (!isSpotWithinReceivedBand(spot.frequency_hz)) continue;
     // The registry decides what it will hold. A spot it refuses is simply not
     // stored; nothing here retries, repairs, or works around that refusal.
     static_cast<void>(dx_spot_registry_.add(spot, now_ns));
+    stored_any = true;
   }
+  if (!stored_any) return;
   rebuildDxSpotModel();
 }
 
 void ReplayController::rebuildDxSpotModel() {
   QVariantList spots;
-  if (dx_spots_enabled_) {
+  if (dxSpotsActive()) {
+    // Joining a node is itself a request to see what that node sends, so the
+    // kind it supplies is displayed without also having to be ticked in the
+    // source list above, which describes the HTTPS feed.
+    const bool show_reverse_beacon =
+        dx_spots_reverse_beacon_ ||
+        (dx_cluster_enabled_ && dx_cluster_reverse_beacon_);
+    const bool show_cluster =
+        dx_spots_cluster_ ||
+        (dx_cluster_enabled_ && !dx_cluster_reverse_beacon_);
     const std::uint64_t now_ns = currentUnixTimeNs();
     dx_spot_registry_.expire(now_ns);
     for (const auto& match : dx_spot_registry_.all(now_ns)) {
@@ -1802,10 +2007,14 @@ void ReplayController::rebuildDxSpotModel() {
       // reported by both a skimmer and a person keeps both marks even when
       // only one of the two kinds is being displayed, because hiding half of
       // what corroborates a callsign would misrepresent the evidence.
-      if (!(match.reverse_beacon && dx_spots_reverse_beacon_) &&
-          !(match.cluster && dx_spots_cluster_)) {
+      if (!(match.reverse_beacon && show_reverse_beacon) &&
+          !(match.cluster && show_cluster)) {
         continue;
       }
+      // Applied again on the way out, not only on arrival: retuning to another
+      // band must drop the previous band's markers at once rather than leave
+      // them standing until they expire.
+      if (!isSpotWithinReceivedBand(match.frequency_hz)) continue;
       QVariantMap entry;
       entry.insert(QStringLiteral("callsign"),
                    QString::fromStdString(match.callsign));
@@ -2068,6 +2277,8 @@ void ReplayController::setSourceMode(const int value) {
   source_mode_ = clamped;
   if (source_mode_ == 2 && monitor_mode_ == 1) setMonitorMode(0);
   rebuildDecoderModels();
+  // Changing source changes which frequency counts as the receive frequency.
+  publishDxClusterBandFilter();
   rebuildDxSpotModel();
   emit sourceReset();
   emit stateChanged();
@@ -2188,14 +2399,21 @@ void ReplayController::setSdrInputSelection(
       sdr_decoder_bandwidth_hz_ != decoder_bandwidth_hz;
   sdr_decoder_center_frequency_hz_ = decoder_center_frequency_hz;
   sdr_decoder_bandwidth_hz_ = decoder_bandwidth_hz;
-  if (decoder_window_changed || !live_capturing_) {
-    emit liveSdrDecoderWindowRequested(
-        static_cast<double>(sdr_decoder_center_frequency_hz_),
-        static_cast<double>(sdr_decoder_bandwidth_hz_));
+  if (decoder_window_changed || center_changed || !live_capturing_) {
+    // Always through the clamping publisher. Emitting the stored window raw
+    // was the whole defect: the preference is expressed in absolute RF and
+    // means nothing until it is checked against the passband actually being
+    // acquired, so a receiver configured for any band but the stored one was
+    // handed a window the decimator refuses.
+    publishSdrDecoderWindow();
   }
   if (restart) {
     beginLiveSdrCapture();
   } else if (center_changed && live_capturing_ && source_mode_ == 2) {
+    // Retuning moves the passband out from under the decoder window; the
+    // publication above has already re-centred it, so the receiver and the
+    // decoder move together instead of the tracks vanishing on the first
+    // click of the dial.
     emit sdrRetuneRequested(static_cast<double>(sdr_center_frequency_hz_));
   }
 }
@@ -2281,6 +2499,10 @@ void ReplayController::beginLiveSdrCapture() {
   setStatus(QStringLiteral("Starting live SDR from %1…").arg(sdr_device_name_));
   publishSpectrumConfiguration();
   emit liveDspStartRequested();
+  // After liveDspStartRequested(), because LiveAudioDspWorker::start() resets
+  // the decimator's stream state; the window has to be the first thing the
+  // freshly started worker is told.
+  publishSdrDecoderWindow();
   emit sdrStartRequested(sdr_device_id_,
                          static_cast<double>(sdr_center_frequency_hz_),
                          static_cast<double>(sdr_sample_rate_hz_),

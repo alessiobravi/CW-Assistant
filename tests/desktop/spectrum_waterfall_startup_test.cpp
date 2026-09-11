@@ -8,7 +8,11 @@
 #include <iterator>
 #include <numbers>
 #include <span>
+#include <utility>
 #include <vector>
+
+#include "cwassistant/core/iq_receive.hpp"
+#include "cwassistant/core/sample_block.hpp"
 
 #include "decoder/local_character_decoder.hpp"
 #include "replay/decoder_channel_model.hpp"
@@ -345,8 +349,164 @@ int testVfoMoveShiftsTrackedSignals() {
   return 0;
 }
 
+
+// Starting SDR reception must hand the decoder a window inside the passband.
+//
+// IqSubbandDecimator::process() refuses a block outright when
+//   |decoder centre - capture centre| + bandwidth / 2 >= sample rate / 2,
+// and LiveAudioDspWorker::drain() publishes the wide overview spectrum before
+// it ever consults the decimator. The two together produce a fault that looks
+// like anything but its cause: the spectrum and waterfall paint signals
+// perfectly while not one sample reaches detection, so no track is ever
+// created and nothing is marked.
+//
+// The stored decoder window defaults to 14.050 MHz and used to move only when
+// the operator dragged a selection in the zoomed view, so a receiver started
+// on any other band decoded nothing at all -- and a receiver retuned away from
+// 20 m lost every track the moment the passband slid out from under the
+// window.
+int testSdrCaptureKeepsDecoderWindowInsidePassband() {
+  cwassistant::desktop::ReplayController controller;
+  std::vector<std::pair<double, double>> windows;
+  QObject::connect(
+      &controller,
+      &cwassistant::desktop::ReplayController::liveSdrDecoderWindowRequested,
+      &controller, [&windows](const double center, const double bandwidth) {
+        windows.emplace_back(center, bandwidth);
+      });
+
+  constexpr double kCaptureCenterHz = 7'030'000.0;
+  constexpr double kSampleRateHz = 2'000'000.0;
+  // The stale 20 m window, exactly as a fresh installation carries it.
+  controller.setSdrInputSelection(
+      QStringLiteral("driver=test"), QStringLiteral("Test SDR"),
+      static_cast<qulonglong>(kCaptureCenterHz),
+      static_cast<int>(kSampleRateHz), 192'000, QStringLiteral("RX"), true,
+      0.0, 14'050'000ULL, 24'000);
+  controller.startLiveSdr();
+  if (windows.empty()) return 75;
+
+  const auto [center_hz, bandwidth_hz] = windows.back();
+  if (bandwidth_hz <= 0.0) return 76;
+  if (std::abs(center_hz - kCaptureCenterHz) + bandwidth_hz * 0.5 >=
+      kSampleRateHz * 0.5) {
+    // The published window cannot be admitted: every IQ block would be
+    // refused and the decoder would receive nothing while the spectrum ran.
+    return 77;
+  }
+
+  // Close the loop on the real component rather than on arithmetic that
+  // merely mirrors it, so the test fails if the decimator's own acceptance
+  // rule ever moves away from what the controller assumes.
+  cwassistant::core::IqSubbandDecimator decimator;
+  if (!decimator.configure({.center_frequency_hz = center_hz,
+                            .bandwidth_hz = bandwidth_hz,
+                            .maximum_output_sample_rate_hz = std::clamp(
+                                bandwidth_hz * 2.5, 48'000.0, 192'000.0)})) {
+    return 78;
+  }
+  cwassistant::core::RealtimeSampleBlock block;
+  block.stream = {.kind = cwassistant::core::StreamKind::ComplexIq,
+                  .sample_rate_hz = kSampleRateHz,
+                  .center_frequency_hz = kCaptureCenterHz,
+                  .channel_count = 1};
+  block.sample_count = 2'048;
+  for (std::size_t index = 0; index < block.sample_count; ++index) {
+    block.samples[index] = {0.01F, 0.0F};
+  }
+  cwassistant::core::RealtimeSampleBlock decoded;
+  const auto status = decimator.process(block, decoded);
+  if (status != cwassistant::core::IqBlockStatus::Accepted &&
+      status !=
+          cwassistant::core::IqBlockStatus::AcceptedAfterDiscontinuity) {
+    return 79;
+  }
+
+  // Retuning the receiver drags the passband away from the window. The
+  // decoder has to be moved with it, or the tracks vanish on the first click
+  // of the dial while the spectrum carries on unchanged.
+  const std::size_t before_retune = windows.size();
+  controller.setSdrInputSelection(
+      QStringLiteral("driver=test"), QStringLiteral("Test SDR"),
+      21'030'000ULL, static_cast<int>(kSampleRateHz), 192'000,
+      QStringLiteral("RX"), true, 0.0,
+      static_cast<qulonglong>(std::llround(center_hz)), 24'000);
+  if (windows.size() <= before_retune) return 80;
+  const auto [retuned_center_hz, retuned_bandwidth_hz] = windows.back();
+  if (std::abs(retuned_center_hz - 21'030'000.0) +
+          retuned_bandwidth_hz * 0.5 >=
+      kSampleRateHz * 0.5) {
+    return 81;
+  }
+  return 0;
+}
+
+
+// A configured span opens the view at that width, not at whatever the radio
+// delivered.
+//
+// SoapySDR devices routinely refuse the requested sample rate and run at the
+// nearest one they support, so a 2 MHz selection can arrive as an 8 MHz frame.
+// Opening at the frame span then buries the entire CW segment in a handful of
+// pixels and the operator has to zoom in by hand before anything is legible.
+int testPreferredSpanOpensTheConfiguredWidth() {
+  constexpr double kCenterHz = 14'050'000.0;
+  constexpr double kDeliveredSpanHz = 8'000'000.0;
+  constexpr double kPreferredSpanHz = 2'000'000.0;
+  cwassistant::desktop::SpectrumWaterfallItem item;
+  item.setPreferredSpanHz(kPreferredSpanHz);
+
+  cwassistant::desktop::SpectrumFrame frame;
+  frame.bins_dbfs = QVector<float>(1024, -90.0F);
+  frame.lower_frequency_hz = kCenterHz - kDeliveredSpanHz * 0.5;
+  frame.upper_frequency_hz = kCenterHz + kDeliveredSpanHz * 0.5;
+  frame.sequence = 1;
+  item.acceptFrame(frame);
+
+  const double span_hz = item.upperFrequencyHz() - item.lowerFrequencyHz();
+  if (std::abs(span_hz - kPreferredSpanHz) > 1.0) return 82;
+  const double view_center_hz =
+      0.5 * (item.lowerFrequencyHz() + item.upperFrequencyHz());
+  if (std::abs(view_center_hz - kCenterHz) > 1.0) return 83;
+
+  // A preference wider than what arrived cannot be honoured and must not
+  // manufacture spectrum that was never received.
+  cwassistant::desktop::SpectrumWaterfallItem narrow_item;
+  narrow_item.setPreferredSpanHz(4'000'000.0);
+  cwassistant::desktop::SpectrumFrame narrow_frame;
+  narrow_frame.bins_dbfs = QVector<float>(1024, -90.0F);
+  narrow_frame.lower_frequency_hz = 14'000'000.0;
+  narrow_frame.upper_frequency_hz = 14'096'000.0;
+  narrow_frame.sequence = 1;
+  narrow_item.acceptFrame(narrow_frame);
+  if (std::abs(narrow_item.lowerFrequencyHz() - 14'000'000.0) > 1.0 ||
+      std::abs(narrow_item.upperFrequencyHz() - 14'096'000.0) > 1.0) {
+    return 84;
+  }
+
+  // No preference leaves the previous behaviour exactly as it was, so an
+  // audio card still opens on its whole axis.
+  cwassistant::desktop::SpectrumWaterfallItem plain_item;
+  plain_item.acceptFrame(frame);
+  if (std::abs(plain_item.upperFrequencyHz() - plain_item.lowerFrequencyHz() -
+               kDeliveredSpanHz) > 1.0) {
+    return 85;
+  }
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  if (const int preferred_span_failure =
+          testPreferredSpanOpensTheConfiguredWidth();
+      preferred_span_failure != 0) {
+    return preferred_span_failure;
+  }
+  if (const int sdr_window_failure =
+          testSdrCaptureKeepsDecoderWindowInsidePassband();
+      sdr_window_failure != 0) {
+    return sdr_window_failure;
+  }
   if (const int zoom_failure = testZoomSurvivesFrames();
       zoom_failure != 0) {
     return zoom_failure;

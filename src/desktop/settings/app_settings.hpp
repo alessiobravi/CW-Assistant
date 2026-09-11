@@ -20,6 +20,10 @@
 
 namespace cwassistant::desktop {
 
+// Declared rather than included: only a reference to it is named here, and
+// the receiver header pulls in the backend interface with it.
+struct SdrDiscoveryReport;
+
 class Cat4OmClient;
 class HamlibRigctldClient;
 class AppSettings final : public QObject {
@@ -56,6 +60,8 @@ class AppSettings final : public QObject {
   Q_PROPERTY(
       QStringList sdrDeviceNames READ sdrDeviceNames NOTIFY sdrSettingsChanged)
   Q_PROPERTY(int sdrDeviceIndex READ sdrDeviceIndex NOTIFY sdrSettingsChanged)
+  Q_PROPERTY(bool sdrDiscoveryRunning READ sdrDiscoveryRunning NOTIFY
+                 sdrDiscoveryRunningChanged)
   Q_PROPERTY(QString sdrDeviceDisplayName READ sdrDeviceDisplayName NOTIFY
                  sdrSettingsChanged)
   Q_PROPERTY(QStringList sdrOperatingModeNames READ sdrOperatingModeNames NOTIFY
@@ -335,6 +341,32 @@ class AppSettings final : public QObject {
                  setDxSpotsToleranceHz NOTIFY settingsChanged)
   Q_PROPERTY(bool dxSpotsShowLabels READ dxSpotsShowLabels WRITE
                  setDxSpotsShowLabels NOTIFY settingsChanged)
+  // The live telnet cluster / reverse-beacon link. It is separate from the
+  // HTTPS spot feed above because it costs something the feed does not: a
+  // cluster login requires the operator's callsign, unencrypted, on somebody
+  // else's machine. Off by default, and the settings page says what joining
+  // sends before the switch can be reached.
+  Q_PROPERTY(bool dxClusterEnabled READ dxClusterEnabled WRITE
+                 setDxClusterEnabled NOTIFY settingsChanged)
+  // Index into dxClusterServers. -1 selects the operator's own host and port
+  // instead, so a node that is not on the shipped list is still reachable
+  // without editing a file.
+  Q_PROPERTY(int dxClusterServerIndex READ dxClusterServerIndex WRITE
+                 setDxClusterServerIndex NOTIFY settingsChanged)
+  Q_PROPERTY(QString dxClusterCustomHost READ dxClusterCustomHost WRITE
+                 setDxClusterCustomHost NOTIFY settingsChanged)
+  Q_PROPERTY(int dxClusterCustomPort READ dxClusterCustomPort WRITE
+                 setDxClusterCustomPort NOTIFY settingsChanged)
+  // There is no separate cluster login: the station callsign is the operator's
+  // identity and it is already configured, so asking for it twice would only
+  // create two values that can disagree on somebody else's server. A station
+  // with no callsign set cannot join a cluster at all, which the settings page
+  // says rather than failing quietly.
+  //
+  // The offered servers, read from dictionaries/dx-cluster-servers.txt. Each
+  // entry carries name, host, port, source and note.
+  Q_PROPERTY(QVariantList dxClusterServers READ dxClusterServers NOTIFY
+                 dxClusterServersChanged)
   Q_PROPERTY(
       QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
@@ -504,6 +536,11 @@ class AppSettings final : public QObject {
   [[nodiscard]] int dxSpotsRetentionMinutes() const noexcept;
   [[nodiscard]] int dxSpotsToleranceHz() const noexcept;
   [[nodiscard]] bool dxSpotsShowLabels() const noexcept;
+  [[nodiscard]] bool dxClusterEnabled() const noexcept;
+  [[nodiscard]] int dxClusterServerIndex() const noexcept;
+  [[nodiscard]] const QString& dxClusterCustomHost() const noexcept;
+  [[nodiscard]] int dxClusterCustomPort() const noexcept;
+  [[nodiscard]] const QVariantList& dxClusterServers() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
@@ -595,6 +632,10 @@ class AppSettings final : public QObject {
   void setDxSpotsRetentionMinutes(int value);
   void setDxSpotsToleranceHz(int value);
   void setDxSpotsShowLabels(bool value);
+  void setDxClusterEnabled(bool value);
+  void setDxClusterServerIndex(int value);
+  void setDxClusterCustomHost(const QString& value);
+  void setDxClusterCustomPort(int value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -604,6 +645,10 @@ class AppSettings final : public QObject {
   Q_INVOKABLE void refreshAudioOutputs();
   Q_INVOKABLE void selectAudioOutput(int index);
   Q_INVOKABLE void refreshSdrDevices();
+  // True from the moment enumeration begins until its result has been applied.
+  // The interface shows a waiting state on it, which is only meaningful
+  // because the scan no longer runs on the thread that draws.
+  [[nodiscard]] bool sdrDiscoveryRunning() const noexcept;
   Q_INVOKABLE void setSdrDecoderWindow(qulonglong center_frequency_hz,
                                        int bandwidth_hz);
   Q_INVOKABLE bool requestSdrRxFrequencyHz(qulonglong frequency_hz);
@@ -651,6 +696,7 @@ class AppSettings final : public QObject {
   void audioOutputsChanged();
   void receiverInputTypeChanged();
   void sdrSettingsChanged();
+  void sdrDiscoveryRunningChanged();
   void statusMessageChanged();
   void setupCompleteChanged();
   void profileChanged();
@@ -667,6 +713,7 @@ class AppSettings final : public QObject {
   void localCallsignDatabaseChanged();
   void localCallsignDatabaseConfigurationCommitted(
       bool enabled, const QString& database_path);
+  void dxClusterServersChanged();
 
  private:
   void load();
@@ -679,6 +726,10 @@ class AppSettings final : public QObject {
   void refreshSelectedSdrCapabilities();
   void rebuildSdrDeviceModes(const QString& preferred_variant_id = {},
                              const QString& preferred_mode_id = {});
+  // Applies an enumeration result. Separated from the scan itself so the
+  // scan can run on a pooled thread while this stays on the thread that owns
+  // the state it writes.
+  void applySdrDiscoveryReport(const SdrDiscoveryReport& report);
   void refreshControlledFrequency();
   void reconcilePendingRxFrequency();
   void rememberPendingRxFrequency(std::uint64_t frequency_hz);
@@ -720,6 +771,7 @@ class AppSettings final : public QObject {
   QStringList sdr_module_names_;
   QStringList sdr_device_names_;
   QStringList sdr_device_ids_;
+  bool sdr_discovery_running_{false};
   QStringList sdr_device_mode_names_;
   QStringList sdr_device_mode_ids_;
   QStringList sdr_device_mode_keys_;
@@ -840,7 +892,7 @@ class AppSettings final : public QObject {
   // the weakest track that carried a correctly recovered callsign
   // measured 19.5 dB, so 12 dB leaves over seven decibels of margin before the
   // threshold could cost the operator a station that was genuinely readable.
-  double minimum_decode_snr_db_{12.0};
+  double minimum_decode_snr_db_{4.0};
   bool local_decoder_enabled_{false};
   // Off by default. Two listed stations can differ by one character, so a
   // correction can name a station that was never heard; the operator opts in.
@@ -874,6 +926,18 @@ class AppSettings final : public QObject {
   // in the neighbouring station.
   int dx_spots_tolerance_hz_{250};
   bool dx_spots_show_labels_{true};
+  // Off by default. Nothing is connected, and no callsign leaves this machine,
+  // until the operator turns this on having read what it sends.
+  bool dx_cluster_enabled_{false};
+  // The first offered server. -1 means the custom host and port below.
+  int dx_cluster_server_index_{0};
+  QString dx_cluster_custom_host_;
+  // The DXSpider default. It is only a starting point for a typed-in node;
+  // nothing is contacted until a host is supplied as well.
+  int dx_cluster_custom_port_{7'300};
+  // Read from data rather than compiled in, so a node that has moved can be
+  // corrected without a new build. Loaded once; the file is not per profile.
+  QVariantList dx_cluster_servers_;
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

@@ -24,8 +24,8 @@ namespace {
 // them is a unit error or a corrupted record rather than a station, and a
 // corroborating overlay drawn at the wrong end of the spectrum is worse than
 // an empty one.
-constexpr double kMinimumSpotFrequencyHz = 100'000.0;
-constexpr double kMaximumSpotFrequencyHz = 300'000'000'000.0;
+using cwassistant::core::kMaximumSpotFrequencyHz;
+using cwassistant::core::kMinimumSpotFrequencyHz;
 
 // Real callsigns, including portable and prefix forms, fit comfortably inside
 // these bounds; anything outside them is not a callsign this application can

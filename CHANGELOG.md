@@ -8,6 +8,25 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Direct SDR reception decoded nothing on any band but 20 m. The decoder is
+  fed by a narrow slice taken from the wide capture, and the slice is refused
+  outright unless it lies wholly inside the passband being acquired. Its
+  centre defaulted to 14.050 MHz and moved only when the operator dragged a
+  selection in the zoomed view, so a receiver started anywhere else had every
+  block refused. The overview spectrum is produced before that refusal, which
+  is why the fault showed as signals painting normally on the spectrum and
+  waterfall with no stream ever identified or marked. The slice is now
+  re-centred on the capture whenever it would fall outside it, both when
+  reception starts and when the receiver is retuned, so the decoder follows
+  the radio instead of being stranded at a frequency no longer being received.
+
+- Starting SDR reception opened the display at whatever span the hardware
+  delivered rather than the one selected. A device asked for 2 MHz commonly
+  runs at the nearest rate it supports instead, and opening at 8 MHz put the
+  whole CW segment inside a few pixels. The first view is now the configured
+  width, centred on the capture, and falls back to the delivered span when
+  that is narrower.
+
 - Stations other receivers report hearing can be shown and used as
   corroboration. A receive-only feed places a marker on the separator between
   the spectrum and the waterfall where a station has been reported, with a
@@ -323,7 +342,51 @@ All notable changes to CW Buddy are recorded here. The format follows
   was feeding the automatic range as though it were a signal. It is interpolated
   across for display only; detection is unaffected.
 
+### Changed
+
+- The threshold below which a signal is not decoded is 4 dB, not 12 dB. The
+  higher figure came from a corpus of twenty-two recordings made through a
+  single receiver; that corpus was never the whole population, and on air the
+  gate proved aggressive enough to suppress workable signals. Recovery across
+  the corpus is unchanged at the lower setting. The saving in processing that
+  the gate also produced is largely given back, because skipping the filtering
+  is the same act as declining to decode: at twenty-four simultaneous signals
+  the cost returns from 0.71 to 1.06 times real time.
+
 ### Added
+
+- Spots can now be received from the DX cluster and reverse-beacon networks
+  themselves, over telnet, rather than only from a web feed. This is what
+  those networks actually speak: the public HTTPS feeds are aggregators, and
+  the Reverse Beacon Network -- the one source here that is a receiver rather
+  than a person, reporting every call it decodes with a measured
+  signal-to-noise ratio and speed -- publishes no web interface at all.
+
+  A server is chosen from a list in `dictionaries/dx-cluster-servers.txt`,
+  which is data and not compiled in, so a host that moves or a node that
+  closes can be corrected without a new build; a custom host and port can be
+  given instead. Every server shipped in that list was connected to and
+  verified before it was listed.
+
+  Spots are filtered twice, and neither filter replaces the other. On the
+  server, the filter commands listed for it are sent at login and any naming a
+  band is sent again when the radio changes band, so what the server sends
+  follows the receiver. On arrival, always, because the reverse beacon network
+  accepts no filter commands at all and its feed runs at roughly six spots a
+  second worldwide; anything outside the band being received is discarded
+  before it is stored. When no receive frequency is known nothing is
+  discarded and no band filter is sent, because a filter that threw everything
+  away for not knowing where the radio was pointed would be worse than none.
+
+  The client joins with the station's configured callsign, which is what the
+  cluster network is for, and sends nothing else: no spots, no announcements,
+  and no reply to anything the server or its users send. Cluster logins are
+  unencrypted, as that protocol has always been. One connection is held at a
+  time and a failure is retried after a wait that lengthens each time rather
+  than in a loop, because these are volunteer machines shared by thousands of
+  operators. The whole feature is off by default, and the existing prohibition
+  is unchanged: a spot corroborates a callsign this receiver decoded and can
+  never supply one, rewrite a character, or reach the transmit path.
 
 - Direct SDR reception can be recorded as interoperable IQ. Recording previously
   refused to run at all on an SDR source, and the writer behind it kept only the

@@ -386,6 +386,12 @@ ApplicationWindow {
                     noiseSuppression: appSettings.waterfallNoiseSuppression
                     noiseMarginDb: appSettings.waterfallNoiseMarginDb
                     showGrid: appSettings.showGrid
+                    // Direct IQ only. An audio card's axis is already the
+                    // width of the passband the operator hears, so there is
+                    // nothing to narrow; a wide SDR capture is the only case
+                    // where the delivered span and the requested one differ.
+                    preferredSpanHz: replayController.sourceMode === 2
+                                     ? appSettings.sdrSampleRateHz : 0
                 }
 
                 Rectangle {

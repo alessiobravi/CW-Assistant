@@ -52,6 +52,10 @@ qt_add_executable(cw-buddy-desktop
   radio/cat4om_client.hpp
   dxcluster/dx_spot_provider.cpp
   dxcluster/dx_spot_provider.hpp
+  dxcluster/dx_cluster_servers.cpp
+  dxcluster/dx_cluster_servers.hpp
+  dxcluster/dx_cluster_client.cpp
+  dxcluster/dx_cluster_client.hpp
   radio/hamlib_rigctld_client.cpp
   radio/hamlib_rigctld_client.hpp
   transmit/transmit_controller.cpp
@@ -131,6 +135,7 @@ qt_add_resources(cw-buddy-desktop "cwa_cw_dictionaries"
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/dx-cluster-servers.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-ww-cw.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-wpx-cw.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-field-day-cw.txt"
@@ -317,6 +322,10 @@ if(CWA_BUILD_TESTS)
     ${PROJECT_SOURCE_DIR}/tests/desktop/spectrum_waterfall_startup_test.cpp
     dxcluster/dx_spot_provider.cpp
     dxcluster/dx_spot_provider.hpp
+    dxcluster/dx_cluster_servers.cpp
+    dxcluster/dx_cluster_servers.hpp
+    dxcluster/dx_cluster_client.cpp
+    dxcluster/dx_cluster_client.hpp
     replay/replay_controller.cpp
     replay/replay_controller.hpp
     replay/live_audio_worker.cpp
@@ -370,7 +379,11 @@ if(CWA_BUILD_TESTS)
   qt_add_executable(cwa_dx_spot_provider_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/dx_spot_provider_test.cpp
     dxcluster/dx_spot_provider.cpp
-    dxcluster/dx_spot_provider.hpp)
+    dxcluster/dx_spot_provider.hpp
+    dxcluster/dx_cluster_servers.cpp
+    dxcluster/dx_cluster_servers.hpp
+    dxcluster/dx_cluster_client.cpp
+    dxcluster/dx_cluster_client.hpp)
   target_link_libraries(cwa_dx_spot_provider_test PRIVATE
     cwa_core Qt6::Core Qt6::Network)
   target_include_directories(cwa_dx_spot_provider_test PRIVATE
@@ -382,6 +395,40 @@ if(CWA_BUILD_TESTS)
     CWA_REPLAY_CONTROLLER_CPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/replay/replay_controller.cpp"
     CWA_DX_SPOT_PROVIDER_CPP_PATH="${CMAKE_CURRENT_SOURCE_DIR}/dxcluster/dx_spot_provider.cpp")
   add_test(NAME cwa_dx_spot_provider_test COMMAND cwa_dx_spot_provider_test)
+
+  qt_add_executable(cwa_dx_cluster_client_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/dx_cluster_client_test.cpp
+    dxcluster/dx_cluster_client.cpp
+    dxcluster/dx_cluster_client.hpp
+    dxcluster/dx_cluster_servers.cpp
+    dxcluster/dx_cluster_servers.hpp)
+  # Qt6::Network for the loopback half: the band-filter tests drive the real
+  # client against a QTcpServer on 127.0.0.1 and read back every line it
+  # wrote, because what is actually sent to a stranger's machine is the thing
+  # worth asserting on. dx_cluster_servers.cpp comes too -- the client calls
+  # DxClusterServer::isValid() and will not link without it.
+  target_link_libraries(cwa_dx_cluster_client_test PRIVATE
+    cwa_core Qt6::Core Qt6::Network)
+  target_include_directories(cwa_dx_cluster_client_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_dx_cluster_client_test COMMAND cwa_dx_cluster_client_test)
+  set_tests_properties(cwa_dx_cluster_client_test PROPERTIES TIMEOUT 60)
+
+  qt_add_executable(cwa_dx_cluster_servers_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/dx_cluster_servers_test.cpp
+    dxcluster/dx_cluster_servers.cpp
+    dxcluster/dx_cluster_servers.hpp)
+  target_link_libraries(cwa_dx_cluster_servers_test PRIVATE
+    cwa_core Qt6::Core)
+  target_include_directories(cwa_dx_cluster_servers_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  # The shipped list is read from the source tree rather than a fixture, so a
+  # server entry cannot be edited into something unparseable without a test
+  # saying so.
+  target_compile_definitions(cwa_dx_cluster_servers_test PRIVATE
+    CWA_DX_CLUSTER_SERVERS_TXT_PATH="${PROJECT_SOURCE_DIR}/dictionaries/dx-cluster-servers.txt")
+  add_test(NAME cwa_dx_cluster_servers_test COMMAND cwa_dx_cluster_servers_test)
+  set_tests_properties(cwa_dx_cluster_servers_test PROPERTIES TIMEOUT 15)
 
   qt_add_executable(cwa_update_checker_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/update_checker_test.cpp

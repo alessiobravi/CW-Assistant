@@ -308,6 +308,22 @@ double SpectrumWaterfallItem::sourceLowerFrequencyHz() const noexcept {
 double SpectrumWaterfallItem::sourceUpperFrequencyHz() const noexcept {
   return source_upper_frequency_hz_;
 }
+double SpectrumWaterfallItem::preferredSpanHz() const noexcept {
+  return preferred_span_hz_;
+}
+
+void SpectrumWaterfallItem::setPreferredSpanHz(const double span_hz) {
+  const double sanitized =
+      std::isfinite(span_hz) && span_hz > 0.0 ? span_hz : 0.0;
+  if (qFuzzyCompare(preferred_span_hz_, sanitized)) return;
+  preferred_span_hz_ = sanitized;
+  // Deliberately not applied to the view in flight: changing the preference
+  // while watching would yank the display out from under the operator. It
+  // takes effect the next time the view is established, which is exactly when
+  // a new receiver setting reaches the spectrum anyway.
+  emit displayChanged();
+}
+
 bool SpectrumWaterfallItem::zoomed() const noexcept {
   return view_initialized_ &&
       (lower_frequency_hz_ > source_lower_frequency_hz_ + 0.5 ||
@@ -410,8 +426,23 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   // predicated on a source change and is therefore false in the steady state:
   // a zoom survived only until the next frame arrived.
   if (!view_initialized_ || (source_changed && !preserve_zoom)) {
-    lower_frequency_hz_ = frame.lower_frequency_hz;
-    upper_frequency_hz_ = frame.upper_frequency_hz;
+    const double frame_span_hz =
+        frame.upper_frequency_hz - frame.lower_frequency_hz;
+    // Open at the span the operator configured rather than at whatever the
+    // hardware happened to deliver. A receiver asked for 2 MHz frequently
+    // runs at the nearest rate it supports instead, and opening at 8 MHz puts
+    // the entire CW segment inside a handful of pixels -- the operator then
+    // has to zoom in by hand before the display says anything at all.
+    if (preferred_span_hz_ > 0.0 && frame_span_hz > 0.0 &&
+        preferred_span_hz_ < frame_span_hz) {
+      const double center_hz =
+          0.5 * (frame.lower_frequency_hz + frame.upper_frequency_hz);
+      lower_frequency_hz_ = center_hz - preferred_span_hz_ * 0.5;
+      upper_frequency_hz_ = center_hz + preferred_span_hz_ * 0.5;
+    } else {
+      lower_frequency_hz_ = frame.lower_frequency_hz;
+      upper_frequency_hz_ = frame.upper_frequency_hz;
+    }
     view_initialized_ = true;
     emit frequencyRangeChanged();
   } else if (preserve_zoom) {

@@ -33,6 +33,13 @@ class SpectrumWaterfallItem : public QQuickItem {
   Q_PROPERTY(double sourceLowerFrequencyHz READ sourceLowerFrequencyHz NOTIFY frequencyRangeChanged)
   Q_PROPERTY(double sourceUpperFrequencyHz READ sourceUpperFrequencyHz NOTIFY frequencyRangeChanged)
   Q_PROPERTY(bool zoomed READ zoomed NOTIFY frequencyRangeChanged)
+  // The span the operator asked the receiver for, in hertz; 0 means "no
+  // preference, show whatever arrives". A device often cannot deliver the
+  // requested rate and runs faster, so a 2 MHz selection can arrive as an
+  // 8 MHz frame and the whole CW segment collapses into a few pixels. This is
+  // the width the first view is opened at, centred on the capture.
+  Q_PROPERTY(double preferredSpanHz READ preferredSpanHz WRITE
+                 setPreferredSpanHz NOTIFY displayChanged)
   Q_PROPERTY(qulonglong droppedRows READ droppedRows NOTIFY droppedRowsChanged)
   Q_PROPERTY(double estimatedNoiseFloorDb READ estimatedNoiseFloorDb NOTIFY noiseFloorChanged)
 
@@ -72,6 +79,8 @@ class SpectrumWaterfallItem : public QQuickItem {
   [[nodiscard]] double sourceLowerFrequencyHz() const noexcept;
   [[nodiscard]] double sourceUpperFrequencyHz() const noexcept;
   [[nodiscard]] bool zoomed() const noexcept;
+  [[nodiscard]] double preferredSpanHz() const noexcept;
+  void setPreferredSpanHz(double span_hz);
   [[nodiscard]] qulonglong droppedRows() const noexcept;
   // How many waterfall rows are currently retained. Exposed so that the
   // history's survival across a retune can be asserted: a receiver moving in
@@ -129,6 +138,7 @@ class SpectrumWaterfallItem : public QQuickItem {
   double source_lower_frequency_hz_{0.0};
   double source_upper_frequency_hz_{0.0};
   bool view_initialized_{false};
+  double preferred_span_hz_{0.0};
   bool automatic_range_{true};
   bool automatic_range_initialized_{false};
   bool noise_suppression_{true};

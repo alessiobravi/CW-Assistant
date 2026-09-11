@@ -266,6 +266,16 @@ int main(int argc, char* argv[]) {
         settings.dxSpotsRefreshSeconds(), settings.dxSpotsRetentionMinutes(),
         settings.dxSpotsToleranceHz());
   };
+  // The cluster logs in as the station callsign rather than one of its own,
+  // so this has to be reapplied when the callsign changes and not only when a
+  // dxcluster setting does. Both arrive on settingsChanged, so one connection
+  // covers it.
+  const auto apply_dx_cluster = [&settings, &replay_controller] {
+    replay_controller.configureDxCluster(
+        settings.dxClusterEnabled(), settings.dxClusterServerIndex(),
+        settings.dxClusterCustomHost(), settings.dxClusterCustomPort(),
+        settings.ownCallsign());
+  };
   const auto apply_radio_frequency = [&settings, &replay_controller] {
     const auto rx_rf_hz = settings.controlledRxRfHz();
     const auto tx_rf_hz = settings.controlledTxRfHz();
@@ -384,6 +394,7 @@ int main(int argc, char* argv[]) {
   apply_decoded_signal_timeout();
   apply_weak_signal_decoding();
   apply_dx_spots();
+  apply_dx_cluster();
   apply_local_character_decoder();
   apply_callsign_database_correction();
   apply_keying_model();
@@ -416,6 +427,9 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_dx_spots);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_dx_cluster);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_callsign_database_correction);

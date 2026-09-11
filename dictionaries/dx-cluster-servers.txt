@@ -1,0 +1,74 @@
+# DX cluster and reverse-beacon servers
+#
+# The servers offered in Settings -> DX Cluster / RBN. These are other
+# people's machines, run by volunteers at their own expense, so treat this
+# list as a guest list rather than an API: connect to one at a time, and do
+# not add a server you have no reason to be on.
+#
+# Before connecting, know what leaves this machine. A cluster login requires
+# a callsign, sent unencrypted, and CW Buddy sends yours in answer to the
+# server's prompt followed by the setup commands below. It sends nothing else
+# -- no spots, no announcements, no replies. Your callsign reaching the server
+# operator, and usually the other logged-in users, is the cost of joining.
+#
+# One server per line:
+#
+#   name | host | port | source | login commands | note
+#
+# source          rbn for a reverse-beacon feed -- a receiver reporting what
+#                 it decoded -- or cluster for human-entered spots. They are
+#                 weighed differently and agreement between them counts for
+#                 more than either alone, so do not relabel one as the other.
+# login commands  separated by ';', sent after login, may be empty. The token
+#                 {BAND} is replaced with the band the receiver is on, as an
+#                 ADIF band name such as 20m. A command containing it is sent
+#                 again whenever the radio changes band, so the server's own
+#                 filter follows the receiver; one without it is setup and is
+#                 sent once. A command is skipped entirely while the band is
+#                 unknown, because a filter with a hole in it is a syntax
+#                 error on somebody else's server.
+#
+#                 The syntax differs by cluster software and is verified
+#                 against each server rather than assumed. DXSpider takes
+#                 `accept/spots 0 on {BAND}/cw` -- confirmed against GB7DJK,
+#                 which echoed it back as `filter0 accept on 20m/cw`.
+#
+#                 CC Cluster and AR-Cluster nodes carry no {BAND} command here
+#                 because none was verified. CC Cluster's own login banner
+#                 lists its whole command set and there is no band filter in
+#                 it; its band filtering belongs to the CC User client rather
+#                 than to plain telnet. Guessing a command to send to somebody
+#                 else's machine is not worth an "Unknown command" reply and a
+#                 filter that silently is not there, so those servers are
+#                 filtered on arrival instead, which happens for every server
+#                 regardless. Add a {BAND} command for one only after watching
+#                 that server accept it.
+# note            shown beside the entry in Settings.
+#
+# Blank lines and lines starting with '#' are ignored. A line that does not
+# parse is skipped, so one bad edit cannot leave you with no servers at all.
+#
+# Edit freely: this file is read at startup and never compiled in.
+
+# --- Reverse beacon: receivers, not people ---
+#
+# The RBN is a network of skimmers decoding CW continuously and reporting
+# every call they hear with a measured signal-to-noise ratio and speed. It is
+# the most useful source here for a CW decoder, and the only one that is
+# itself a receiver. Port 7000 carries CW and RTTY; port 7001 carries FT8 and
+# is deliberately not offered, because nothing in CW Buddy can use it.
+# No login commands: the RBN telnet port accepts none. Its feed arrives
+# unfiltered at roughly six spots a second worldwide and is filtered on
+# arrival instead, against the band being received.
+Reverse Beacon Network (CW/RTTY)|telnet.reversebeacon.net|7000|rbn||Skimmers worldwide, reporting CW with signal-to-noise and speed. The best match for CW decoding.
+
+# --- Cluster: people, and the skimmers their servers relay ---
+#
+# Spot rates vary enormously between these. A server relaying skimmer output
+# can send several spots a second; one carrying only human spots sends a few
+# a minute. Both are useful, for different reasons.
+VE7CC (CC Cluster, Vancouver)|dxc.ve7cc.net|23|cluster|SET/SKIMMER;SET/NOFT8;SET/NOFT4;SET/NOBEACON|Well-run CC Cluster node. Skimmer spots enabled, FT8 and FT4 suppressed.
+NC7J (AR-Cluster, Utah)|dxc.nc7j.com|7373|cluster|SET/SKIMMER;SET/NOFT8|AR-Cluster v6 with an attached CW and RTTY skimmer server.
+DXFun (Spain)|dxfun.com|8000|cluster||Long-running European node with a large user base.
+W3LPL (Maryland)|dxc.w3lpl.net|7373|cluster|SET/SKIMMER;SET/NOFT8|North American node fed by the W3LPL skimmer array.
+GB7DJK (DXSpider, UK)|gb7djk.dxcluster.net|7300|cluster|accept/spots 0 on {BAND}/cw|DXSpider node run by the author of DXSpider; answers as GB7TLH.

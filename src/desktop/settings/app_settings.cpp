@@ -5,9 +5,11 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QMediaDevices>
+#include <QMetaObject>
 #include <QRegularExpression>
 #include <QSerialPortInfo>
 #include <QSettings>
+#include <QThreadPool>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -25,6 +27,7 @@
 // clang-format on
 #endif
 
+#include "../dxcluster/dx_cluster_servers.hpp"
 #include "../radio/cat4om_client.hpp"
 #include "../radio/hamlib_rigctld_client.hpp"
 #include "../sdr/sdr_receiver.hpp"
@@ -42,6 +45,16 @@ constexpr auto kSchemaVersion = 1;
 // short enough that a settings file cannot hand the network layer an
 // unbounded string.
 constexpr int kMaximumDxSpotsEndpointLength = 512;
+
+// A hostname is at most 253 characters, and nothing longer can resolve. The
+// bound exists so a settings file cannot hand the socket layer an unbounded
+// string, not to judge whether the name is reachable.
+constexpr int kMaximumDxClusterHostLength = 253;
+
+// The index a stored selection falls back to when the server list no longer
+// has the entry it named -- the first offered server, never the custom entry,
+// because a custom entry with no host contacts nobody and would look broken.
+constexpr int kDxClusterCustomServerIndex = -1;
 
 QString acceptancePlatformToken() {
 #ifdef Q_OS_WIN
@@ -1411,6 +1424,21 @@ int AppSettings::dxSpotsToleranceHz() const noexcept {
 bool AppSettings::dxSpotsShowLabels() const noexcept {
   return dx_spots_show_labels_;
 }
+bool AppSettings::dxClusterEnabled() const noexcept {
+  return dx_cluster_enabled_;
+}
+int AppSettings::dxClusterServerIndex() const noexcept {
+  return dx_cluster_server_index_;
+}
+const QString& AppSettings::dxClusterCustomHost() const noexcept {
+  return dx_cluster_custom_host_;
+}
+int AppSettings::dxClusterCustomPort() const noexcept {
+  return dx_cluster_custom_port_;
+}
+const QVariantList& AppSettings::dxClusterServers() const noexcept {
+  return dx_cluster_servers_;
+}
 const QString& AppSettings::statusMessage() const noexcept {
   return status_message_;
 }
@@ -1770,6 +1798,23 @@ CWA_SETTER(setDxSpotsReverseBeacon, dx_spots_reverse_beacon_, bool)
 CWA_SETTER(setDxSpotsCluster, dx_spots_cluster_, bool)
 CWA_SETTER(setDxSpotsShowLabels, dx_spots_show_labels_, bool)
 
+void AppSettings::setDxClusterEnabled(const bool value) {
+  // A cluster login is the station callsign, and there is no anonymous one.
+  // Turning the link on without a callsign configured is refused here rather
+  // than discovered later as a connection that never completes, and the
+  // message says where the callsign is set.
+  if (value && own_callsign_.isEmpty()) {
+    setStatusMessage(QStringLiteral(
+        "Set the station callsign first; a cluster login is sent as your "
+        "callsign and cannot be made anonymously."));
+    emit settingsChanged();
+    return;
+  }
+  if (assign_if_changed(dx_cluster_enabled_, value)) {
+    emit settingsChanged();
+  }
+}
+
 void AppSettings::setDxSpotsEndpoint(const QString& value) {
   // Whitespace around a pasted address is the commonest way an endpoint fails
   // to parse, and it is the one thing that can be corrected without guessing.
@@ -1802,6 +1847,37 @@ void AppSettings::setDxSpotsToleranceHz(const int value) {
   }
 }
 
+void AppSettings::setDxClusterServerIndex(const int value) {
+  // -1 is the custom entry and is always selectable. Any other value has to
+  // name an entry that exists: a stored index pointing past the end of an
+  // edited server list must not be carried forward as a connection attempt to
+  // whatever now happens to sit at that position.
+  const int server_count = static_cast<int>(dx_cluster_servers_.size());
+  int bounded = value;
+  if (bounded != kDxClusterCustomServerIndex &&
+      (bounded < 0 || bounded >= server_count)) {
+    bounded = server_count > 0 ? 0 : kDxClusterCustomServerIndex;
+  }
+  if (assign_if_changed(dx_cluster_server_index_, bounded)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxClusterCustomHost(const QString& value) {
+  if (assign_if_changed(dx_cluster_custom_host_,
+                        value.trimmed().left(kMaximumDxClusterHostLength))) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxClusterCustomPort(const int value) {
+  const int clamped = std::clamp(value, 1, 65'535);
+  if (assign_if_changed(dx_cluster_custom_port_, clamped)) {
+    emit settingsChanged();
+  }
+}
+
+
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
   local_callsign_database_status_ =
@@ -1830,6 +1906,10 @@ void AppSettings::setOwnCallsign(const QString& value) {
   const QString trimmed = value.trimmed();
   if (trimmed.isEmpty()) {
     if (assign_if_changed(own_callsign_, QString{})) {
+      // The cluster link logs in as this callsign and has no other identity to
+      // offer, so clearing it switches the link off rather than leaving a
+      // connection configured that can never complete.
+      dx_cluster_enabled_ = false;
       emit settingsChanged();
     }
     return;
@@ -2070,8 +2150,39 @@ void AppSettings::selectAudioInput(const int index) {
 }
 
 void AppSettings::refreshSdrDevices() {
-  SdrReceiver receiver(makeSoapySdrReceiveBackend());
-  const SdrDiscoveryReport report = receiver.discover();
+  // Enumeration asks every vendor module what it can see, which takes long
+  // enough to be noticed. Running it here, on the thread that draws, stopped
+  // the event loop for its whole duration: the application looked frozen, and
+  // no waiting indicator could even animate, because nothing was being
+  // painted. It runs on a pooled thread now and the result is applied back
+  // here, where the state it touches lives.
+  if (sdr_discovery_running_) return;
+  sdr_discovery_running_ = true;
+  emit sdrDiscoveryRunningChanged();
+  emit sdrSettingsChanged();
+  QThreadPool::globalInstance()->start([this] {
+    SdrReceiver receiver(makeSoapySdrReceiveBackend());
+    SdrDiscoveryReport report = receiver.discover();
+    // Back to the thread that owns this object before touching anything it
+    // owns. Nothing below is safe to run anywhere else.
+    QMetaObject::invokeMethod(
+        this,
+        [this, report = std::move(report)] {
+          applySdrDiscoveryReport(report);
+          sdr_discovery_running_ = false;
+          emit sdrDiscoveryRunningChanged();
+          emit sdrSettingsChanged();
+          emit settingsChanged();
+        },
+        Qt::QueuedConnection);
+  });
+}
+
+bool AppSettings::sdrDiscoveryRunning() const noexcept {
+  return sdr_discovery_running_;
+}
+
+void AppSettings::applySdrDiscoveryReport(const SdrDiscoveryReport& report) {
 
   const QString previous_variant_id = sdr_device_id_;
   const QString previous_device_name = sdr_device_name_;
@@ -2531,6 +2642,22 @@ bool AppSettings::apply() {
   dx_spots_refresh_seconds_ = std::clamp(dx_spots_refresh_seconds_, 30, 600);
   dx_spots_retention_minutes_ = std::clamp(dx_spots_retention_minutes_, 1, 60);
   dx_spots_tolerance_hz_ = std::clamp(dx_spots_tolerance_hz_, 50, 1'000);
+  dx_cluster_custom_host_ =
+      dx_cluster_custom_host_.trimmed().left(kMaximumDxClusterHostLength);
+  dx_cluster_custom_port_ = std::clamp(dx_cluster_custom_port_, 1, 65'535);
+  {
+    const int server_count = static_cast<int>(dx_cluster_servers_.size());
+    if (dx_cluster_server_index_ != kDxClusterCustomServerIndex &&
+        (dx_cluster_server_index_ < 0 ||
+         dx_cluster_server_index_ >= server_count)) {
+      dx_cluster_server_index_ =
+          server_count > 0 ? 0 : kDxClusterCustomServerIndex;
+    }
+  }
+  // The link has no identity of its own. Without a station callsign there is
+  // nothing to log in as, so the saved state is off rather than a connection
+  // that would be attempted and refused on every start.
+  if (own_callsign_.isEmpty()) dx_cluster_enabled_ = false;
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -2758,6 +2885,14 @@ bool AppSettings::apply() {
                     dx_spots_tolerance_hz_);
   settings.setValue(storageKey(QStringLiteral("dxSpots/showLabels")),
                     dx_spots_show_labels_);
+  settings.setValue(storageKey(QStringLiteral("dxcluster/enabled")),
+                    dx_cluster_enabled_);
+  settings.setValue(storageKey(QStringLiteral("dxcluster/serverIndex")),
+                    dx_cluster_server_index_);
+  settings.setValue(storageKey(QStringLiteral("dxcluster/customHost")),
+                    dx_cluster_custom_host_);
+  settings.setValue(storageKey(QStringLiteral("dxcluster/customPort")),
+                    dx_cluster_custom_port_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -3155,7 +3290,7 @@ void AppSettings::load() {
           .toBool();
   minimum_decode_snr_db_ =
       settings
-          .value(storageKey(QStringLiteral("decoder/minimumDecodeSnrDb")), 12.0)
+          .value(storageKey(QStringLiteral("decoder/minimumDecodeSnrDb")), 4.0)
           .toDouble();
   local_decoder_enabled_ =
       settings.value(storageKey(QStringLiteral("decoder/localEnabled")), false)
@@ -3230,6 +3365,42 @@ void AppSettings::load() {
   dx_spots_show_labels_ =
       settings.value(storageKey(QStringLiteral("dxSpots/showLabels")), true)
           .toBool();
+  // The server list is file data rather than profile data: read it once, and
+  // keep whatever was read when a profile is switched underneath it.
+  if (dx_cluster_servers_.isEmpty()) {
+    dx_cluster_servers_ = DxClusterServerList::load().toVariantList();
+    emit dxClusterServersChanged();
+  }
+  dx_cluster_custom_host_ =
+      settings.value(storageKey(QStringLiteral("dxcluster/customHost")))
+          .toString()
+          .trimmed()
+          .left(kMaximumDxClusterHostLength);
+  dx_cluster_custom_port_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("dxcluster/customPort")), 7'300)
+          .toInt(),
+      1, 65'535);
+  {
+    // A stored index is only meaningful against the list that is actually
+    // loaded. An edited or shortened file must not silently redirect the
+    // operator to a different server than the one they chose, so an index that
+    // no longer exists falls back to the first entry.
+    const int server_count = static_cast<int>(dx_cluster_servers_.size());
+    const int stored_index =
+        settings.value(storageKey(QStringLiteral("dxcluster/serverIndex")), 0)
+            .toInt();
+    dx_cluster_server_index_ =
+        (stored_index == kDxClusterCustomServerIndex ||
+         (stored_index >= 0 && stored_index < server_count))
+            ? stored_index
+            : (server_count > 0 ? 0 : kDxClusterCustomServerIndex);
+  }
+  // Read after the station callsign, which is what the link logs in as. With
+  // no callsign there is no login, so a stored "on" is not honoured.
+  dx_cluster_enabled_ =
+      settings.value(storageKey(QStringLiteral("dxcluster/enabled")), false)
+          .toBool() &&
+      !own_callsign_.isEmpty();
   local_callsign_database_status_ =
       !local_callsign_database_enabled_
           ? QStringLiteral("Disabled. No local callsign list is in use.")
@@ -3465,7 +3636,7 @@ void AppSettings::resetInMemorySettings() {
   show_spectrum_gesture_hints_ = true;
   decoded_signal_timeout_seconds_ = 30;
   decode_weak_signals_ = false;
-  minimum_decode_snr_db_ = 12.0;
+  minimum_decode_snr_db_ = 4.0;
   local_decoder_enabled_ = false;
   callsign_database_correction_enabled_ = false;
   keying_model_ = QStringLiteral("adaptive-threshold");
@@ -3485,6 +3656,14 @@ void AppSettings::resetInMemorySettings() {
   dx_spots_retention_minutes_ = 15;
   dx_spots_tolerance_hz_ = 250;
   dx_spots_show_labels_ = true;
+  // The loaded server list is deliberately left alone: it is file data shared
+  // by every profile, not a per-station setting.
+  dx_cluster_enabled_ = false;
+  dx_cluster_server_index_ = dx_cluster_servers_.isEmpty()
+                                 ? kDxClusterCustomServerIndex
+                                 : 0;
+  dx_cluster_custom_host_.clear();
+  dx_cluster_custom_port_ = 7'300;
   applyReferenceDefaults(0);
 }
 

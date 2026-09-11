@@ -12,7 +12,10 @@ Pane {
     // object publishes a result. It is deliberately driven by the request and
     // by the completion notification rather than by an assumed duration, so it
     // never claims progress it cannot observe.
-    property bool sdrDiscoveryRunning: false
+    // Reported by the application rather than assumed here. Enumeration runs on
+    // a pooled thread now, so this is true for exactly as long as the scan
+    // actually takes and the waiting indicator can animate while it does.
+    readonly property bool sdrDiscoveryRunning: appSettings.sdrDiscoveryRunning
 
     function formatFrequencyKhz(frequencyHz) {
         return Number((Number(frequencyHz) / 1000).toFixed(3)).toString()
@@ -35,12 +38,9 @@ Pane {
     function beginSdrDiscovery() {
         if (sdrDiscoveryRunning)
             return
-        // Raise the waiting state first, then let the SDR page render before a
-        // vendor module probes USB. Enumeration still runs on the interface
-        // thread, so this one deferred turn is what gives the busy state a
-        // chance to appear. Discovery remains receive-only and does not open or
-        // start any returned device.
-        sdrDiscoveryRunning = true
+        // The application raises and clears the waiting state itself, and
+        // refuses a second scan while one is in flight. Discovery remains
+        // receive-only and does not open or start any device it finds.
         Qt.callLater(function() { appSettings.refreshSdrDevices() })
     }
 
@@ -635,7 +635,7 @@ Pane {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             color: "#91a0b1"
-                            text: "A signal below the threshold is still detected, followed, and drawn in the spectrum; only its decoding is withheld. Off by default because below this level the decoder receives fragments rather than copy, filling the transcript with nothing while each such track costs a full decoder's work. The default of 12.0 dB is measured: the weakest track that carried a correctly recovered callsign across the capture corpus sat at 19.5 dB, leaving over seven decibels of margin. Enable the option above to decode every tracked signal regardless of level."
+                            text: "A signal below the threshold is still detected, followed, and drawn in the spectrum; only its decoding is withheld. Off by default because below this level the decoder receives fragments rather than copy, filling the transcript with nothing while each such track costs a full decoder's work. The default of 4.0 dB is deliberately permissive: a higher threshold was tried and suppressed signals that could be worked, so this withholds decoding only from tracks that are barely above the noise at all. Enable the option above to decode every tracked signal regardless of level."
                         }
                     }
                     Label { text: "Local model" }
@@ -1102,6 +1102,148 @@ Pane {
                         ToolTip.visible: hovered && enabled
                         ToolTip.text: "Draw the spotted callsign beside its marker; turn this off to keep the markers without the text"
                     }
+
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.topMargin: 6
+                        Layout.fillWidth: true
+                        text: "Live cluster connection"
+                        font.pixelSize: 13
+                        font.weight: Font.DemiBold
+                    }
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "The spot feed above reads a web address. This instead joins a cluster or reverse-beacon node over telnet, which is the only way the Reverse Beacon Network publishes its live stream. Spots arrive the same way and are used for the same thing; only the transport differs. One node is joined at a time, and a node that refuses or drops the link is left alone for longer each time rather than retried in a loop."
+                    }
+                    Label { text: "Cluster node" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        ComboBox {
+                            id: dxClusterServerCombo
+                            objectName: "dxClusterServerCombo"
+                            Layout.fillWidth: true
+                            // The last entry is always Custom, so its position
+                            // follows the loaded list rather than a constant
+                            // that a shorter server file would put out of step.
+                            readonly property int customIndex: count - 1
+                            readonly property var selectedServer:
+                                (appSettings.dxClusterServerIndex >= 0
+                                 && appSettings.dxClusterServerIndex < appSettings.dxClusterServers.length)
+                                ? appSettings.dxClusterServers[appSettings.dxClusterServerIndex]
+                                : null
+                            model: {
+                                var names = []
+                                for (var i = 0; i < appSettings.dxClusterServers.length; ++i)
+                                    names.push(appSettings.dxClusterServers[i].name)
+                                names.push("Custom…")
+                                return names
+                            }
+                            currentIndex: appSettings.dxClusterServerIndex < 0
+                                          ? customIndex
+                                          : Math.min(appSettings.dxClusterServerIndex, customIndex)
+                            onActivated: appSettings.dxClusterServerIndex =
+                                         (currentIndex === customIndex ? -1 : currentIndex)
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Read from dictionaries/dx-cluster-servers.txt; edit that file to add or correct a node"
+                        }
+                        Label {
+                            objectName: "dxClusterServerNoteLabel"
+                            Layout.fillWidth: true
+                            visible: dxClusterServerCombo.currentIndex !== dxClusterServerCombo.customIndex
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: dxClusterServerCombo.selectedServer
+                                  ? dxClusterServerCombo.selectedServer.host
+                                    + ":" + dxClusterServerCombo.selectedServer.port
+                                    + " — " + dxClusterServerCombo.selectedServer.note
+                                  : "No servers could be read from dictionaries/dx-cluster-servers.txt; choose Custom and enter a node."
+                        }
+                    }
+                    Label {
+                        text: "Custom node"
+                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        visible: dxClusterServerCombo.currentIndex === dxClusterServerCombo.customIndex
+                        RowLayout {
+                            spacing: 8
+                            Layout.fillWidth: true
+                            TextField {
+                                id: dxClusterCustomHostField
+                                objectName: "dxClusterCustomHostField"
+                                Layout.fillWidth: true
+                                text: appSettings.dxClusterCustomHost
+                                placeholderText: "cluster.example.org"
+                                inputMethodHints: Qt.ImhUrlCharactersOnly
+                                                  | Qt.ImhNoPredictiveText
+                                validator: RegularExpressionValidator {
+                                    regularExpression: /[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?/
+                                }
+                                onEditingFinished: {
+                                    if (acceptableInput)
+                                        appSettings.dxClusterCustomHost = text
+                                    else
+                                        text = appSettings.dxClusterCustomHost
+                                }
+                            }
+                            SpinBox {
+                                objectName: "dxClusterCustomPortSpin"
+                                editable: true
+                                from: 1
+                                to: 65535
+                                value: appSettings.dxClusterCustomPort
+                                onValueModified: appSettings.dxClusterCustomPort = value
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Cluster nodes commonly listen on 23, 7300, 7373 or 8000; the Reverse Beacon Network CW stream is on 7000"
+                            }
+                        }
+                        Label {
+                            objectName: "dxClusterCustomHintLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: appSettings.dxClusterCustomHost.length > 0
+                                   ? "#91a0b1" : "#f3bd55"
+                            text: appSettings.dxClusterCustomHost.length > 0
+                                  ? "Joined over plain telnet, which is what cluster software speaks; there is no encrypted alternative to offer."
+                                  : "Enter the host name of the node to join, for example cluster.example.org"
+                        }
+                    }
+                    Label { text: "Cluster link" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        CheckBox {
+                            objectName: "dxClusterEnabledCheck"
+                            text: "Join the selected node and receive its spots"
+                            // A cluster login is the station callsign, and
+                            // there is no anonymous one, so the switch is not
+                            // reachable until a callsign has been set.
+                            enabled: appSettings.ownCallsign.length > 0
+                            checked: appSettings.dxClusterEnabled
+                            onToggled: appSettings.dxClusterEnabled = checked
+                        }
+                        // Plainly stated rather than tucked into a tooltip:
+                        // this is the one place the application speaks on the
+                        // network, and what it sends is on screen before the
+                        // switch above can be used.
+                        Label {
+                            objectName: "dxClusterLoginLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: appSettings.ownCallsign.length > 0
+                                  ? "Connects as " + appSettings.ownCallsign
+                                    + "; cluster logins are sent unencrypted. Nothing else is sent: no spots, no announcements, no replies."
+                                  : "Set your callsign on the Station tab first. A cluster login is sent as your callsign and cannot be made anonymously."
+                        }
+                    }
+
                     Label { text: "" }
                     Label {
                         objectName: "dxSpotsAuthorityLabel"

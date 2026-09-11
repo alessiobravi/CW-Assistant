@@ -44,15 +44,21 @@ bool readSource(const char* path, std::string& contents) {
 
 // Both values are stored under the profile's own decoder keys, restored with
 // the documented defaults, and bounded before they are written.
+//
+// The threshold default is pinned here deliberately: it decides, silently and
+// for every operator who never opens this setting, which signals are allowed
+// to decode at all. It was 12 dB, a figure measured on a corpus of twenty-two
+// recordings made through one receiver; on air that proved far too aggressive
+// and suppressed workable signals, so it is 4 dB.
 bool persistsBothValuesPerProfile(const std::string& header,
                                   const std::string& implementation) {
   return contains(header, "bool decode_weak_signals_{false};") &&
-         contains(header, "double minimum_decode_snr_db_{12.0};") &&
+         contains(header, "double minimum_decode_snr_db_{4.0};") &&
          contains(implementation,
                   "storageKey(QStringLiteral(\"decoder/decodeWeakSignals\"))") &&
          contains(implementation,
                   "storageKey(QStringLiteral(\"decoder/minimumDecodeSnrDb\"))") &&
-         contains(implementation, "\"decoder/minimumDecodeSnrDb\")), 12.0)") &&
+         contains(implementation, "\"decoder/minimumDecodeSnrDb\")), 4.0)") &&
          contains(implementation,
                   "std::clamp(minimum_decode_snr_db_, 0.0, 40.0)");
 }
