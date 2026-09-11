@@ -334,8 +334,13 @@ if(CWA_BUILD_TESTS)
     visualization/spectrum_waterfall_item.cpp
     visualization/spectrum_waterfall_item.hpp
   )
+  # Qt6::Network is named explicitly because this target now compiles the spot
+  # provider, which uses the network classes directly. Other platforms happen
+  # to resolve it through Qt Quick's own dependencies; a linker that drops
+  # unused libraries does not, so relying on that is how a build passes on
+  # three platforms and fails on the fourth.
   target_link_libraries(cwa_desktop_render_startup_test PRIVATE
-    cwa_core Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Quick)
+    cwa_core Qt6::Core Qt6::Gui Qt6::Multimedia Qt6::Network Qt6::Quick)
   target_include_directories(cwa_desktop_render_startup_test PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR})
   target_compile_definitions(cwa_desktop_render_startup_test PRIVATE

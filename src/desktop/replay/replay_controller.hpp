@@ -2,6 +2,7 @@
 
 #include <QAbstractListModel>
 #include <QObject>
+#include <cstdint>
 #include <QByteArray>
 #include <QList>
 #include <QString>

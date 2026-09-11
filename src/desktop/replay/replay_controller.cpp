@@ -20,6 +20,7 @@
 #include <QVariantMap>
 
 #include <algorithm>
+#include <cstdint>
 #include <cctype>
 #include <chrono>
 #include <cmath>
