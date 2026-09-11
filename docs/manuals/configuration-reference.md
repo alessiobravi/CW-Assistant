@@ -674,6 +674,11 @@ safety gate -- is built by the application and cannot be named in a file. No
 file in that directory can arm a transmitter, change a key-down timeout, or
 relax callsign confirmation.
 
+Cut numbers are declared per field with `cut=`. The shipped contest files
+carry the set an operator actually sends at speed -- `T` and `O` for zero, `A`,
+`U`, `V`, `E` and `N` for one, two, three, five and nine -- so a serial sent as
+`ANU` reads as `123`.
+
 A file that does not parse, or that parses into an exchange the application
 rejects, is refused whole and reported; it never loads partially. One bad
 contest does not remove the others.

@@ -94,10 +94,18 @@ ConversationMacroDefinition macro(
           .safety = {}};
 }
 
+// The contest contraction of a signal report. An operator sends 5NN for 599
+// because the shorter elements are quicker and clearer at speed, so the two
+// are the same report and every RST field must read them alike; written once
+// rather than repeated beside each field that needs it.
+std::vector<ConversationFieldAlias> rstShorthandAliases() {
+  return {{"5NN", "599", false}};
+}
+
 std::vector<ConversationFieldDefinition> commonStationFields() {
   return {field("my_call", ConversationFieldKind::Callsign, false, 16),
           field("rst_tx", ConversationFieldKind::Rst, false, 3, {},
-                {{"5NN", "599", false}})};
+                rstShorthandAliases())};
 }
 
 ConversationProfile contestProfile(
@@ -599,7 +607,7 @@ const ConversationProfile& ordinary_cw_profile() {
       .received_fields = {
           field("remote_call", ConversationFieldKind::Callsign, false, 16),
           field("rst_rx", ConversationFieldKind::Rst, false, 3, {},
-                {{"5NN", "599", false}}),
+                rstShorthandAliases()),
           field("name", ConversationFieldKind::FreeText, false, 64),
           field("qth", ConversationFieldKind::FreeText, false, 96),
           field("conversation", ConversationFieldKind::FreeText, false, 256)},

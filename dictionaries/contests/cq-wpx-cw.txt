@@ -5,7 +5,7 @@ rules-url = https://cqwpx.com/rules/
 
 [received]
 rst_rx     rst     required  max=3  alias=5NN>599
-serial_rx  serial  required  max=6  cut=T>0  cut=N>9
+serial_rx  serial  required  max=6  cut=T>0  cut=O>0  cut=A>1  cut=U>2  cut=V>3  cut=E>5  cut=N>9
 
 [station]
 serial_tx  serial  optional  max=6

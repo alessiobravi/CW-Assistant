@@ -1,5 +1,6 @@
 #include "cwassistant/core/cw_decoder.hpp"
 #include "cwassistant/core/cw_morse_alphabet.hpp"
+#include "cwassistant/core/cw_speed_anchors.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -688,13 +689,11 @@ void CwMultiSpeedDecoder::reset() {
 }
 
 void CwMultiSpeedDecoder::resetHypotheses() {
-  static constexpr double speeds[]{8.0, 12.0, 16.0, 20.0, 25.0,
-                                   32.0, 40.0, 50.0, 60.0};
   hypotheses_.clear();
-  hypotheses_.reserve(std::size(speeds));
-  for (const double speed : speeds)
+  hypotheses_.reserve(kCwSeedWpmAnchors.size());
+  for (const double speed : kCwSeedWpmAnchors)
     hypotheses_.emplace_back(speed, decoder_config_);
-  leader_index_ = 3;
+  leader_index_ = cwSeedWpmAnchorIndex(kCwInitialLeaderWpm);
   locked_index_ = 0;
   first_timestamp_ns_ = 0;
   last_signal_timestamp_ns_ = 0;

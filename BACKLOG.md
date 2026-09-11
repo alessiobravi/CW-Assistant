@@ -6,7 +6,33 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-first entry) -- contest exchanges are data.
+Last reviewed: 2026-09-11 (forty-second entry) -- the outstanding cleanups are
+done. Cut numbers carried only `T` and `N`, so a serial sent as `ANU` read as
+letters instead of 123; the shipped contest files now declare the set an
+operator sends at speed, which was a data edit rather than a rebuild now that
+contests are files. The nine speed anchors existed twice, in the multi-speed and
+probabilistic decoders, and the starting anchor was a bare index into one of
+them; both read one definition and the starting speed is named. The contest
+contraction of a signal report is written once.
+
+The crash recorded two entries ago is fixed and the fix is verified rather than
+assumed: with no dictionaries the suite exited 139 before and exits 1 now, with
+twenty-four named failures instead of a signal. The pattern was reading front()
+of a container immediately after the expectation that catches it being empty,
+so the crash replaced the diagnosis.
+
+Remaining, and none of it is tidying. A turn becomes semantic only once the
+decoder observes the next transmission begin, so the last thing a station sends
+never reaches the context rescorer -- usually its callsign. The rescorer runs
+only in `completeTransmission` and so never shapes the running text an operator
+watches. `SpectrumSnapshot::noise_bandwidth_hz` is published and nothing
+consumes it. The per-track front end still builds a complex baseband at the full
+rate and discards it for all but the monitored track, and all nine hypotheses
+continue after lock (`PERF-002`). Recalibrating the evidence chain, which the
+fortieth entry establishes as the prerequisite for any likelihood change,
+remains deferred.
+
+Previous review: 2026-09-11 (forty-first entry) -- contest exchanges are data.
 CQ WW, CQ WPX, ARRL Field Day and November Sweepstakes moved out of
 `conversation_profile.cpp` into `dictionaries/contests/`, one file each, with
 the format documented beside them. The parser feeds the existing

@@ -8,6 +8,28 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Contest cut numbers were incomplete. Only `T` for zero and `N` for nine
+  were declared, so a serial sent as `ANU` read as letters rather than 123 --
+  a wrong exchange logged as though it were right. The shipped contest files
+  now carry the set an operator actually sends at speed, and because those
+  files are data this was an edit rather than a rebuild.
+
+- Three duplicated definitions are written once. The nine speed anchors every
+  decoder starts from existed separately in the multi-speed and probabilistic
+  decoders, so a speed added to one and not the other would have left the two
+  disagreeing about which senders they can acquire with nothing to report it;
+  the starting anchor is also named now rather than written as a bare index
+  that silently selects a different speed if the set changes. The contest
+  contraction of a signal report is declared once instead of beside each
+  field that needs it.
+
+- A failing decoder test crashed instead of reporting. The slow-track checks
+  read the first element of containers the expectations immediately above had
+  just failed on, so a decoder that produced no track turned a clear list of
+  failures into a segmentation fault, and the crash was what got reported
+  rather than the cause. Measured against a build with no dictionaries: the
+  suite now exits with twenty-four named failures instead of a signal.
+
 - Contest exchanges are data. The four supported contests were built in the
   application, so a sponsor changing an exchange, or an operator wanting a
   contest that is not among them, needed a rebuild. Each is now a file in

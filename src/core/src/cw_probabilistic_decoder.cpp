@@ -1,5 +1,7 @@
 #include "cwassistant/core/cw_probabilistic_decoder.hpp"
 
+#include "cwassistant/core/cw_speed_anchors.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -272,8 +274,6 @@ CwProbabilisticDecoderUpdate CwProbabilisticMorseDecoder::decode(
   }
   if (working.observationCount() == 0U) return snapshot(false);
 
-  constexpr std::array<double, 9> seed_wpm{
-      8.0, 12.0, 16.0, 20.0, 25.0, 32.0, 40.0, 50.0, 60.0};
   std::array<double, 12> candidate_wpm{};
   std::size_t candidate_count = 0;
   const auto add_wpm = [&](const double value) {
@@ -285,7 +285,7 @@ CwProbabilisticDecoderUpdate CwProbabilisticMorseDecoder::decode(
     if (candidate_count < candidate_wpm.size())
       candidate_wpm[candidate_count++] = bounded;
   };
-  for (const double value : seed_wpm) add_wpm(value);
+  for (const double value : kCwSeedWpmAnchors) add_wpm(value);
   const double estimated_wpm = 1'200.0 / estimated_dot_ms_;
   add_wpm(estimated_wpm * 0.90);
   add_wpm(estimated_wpm);

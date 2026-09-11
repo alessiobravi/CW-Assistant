@@ -1002,6 +1002,15 @@ void test_cw_channel_bank() {
   // A VFO retune (a known, deliberate audio-domain shift) must preserve the
   // track's identity and decoded history, unlike an unexplained jump that
   // exceeds normal tracking tolerance and would be treated as a lost track.
+  // Stop here rather than dereference what the expectations above just failed
+  // on. Every check from this point reads front() of these containers, so a
+  // decoder that produced no track turns a clear list of failures into a
+  // crash, and the crash is what gets reported instead of the cause.
+  if (slow_track_diagnostics.empty() || slow_bank.channels().empty()) {
+    expect(false,
+           "slow-track checks need a tracked channel; skipping the rest");
+    return;
+  }
   const auto text_before_shift = slow_track_diagnostics.front().text;
   const auto frequency_before_shift = slow_bank.channels().front().frequency_hz;
   slow_bank.shiftTrackedFrequencies(300.0);

@@ -4,10 +4,10 @@ revision = 1
 rules-url = https://www.arrl.org/sweepstakes
 
 [received]
-serial_rx           serial       required  max=6  cut=T>0  cut=N>9
+serial_rx           serial       required  max=6  cut=T>0  cut=O>0  cut=A>1  cut=U>2  cut=V>3  cut=E>5  cut=N>9
 precedence_rx       enumeration  required  max=1  values=Q,A,B,U,M,S
 exchange_call_rx    callsign     required  max=16
-check_rx            serial       required  max=2  cut=T>0  cut=N>9
+check_rx            serial       required  max=2  cut=T>0  cut=O>0  cut=A>1  cut=U>2  cut=V>3  cut=E>5  cut=N>9
 section_rx          text         required  max=4
 
 [station]

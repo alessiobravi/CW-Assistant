@@ -69,6 +69,12 @@ void testTypedFieldSuggestions() {
   const auto serial = suggest_received_field_value(wpx, "serial_rx", "1T3N");
   expect(serial && serial->syntactically_valid && serial->normalized == "1039",
          "declared cut numbers normalize within serial field");
+  // The full set an operator actually sends, not just the two that used to be
+  // declared: a serial sent as ANU is 123, and read as letters it is a wrong
+  // exchange logged as though it were right.
+  const auto cut = suggest_received_field_value(wpx, "serial_rx", "ANUVEO");
+  expect(cut && cut->syntactically_valid && cut->normalized == "192350",
+         "every declared cut number normalizes within a serial field");
   const auto call = suggest_received_field_value(wpx, "remote_call", "n1abc");
   expect(call && call->syntactically_valid && call->normalized == "N1ABC",
          "callsign has typed validation without serial aliases");
