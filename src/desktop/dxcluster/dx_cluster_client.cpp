@@ -220,6 +220,49 @@ constexpr char16_t kDeleteAscii = 0x007F;
   return trimmed.toLower();
 }
 
+// The login this client may send, spelled exactly as it will go on the wire,
+// or nothing at all when this text may not be sent.
+//
+// A cluster login is `CALL` or `CALL-N`. The SSID is how a node tells one of
+// an operator's connections from another: a station already logged in as
+// CALL-1 that connects again as a bare CALL takes over its own first session
+// instead of joining beside it, so an operator running CW Buddy next to a
+// logging program has to be able to say which connection this one is. It is a
+// suffix on the login and nothing more. The part in front of the hyphen is
+// still a callsign under the program's single definition of callsign syntax,
+// which CallsignPolicy owns and the decoder shares; nothing here loosens that
+// definition, because a `-` admitted into it would change what the decoder
+// accepts as a callsign off the air.
+//
+// The split is on the last hyphen rather than the first, which is what keeps
+// that true: `CALL-1-2` leaves `CALL-1` in front of it, and `CALL-1` is not a
+// callsign, so the whole thing is refused.
+[[nodiscard]] std::optional<QString> wireLoginCallsign(
+    const QString& callsign) {
+  QString base = callsign.trimmed();
+  QString ssid;
+  const auto separator = base.lastIndexOf(QLatin1Char('-'));
+  if (separator >= 0) {
+    ssid = base.mid(separator + 1);
+    // One or two ASCII digits, and nothing else. A hyphen with nothing behind
+    // it, three digits, or a letter is a typing mistake that would be written
+    // to a stranger's server under the operator's name and answered with an
+    // error the operator never sees. Tested by code point rather than with
+    // QChar::isDigit, which is also true of digits outside ASCII.
+    if (ssid.isEmpty() || ssid.size() > 2) return std::nullopt;
+    for (const QChar character : ssid) {
+      const char16_t code = character.unicode();
+      if (code < u'0' || code > u'9') return std::nullopt;
+    }
+    base = base.left(separator);
+  }
+  const auto normalised =
+      cwassistant::core::CallsignPolicy::normalize(base.toStdString());
+  if (!normalised) return std::nullopt;
+  const QString login = QString::fromStdString(*normalised);
+  return ssid.isEmpty() ? login : login + QLatin1Char('-') + ssid;
+}
+
 // Whether two descriptions name the same session. Changing any of these means
 // a different machine, a different kind of evidence, or a different setup
 // conversation, and all of them require the connection to be made again.
@@ -467,9 +510,14 @@ DxClusterLine DxClusterClient::parseLine(
 bool DxClusterClient::isAcceptableLoginCallsign(const QString& callsign) {
   // Two questions, both of which have to be answered yes.
   //
-  // The first is syntax, and it is not asked here. CallsignPolicy::normalize
-  // is the whole program's definition of a valid callsign and a cluster login
-  // does not get a second one beside it, which would be free to drift.
+  // The first is syntax, and the callsign half of it is not asked here.
+  // CallsignPolicy::normalize is the whole program's definition of a valid
+  // callsign and a cluster login does not get a second one beside it, which
+  // would be free to drift. What a login may carry in addition is the cluster
+  // SSID -- `-1`, `-12` -- which is not part of any callsign and is taken off
+  // before the policy is asked. wireLoginCallsign above does both halves, and
+  // it is the same function that produces what is written to the socket, so
+  // there is no second spelling of the login anywhere.
   //
   // The second is what makes this different from every other callsign check in
   // the application, and why it is not simply `normalize`. This string is
@@ -482,8 +530,7 @@ bool DxClusterClient::isAcceptableLoginCallsign(const QString& callsign) {
     const char16_t code = character.unicode();
     if (code < kFirstPrintableAscii || code == kDeleteAscii) return false;
   }
-  return cwassistant::core::CallsignPolicy::normalize(callsign.toStdString())
-      .has_value();
+  return wireLoginCallsign(callsign).has_value();
 }
 
 void DxClusterClient::openConnection() {
@@ -654,12 +701,11 @@ void DxClusterClient::handleLine(const QString& line) {
     // that has already said no; the server or the idle timer ends the session
     // instead.
     if (logged_in_) return;
-    const auto callsign = cwassistant::core::CallsignPolicy::normalize(
-        login_callsign_.toStdString());
-    if (!callsign) return;
+    const auto accepted = wireLoginCallsign(login_callsign_);
+    if (!accepted) return;
     logged_in_ = true;
     consecutive_failures_ = 0;
-    const QString login = QString::fromStdString(*callsign);
+    const QString login = *accepted;
     sendLine(login);
     // The only other thing ever written to this socket: the setup commands the
     // chosen server needs before it sends what a CW decoder can use, with the

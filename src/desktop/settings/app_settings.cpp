@@ -1418,6 +1418,19 @@ const QString& AppSettings::dxClusterCustomHost() const noexcept {
 int AppSettings::dxClusterCustomPort() const noexcept {
   return dx_cluster_custom_port_;
 }
+int AppSettings::dxClusterLoginSsid() const noexcept {
+  return dx_cluster_login_ssid_;
+}
+QString AppSettings::dxClusterLoginCallsign() const {
+  // Composed, never stored. The station callsign is the identity and the SSID
+  // only says which of this operator's connections this one is, so there is no
+  // third value here to drift from either of them. No callsign means no login
+  // at all rather than a bare SSID: a cluster cannot be joined anonymously.
+  if (own_callsign_.isEmpty()) return {};
+  if (dx_cluster_login_ssid_ <= 0) return own_callsign_;
+  return own_callsign_ + QStringLiteral("-") +
+         QString::number(dx_cluster_login_ssid_);
+}
 const QVariantList& AppSettings::dxClusterServers() const noexcept {
   return dx_cluster_servers_;
 }
@@ -1834,6 +1847,17 @@ void AppSettings::setDxClusterCustomHost(const QString& value) {
 void AppSettings::setDxClusterCustomPort(const int value) {
   const int clamped = std::clamp(value, 1, 65'535);
   if (assign_if_changed(dx_cluster_custom_port_, clamped)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDxClusterLoginSsid(const int value) {
+  // 0..99 is what a cluster accepts behind the hyphen, and it is the whole
+  // range the settings page offers. A value outside it is clamped rather than
+  // refused: the number decides nothing but which of the operator's own
+  // connections this is.
+  const int clamped = std::clamp(value, 0, 99);
+  if (assign_if_changed(dx_cluster_login_ssid_, clamped)) {
     emit settingsChanged();
   }
 }
@@ -2603,6 +2627,7 @@ bool AppSettings::apply() {
   dx_cluster_custom_host_ =
       dx_cluster_custom_host_.trimmed().left(kMaximumDxClusterHostLength);
   dx_cluster_custom_port_ = std::clamp(dx_cluster_custom_port_, 1, 65'535);
+  dx_cluster_login_ssid_ = std::clamp(dx_cluster_login_ssid_, 0, 99);
   {
     const int server_count = static_cast<int>(dx_cluster_servers_.size());
     if (dx_cluster_server_index_ != kDxClusterCustomServerIndex &&
@@ -2849,6 +2874,8 @@ bool AppSettings::apply() {
                     dx_cluster_custom_host_);
   settings.setValue(storageKey(QStringLiteral("dxcluster/customPort")),
                     dx_cluster_custom_port_);
+  settings.setValue(storageKey(QStringLiteral("dxcluster/loginSsid")),
+                    dx_cluster_login_ssid_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -3321,6 +3348,10 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("dxcluster/customPort")), 7'300)
           .toInt(),
       1, 65'535);
+  dx_cluster_login_ssid_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("dxcluster/loginSsid")), 0)
+          .toInt(),
+      0, 99);
   {
     // A stored index is only meaningful against the list that is actually
     // loaded. An edited or shortened file must not silently redirect the
@@ -3600,6 +3631,7 @@ void AppSettings::resetInMemorySettings() {
                                  : 0;
   dx_cluster_custom_host_.clear();
   dx_cluster_custom_port_ = 7'300;
+  dx_cluster_login_ssid_ = 0;
   applyReferenceDefaults(0);
 }
 

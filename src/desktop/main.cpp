@@ -264,11 +264,15 @@ int main(int argc, char* argv[]) {
   // this has to be reapplied when the callsign changes and not only when a
   // dxcluster setting does. Both arrive on settingsChanged, so one connection
   // covers it.
+  //
+  // dxClusterLoginCallsign rather than ownCallsign: it is the station callsign
+  // with the optional cluster SSID appended, which is how an operator running
+  // more than one connection from one station is told apart on a node.
   const auto apply_dx_cluster = [&settings, &replay_controller] {
     replay_controller.configureDxCluster(
         settings.dxClusterEnabled(), settings.dxClusterServerIndex(),
         settings.dxClusterCustomHost(), settings.dxClusterCustomPort(),
-        settings.ownCallsign(), settings.dxSpotsRetentionMinutes(),
+        settings.dxClusterLoginCallsign(), settings.dxSpotsRetentionMinutes(),
         settings.dxSpotsToleranceHz());
   };
   const auto apply_radio_frequency = [&settings, &replay_controller] {

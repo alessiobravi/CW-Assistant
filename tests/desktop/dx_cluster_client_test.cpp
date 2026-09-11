@@ -18,6 +18,14 @@
 // carrying CR or LF -- a newline inside it would send everything after it to
 // that server as a command line of its own.
 //
+// The login may carry one thing a callsign may not: the cluster SSID, the
+// `-1` that tells a node which of an operator's connections this is. It is a
+// suffix on the login, split off before the callsign policy is consulted, and
+// never a loosening of that policy -- the decoder shares it, and a `-`
+// admitted into it would change what is accepted as a callsign off the air.
+// Admitting the hyphen must not admit a newline behind it, which is what the
+// CR/LF case below exists to hold.
+//
 // All of this runs for real: parseLine and isAcceptableLoginCallsign are
 // static and free of socket, clock and member state, so every acceptance and
 // rejection rule can be exercised directly.
@@ -522,14 +530,15 @@ bool acceptsAPlausibleLoginCallsign() {
 // server under the operator's name, and the server would answer with an error
 // the operator never sees.
 //
-// `VE7CC-1` is refused deliberately: the hyphenated SSID form is not a
-// callsign under CallsignPolicy::normalize, which is the program's single
-// definition of callsign syntax, and a spotting or login path does not get a
-// second, looser one.
+// The hyphen is the one character a login may carry that a callsign may not,
+// and only as the cluster SSID: `VE7CC-1` is a login, tested below. What sits
+// in front of the hyphen is still judged by CallsignPolicy::normalize, the
+// program's single definition of callsign syntax, which is not relaxed here
+// and is not given a second, looser copy.
 bool refusesALoginCallsignThePolicyRejects() {
   for (const char* callsign :
        {"", "   ", "\t", "K1", "CQ", "ABC", "12345", "/W1AW", "W1AW/",
-        "W1AW//P", "VE7CC-1", "W1AW DE IU0LFQ", "please enter your call",
+        "W1AW//P", "W1AW DE IU0LFQ", "please enter your call",
         "W1AW\x01", "W1AW\x7f", "THISCALLSIGNISFARTOOLONG"}) {
     if (DxClusterClient::isAcceptableLoginCallsign(
             QString::fromLatin1(callsign))) {
@@ -566,12 +575,13 @@ bool refusesALoginCallsignCarryingCrOrLf() {
   return CallsignPolicy::normalize("W1AW\r\n").has_value();
 }
 
-// Everything else this accepts or refuses is the program's one callsign
-// definition, not a private rule invented here. Two definitions would drift,
-// and the looser one would always be the one facing the network.
+// Everything else this accepts or refuses, once any SSID has been taken off,
+// is the program's one callsign definition and not a private rule invented
+// here. Two definitions would drift, and the looser one would always be the
+// one facing the network.
 bool agreesWithTheOneCallsignPolicy() {
   for (const char* callsign :
-       {"IU0LFQ", "W1AW", "IU0LFQ/P", "iu0lfq", "VE7CC", "VE7CC-1", "K1",
+       {"IU0LFQ", "W1AW", "IU0LFQ/P", "iu0lfq", "VE7CC", "K1",
         "ABC", "12345", "/W1AW", "W1AW/", "", "   ", "DL1ABC/QRP",
         "W1AW DE IU0LFQ", "A1A", "4X4AAA", "THISCALLSIGNISFARTOOLONG"}) {
     const bool accepted = DxClusterClient::isAcceptableLoginCallsign(
@@ -579,7 +589,81 @@ bool agreesWithTheOneCallsignPolicy() {
     const bool policy = CallsignPolicy::normalize(callsign).has_value();
     if (accepted != policy) return false;
   }
+  // An SSID is a suffix on a login, never a widening of what a callsign is.
+  // What the policy refuses in front of the hyphen stays refused with any
+  // SSID stuck on the end of it.
+  for (const char* callsign :
+       {"K1-1", "ABC-1", "12345-1", "/W1AW-1", "W1AW/-1",
+        "THISCALLSIGNISFARTOOLONG-1", "W1AW DE IU0LFQ-1"}) {
+    if (DxClusterClient::isAcceptableLoginCallsign(
+            QString::fromLatin1(callsign))) {
+      return false;
+    }
+  }
   return true;
+}
+
+// The SSID an operator actually logs in with.
+//
+// A cluster tells one of an operator's connections from another by it. With a
+// logging program already on the node as IU0LFQ, a CW Buddy that could only
+// offer the bare callsign would take that session over rather than join beside
+// it, and the operator would lose the connection they were already using --
+// which is what is lost if these are refused.
+bool acceptsALoginCallsignCarryingAnSsid() {
+  for (const char* callsign :
+       {"IU0LFQ-1", "W1AW-12", "IU0LFQ", "VE7CC-1", "IU0LFQ/P-2", "iu0lfq-9",
+        " IU0LFQ-1 "}) {
+    if (!DxClusterClient::isAcceptableLoginCallsign(
+            QString::fromLatin1(callsign))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// What is not an SSID.
+//
+// A hyphen with nothing behind it, three digits, a letter, a second hyphen, or
+// a hyphen with no callsign at all in front of it are all typing mistakes.
+// Every one of them would be written to a stranger's server under the
+// operator's name and answered with an error line the operator never sees, and
+// the link would sit there looking connected while no spot ever arrived.
+bool refusesAMalformedSsid() {
+  for (const char* callsign :
+       {"IU0LFQ-", "IU0LFQ-123", "IU0LFQ-A", "-1", "-", "IU0LFQ-1-2",
+        "IU0LFQ--1", "IU0LFQ-1A", "IU0LFQ- 1", "IU0LFQ-+1"}) {
+    if (DxClusterClient::isAcceptableLoginCallsign(
+            QString::fromLatin1(callsign))) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The security-relevant assertion of the SSID change, kept apart from the rest
+// of it because it is the one thing admitting a hyphen must not have opened.
+//
+// `IU0LFQ-1\r\nSH/DX` is a valid login with a second command line stapled to
+// it. Accepted, it would write SH/DX to a volunteer's machine under the
+// operator's callsign -- a command the operator never issued, on a server
+// belonging to somebody else. The line test is applied to the text exactly as
+// given, in front of the SSID split, so a hyphen buys a digit and nothing
+// else.
+bool refusesAnSsidCarryingCrOrLf() {
+  for (const char* callsign :
+       {"IU0LFQ-1\r\nSH/DX", "IU0LFQ-1\r\n", "IU0LFQ-1\n", "IU0LFQ-1\r",
+        "IU0LFQ-12\r\nSET/SKIMMER", "IU0LFQ-1\nBYE", "IU0LFQ\r\n-1",
+        "IU0LFQ-\n1", "\nIU0LFQ-1", "\r\nIU0LFQ-1"}) {
+    if (DxClusterClient::isAcceptableLoginCallsign(
+            QString::fromLatin1(callsign))) {
+      return false;
+    }
+  }
+  // The same gap the bare-callsign case closes, with an SSID on it: the shared
+  // policy trims a trailing newline away and says yes to what is left, so the
+  // refusal cannot be delegated to it.
+  return CallsignPolicy::normalize("IU0LFQ\r\n").has_value();
 }
 
 
@@ -862,6 +946,9 @@ int main(int argc, char** argv) {
   if (!refusesALoginCallsignThePolicyRejects()) return 20;
   if (!refusesALoginCallsignCarryingCrOrLf()) return 21;
   if (!agreesWithTheOneCallsignPolicy()) return 22;
+  if (!acceptsALoginCallsignCarryingAnSsid()) return 27;
+  if (!refusesAMalformedSsid()) return 28;
+  if (!refusesAnSsidCarryingCrOrLf()) return 29;
 
   if (!resolvesTheBandTokenOnTheWire()) return 23;
   if (!resolvesTheBandNumberTokenForArCluster()) return 26;

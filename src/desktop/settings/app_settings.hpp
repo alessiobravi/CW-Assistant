@@ -350,6 +350,22 @@ class AppSettings final : public QObject {
   // with no callsign set cannot join a cluster at all, which the settings page
   // says rather than failing quietly.
   //
+  // What the operator may add to it is the SSID a cluster uses to tell one of
+  // their connections from another. Logging in as CALL-1 while CALL-2 is
+  // already on the node is ordinary practice; without it the second
+  // connection displaces the first, and the operator loses the session they
+  // were already using. It is a number, 0..99, and 0 means no SSID at all.
+  // Deliberately not a second callsign field: the identity on the wire stays
+  // the configured station callsign.
+  Q_PROPERTY(int dxClusterLoginSsid READ dxClusterLoginSsid WRITE
+                 setDxClusterLoginSsid NOTIFY settingsChanged)
+  // The login exactly as it will be sent: the station callsign, with the SSID
+  // appended when there is one, and empty when no callsign is set. Read-only,
+  // because both halves are already settings and a third editable copy of
+  // them could disagree with both.
+  Q_PROPERTY(QString dxClusterLoginCallsign READ dxClusterLoginCallsign NOTIFY
+                 settingsChanged)
+  //
   // The offered servers, read from dictionaries/dx-cluster-servers.txt. Each
   // entry carries name, host, port, source and note.
   Q_PROPERTY(QVariantList dxClusterServers READ dxClusterServers NOTIFY
@@ -522,6 +538,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] int dxClusterServerIndex() const noexcept;
   [[nodiscard]] const QString& dxClusterCustomHost() const noexcept;
   [[nodiscard]] int dxClusterCustomPort() const noexcept;
+  [[nodiscard]] int dxClusterLoginSsid() const noexcept;
+  [[nodiscard]] QString dxClusterLoginCallsign() const;
   [[nodiscard]] const QVariantList& dxClusterServers() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
@@ -613,6 +631,7 @@ class AppSettings final : public QObject {
   void setDxClusterServerIndex(int value);
   void setDxClusterCustomHost(const QString& value);
   void setDxClusterCustomPort(int value);
+  void setDxClusterLoginSsid(int value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -902,6 +921,10 @@ class AppSettings final : public QObject {
   // The DXSpider default. It is only a starting point for a typed-in node;
   // nothing is contacted until a host is supplied as well.
   int dx_cluster_custom_port_{7'300};
+  // 0 means no SSID, which is what a single connection wants: the login is the
+  // bare station callsign. 1..99 appends `-N`, so a second connection from the
+  // same station joins beside the first instead of replacing it.
+  int dx_cluster_login_ssid_{0};
   // Read from data rather than compiled in, so a node that has moved can be
   // corrected without a new build. Loaded once; the file is not per profile.
   QVariantList dx_cluster_servers_;

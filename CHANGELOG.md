@@ -8,6 +8,11 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- A cluster login carrying an SSID would have connected and then never sent
+  its callsign. The login was written to the socket through the shared
+  callsign policy, which refuses a hyphen, so the composed name resolved to
+  nothing and the node was left waiting at its prompt.
+
 - Moving the VFO no longer costs a tracked stream. A signal carried out of the
   processed passband by a retune was expired on the ordinary retention
   timeout, exactly as if it had faded -- which was deliberate and wrong. The
@@ -387,6 +392,25 @@ All notable changes to CW Buddy are recorded here. The format follows
   the cost returns from 0.71 to 1.06 times real time.
 
 ### Added
+
+- The cluster login can carry a connection SSID, 0 to 99. An operator running
+  more than one connection from one station is told apart on a node by it, so
+  CW Buddy can join as `CALL-1` beside a logging program already logged in as
+  `CALL`. It is a number rather than a second callsign field: the login is
+  always composed from the station callsign, and the line beneath the switch
+  shows it exactly as it will be sent. The shared callsign policy is
+  unchanged -- it is what the decoder uses to judge a callsign on the air, and
+  loosening it to admit a hyphen for the sake of a login would have changed
+  what the decoder accepts.
+
+- The spectrum separator carries an audio-offset scale, completing the ruler
+  work begun when the main axis started reading RF. Once the axis is in RF an
+  operator loses the sense of how wide the visible span is in audio, which is
+  what the decoder hears and what the receiver's filter sets. It appears only
+  where the two scales genuinely differ -- on direct IQ the frames already
+  arrive in absolute RF, so a second scale there would print the same numbers
+  twice -- and sits below the spot markers in the one band of the gutter that
+  no other mark occupies.
 
 - Spots can now be received from the DX cluster and reverse-beacon networks
   themselves, over telnet, rather than only from a web feed. This is what

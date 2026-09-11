@@ -717,6 +717,14 @@ the station is used; there is no second one to set, and the cluster cannot be
 enabled before the station callsign is. Cluster logins are unencrypted, as the
 protocol has always been.
 
+**Connection SSID** appends a number to that login. At *none* the bare callsign
+is sent; at 1 the node is joined as `CALL-1`, leaving `CALL` and `CALL-2` free
+for a logging program or a second client. A node tells one station's several
+connections apart by this and nothing else. It is a number rather than a second
+callsign field on purpose: the login is always composed from the station
+callsign, so the two cannot drift apart, and the line under the switch shows
+the login exactly as it will be sent.
+
 Beyond the login and the setup commands listed for that server, the client
 sends nothing: no spots, no announcements, and no reply to anything the server
 or its users send.
@@ -724,6 +732,18 @@ or its users send.
 These are volunteer machines shared by thousands of operators, so one
 connection is held at a time and a failed one is retried after a wait that
 lengthens with each failure rather than in a loop.
+
+### The scale on the separator
+
+When the main axis reads RF, a smaller audio-offset scale appears in the gutter
+between the spectrum and the waterfall, marked `AF`. The RF axis says where the
+band is; this says how wide the visible span is in audio, which is what the
+decoder hears and what the receiver's filter sets.
+
+It appears only where the two scales genuinely differ. On a direct SDR source
+the frames already arrive in absolute RF, so there is no separate audio scale
+to show and none is drawn; the same applies when no radio frequency is known
+and the main axis is showing audio already.
 
 ### Filtering
 

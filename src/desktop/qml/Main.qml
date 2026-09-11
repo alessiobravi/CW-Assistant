@@ -1539,6 +1539,134 @@ ApplicationWindow {
                         }
                     }
                 }
+                // UI-008, second half. Once the main ruler at the foot of the
+                // panel reads absolute RF, an operator loses any sense of how
+                // wide the visible span is in audio terms -- and the audio
+                // passband is exactly what the decoder hears and what the
+                // receiver's filter sets. This is that second reference, and
+                // it is deliberately subordinate to the main axis: the axis's
+                // own untransformed hertz, never passed through
+                // axisFrequencyHz(), in smaller and dimmer type.
+                Item {
+                    id: audioOffsetRuler
+                    objectName: "audioOffsetRuler"
+                    anchors.fill: spectrumDisplay
+                    // Chrome, like the main axis: a decoded-stream marker at
+                    // z 5 still wins the pixels where the two meet.
+                    z: 4
+
+                    readonly property real spanHz:
+                        spectrumDisplay.upperFrequencyHz
+                        - spectrumDisplay.lowerFrequencyHz
+                    readonly property real midHz:
+                        spectrumDisplay.lowerFrequencyHz + spanHz / 2
+                    // Drawn only where the two scales genuinely differ.
+                    // axisShowsRf on its own is not enough: direct IQ frames
+                    // already arrive described in absolute RF, so
+                    // axisFrequencyHz() is the identity for them and this
+                    // ruler would reprint the RF numbers a second time under
+                    // an "AF" heading. Probing the transform also covers the
+                    // sound-card span whose RF mapping fails, where the main
+                    // axis falls back to audio and a second audio scale would
+                    // be pure duplication. The probe re-evaluates on exactly
+                    // the same signals the main axis label does.
+                    readonly property bool scalesDiffer: {
+                        if (!replayController.axisShowsRf)
+                            return false
+                        var shownHz = replayController.axisFrequencyHz(midHz)
+                        return Math.abs(shownHz - midHz) > 1.0
+                    }
+                    visible: replayController.activeSource
+                             && spanHz > 0
+                             && scalesDiffer
+                             && bandFitsPanel
+
+                    // Vertical band. The 8 px gutter itself is full: the
+                    // retained-stream marks straddle the separator line, the
+                    // spot ticks take its lower half, and the spot callsign
+                    // plates hang from waterfallTopY + 2 down to roughly
+                    // + 22. The lower "dBFS" plate straddles the separator on
+                    // the left edge, and the rotated stream callsigns end
+                    // 12 px above it, so the strip above the separator is not
+                    // free either. The first band clear of all of them starts
+                    // four pixels under the deepest spot plate. It is
+                    // measured from dxSpotOverlay's own waterfallTopY so the
+                    // two cannot drift apart if that overlay is ever
+                    // re-laid-out.
+                    readonly property real tickTopY:
+                        dxSpotOverlay.waterfallTopY + 26
+                    readonly property real tickHeightPx: 4
+                    // Plated label depth at this font size, rounded up.
+                    readonly property real labelDepthPx: 16
+                    readonly property real bandBottomY:
+                        tickTopY + tickHeightPx + labelDepthPx
+                    // The band must also clear the tune arrows, which are
+                    // centred on 0.68 of the panel height and stand 58 px
+                    // tall at either edge. Every panel this window can produce
+                    // is tall enough, but the check is cheap and a collision
+                    // there would be ugly.
+                    readonly property bool bandFitsPanel:
+                        bandBottomY < height * 0.68 - 30
+
+                    // Fewer ticks than the main axis's 7, and fewer still on a
+                    // narrow panel. A plated label runs about 70 px at this
+                    // size, so 110 px between tick centres is the closest two
+                    // may sit without their plates touching at any span this
+                    // axis can show.
+                    readonly property int tickCount:
+                        width >= 440 ? 5 : (width >= 220 ? 3 : 2)
+
+                    Repeater {
+                        model: audioOffsetRuler.tickCount
+                        delegate: Item {
+                            id: audioOffsetTick
+                            required property int index
+                            readonly property real fraction:
+                                index / (audioOffsetRuler.tickCount - 1)
+                            readonly property bool firstTick: index === 0
+                            readonly property bool lastTick:
+                                index === audioOffsetRuler.tickCount - 1
+                            x: fraction * audioOffsetRuler.width
+                            y: audioOffsetRuler.tickTopY
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 1
+                                height: audioOffsetRuler.tickHeightPx
+                                color: "#8290a0"
+                            }
+                            Label {
+                                objectName: "audioOffsetRulerLabel"
+                                x: audioOffsetTick.firstTick
+                                   ? 2
+                                   : (audioOffsetTick.lastTick
+                                      ? -implicitWidth - 2
+                                      : -implicitWidth / 2)
+                                y: audioOffsetRuler.tickHeightPx + 1
+                                leftPadding: 4
+                                rightPadding: 4
+                                topPadding: 1
+                                bottomPadding: 1
+                                // Like every other label on this panel this is
+                                // drawn straight over live waterfall speckle,
+                                // so it carries its own semi-opaque plate.
+                                // "AF" rides the first label: these numbers
+                                // must never be mistaken for the RF ruler at
+                                // the foot of the panel.
+                                text: (audioOffsetTick.firstTick ? "AF  " : "")
+                                      + window.formatFrequency(
+                                          spectrumDisplay.lowerFrequencyHz
+                                          + audioOffsetTick.fraction
+                                            * audioOffsetRuler.spanHz)
+                                color: "#91a0b1"
+                                font.pixelSize: 10
+                                background: Rectangle {
+                                    color: "#c8080f16"
+                                    radius: 3
+                                }
+                            }
+                        }
+                    }
+                }
                 Label {
                     visible: txSliceGuideOverlay.visible
                     anchors.top: parent.top

@@ -1233,15 +1233,53 @@ Pane {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 4
-                        CheckBox {
-                            objectName: "dxClusterEnabledCheck"
-                            text: "Join the selected node and receive its spots"
-                            // A cluster login is the station callsign, and
-                            // there is no anonymous one, so the switch is not
-                            // reachable until a callsign has been set.
-                            enabled: appSettings.ownCallsign.length > 0
-                            checked: appSettings.dxClusterEnabled
-                            onToggled: appSettings.dxClusterEnabled = checked
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 12
+                            CheckBox {
+                                objectName: "dxClusterEnabledCheck"
+                                text: "Join the selected node and receive its spots"
+                                // A cluster login is the station callsign, and
+                                // there is no anonymous one, so the switch is
+                                // not reachable until a callsign has been set.
+                                enabled: appSettings.ownCallsign.length > 0
+                                checked: appSettings.dxClusterEnabled
+                                onToggled: appSettings.dxClusterEnabled = checked
+                            }
+                            Item { Layout.fillWidth: true }
+                            Label {
+                                text: "Connection SSID"
+                                color: appSettings.ownCallsign.length > 0
+                                       ? "#c7d2df" : "#667586"
+                            }
+                            SpinBox {
+                                objectName: "dxClusterLoginSsidSpin"
+                                editable: true
+                                from: 0
+                                to: 99
+                                stepSize: 1
+                                enabled: appSettings.ownCallsign.length > 0
+                                value: appSettings.dxClusterLoginSsid
+                                onValueModified: appSettings.dxClusterLoginSsid = value
+                                // 0 is not a number the operator picks, it is
+                                // the absence of an SSID, so it is shown as
+                                // what it means rather than as a zero that
+                                // would read like a chosen connection number.
+                                validator: RegularExpressionValidator {
+                                    regularExpression: /(none|-?[0-9]{1,2})/
+                                }
+                                textFromValue: function(value, locale) {
+                                    return value === 0 ? "none" : "-" + value
+                                }
+                                valueFromText: function(text, locale) {
+                                    var digits = text.replace(/[^0-9]/g, "")
+                                    if (digits.length === 0)
+                                        return 0
+                                    return Math.max(0, Math.min(99, parseInt(digits, 10)))
+                                }
+                                ToolTip.visible: hovered && enabled
+                                ToolTip.text: "Cluster nodes tell one of your connections from another by the SSID: log in as CALL-1 here to leave CALL or CALL-2 to your logging program. Leave it at none for a single connection."
+                            }
                         }
                         // Plainly stated rather than tucked into a tooltip:
                         // this is the one place the application speaks on the
@@ -1252,8 +1290,8 @@ Pane {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             color: "#91a0b1"
-                            text: appSettings.ownCallsign.length > 0
-                                  ? "Connects as " + appSettings.ownCallsign
+                            text: appSettings.dxClusterLoginCallsign.length > 0
+                                  ? "Connects as " + appSettings.dxClusterLoginCallsign
                                     + "; cluster logins are sent unencrypted. Nothing else is sent: no spots, no announcements, no replies."
                                   : "Set your callsign on the Station tab first. A cluster login is sent as your callsign and cannot be made anonymously."
                         }
