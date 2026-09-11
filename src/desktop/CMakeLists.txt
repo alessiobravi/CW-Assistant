@@ -126,13 +126,29 @@ set_source_files_properties(
 set_source_files_properties(
   "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt" PROPERTIES
   QT_RESOURCE_ALIAS cw-distinctive-tokens.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-ww-cw.txt" PROPERTIES
+  QT_RESOURCE_ALIAS contests/cq-ww-cw.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-wpx-cw.txt" PROPERTIES
+  QT_RESOURCE_ALIAS contests/cq-wpx-cw.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-field-day-cw.txt" PROPERTIES
+  QT_RESOURCE_ALIAS contests/arrl-field-day-cw.txt)
+set_source_files_properties(
+  "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-sweepstakes-cw.txt" PROPERTIES
+  QT_RESOURCE_ALIAS contests/arrl-sweepstakes-cw.txt)
 qt_add_resources(cw-buddy-desktop "cwa_cw_dictionaries"
   PREFIX "/dictionaries"
   FILES
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-abbreviations.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/cw-word-gap-prefixes.txt"
     "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
-    "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt")
+    "${PROJECT_SOURCE_DIR}/dictionaries/cw-distinctive-tokens.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-ww-cw.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/contests/cq-wpx-cw.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-field-day-cw.txt"
+    "${PROJECT_SOURCE_DIR}/dictionaries/contests/arrl-sweepstakes-cw.txt")
 
 if(WIN32)
   configure_file(packaging/cw-buddy.rc.in

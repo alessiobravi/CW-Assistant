@@ -11,6 +11,7 @@ add_library(cwa_core
   src/cw_context_rescorer.cpp
   src/cw_vocabulary.cpp
   src/cw_morse_alphabet.cpp
+  src/conversation_profile_file.cpp
   src/cw_decoder.cpp
   src/cw_event_lattice.cpp
   src/cw_probabilistic_decoder.cpp

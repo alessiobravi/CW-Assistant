@@ -8,6 +8,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Contest exchanges are data. The four supported contests were built in the
+  application, so a sponsor changing an exchange, or an operator wanting a
+  contest that is not among them, needed a rebuild. Each is now a file in
+  `dictionaries/contests/`, carried inside the application, copied to the
+  operator's data directory on first run and read from there afterwards. A
+  file describes only the exchange: the conversation flow, its states and
+  every transmit safety gate are still built by the application and cannot be
+  named in one, so no file in that directory can arm a transmitter, change a
+  key-down timeout, or relax callsign confirmation. A file is validated by
+  the same gate the built-in profiles were written against and is refused
+  whole if it fails, because an exchange that silently lost a field would be
+  worse than a contest that does not appear; one bad file does not remove the
+  others. The tests now read the shipped files rather than a private copy.
+
 - Two more copies of the CW vocabulary are gone. Callsign attribution split a
   run-together prosign using its own list of four tokens while the context
   rescorer used another of six, so the two paths could disagree about the

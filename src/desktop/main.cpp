@@ -9,6 +9,7 @@
 #include <QQuickWindow>
 #include <QSettings>
 #include <QStandardPaths>
+#include "cwassistant/core/conversation_profile.hpp"
 #include "cwassistant/core/cw_morse_alphabet.hpp"
 #include "cwassistant/core/cw_vocabulary.hpp"
 #include <array>
@@ -115,6 +116,29 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   static_cast<void>(vocabulary.importDistinctiveTokens(
       std::string_view(distinctive.constData(),
                        static_cast<std::size_t>(distinctive.size()))));
+
+  // Contest exchanges are a directory rather than a single file. Seed it the
+  // same way, then read the operator's copy so an updated or added contest
+  // needs no rebuild. An extra file the operator adds is read too; only the
+  // ones carried inside the application are ever written out.
+  static constexpr std::array<const char*, 4> kContests{
+      "cq-ww-cw.txt", "cq-wpx-cw.txt", "arrl-field-day-cw.txt",
+      "arrl-sweepstakes-cw.txt"};
+  const QDir contests(directory.filePath(QStringLiteral("contests")));
+  QDir().mkpath(contests.absolutePath());
+  for (const char* name : kContests) {
+    const QString target = contests.filePath(QString::fromLatin1(name));
+    if (QFile::exists(target)) continue;
+    QFile bundled(QStringLiteral(":/dictionaries/contests/") +
+                  QString::fromLatin1(name));
+    if (!bundled.open(QIODevice::ReadOnly)) continue;
+    QFile out(target);
+    if (out.open(QIODevice::WriteOnly)) out.write(bundled.readAll());
+  }
+
+  static_cast<void>(cwassistant::core::load_conversation_profile_directory(
+      (directory.absolutePath() + QStringLiteral("/contests"))
+          .toStdString()));
 
   const QByteArray alphabet = read(kFiles[2]);
   auto& morse = cwassistant::core::cwMutableSharedMorseAlphabet();

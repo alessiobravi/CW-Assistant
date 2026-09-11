@@ -1,0 +1,20 @@
+id = cq-ww-cw
+title = CQ World Wide DX Contest — CW
+revision = 1
+rules-url = https://cqww.com/rules.htm
+
+[received]
+rst_rx      rst          required  max=3  alias=5NN>599
+cq_zone_rx  enumeration  required  max=2  values=cq-zones
+
+[station]
+cq_zone_tx  enumeration  optional  max=2  values=cq-zones
+
+[runner]
+received:remote_call
+station:rst_tx
+station:cq_zone_tx
+
+[caller]
+station:rst_tx
+station:cq_zone_tx

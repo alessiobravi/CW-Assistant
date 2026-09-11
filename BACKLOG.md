@@ -6,7 +6,32 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fortieth entry) -- two attempts at the per-frame
+Last reviewed: 2026-09-11 (forty-first entry) -- contest exchanges are data.
+CQ WW, CQ WPX, ARRL Field Day and November Sweepstakes moved out of
+`conversation_profile.cpp` into `dictionaries/contests/`, one file each, with
+the format documented beside them. The parser feeds the existing
+`contestProfile` builder, which is what keeps the safety boundary intact: a file
+supplies only the exchange, while flows, states, macros and every transmit gate
+are still constructed in the application and cannot be named in a file.
+
+The accessors became library lookups, and a contest that failed to load returns
+an empty profile rather than a plausible one, so validation fails loudly instead
+of presenting an operator an exchange that is quietly wrong. A malformed file is
+refused whole; one bad contest does not remove the others.
+
+Two things worth noting. Moving the profiles out left `cqZones` unused in
+`conversation_profile.cpp` while the parser had grown its own copy, so the dead
+one was removed rather than left to become the next silent divergence. And the
+format documentation living as `README.txt` inside the directory the loader
+globs made it parse as a contest; it is `README.md` now, which keeps it beside
+the files it describes without a filename special case in the loader.
+
+Still compiled in, deliberately: `neutral_monitoring_profile` and
+`ordinary_cw_profile`. They are the structural fallback rather than published
+rules that change, and making them data would mean an installation with no
+dictionary has no conversation model at all.
+
+Previous review: 2026-09-11 (fortieth entry) -- two attempts at the per-frame
 keying likelihood, both measured on the full surface against 0.2579 with 150
 correct and 33 wrong callsigns, both reverted.
 

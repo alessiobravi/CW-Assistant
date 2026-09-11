@@ -1,4 +1,11 @@
 #include "cwassistant/core/conversation_profile.hpp"
+#include "cwassistant/core/conversation_profile_file.hpp"
+#include <system_error>
+#include <sstream>
+#include <map>
+#include <fstream>
+#include <filesystem>
+#include <cstdlib>
 
 #include <algorithm>
 #include <cctype>
@@ -85,16 +92,6 @@ ConversationMacroDefinition macro(
           .allowed_states = std::move(allowed_states),
           .required_received_fields = std::move(required_received_fields),
           .safety = {}};
-}
-
-std::vector<std::string> cqZones() {
-  std::vector<std::string> result;
-  result.reserve(40);
-  for (int zone = 1; zone <= 40; ++zone) {
-    result.push_back(zone < 10 ? "0" + std::to_string(zone)
-                              : std::to_string(zone));
-  }
-  return result;
 }
 
 std::vector<ConversationFieldDefinition> commonStationFields() {
@@ -636,87 +633,127 @@ const ConversationProfile& ordinary_cw_profile() {
   return profile;
 }
 
-const ConversationProfile& cq_ww_cw_profile() {
-  static const ConversationProfile profile = contestProfile(
-      {.id = "cq-ww-cw", .title = "CQ World Wide DX Contest — CW",
-       .kind = ConversationKind::Contest, .revision = 1,
-       .valid_from = {}, .valid_to = {},
-       .rules_url = "https://cqww.com/rules.htm"},
-      {field("rst_rx", ConversationFieldKind::Rst, true, 3, {},
-             {{"5NN", "599", false}}),
-       field("cq_zone_rx", ConversationFieldKind::Enumeration, true, 2,
-             cqZones())},
-      {field("cq_zone_tx", ConversationFieldKind::Enumeration, false, 2,
-             cqZones())},
-      {received("remote_call"), station("rst_tx"), station("cq_zone_tx")},
-      {station("rst_tx"), station("cq_zone_tx")});
+namespace {
+
+// Loaded once and then only read, so references handed out by the accessors
+// below stay valid. A map rather than a vector for the same reason: adding a
+// profile must not move the ones already returned.
+std::map<std::string, ConversationProfile, std::less<>>& profileLibrary() {
+  static std::map<std::string, ConversationProfile, std::less<>> library;
+  return library;
+}
+
+// An identifier that was never loaded returns this rather than a profile with
+// a plausible but wrong exchange. It fails validation, which is the intended
+// outcome: a contest whose rules could not be read must not look usable.
+const ConversationProfile& missingProfile() {
+  static const ConversationProfile profile{};
   return profile;
+}
+
+void loadFromEnvironmentOnce() {
+  static const bool attempted = [] {
+    const char* directory = std::getenv("CWA_DICTIONARY_DIR");
+    if (directory == nullptr) return true;
+    static_cast<void>(load_conversation_profile_directory(
+        std::string(directory) + "/contests"));
+    return true;
+  }();
+  static_cast<void>(attempted);
+}
+
+const ConversationProfile& profileOrMissing(const std::string_view id) {
+  const auto* found = conversation_profile_by_id(id);
+  return found == nullptr ? missingProfile() : *found;
+}
+
+}  // namespace
+
+ConversationProfileLoadResult load_conversation_profile_text(
+    const std::string_view text) {
+  ConversationProfileLoadResult result;
+  const auto parsed = parse_conversation_profile_text(text);
+  if (!parsed.accepted) {
+    result.errors = parsed.errors;
+    return result;
+  }
+  auto profile = contestProfile(parsed.profile.metadata,
+                                parsed.profile.received_exchange_fields,
+                                parsed.profile.station_exchange_fields,
+                                parsed.profile.runner_exchange_tokens,
+                                parsed.profile.caller_exchange_tokens);
+  // A file is operator-editable, so it is validated before it can be handed
+  // to anything. The same gate the built-in profiles were written against.
+  const auto validation = validate_conversation_profile(profile);
+  if (!validation.valid()) {
+    result.errors = validation.errors;
+    return result;
+  }
+  const std::string id = profile.metadata.id;
+  profileLibrary().insert_or_assign(id, std::move(profile));
+  result.accepted = true;
+  result.loaded_profiles = 1;
+  return result;
+}
+
+ConversationProfileLoadResult load_conversation_profile_directory(
+    const std::string_view directory_path) {
+  ConversationProfileLoadResult result;
+  std::error_code failure;
+  const std::filesystem::path directory{directory_path};
+  std::filesystem::directory_iterator entries(directory, failure);
+  if (failure) {
+    result.errors.push_back("cannot read profile directory " +
+                            std::string(directory_path));
+    return result;
+  }
+  result.accepted = true;
+  // Sorted so a directory listing's order cannot change which profile wins
+  // when two files carry the same identifier.
+  std::vector<std::filesystem::path> files;
+  for (const auto& entry : entries) {
+    if (entry.is_regular_file(failure) && entry.path().extension() == ".txt")
+      files.push_back(entry.path());
+  }
+  std::ranges::sort(files);
+  for (const auto& file : files) {
+    std::ifstream input(file, std::ios::binary);
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    const auto loaded = load_conversation_profile_text(buffer.str());
+    if (loaded.accepted) {
+      result.loaded_profiles += loaded.loaded_profiles;
+      continue;
+    }
+    // One unreadable contest must not remove the others.
+    for (const auto& error : loaded.errors)
+      result.errors.push_back(file.filename().string() + ": " + error);
+  }
+  return result;
+}
+
+const ConversationProfile* conversation_profile_by_id(
+    const std::string_view id) {
+  loadFromEnvironmentOnce();
+  const auto& library = profileLibrary();
+  const auto found = library.find(id);
+  return found == library.end() ? nullptr : &found->second;
+}
+
+const ConversationProfile& cq_ww_cw_profile() {
+  return profileOrMissing("cq-ww-cw");
 }
 
 const ConversationProfile& cq_wpx_cw_profile() {
-  static const auto cut_numbers = std::vector<ConversationFieldAlias>{
-      {"T", "0", true}, {"N", "9", true}};
-  static const ConversationProfile profile = contestProfile(
-      {.id = "cq-wpx-cw", .title = "CQ World Wide WPX Contest — CW",
-       .kind = ConversationKind::Contest, .revision = 1,
-       .valid_from = {}, .valid_to = {},
-       .rules_url = "https://cqwpx.com/rules/"},
-      {field("rst_rx", ConversationFieldKind::Rst, true, 3, {},
-             {{"5NN", "599", false}}),
-       field("serial_rx", ConversationFieldKind::Serial, true, 6, {},
-             cut_numbers)},
-      {field("serial_tx", ConversationFieldKind::Serial, false, 6)},
-      {received("remote_call"), station("rst_tx"), station("serial_tx")},
-      {station("rst_tx"), station("serial_tx")});
-  return profile;
+  return profileOrMissing("cq-wpx-cw");
 }
 
 const ConversationProfile& arrl_field_day_cw_profile() {
-  static const ConversationProfile profile = contestProfile(
-      {.id = "arrl-field-day-cw", .title = "ARRL Field Day — CW",
-       .kind = ConversationKind::Contest, .revision = 1,
-       .valid_from = {}, .valid_to = {},
-       .rules_url =
-           "https://contests.arrl.org/ContestRules/Field-Day-Rules.pdf"},
-      {field("class_rx", ConversationFieldKind::FreeText, true, 4),
-       field("section_rx", ConversationFieldKind::FreeText, true, 4)},
-      {field("class_tx", ConversationFieldKind::FreeText, false, 4),
-       field("section_tx", ConversationFieldKind::FreeText, false, 4)},
-      {received("remote_call"), station("class_tx"), station("section_tx")},
-      {station("class_tx"), station("section_tx")});
-  return profile;
+  return profileOrMissing("arrl-field-day-cw");
 }
 
 const ConversationProfile& arrl_sweepstakes_cw_profile() {
-  static const auto cut_numbers = std::vector<ConversationFieldAlias>{
-      {"T", "0", true}, {"N", "9", true}};
-  static const auto precedence =
-      std::vector<std::string>{"Q", "A", "B", "U", "M", "S"};
-  static const ConversationProfile profile = contestProfile(
-      {.id = "arrl-sweepstakes-cw",
-       .title = "ARRL November Sweepstakes — CW",
-       .kind = ConversationKind::Contest, .revision = 1,
-       .valid_from = {}, .valid_to = {},
-       .rules_url = "https://www.arrl.org/sweepstakes"},
-      {field("serial_rx", ConversationFieldKind::Serial, true, 6, {},
-             cut_numbers),
-       field("precedence_rx", ConversationFieldKind::Enumeration, true, 1,
-             precedence),
-       field("exchange_call_rx", ConversationFieldKind::Callsign, true, 16),
-       field("check_rx", ConversationFieldKind::Serial, true, 2, {},
-             cut_numbers),
-       field("section_rx", ConversationFieldKind::FreeText, true, 4)},
-      {field("serial_tx", ConversationFieldKind::Serial, false, 6),
-       field("precedence_tx", ConversationFieldKind::Enumeration, false, 1,
-             precedence),
-       field("check_tx", ConversationFieldKind::Serial, false, 2),
-       field("section_tx", ConversationFieldKind::FreeText, false, 4)},
-      {received("remote_call"), station("serial_tx"),
-       station("precedence_tx"), station("my_call"), station("check_tx"),
-       station("section_tx")},
-      {station("serial_tx"), station("precedence_tx"), station("my_call"),
-       station("check_tx"), station("section_tx")});
-  return profile;
+  return profileOrMissing("arrl-sweepstakes-cw");
 }
 
 }  // namespace cwassistant::core

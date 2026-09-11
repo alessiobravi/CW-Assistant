@@ -1,0 +1,20 @@
+id = cq-wpx-cw
+title = CQ World Wide WPX Contest — CW
+revision = 1
+rules-url = https://cqwpx.com/rules/
+
+[received]
+rst_rx     rst     required  max=3  alias=5NN>599
+serial_rx  serial  required  max=6  cut=T>0  cut=N>9
+
+[station]
+serial_tx  serial  optional  max=6
+
+[runner]
+received:remote_call
+station:rst_tx
+station:serial_tx
+
+[caller]
+station:rst_tx
+station:serial_tx

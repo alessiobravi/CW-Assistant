@@ -664,6 +664,20 @@ seeded there from copies carried inside the application the first time it runs.
 | `cw-distinctive-tokens.txt` | The small subset distinctive enough that one match is accepted as evidence of real CW. Deliberately much narrower than the abbreviation list, and each entry must also appear there. |
 | `morse-alphabet.txt` | The element pattern the decoder recognises and the symbol it produces. One entry per line: dots and dashes, whitespace, then the symbol. A symbol may be several characters, which is how prosigns such as `<SK>` are represented. |
 
+### Contest exchange profiles
+
+`dictionaries/contests/` holds one file per contest, and `README.md` beside them
+describes the format in full. A file gives the contest's identity, what the
+other station sends, what your station sends, and the order each side sends
+them. Everything else -- the conversation flow, its states, and every transmit
+safety gate -- is built by the application and cannot be named in a file. No
+file in that directory can arm a transmitter, change a key-down timeout, or
+relax callsign confirmation.
+
+A file that does not parse, or that parses into an exchange the application
+rejects, is refused whole and reported; it never loads partially. One bad
+contest does not remove the others.
+
 The alphabet is receive-only. What may be transmitted is fixed in the
 application and is deliberately narrower: `<SOS>` is decoded so that a distress
 call can be read, and is absent from the transmit alphabet so this application

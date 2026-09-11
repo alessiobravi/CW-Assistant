@@ -124,6 +124,8 @@ add_test(NAME cwa_offline_callsign_database_tests
 
 add_executable(cwa_conversation_profile_tests conversation_profile_tests.cpp)
 target_link_libraries(cwa_conversation_profile_tests PRIVATE cwa_core)
+target_compile_definitions(cwa_conversation_profile_tests PRIVATE
+  CWA_DICTIONARY_DIR="${PROJECT_SOURCE_DIR}/dictionaries")
 add_test(NAME cwa_conversation_profile_tests COMMAND cwa_conversation_profile_tests)
 
 add_executable(cwa_event_lattice_tests cw_event_lattice_tests.cpp)

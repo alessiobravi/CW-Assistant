@@ -140,6 +140,35 @@ suggest_received_field_value(
 
 [[nodiscard]] const ConversationProfile& neutral_monitoring_profile();
 [[nodiscard]] const ConversationProfile& ordinary_cw_profile();
+// Contest exchanges are published rules that change, so they are read from
+// dictionaries/contests rather than compiled in. A file describes only the
+// exchange; the conversation flow, its states, and every transmit safety gate
+// are built by the application and cannot be named in one.
+//
+// The host application loads these during startup. If the directory has not
+// been read the shared library falls back to the one named by the
+// CWA_DICTIONARY_DIR environment variable, and a profile that is still missing
+// is returned empty, which fails validation loudly rather than presenting an
+// operator a contest whose exchange is silently wrong.
+struct ConversationProfileLoadResult {
+  bool accepted{false};
+  std::size_t loaded_profiles{0};
+  std::vector<std::string> errors;
+};
+
+// Parses one profile file and adds it to the shared library, replacing any
+// profile carrying the same identifier.
+ConversationProfileLoadResult load_conversation_profile_text(
+    std::string_view text);
+
+// Reads every *.txt in the given directory. Files that fail to parse are
+// reported and skipped; a bad file for one contest must not remove the others.
+ConversationProfileLoadResult load_conversation_profile_directory(
+    std::string_view directory_path);
+
+[[nodiscard]] const ConversationProfile* conversation_profile_by_id(
+    std::string_view id);
+
 [[nodiscard]] const ConversationProfile& cq_ww_cw_profile();
 [[nodiscard]] const ConversationProfile& cq_wpx_cw_profile();
 [[nodiscard]] const ConversationProfile& arrl_field_day_cw_profile();

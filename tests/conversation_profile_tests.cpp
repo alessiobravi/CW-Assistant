@@ -14,6 +14,34 @@ void expect(const bool condition, const std::string_view message) {
   }
 }
 
+void testShippedContestProfiles() {
+  using namespace cwassistant::core;
+  // The four shipped files are the profiles now; loading them is not a
+  // convenience the tests arrange but the thing under test.
+  const auto loaded = load_conversation_profile_directory(
+      std::string(CWA_DICTIONARY_DIR) + "/contests");
+  for (const auto& error : loaded.errors) std::cerr << "  " << error << '\n';
+  expect(loaded.accepted && loaded.errors.empty(),
+         "every shipped contest profile parses and validates");
+  expect(loaded.loaded_profiles == 4U,
+         "all four shipped contest profiles load");
+  expect(conversation_profile_by_id("cq-ww-cw") != nullptr &&
+             conversation_profile_by_id("not-a-contest") == nullptr,
+         "profiles are addressable by identifier");
+
+  // A malformed file must be refused outright. Silently dropping a field
+  // would present an operator a contest whose exchange is quietly wrong,
+  // which is worse than refusing to offer the contest at all.
+  const auto malformed = load_conversation_profile_text(
+      "id = broken\ntitle = Broken\n\n[received]\nrst_rx nonsense required\n");
+  expect(!malformed.accepted && !malformed.errors.empty(),
+         "an unknown field kind is refused rather than dropped");
+  const auto missing_id = load_conversation_profile_text(
+      "title = No Identifier\n\n[received]\nrst_rx rst required max=3\n");
+  expect(!missing_id.accepted,
+         "a profile without an identifier is refused");
+}
+
 void testReferenceProfiles() {
   using namespace cwassistant::core;
   expect(validate_conversation_profile(neutral_monitoring_profile()).valid(),
@@ -142,6 +170,7 @@ void testGraphAndLengthValidation() {
 }  // namespace
 
 int main() {
+  testShippedContestProfiles();
   testReferenceProfiles();
   testTypedFieldSuggestions();
   testSuggestionAuthorityAndSafetyInvariants();

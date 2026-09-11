@@ -1,0 +1,21 @@
+id = arrl-field-day-cw
+title = ARRL Field Day — CW
+revision = 1
+rules-url = https://contests.arrl.org/ContestRules/Field-Day-Rules.pdf
+
+[received]
+class_rx    text  required  max=4
+section_rx  text  required  max=4
+
+[station]
+class_tx    text  optional  max=4
+section_tx  text  optional  max=4
+
+[runner]
+received:remote_call
+station:class_tx
+station:section_tx
+
+[caller]
+station:class_tx
+station:section_tx

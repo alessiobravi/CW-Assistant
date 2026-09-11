@@ -1,0 +1,32 @@
+id = arrl-sweepstakes-cw
+title = ARRL November Sweepstakes — CW
+revision = 1
+rules-url = https://www.arrl.org/sweepstakes
+
+[received]
+serial_rx           serial       required  max=6  cut=T>0  cut=N>9
+precedence_rx       enumeration  required  max=1  values=Q,A,B,U,M,S
+exchange_call_rx    callsign     required  max=16
+check_rx            serial       required  max=2  cut=T>0  cut=N>9
+section_rx          text         required  max=4
+
+[station]
+serial_tx      serial       optional  max=6
+precedence_tx  enumeration  optional  max=1  values=Q,A,B,U,M,S
+check_tx       serial       optional  max=2
+section_tx     text         optional  max=4
+
+[runner]
+received:remote_call
+station:serial_tx
+station:precedence_tx
+station:my_call
+station:check_tx
+station:section_tx
+
+[caller]
+station:serial_tx
+station:precedence_tx
+station:my_call
+station:check_tx
+station:section_tx
