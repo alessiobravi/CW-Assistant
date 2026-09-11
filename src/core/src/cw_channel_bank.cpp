@@ -11,6 +11,55 @@
 
 namespace cwassistant::core {
 namespace {
+// Removes runs of characters that are almost certainly fragments rather than
+// copy, leaving the copy around them intact.
+//
+// E, T, I, A, N and M are the one- and two-element characters. When the keying
+// evidence breaks up, what comes out is a run of them, and that happens inside
+// an otherwise good track as readily as in a bad one: a track that reads
+// "CQ POTA DE SN5WLF" correctly several times fills the spaces between with
+// single-element runs. Suppressing whole tracks on this measure is therefore
+// wrong, and measurably so -- across the capture corpus, tracks that recovered
+// a correct callsign reach runs of ten themselves.
+//
+// Six is the shortest run that is safe. Real copy does reach four and five: a
+// callsign rarely exceeds three, but ordinary text does. So the run is
+// replaced by a single space, which says plainly that something here was not
+// copyable, rather than joining unrelated text together as deletion would.
+std::string suppressFragmentRuns(const std::string_view text) {
+  constexpr std::string_view kShortCharacters = "ETIANM";
+  constexpr std::size_t kMinimumFragmentRun = 6;
+  std::string result;
+  result.reserve(text.size());
+  std::size_t index = 0;
+  while (index < text.size()) {
+    // Measure a run from here, counting only the characters: spaces inside a
+    // run of fragments are part of the same damage, not a break in it.
+    std::size_t scan = index;
+    std::size_t characters = 0;
+    std::size_t last_character_end = index;
+    while (scan < text.size()) {
+      const char symbol = text[scan];
+      if (symbol == ' ') {
+        ++scan;
+        continue;
+      }
+      if (kShortCharacters.find(symbol) == std::string_view::npos) break;
+      ++characters;
+      ++scan;
+      last_character_end = scan;
+    }
+    if (characters >= kMinimumFragmentRun) {
+      if (!result.empty() && result.back() != ' ') result.push_back(' ');
+      index = last_character_end;
+      continue;
+    }
+    result.push_back(text[index]);
+    ++index;
+  }
+  return result;
+}
+
 
 constexpr std::array<double, 3> kNarrowbandWidthsHz{60.0, 120.0, 240.0};
 constexpr double kCandidateMatchHoldSeconds = 0.75;
@@ -1059,6 +1108,37 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
 
   for (auto& track : tracks_) {
     const bool monitored_track = is_monitored(track.id);
+    // A track that will not be decoded needs no baseband at all. Everything
+    // below -- three oscillators and five three-stage complex cascades for
+    // every sample of every track -- exists to produce keying evidence, and
+    // for a track nothing is reading that evidence is pure cost. Measured, the
+    // per-track chain is what sets the pipeline's ceiling: it grows in
+    // proportion to tracked signals at roughly nine tenths of a second per
+    // track per twenty seconds of audio, while building the spectrum costs the
+    // same for one signal as for twenty-four.
+    //
+    // Which level decides matters. The spectrum's estimate is free but is not
+    // on the same scale as the level the keying envelope measures, and judging
+    // one against the other's threshold skipped tracks that decode perfectly
+    // well -- measured, that cost two and a half points of character error
+    // across the synthetic surface. So the track's own measured level decides,
+    // and the circularity is broken by giving every track a fixed warm-up
+    // during which it is always filtered. Only a track that has had that long
+    // to show its level and is still below the threshold is skipped.
+    //
+    // A monitored track is always filtered, because the operator is listening
+    // to it, and so is one the operator selected.
+    constexpr std::uint32_t kDecodeLevelWarmupBlocks = 150;
+    if (track.decode_level_observations < kDecodeLevelWarmupBlocks) {
+      ++track.decode_level_observations;
+    } else if (!monitored_track && !track.operator_selected &&
+               !config_.decode_weak_signals &&
+               track.peak_decode_level_db < config_.minimum_decode_snr_db) {
+      track.center_power_sums = {};
+      track.lower_power_sum = 0.0F;
+      track.upper_power_sum = 0.0F;
+      continue;
+    }
     std::complex<float> track_monitor_oscillator = monitor_oscillator_;
     const double center_hz =
         block.stream.kind == StreamKind::Audio
@@ -2253,8 +2333,8 @@ std::vector<CwTrackDiagnostic> CwChannelBank::allTrackDiagnostics() const {
             track.keying_level_explained_variation,
         .robust_keying_level_anchor_active =
             track.robust_keying_level_anchor_active,
-        .text = track.update.text,
-        .refined_text = track.update.refined_text,
+        .text = suppressFragmentRuns(track.update.text),
+        .refined_text = suppressFragmentRuns(track.update.refined_text),
         .acoustic_alternatives = track.update.acoustic_alternatives,
         .provisional_text = track.update.provisional_text,
         .match_age_seconds = match_age_seconds,
@@ -2427,8 +2507,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .narrowband_coherence = track.narrowband_coherence,
         .key_transitions = track.update.key_transitions,
         .characters = track.update.characters,
-        .text = track.update.text,
-        .refined_text = track.update.refined_text,
+        .text = suppressFragmentRuns(track.update.text),
+        .refined_text = suppressFragmentRuns(track.update.refined_text),
         .acoustic_alternatives = track.update.acoustic_alternatives,
         .provisional_text = track.update.provisional_text,
         .pending_elements = track.update.pending_elements,

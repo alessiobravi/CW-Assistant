@@ -448,6 +448,10 @@ class CwChannelBank {
     // establish itself -- measured, that lost a callsign whose settled level
     // was thirty-five decibels.
     float peak_decode_level_db{0.0F};
+    // How many sample blocks this track has been filtered for. A track is
+    // only judged too weak to be worth filtering once it has had long enough
+    // to show what its level actually is.
+    std::uint32_t decode_level_observations{0};
     bool ever_morse_likely{false};
     // Sticky for the life of the track: having once said CQ, a station does not
     // stop being a station when the word scrolls out of the recent window.

@@ -6,7 +6,38 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fiftieth entry) -- a field report of poor decoding
+Last reviewed: 2026-09-11 (fifty-first entry) -- fragment runs are suppressed
+and `PERF-002`'s ceiling is cleared, both measured rather than argued.
+
+Fragmentation is regional, not per-track. The obvious reading of the previous
+entry -- that a track emitting runs of short characters is not CW -- does not
+survive measurement: across the corpus, tracks that recovered a correct
+callsign reach runs of ten themselves, because the same track carries good copy
+and fragment sections in turn. Suppression therefore removes the run and keeps
+what surrounds it. Six characters is the shortest safe threshold, real copy
+reaching four and five, and the run becomes a space rather than being deleted.
+On the reported capture the longest surviving run fell from nine to five with
+corpus recovery unchanged.
+
+The performance work reached the same lesson by a worse route. Skipping the
+per-track filter chain for tracks that will not be decoded is correct, but the
+first attempt judged a track by the spectrum's level estimate against a
+threshold calibrated for the keying envelope's -- two different scales -- and
+skipped tracks that decode perfectly well, costing two and a half points of
+character error and failing a keying-edge test. Giving every track a fixed
+warm-up during which it is always filtered, and judging it afterwards on its
+own measured level, removes the circularity without the miscalibration.
+
+Measured at twenty-four tracked signals, which is `maximum_tracks`: the sample
+stage falls from 21.0 s to 13.6 s per twenty seconds of audio, so the real-time
+factor goes from 1.09 to 0.71 and the pipeline is no longer behind the radio.
+Mean character error on the synthetic surface moved from 0.3534 to 0.3356 and
+callsign recovery held at 8 of 9. The larger prize the survey described --
+taking the localisation ratio and the noise reference from the transform the
+spectrum stage already computes, leaving one cascade per track instead of five
+-- is untouched and still worth roughly an order of magnitude.
+
+Previous review: 2026-09-11 (fiftieth entry) -- a field report of poor decoding
 produced the first measurement of where decode quality actually goes, and it is
 not where the report suggested.
 

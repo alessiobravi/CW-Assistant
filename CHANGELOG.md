@@ -8,6 +8,27 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Runs of fragments are removed from decoded text while the copy around them
+  is kept. When keying evidence breaks up, what comes out is a run of the
+  one- and two-element characters, and that happens inside an otherwise good
+  track as readily as a bad one: a track reading `CQ POTA DE SN5WLF`
+  correctly several times filled the spaces between with single-element runs.
+  Suppressing whole tracks on this measure is therefore wrong, and measurably
+  so, since tracks that recovered a correct callsign reach such runs of ten
+  themselves. Six is the shortest run that is safe, real copy reaching four
+  and five, and the run is replaced by a space rather than deleted so that
+  unrelated text is not joined together.
+
+- The receive pipeline no longer exceeds real time at the number of signals
+  it is willing to track. Every tracked signal ran three oscillators and five
+  three-stage complex filter cascades for every sample, whether or not
+  anything read the keying evidence they produce, and that cost grew in
+  proportion to tracked signals while building the spectrum cost the same for
+  one as for twenty-four. A track that will not be decoded is no longer
+  filtered. At twenty-four tracked signals the pipeline went from 1.09 times
+  real time to 0.71, and mean character error across the synthetic surface
+  did not regress.
+
 - The spectrum trace drew its noise floor flat along the bottom of the plot,
   where neither its shape nor a signal's height above it could be read. One
   bound was serving two purposes: a palette that wants to start just under
