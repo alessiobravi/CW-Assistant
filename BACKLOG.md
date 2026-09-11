@@ -6,7 +6,28 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fifty-third entry) -- the waterfall slides with the
+Last reviewed: 2026-09-11 (fifty-fourth entry) -- a VFO move could lose an
+identified stream, and the way it was found is the point.
+
+The channel bank carries every tracked signal by the amount the dial moved, and
+that is tested directly: the track keeps its identity, verification state and
+decoded text, and survives continued processing at the new frequency. All of it
+passed while the application lost streams in the field, because nothing tested
+the other half -- that the controller actually asks for the shift.
+
+Written as a controller-level test, the defect appeared immediately. The request
+was guarded on the radio having been readable in the previous report as well as
+this one, so a momentary gap in availability, which a polled radio produces
+while it is busy retuning, swallowed the move that followed it. The tracks stayed
+where they were while the signal moved away, and the stream was lost and
+re-acquired as a new one. The guard now asks only that a previous frequency is
+known and that the dial has moved.
+
+That is the second time in this session the core behaviour was tested and
+correct while the path that reaches it was not. A feature is only covered when
+the test enters where the operator does.
+
+Previous review: 2026-09-11 (fifty-third entry) -- the waterfall slides with the
 receiver instead of being erased, and the standing lesson of this session is
 recorded with it.
 

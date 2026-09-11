@@ -290,11 +290,70 @@ int testZoomSurvivesFrames() {
   return 0;
 }
 
+// A VFO move must carry the tracked signals with it. The decoder shifts every
+// track by the amount the dial moved so an identified signal keeps its
+// identity, and the channel bank is tested for that directly. Nothing tested
+// that the controller actually asks for the shift, which is the half that
+// reaches an operator: without the request the tracks stay at the old audio
+// frequency while the signal moves, and an identified stream is lost and then
+// re-acquired as a new one.
+int testVfoMoveShiftsTrackedSignals() {
+  cwassistant::desktop::ReplayController controller;
+  controller.setSourceMode(0);
+  std::vector<double> shifts;
+  QObject::connect(
+      &controller, &cwassistant::desktop::ReplayController::
+                       liveFrequencyShiftRequested,
+      &controller, [&shifts](const double delta) { shifts.push_back(delta); });
+
+  // The first report only establishes the context; there is no previous
+  // frequency to have moved from.
+  controller.setRadioFrequencyContext(true, 7'020'000ULL, 7'020'000ULL, false,
+                                      0, 700.0);
+  if (!shifts.empty()) return 70;
+
+  // Upper sideband: tuning the dial up moves a received signal down in audio
+  // by the same amount, so the shift is the negative of the dial movement.
+  controller.setRadioFrequencyContext(true, 7'020'300ULL, 7'020'000ULL, false,
+                                      0, 700.0);
+  if (shifts.size() != 1U || std::abs(shifts.back() + 300.0) > 0.001) {
+    return 71;
+  }
+
+  // Lower sideband moves the other way.
+  controller.setRadioFrequencyContext(true, 7'020'000ULL, 7'020'000ULL, false,
+                                      1, 700.0);
+  if (shifts.size() != 2U || std::abs(shifts.back() - (-300.0)) > 0.001) {
+    // sideband 1 with a -300 Hz dial move gives -300 Hz of audio shift
+    return 72;
+  }
+
+  // A report that merely repeats the frequency must not shift anything, or a
+  // polling radio would drag the tracks on every update.
+  controller.setRadioFrequencyContext(true, 7'020'000ULL, 7'020'000ULL, false,
+                                      1, 700.0);
+  if (shifts.size() != 2U) return 73;
+
+  // A momentary loss of radio availability must not silently swallow the next
+  // move. If it does, the tracks stay where they were while the signal moves
+  // and the identified stream is lost.
+  controller.setRadioFrequencyContext(false, 7'020'000ULL, 7'020'000ULL, false,
+                                      1, 700.0);
+  controller.setRadioFrequencyContext(true, 7'020'500ULL, 7'020'000ULL, false,
+                                      1, 700.0);
+  if (shifts.size() != 3U) return 74;
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
   if (const int zoom_failure = testZoomSurvivesFrames();
       zoom_failure != 0) {
     return zoom_failure;
+  }
+  if (const int vfo_failure = testVfoMoveShiftsTrackedSignals();
+      vfo_failure != 0) {
+    return vfo_failure;
   }
   if (!testLocalCharacterFrontendBank()) return 21;
   cwassistant::desktop::ReplayController frequency_mapping;

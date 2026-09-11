@@ -1640,7 +1640,14 @@ void ReplayController::setRadioFrequencyContext(
   // audio source) shifts every currently tracked signal's audio frequency
   // by the same amount the RX dial moved, so identified signals keep their
   // identity across the retune instead of being lost and re-acquired.
-  if (source_mode_ == 0 && radio_frequency_available_ && available &&
+  // What matters is that a previous frequency is known and the dial has moved,
+  // not that the radio was continuously readable in between. Requiring the
+  // previous report to have been available meant a momentary gap -- which a
+  // polled radio produces while it is busy retuning -- silently swallowed the
+  // move that followed it. The tracks then stayed at the old audio frequency
+  // while the signal moved away, so an identified stream was lost and
+  // re-acquired as a new one a moment later.
+  if (source_mode_ == 0 && available && radio_rx_rf_hz_ != 0U &&
       radio_rx_rf_hz_ != rx_rf_hz) {
     const double delta_rf_hz =
         static_cast<double>(rx_rf_hz) - static_cast<double>(radio_rx_rf_hz_);

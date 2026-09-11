@@ -8,6 +8,16 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Moving the VFO could lose an identified stream and its audio monitor. The
+  decoder carries every tracked signal with the dial so that identity
+  survives a retune, but the request to do so was only made when the radio
+  had been continuously readable: a momentary gap, which a polled radio
+  produces while it is busy retuning, swallowed the move that followed it.
+  The tracks then stayed at the old audio frequency while the signal moved
+  away, so the stream was lost and re-acquired as a new one once it decoded
+  again. What matters is that a previous frequency is known and the dial has
+  moved, not that the radio was readable in between.
+
 - Retuning a software-defined receiver erased the waterfall. A row is a
   history of frequency, so when the receiver moves that history is still
   true and simply belongs at different bins; it now slides by the number of
