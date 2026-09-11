@@ -8,6 +8,15 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Retuning a software-defined receiver erased the waterfall. A row is a
+  history of frequency, so when the receiver moves that history is still
+  true and simply belongs at different bins; it now slides by the number of
+  bins the band moved, keeping what was drawn under the frequency it belongs
+  to. Discarding it wiped the display at every click of the dial, which is
+  not what the same action does on audio, whose axis does not move with
+  tuning. History that cannot be slid, because the span itself changed and
+  the bins no longer mean the same width, is still dropped.
+
 - A debug capture reported that the Morse alphabet came from the copy inside
   the application whether it did or not. The flag compared symbol counts, and
   the shipped file and the built-in copy are generated from the same source,

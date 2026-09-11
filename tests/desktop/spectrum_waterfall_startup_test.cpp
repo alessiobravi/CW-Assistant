@@ -238,6 +238,44 @@ int testZoomSurvivesFrames() {
     }
   }
 
+  // Retuning slides the waterfall rather than discarding it. Clearing the
+  // history on every frequency change wiped the display at each click of the
+  // dial on a receiver whose frames carry absolute radio frequency, which is
+  // not what the same action does on audio.
+  // Rows are emitted against elapsed time, so the scene has to advance.
+  for (quint64 sequence = 10; sequence <= 60; ++sequence) {
+    frame.sequence = sequence;
+    frame.timestamp_ns = sequence * 100'000'000ULL;
+    item.acceptFrame(frame);
+  }
+  const int rows_before_retune = item.waterfallRowCount();
+  if (rows_before_retune < 5) return 59;
+  frame.sequence = 61;
+  frame.timestamp_ns = 61 * 100'000'000ULL;
+  frame.lower_frequency_hz = kLowerHz + 20'000.0;
+  frame.upper_frequency_hz = kUpperHz + 20'000.0;
+  item.acceptFrame(frame);
+  if (item.waterfallRowCount() < rows_before_retune) return 60;
+
+  // A span change cannot be slid, because the bins stop meaning the same
+  // width, so that history is dropped.
+  frame.sequence = 62;
+  frame.timestamp_ns = 62 * 100'000'000ULL;
+  frame.lower_frequency_hz = kLowerHz;
+  frame.upper_frequency_hz = kLowerHz + 400'000.0;
+  item.acceptFrame(frame);
+  if (item.waterfallRowCount() > 1) return 61;
+
+  // Restore the retune-preserving case for the checks below.
+  frame.sequence = 63;
+  frame.timestamp_ns = 63 * 100'000'000ULL;
+  frame.lower_frequency_hz = kLowerHz;
+  frame.upper_frequency_hz = kUpperHz;
+  item.acceptFrame(frame);
+  item.zoomAt(0.5 * (kLowerHz + kUpperHz), 0.25);
+  const double retuned_lower = item.lowerFrequencyHz();
+  const double retuned_span = item.upperFrequencyHz() - retuned_lower;
+
   // A retune keeps the zoom width and carries it with the receiver.
   constexpr double kShiftHz = 50'000.0;
   frame.sequence = 6;
@@ -245,8 +283,8 @@ int testZoomSurvivesFrames() {
   frame.upper_frequency_hz = kUpperHz + kShiftHz;
   item.acceptFrame(frame);
   if (std::abs((item.upperFrequencyHz() - item.lowerFrequencyHz()) -
-               zoomed_span) > 0.5 ||
-      std::abs(item.lowerFrequencyHz() - (zoomed_lower + kShiftHz)) > 0.5) {
+               retuned_span) > 0.5 ||
+      std::abs(item.lowerFrequencyHz() - (retuned_lower + kShiftHz)) > 0.5) {
     return 58;
   }
   return 0;

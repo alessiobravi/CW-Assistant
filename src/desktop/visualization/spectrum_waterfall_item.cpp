@@ -313,6 +313,10 @@ bool SpectrumWaterfallItem::zoomed() const noexcept {
       (lower_frequency_hz_ > source_lower_frequency_hz_ + 0.5 ||
        upper_frequency_hz_ < source_upper_frequency_hz_ - 0.5);
 }
+int SpectrumWaterfallItem::waterfallRowCount() const noexcept {
+  return static_cast<int>(waterfall_rows_.size());
+}
+
 qulonglong SpectrumWaterfallItem::droppedRows() const noexcept {
   return dropped_rows_;
 }
@@ -347,16 +351,59 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   const double previous_view_span_hz =
       upper_frequency_hz_ - lower_frequency_hz_;
   if (source_changed) {
+    const double previous_span_hz =
+        source_upper_frequency_hz_ - source_lower_frequency_hz_;
+    const double next_span_hz =
+        frame.upper_frequency_hz - frame.lower_frequency_hz;
+    const double shift_hz =
+        frame.lower_frequency_hz - source_lower_frequency_hz_;
     source_lower_frequency_hz_ = frame.lower_frequency_hz;
     source_upper_frequency_hz_ = frame.upper_frequency_hz;
-    // Stored rows were conditioned against the old axis, and the conditioner's
-    // per-bin baseline is a per-frequency history. Both are meaningless once
-    // the receiver moves, and the bin count is unchanged by a retune, so the
-    // size check above never catches it: drop them here instead of scrolling
-    // an old band's traces under a new one's labels.
-    waterfall_rows_.clear();
-    has_row_timestamp_ = false;
-    conditioner_.reset();
+
+    // A row is a history of frequency, so when the receiver moves the history
+    // is still true -- it simply sits at different bins now. Retuning an SDR
+    // changes the absolute bounds of every frame, and discarding the waterfall
+    // on each step wiped the display at every click of the dial, which is not
+    // what the same action does on audio, whose axis does not move with
+    // tuning. Slide the rows instead, by the same number of bins the band
+    // moved, so what was drawn stays under the frequency it belongs to.
+    //
+    // Only a pure translation can be slid. If the span itself changed, the
+    // bins no longer mean the same width and the old rows cannot be placed;
+    // those are dropped as before.
+    const bool same_span = previous_span_hz > 0.0 && next_span_hz > 0.0 &&
+        std::abs(previous_span_hz - next_span_hz) <
+            0.001 * std::max(previous_span_hz, next_span_hz);
+    const qsizetype bins = latest_bins_.size();
+    const double bin_width_hz =
+        bins > 1 ? next_span_hz / static_cast<double>(bins - 1) : 0.0;
+    const auto shift_bins = bin_width_hz > 0.0
+        ? static_cast<qsizetype>(std::llround(shift_hz / bin_width_hz))
+        : 0;
+    if (!same_span || bins <= 1 || std::abs(shift_bins) >= bins) {
+      waterfall_rows_.clear();
+      has_row_timestamp_ = false;
+      conditioner_.reset();
+    } else if (shift_bins != 0) {
+      // Vacated bins carry no history and are filled with the row's own
+      // quietest value, so newly exposed spectrum reads as empty rather than
+      // as a copy of whatever was previously at that edge.
+      for (QVector<float>& row : waterfall_rows_) {
+        if (row.size() != bins) continue;
+        const float empty = *std::min_element(row.cbegin(), row.cend());
+        if (shift_bins > 0) {
+          std::move(row.begin() + shift_bins, row.end(), row.begin());
+          std::fill(row.end() - shift_bins, row.end(), empty);
+        } else {
+          std::move_backward(row.begin(), row.end() + shift_bins, row.end());
+          std::fill(row.begin(), row.begin() - shift_bins, empty);
+        }
+      }
+      // The conditioner's baseline is per-bin and cannot be slid meaningfully
+      // across a retune, so it is re-established. It converges in well under a
+      // second, which is invisible next to losing the whole history.
+      conditioner_.reset();
+    }
   }
   // Only a source change may move the view. Testing `!preserve_zoom` here
   // instead reset the view on every ordinary frame, because preservation is

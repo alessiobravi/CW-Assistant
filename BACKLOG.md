@@ -6,7 +6,31 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (fifty-second entry) -- the exact envelope densities
+Last reviewed: 2026-09-11 (fifty-third entry) -- the waterfall slides with the
+receiver instead of being erased, and the standing lesson of this session is
+recorded with it.
+
+Clearing the waterfall on any axis change was introduced with the zoom fix and
+is wrong for the case it fires on most: retuning a receiver whose frames carry
+absolute radio frequency moves the bounds at every step, so the display was
+wiped at each click of the dial, while the same action on audio -- whose axis
+does not move with tuning -- left it alone. A row is a history of frequency and
+stays true when the receiver moves; it is slid by the number of bins the band
+moved. Only a span change, where the bins stop meaning the same width, still
+drops it. The regression test was verified by making it fail against the old
+behaviour before the fix was trusted.
+
+The pattern this session is worth stating plainly, because it has now cost the
+owner repeatedly: spectrum zoom reset on every frame, the waterfall erased on
+every retune, a decode gate that suppressed acquisition, and a reported loss of
+decoded streams on a VFO move. Each was a working feature with no behavioural
+test, so the suite stayed green while the application regressed, and each was
+found in the field rather than here. Areas still without that cover are
+spectrum and waterfall presentation, source switching, VFO retune with track
+identity, and monitor selection. A feature without a test is a feature that
+will be broken by the next fix.
+
+Previous review: 2026-09-11 (fifty-second entry) -- the exact envelope densities
 are settled in the negative, and the reason the earlier entries gave for trying
 them again was wrong.
 

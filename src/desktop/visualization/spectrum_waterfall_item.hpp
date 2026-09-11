@@ -73,6 +73,11 @@ class SpectrumWaterfallItem : public QQuickItem {
   [[nodiscard]] double sourceUpperFrequencyHz() const noexcept;
   [[nodiscard]] bool zoomed() const noexcept;
   [[nodiscard]] qulonglong droppedRows() const noexcept;
+  // How many waterfall rows are currently retained. Exposed so that the
+  // history's survival across a retune can be asserted: a receiver moving in
+  // frequency slides its history rather than discarding it, and nothing else
+  // observable distinguishes those two outcomes.
+  [[nodiscard]] int waterfallRowCount() const noexcept;
   [[nodiscard]] double estimatedNoiseFloorDb() const noexcept;
 
  public slots:
