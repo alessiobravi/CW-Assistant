@@ -445,6 +445,7 @@ int replay(
     std::cout << "final path=\"" << path << "\" id=" << id
               << " frequency_hz=" << channel.frequency_hz
               << " timing_quality=" << channel.verification_timing_quality
+              << " snr_db=" << channel.snr_db
               << " callsign=\"" << channel.callsign << "\""
               << " turns=" << channel.transmissions.size()
               << " sender=\"" << channel.current_sender_callsign << "\""

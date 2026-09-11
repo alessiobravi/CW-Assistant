@@ -363,6 +363,34 @@ Changing the model restarts the decoders but keeps every track, so a station can
 be compared under both while it is still sending. The setting is stored by name,
 so it survives future additions to the list.
 
+### Weak signals
+
+**Decode every tracked signal** decides whether a very weak signal is decoded
+or merely watched. It is off by default, and while it is off a signal has to
+reach **Decode only above … dB above the noise floor** before the decoder is
+given it. The threshold accepts 0.0 to 40.0 dB in tenths of a decibel and
+defaults to 12.0 dB; the field is disabled while the toggle is on, because the
+threshold no longer applies then.
+
+Nothing disappears from the display either way. A signal under the threshold is
+still detected, still followed, and still drawn in the spectrum with its own
+marker; only its decoding is withheld. What the setting buys is a cleaner
+transcript and spare processing: below the threshold the decoder receives
+fragments rather than copy, so it fills the transcript with one- and
+two-element characters that mean nothing while each such track costs as much
+work as a readable one.
+
+The default is measured rather than chosen. Across the capture corpus the
+weakest track that ever carried a correctly recovered callsign sat at 19.5 dB,
+so 12.0 dB leaves over seven decibels of margin before the threshold could cost
+a station that was genuinely readable. Lower it, or turn the toggle on, when
+working a quiet band where marginal signals are the point; raise it on a
+crowded band where the transcript is filling with noise.
+
+Both values are stored per profile, and changing either keeps every open track,
+transcript, and confirmed callsign: the setting selects which tracked signals
+are decoded and never alters the audio the detector receives.
+
 ### Debug capture
 
 On a direct SDR source, capture is written as **SigMF IQ** (`.sigmf-data` plus a

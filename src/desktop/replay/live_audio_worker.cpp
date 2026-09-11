@@ -749,6 +749,16 @@ void LiveAudioDspWorker::setDecodedSignalTimeoutSeconds(const int seconds) {
                           static_cast<double>(std::clamp(seconds, 5, 120))});
 }
 
+void LiveAudioDspWorker::setWeakSignalDecoding(
+    const bool enabled, const double minimum_decode_snr_db) {
+  // No reset here, deliberately. Only a change to the audio presented to the
+  // detector may discard decoder state; this one changes which of the already
+  // tracked signals are worth decoding, and the bank applies it on its next
+  // update without losing a single track, transcript or confirmed callsign.
+  decoder_.setWeakSignalDecoding(enabled,
+                                 static_cast<float>(minimum_decode_snr_db));
+}
+
 void LiveAudioDspWorker::setLocalCharacterFrontendEnabled(const bool enabled) {
   character_frontends_.setEnabled(enabled);
 }

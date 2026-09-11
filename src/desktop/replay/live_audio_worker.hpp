@@ -94,6 +94,12 @@ class LiveAudioDspWorker final : public QObject {
   void setDebugCaptureMaximumSeconds(double seconds);
   void setOperatorRole(const QString& role);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  // Chooses which tracked signals are decoded, and from what level. It never
+  // touches the audio the detector receives, so it deliberately does not reset
+  // the decoder: doing so would discard every track, transcript and confirmed
+  // callsign the operator currently has open in exchange for a preference the
+  // channel bank honours from its very next update.
+  void setWeakSignalDecoding(bool enabled, double minimum_decode_snr_db);
   void setLocalCharacterFrontendEnabled(bool enabled);
   void setMonitor(int mode, const QVariantList& channel_ids,
                   double reference_tone_hz);

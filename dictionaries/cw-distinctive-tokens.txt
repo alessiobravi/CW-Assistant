@@ -19,3 +19,9 @@ TU
 UP
 599
 5NN
+
+# Award programmes. Four characters and specific to an activation, so a match
+# is as hard to counterfeit as a Q-code and an activator sends one in the very
+# first exchange -- which is where being able to verify quickly matters most.
+POTA
+SOTA

@@ -93,6 +93,18 @@ target_compile_definitions(cwa_decoder_display_separation_test PRIVATE
 add_test(NAME cwa_decoder_display_separation_test
   COMMAND cwa_decoder_display_separation_test)
 
+add_executable(cwa_weak_signal_decoding_settings_test
+  desktop/weak_signal_decoding_settings_test.cpp)
+target_compile_definitions(cwa_weak_signal_decoding_settings_test PRIVATE
+  CWA_APP_SETTINGS_HPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.hpp"
+  CWA_APP_SETTINGS_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/settings/app_settings.cpp"
+  CWA_SETTINGS_QML_PATH="${PROJECT_SOURCE_DIR}/src/desktop/qml/SettingsPane.qml"
+  CWA_REPLAY_CONTROLLER_HPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/replay_controller.hpp"
+  CWA_REPLAY_CONTROLLER_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/replay_controller.cpp"
+  CWA_LIVE_AUDIO_WORKER_CPP_PATH="${PROJECT_SOURCE_DIR}/src/desktop/replay/live_audio_worker.cpp")
+add_test(NAME cwa_weak_signal_decoding_settings_test
+  COMMAND cwa_weak_signal_decoding_settings_test)
+
 add_executable(cwa_turn_timing_diagnostics_contract_test
   desktop/turn_timing_diagnostics_contract_test.cpp)
 target_compile_definitions(cwa_turn_timing_diagnostics_contract_test PRIVATE

@@ -6,7 +6,43 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-11 (forty-ninth entry) -- the Windows build was broken
+Last reviewed: 2026-09-11 (fiftieth entry) -- a field report of poor decoding
+produced the first measurement of where decode quality actually goes, and it is
+not where the report suggested.
+
+The spectrum floor was a defect of my own making: the palette bottom introduced
+at 0.1.151 is also the trace's baseline and the labelled axis, so the noise lay
+flat on the bottom of the plot. The two wants are opposite -- a palette should
+start just under the noise, a trace needs room beneath it -- and they are
+separate numbers now.
+
+Weak-signal decoding is an operator setting, off by default, gating at twelve
+decibels. Two things were learned building it. Gating on a track's present
+level suppresses it during acquisition and cost two of eight recovered
+callsigns, including one settling at thirty-five decibels, so the gate reads
+the strongest level a track has reached. And suspending a weak track is wrong:
+suspension belongs to the association-loss path and is only resumed from there,
+so a track suspended for being quiet would never decode again once it grew
+loud. It is simply not fed instead.
+
+The gate is honest but weak as a filter for what the operator actually
+complained about. On the reported capture it removed one of eight text-emitting
+tracks: level does not separate copy from fragments, because the corpus shows
+fragmenting tracks at twenty-six decibels and a cleanly recovered callsign at
+fifteen.
+
+The real finding is what the fragments are. Every poor track emits runs of E, I,
+S, T and H -- the shortest characters in the code -- and so does the verified
+track, between good copies of its callsign. A track carrying `CQ POTA DE
+SN5WLF` reads it correctly several times over and fills the gaps with
+single-element runs. That is the two-level keying envelope admitting noise
+during quiet periods, which
+[[cw-decoder-bottleneck-is-upstream]] already names as the limit. Suppressing
+fragment runs, and separating them from real copy, is the next slice and it
+needs the same treatment as everything else here: measured against the corpus
+before it is believed.
+
+Previous review: 2026-09-11 (forty-ninth entry) -- the Windows build was broken
 by the previous change and neither of the two releases since was green. The
 regression test added with the built-in alphabet clears the dictionary
 directory from the environment, and did so with `unsetenv` and `setenv`, which

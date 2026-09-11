@@ -8,6 +8,39 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The spectrum trace drew its noise floor flat along the bottom of the plot,
+  where neither its shape nor a signal's height above it could be read. One
+  bound was serving two purposes: a palette that wants to start just under
+  the noise so none of its range is spent colouring it, and a trace whose
+  baseline is also the labelled axis and wants room beneath. The trace now
+  keeps twelve decibels of headroom below the estimated floor while the
+  waterfall keeps the tighter bottom it needs.
+
+- Weak signals can be excluded from decoding, and are by default. A track
+  below the threshold is still detected, tracked and drawn; it is simply not
+  decoded, because below it what reaches the decoder is fragments rather than
+  copy and each such track costs a decoder's worth of processor time. The
+  gate reads the strongest level a track has reached rather than its level of
+  the moment: gating on the latter suppressed signals while they were still
+  being acquired and cost two of eight recovered callsigns on the capture
+  corpus, one of whose settled level was thirty-five decibels. A track the
+  operator selected is always decoded. Settings carries the switch and the
+  threshold, defaulting to twelve decibels against a measured nineteen and a
+  half for the weakest correctly recovered callsign.
+
+- Reconfiguring the channel bank no longer discards settings that have their
+  own setters. A caller changing one value passes a freshly constructed
+  configuration, and replacing the whole structure silently reset the others;
+  the station callsign survived only because the application re-applied it
+  afterwards.
+
+- The CW vocabulary gains the award and activity programmes an operator sends
+  constantly -- POTA, SOTA, IOTA, WWFF and others -- along with ordinary
+  ragchew words that were missing, among them UR, MNI, GUD, CU and RPRT.
+  POTA and SOTA also join the small set distinctive enough to stand as
+  evidence of real CW, since an activator sends one in the first exchange.
+  Because the vocabulary is data this was an edit rather than a rebuild.
+
 - The Windows build failed. A test added with the built-in alphabet used the
   POSIX `setenv` and `unsetenv`, which MSVC does not provide, so the core
   tests did not compile there while Linux and both macOS builds passed. The

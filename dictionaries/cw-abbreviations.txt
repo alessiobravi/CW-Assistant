@@ -64,6 +64,17 @@ QSY
 QST
 QTH
 
+# --- Award and activity programmes ---
+# An activator sends these constantly and they are highly distinctive, so
+# recognising them is worth as much as a Q-code for spacing.
+POTA
+SOTA
+IOTA
+WWFF
+GMA
+PARK
+REF
+
 # --- Greetings and the ordinary vocabulary of a ragchew ---
 GM
 GA
@@ -102,3 +113,13 @@ SIG
 SIGS
 RX
 TX
+UR
+MNI
+GUD
+DR
+CU
+VIA
+BURO
+RPRT
+WID
+NAME

@@ -90,6 +90,14 @@ double columnPeakDb(const QVector<float>& bins, const qsizetype begin,
   return peak;
 }
 
+// How far the trace's baseline sits below the estimated noise floor. The
+// palette wants to start just under the noise so that none of its range is
+// spent on it; the trace wants the opposite, because a floor drawn on the
+// bottom axis tells an operator nothing about how far a signal stands above
+// it. They are therefore not the same number.
+constexpr double kTraceFloorHeadroomDb = 12.0;
+constexpr double kWaterfallFloorOffsetDb = 10.0;
+
 QRgb waterfallColor(const float value) {
   const float t = std::clamp(value, 0.0F, 1.0F);
   if (t < 0.35F) {
@@ -504,7 +512,15 @@ void SpectrumWaterfallItem::updateAutomaticRange(const QVector<float>& bins) {
   // the mean, which spent 40% of the palette on noise and pushed that same
   // tail onto the blue-to-green breakpoint at t=0.35, so quiet bins flickered
   // green.
-  double low = std::clamp(estimated_noise_floor_db_ - 2.0, -200.0, 20.0);
+  // This bound is the trace's baseline and what the axis is labelled with, so
+  // it needs room beneath the noise: put the floor two decibels under it and
+  // the noise lies flat along the bottom of the plot, where its shape and its
+  // distance from a signal cannot be read at all. Twelve decibels of headroom
+  // puts the mean floor about a fifth of the way up and leaves the rest for
+  // signals. The waterfall palette keeps the tighter bottom it needs, derived
+  // from this one just below.
+  double low = std::clamp(estimated_noise_floor_db_ - kTraceFloorHeadroomDb,
+                          -200.0, 20.0);
   double high = std::max(static_cast<double>(finite[high_index]) + 3.0,
                          low + automatic_range_span_db_);
   high = std::clamp(high, -190.0, 50.0);
@@ -680,6 +696,15 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
       ? last_bin - first_bin + 1 : 0;
   const double span = std::max(1.0, effective_upper_bound_db_ -
                                        effective_lower_bound_db_);
+  // The palette starts higher than the trace's baseline, so none of its range
+  // is spent colouring noise. Derived from the same smoothed bound so the two
+  // move together.
+  const double waterfall_floor_db = automatic_range_
+      ? std::min(effective_lower_bound_db_ + kWaterfallFloorOffsetDb,
+                 effective_upper_bound_db_ - 1.0)
+      : effective_lower_bound_db_;
+  const double waterfall_span =
+      std::max(1.0, effective_upper_bound_db_ - waterfall_floor_db);
   // One vertex and one raster column per pixel column, never per source bin.
   // Zooming in stops the reduction at one column per bin, so a narrow view is
   // still drawn at full resolution.
@@ -750,8 +775,8 @@ QSGNode* SpectrumWaterfallItem::updatePaintNode(
         columnBinRange(x, column_count, first_bin, visible_bins, bin_begin,
                        bin_end);
         const float normalized = static_cast<float>(std::clamp(
-            (columnPeakDb(row, bin_begin, bin_end) -
-             effective_lower_bound_db_) / span,
+            (columnPeakDb(row, bin_begin, bin_end) - waterfall_floor_db) /
+                waterfall_span,
             0.0, 1.0));
         scanline[x] = waterfallColor(normalized);
       }

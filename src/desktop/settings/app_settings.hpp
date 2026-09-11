@@ -275,6 +275,10 @@ class AppSettings final : public QObject {
                  setShowSpectrumGestureHints NOTIFY settingsChanged)
   Q_PROPERTY(int decodedSignalTimeoutSeconds READ decodedSignalTimeoutSeconds
                  WRITE setDecodedSignalTimeoutSeconds NOTIFY settingsChanged)
+  Q_PROPERTY(bool decodeWeakSignals READ decodeWeakSignals WRITE
+                 setDecodeWeakSignals NOTIFY settingsChanged)
+  Q_PROPERTY(double minimumDecodeSnrDb READ minimumDecodeSnrDb WRITE
+                 setMinimumDecodeSnrDb NOTIFY settingsChanged)
   Q_PROPERTY(bool localDecoderEnabled READ localDecoderEnabled WRITE
                  setLocalDecoderEnabled NOTIFY settingsChanged)
   Q_PROPERTY(
@@ -451,6 +455,8 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool showGrid() const noexcept;
   [[nodiscard]] bool showSpectrumGestureHints() const noexcept;
   [[nodiscard]] int decodedSignalTimeoutSeconds() const noexcept;
+  [[nodiscard]] bool decodeWeakSignals() const noexcept;
+  [[nodiscard]] double minimumDecodeSnrDb() const noexcept;
   [[nodiscard]] bool localDecoderEnabled() const noexcept;
   [[nodiscard]] bool callsignDatabaseCorrectionEnabled() const noexcept;
   [[nodiscard]] const QString& keyingModel() const noexcept;
@@ -538,6 +544,8 @@ class AppSettings final : public QObject {
   void setShowGrid(bool value);
   void setShowSpectrumGestureHints(bool value);
   void setDecodedSignalTimeoutSeconds(int value);
+  void setDecodeWeakSignals(bool value);
+  void setMinimumDecodeSnrDb(double value);
   void setLocalDecoderEnabled(bool value);
   void setCallsignDatabaseCorrectionEnabled(bool value);
   void setKeyingModel(const QString& value);
@@ -778,6 +786,18 @@ class AppSettings final : public QObject {
   bool show_grid_{true};
   bool show_spectrum_gesture_hints_{true};
   int decoded_signal_timeout_seconds_{30};
+  // Whether a tracked signal is decoded regardless of how weak it is. Off by
+  // default: below the threshold the decoder receives fragments rather than
+  // copy, which fills a transcript with nothing while spending a whole
+  // decoder's processor time on each such track. A signal under the threshold
+  // is still detected, followed and drawn in the spectrum either way; only its
+  // decoding is withheld, so nothing disappears from the operator's display.
+  bool decode_weak_signals_{false};
+  // The default is measured rather than chosen. Across the capture corpus
+  // the weakest track that carried a correctly recovered callsign
+  // measured 19.5 dB, so 12 dB leaves over seven decibels of margin before the
+  // threshold could cost the operator a station that was genuinely readable.
+  double minimum_decode_snr_db_{12.0};
   bool local_decoder_enabled_{false};
   // Off by default. Two listed stations can differ by one character, so a
   // correction can name a station that was never heard; the operator opts in.

@@ -1326,6 +1326,12 @@ bool AppSettings::showSpectrumGestureHints() const noexcept {
 int AppSettings::decodedSignalTimeoutSeconds() const noexcept {
   return decoded_signal_timeout_seconds_;
 }
+bool AppSettings::decodeWeakSignals() const noexcept {
+  return decode_weak_signals_;
+}
+double AppSettings::minimumDecodeSnrDb() const noexcept {
+  return minimum_decode_snr_db_;
+}
 bool AppSettings::callsignDatabaseCorrectionEnabled() const noexcept {
   return callsign_database_correction_enabled_;
 }
@@ -1722,6 +1728,8 @@ CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
 CWA_SETTER(setShowSpectrumGestureHints, show_spectrum_gesture_hints_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
+CWA_SETTER(setDecodeWeakSignals, decode_weak_signals_, bool)
+CWA_SETTER(setMinimumDecodeSnrDb, minimum_decode_snr_db_, double)
 CWA_SETTER(setLocalDecoderEnabled, local_decoder_enabled_, bool)
 CWA_SETTER(setCallsignDatabaseCorrectionEnabled,
            callsign_database_correction_enabled_, bool)
@@ -2447,6 +2455,12 @@ bool AppSettings::apply() {
   cw_guide_width_hz_ = std::clamp(cw_guide_width_hz_, 10.0, 5'000.0);
   decoded_signal_timeout_seconds_ =
       std::clamp(decoded_signal_timeout_seconds_, 5, 300);
+  // Stored to exactly the precision the settings page can present. The
+  // operator sets the threshold in tenths of a decibel, and a stored value
+  // carrying more precision than that would read back as a different number
+  // from the one that was just set.
+  minimum_decode_snr_db_ =
+      std::round(std::clamp(minimum_decode_snr_db_, 0.0, 40.0) * 10.0) / 10.0;
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -2632,6 +2646,10 @@ bool AppSettings::apply() {
   settings.setValue(
       storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
       decoded_signal_timeout_seconds_);
+  settings.setValue(storageKey(QStringLiteral("decoder/decodeWeakSignals")),
+                    decode_weak_signals_);
+  settings.setValue(storageKey(QStringLiteral("decoder/minimumDecodeSnrDb")),
+                    minimum_decode_snr_db_);
   settings.setValue(storageKey(QStringLiteral("decoder/localEnabled")),
                     local_decoder_enabled_);
   settings.setValue(
@@ -3045,6 +3063,14 @@ void AppSettings::load() {
               storageKey(QStringLiteral("display/decodedSignalTimeoutSeconds")),
               30)
           .toInt();
+  decode_weak_signals_ =
+      settings
+          .value(storageKey(QStringLiteral("decoder/decodeWeakSignals")), false)
+          .toBool();
+  minimum_decode_snr_db_ =
+      settings
+          .value(storageKey(QStringLiteral("decoder/minimumDecodeSnrDb")), 12.0)
+          .toDouble();
   local_decoder_enabled_ =
       settings.value(storageKey(QStringLiteral("decoder/localEnabled")), false)
           .toBool();
@@ -3321,6 +3347,8 @@ void AppSettings::resetInMemorySettings() {
   show_grid_ = true;
   show_spectrum_gesture_hints_ = true;
   decoded_signal_timeout_seconds_ = 30;
+  decode_weak_signals_ = false;
+  minimum_decode_snr_db_ = 12.0;
   local_decoder_enabled_ = false;
   callsign_database_correction_enabled_ = false;
   keying_model_ = QStringLiteral("adaptive-threshold");

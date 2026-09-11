@@ -122,6 +122,10 @@ class ReplayController final : public QObject {
                  NOTIFY decoderChanged)
   Q_PROPERTY(QString localCharacterStatus READ localCharacterStatus
                  NOTIFY decoderChanged)
+  Q_PROPERTY(bool decodeWeakSignals READ decodeWeakSignals
+                 NOTIFY weakSignalDecodingChanged)
+  Q_PROPERTY(double minimumDecodeSnrDb READ minimumDecodeSnrDb
+                 NOTIFY weakSignalDecodingChanged)
   Q_PROPERTY(QString offlineCallsignDatabaseState READ offlineCallsignDatabaseState
                  NOTIFY decoderChanged)
   Q_PROPERTY(QString offlineCallsignDatabaseStatus READ offlineCallsignDatabaseStatus
@@ -205,6 +209,13 @@ class ReplayController final : public QObject {
                              int frame_rate_hz);
   void setSourceMode(int value);
   void setDecodedSignalTimeoutSeconds(int seconds);
+  [[nodiscard]] bool decodeWeakSignals() const noexcept;
+  [[nodiscard]] double minimumDecodeSnrDb() const noexcept;
+  // The two values travel together because the decoder applies them together:
+  // a threshold means nothing without knowing whether it is in force, and
+  // sending them separately would leave a moment where the bank is gating on
+  // one operator's choice and the other's number.
+  void setWeakSignalDecoding(bool enabled, double minimum_decode_snr_db);
   void setOwnCallsign(const QString& callsign);
   Q_INVOKABLE void setKeyingModel(const QString& model);
   Q_INVOKABLE void setOperatorRole(const QString& role);
@@ -307,6 +318,9 @@ class ReplayController final : public QObject {
   void liveKeyingModelRequested(const QString& model);
   void keyingModelChanged();
   void liveDecodedSignalTimeoutRequested(int seconds);
+  void liveWeakSignalDecodingRequested(bool enabled,
+                                       double minimum_decode_snr_db);
+  void weakSignalDecodingChanged();
   void liveFrequencyShiftRequested(double audio_hz_delta);
   void manualDecoderFrequencyRequested(double audio_frequency_hz);
   void liveManualDecoderFrequencyRequested(double audio_frequency_hz);
@@ -413,6 +427,12 @@ class ReplayController final : public QObject {
   bool callsign_database_correction_enabled_{false};
   QString own_callsign_;
   QString keying_model_{QStringLiteral("adaptive-threshold")};
+  // Mirrors the operator preference so the current gate can be read back, and
+  // so the pair can be resent to a worker whenever the decoder configuration
+  // has been replaced wholesale underneath it. The defaults match the core
+  // decoder's own: weak-signal decoding off, with a measured 12.0 dB gate.
+  bool decode_weak_signals_{false};
+  double minimum_decode_snr_db_{12.0};
   QString offline_callsign_database_state_{QStringLiteral("disabled")};
   QString offline_callsign_database_status_{
       QStringLiteral("Offline callsign suggestions disabled.")};

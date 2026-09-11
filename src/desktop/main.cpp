@@ -270,6 +270,15 @@ int main(int argc, char* argv[]) {
     replay_controller.setDecodedSignalTimeoutSeconds(
         settings.decodedSignalTimeoutSeconds());
   };
+  // Must be applied after the decoded-signal timeout, both here and in the
+  // change notifications below. That timeout reaches the channel bank through
+  // a configure() call that replaces the whole configuration, so applying the
+  // weak-signal gate first would let the next timeout update quietly restore
+  // the bank's built-in defaults over the operator's choice.
+  const auto apply_weak_signal_decoding = [&settings, &replay_controller] {
+    replay_controller.setWeakSignalDecoding(settings.decodeWeakSignals(),
+                                            settings.minimumDecodeSnrDb());
+  };
   const auto apply_local_character_decoder = [&settings,
                                                &replay_controller] {
     replay_controller.configureLocalCharacterDecoder(
@@ -363,6 +372,7 @@ int main(int argc, char* argv[]) {
   apply_spectrum_processing();
   apply_radio_frequency();
   apply_decoded_signal_timeout();
+  apply_weak_signal_decoding();
   apply_local_character_decoder();
   apply_callsign_database_correction();
   apply_keying_model();
@@ -389,6 +399,9 @@ int main(int argc, char* argv[]) {
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_decoded_signal_timeout);
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::settingsChanged,
+      &replay_controller, apply_weak_signal_decoding);
   QObject::connect(
       &settings, &cwassistant::desktop::AppSettings::settingsChanged,
       &replay_controller, apply_callsign_database_correction);

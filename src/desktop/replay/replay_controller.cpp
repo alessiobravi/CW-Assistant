@@ -925,6 +925,8 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::configure);
   connect(this, &ReplayController::liveDecodedSignalTimeoutRequested,
           dsp_worker, &LiveAudioDspWorker::setDecodedSignalTimeoutSeconds);
+  connect(this, &ReplayController::liveWeakSignalDecodingRequested, dsp_worker,
+          &LiveAudioDspWorker::setWeakSignalDecoding);
   connect(this, &ReplayController::liveOwnCallsignRequested, dsp_worker,
           &LiveAudioDspWorker::setOwnCallsign);
   connect(this, &ReplayController::liveKeyingModelRequested, dsp_worker,
@@ -1919,6 +1921,30 @@ void ReplayController::setSourceMode(const int value) {
 void ReplayController::setDecodedSignalTimeoutSeconds(const int seconds) {
   emit decodedSignalTimeoutRequested(seconds);
   emit liveDecodedSignalTimeoutRequested(seconds);
+}
+
+bool ReplayController::decodeWeakSignals() const noexcept {
+  return decode_weak_signals_;
+}
+
+double ReplayController::minimumDecodeSnrDb() const noexcept {
+  return minimum_decode_snr_db_;
+}
+
+void ReplayController::setWeakSignalDecoding(
+    const bool enabled, const double minimum_decode_snr_db) {
+  const bool changed = decode_weak_signals_ != enabled ||
+                       minimum_decode_snr_db_ != minimum_decode_snr_db;
+  decode_weak_signals_ = enabled;
+  minimum_decode_snr_db_ = minimum_decode_snr_db;
+  // Resent even when nothing changed. The decoded-signal timeout reaches the
+  // channel bank through configure(), which replaces the whole configuration
+  // with a fresh one, so any later timeout update would otherwise silently
+  // restore the bank's built-in weak-signal defaults over the operator's
+  // choice. Resending costs nothing and keeps the gate authoritative.
+  emit liveWeakSignalDecodingRequested(decode_weak_signals_,
+                                       minimum_decode_snr_db_);
+  if (changed) emit weakSignalDecodingChanged();
 }
 
 void ReplayController::openDebugCaptureFolder() {

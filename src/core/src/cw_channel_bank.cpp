@@ -146,8 +146,28 @@ CwChannelBank::CwChannelBank(CwChannelBankConfig config) : config_(config) {
 }
 
 void CwChannelBank::configure(CwChannelBankConfig config) noexcept {
-  config_ = config;
+  // Settings that have their own setters are carried across rather than reset
+  // to the struct defaults. A caller changing one unrelated value passes a
+  // freshly constructed config, and replacing the whole thing silently undid
+  // everything set through a setter: the station callsign already survived
+  // only because the application happened to re-apply it afterwards, and the
+  // weak-signal gate would have been reset the same way. Whoever owns a value
+  // keeps it.
+  const auto own_callsign = std::move(config_.own_callsign);
+  const bool decode_weak_signals = config_.decode_weak_signals;
+  const float minimum_decode_snr_db = config_.minimum_decode_snr_db;
+  config_ = std::move(config);
+  if (config_.own_callsign.empty()) config_.own_callsign = own_callsign;
+  config_.decode_weak_signals = decode_weak_signals;
+  config_.minimum_decode_snr_db = minimum_decode_snr_db;
   sanitizeConfig();
+}
+
+void CwChannelBank::setWeakSignalDecoding(
+    const bool enabled, const float minimum_decode_snr_db) noexcept {
+  config_.decode_weak_signals = enabled;
+  config_.minimum_decode_snr_db =
+      std::clamp(minimum_decode_snr_db, 0.0F, 40.0F);
 }
 
 void CwChannelBank::setKeyingModel(const CwKeyingModel model) noexcept {
@@ -1473,6 +1493,25 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
                                    track.last_candidate_match_ns) /
                   1'000'000'000.0L <=
               kCandidateMatchHoldSeconds;
+      // A track too weak to be copied is simply not fed to its decoder. It is
+      // deliberately not suspended: suspension is the association-loss path
+      // and is only resumed from there, so a track suspended for being quiet
+      // would never be decoded again once it grew loud.
+      //
+      // The gate reads the strongest level the track has reached, not the
+      // level of the moment. A signal is weak while it is still being
+      // acquired, and gating on that suppressed it before it could establish
+      // itself: measured on the capture corpus, it cost two of eight
+      // recovered callsigns, one of whose settled level was thirty-five
+      // decibels. An operator-selected track is always decoded, because an
+      // operator saying "this is a signal" is better evidence than a level.
+      const float decode_level_db = track.keying_envelope_initialized
+          ? track.keying_mark_snr_db : track.snr_db;
+      track.peak_decode_level_db =
+          std::max(track.peak_decode_level_db, decode_level_db);
+      const bool loud_enough_to_decode = config_.decode_weak_signals ||
+          track.operator_selected ||
+          track.peak_decode_level_db >= config_.minimum_decode_snr_db;
       if (!candidate_match_held) {
         if (!track.decoder_input_suspended) {
           // Drain a possibly keyed acoustic segment once, but do not claim an
@@ -1482,7 +1521,7 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::processSamples(
           track.update = track.decoder.suspendInput(timestamp_ns);
           track.decoder_input_suspended = true;
         }
-      } else if (!track.decoder_input_suspended) {
+      } else if (!track.decoder_input_suspended && loud_enough_to_decode) {
         track.update = track.decoder.process(timestamp_ns, track.keying_snr_db);
         updateVerification(track, timestamp_ns);
         recoverRejectedDecoder(track);

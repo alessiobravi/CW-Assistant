@@ -522,6 +522,64 @@ Pane {
                             text: "Weighs each mark and gap against the lengths Morse expects. Stronger on machine-sent, weighted and Farnsworth keying; weaker when the sender's timing wanders. Costs about one character of delay."
                         }
                     }
+                    Label { text: "Weak signals" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        CheckBox {
+                            objectName: "decodeWeakSignalsCheck"
+                            text: "Decode every tracked signal"
+                            checked: appSettings.decodeWeakSignals
+                            onToggled: appSettings.decodeWeakSignals = checked
+                        }
+                        RowLayout {
+                            spacing: 8
+                            Label {
+                                // The threshold decides nothing once every
+                                // tracked signal is decoded, so it reads as
+                                // inert rather than as a limit still in force.
+                                color: appSettings.decodeWeakSignals ? "#667586" : "#c7d2df"
+                                text: "Decode only above"
+                            }
+                            SpinBox {
+                                objectName: "minimumDecodeSnrDbSpin"
+                                enabled: !appSettings.decodeWeakSignals
+                                // SpinBox counts in whole numbers, so the
+                                // threshold is held here in tenths of a
+                                // decibel and presented with one decimal.
+                                from: 0
+                                to: 400
+                                stepSize: 1
+                                editable: true
+                                value: Math.round(appSettings.minimumDecodeSnrDb * 10)
+                                validator: DoubleValidator {
+                                    bottom: 0.0
+                                    top: 40.0
+                                    decimals: 1
+                                    notation: DoubleValidator.StandardNotation
+                                }
+                                textFromValue: function(value, locale) {
+                                    return Number(value / 10).toLocaleString(locale, 'f', 1)
+                                }
+                                valueFromText: function(text, locale) {
+                                    return Math.round(Number.fromLocaleString(locale, text) * 10)
+                                }
+                                onValueModified: appSettings.minimumDecodeSnrDb = value / 10
+                                ToolTip.visible: hovered && enabled
+                                ToolTip.text: "Signal-to-noise level, in decibels, a tracked signal must reach before it is decoded"
+                            }
+                            Label {
+                                color: appSettings.decodeWeakSignals ? "#667586" : "#91a0b1"
+                                text: "dB above the noise floor"
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "A signal below the threshold is still detected, followed, and drawn in the spectrum; only its decoding is withheld. Off by default because below this level the decoder receives fragments rather than copy, filling the transcript with nothing while each such track costs a full decoder's work. The default of 12.0 dB is measured: the weakest track that carried a correctly recovered callsign across the capture corpus sat at 19.5 dB, leaving over seven decibels of margin. Enable the option above to decode every tracked signal regardless of level."
+                        }
+                    }
                     Label { text: "Local model" }
                     CheckBox {
                         objectName: "localDecoderEnabledCheck"

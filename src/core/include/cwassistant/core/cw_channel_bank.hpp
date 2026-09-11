@@ -85,6 +85,17 @@ struct CwChannelBankConfig {
   // the operator's own call.
   std::string own_callsign{};
   float acquisition_snr_db{7.0F};
+  // A track weaker than this is acquired, followed and drawn, but not decoded.
+  // Below it what reaches the decoder is fragments rather than copy: on the
+  // capture corpus such tracks emit streams of one- and two-element characters
+  // that fill a transcript with nothing and spend a decoder's worth of
+  // processor time each. The threshold is measured rather than chosen -- the
+  // weakest track that carried a correctly recovered callsign across the
+  // corpus sits at 19.5 dB, so this leaves over seven decibels of margin.
+  float minimum_decode_snr_db{12.0F};
+  // Decode every tracked signal regardless of level. Off by default because
+  // the cost is paid in both transcript quality and processor time.
+  bool decode_weak_signals{false};
   float retention_snr_db{2.5F};
   float detection_dynamic_range_db{96.0F};
   float minimum_peak_prominence_db{4.5F};
@@ -313,6 +324,11 @@ class CwChannelBank {
   // inherit another's partial state -- but track identity, frequency and the
   // callsign evidence gathered so far all survive, so an operator can compare
   // two models on the same station without losing it.
+  // Changing these affects only which tracks are decoded, never which are
+  // detected, so it does not disturb tracking or discard decoder state.
+  void setWeakSignalDecoding(bool enabled,
+                             float minimum_decode_snr_db) noexcept;
+
   void setKeyingModel(CwKeyingModel model) noexcept;
   // What the operator is doing. It decides whose callsign a monitored stream is
   // expected to carry, which exchange context alone cannot always settle.
@@ -426,6 +442,12 @@ class CwChannelBank {
     std::uint16_t verification_fail_samples{0};
     std::uint16_t decoder_rejection_samples{0};
     bool ever_verified{false};
+    // The strongest level this track has reached. The decode gate reads this
+    // rather than the level of the moment, because a signal is weak while it
+    // is still being acquired and gating on that suppresses it before it can
+    // establish itself -- measured, that lost a callsign whose settled level
+    // was thirty-five decibels.
+    float peak_decode_level_db{0.0F};
     bool ever_morse_likely{false};
     // Sticky for the life of the track: having once said CQ, a station does not
     // stop being a station when the word scrolls out of the recent window.
