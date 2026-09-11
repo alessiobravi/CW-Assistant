@@ -204,7 +204,7 @@ void test_expiry_drops_stale_reports() {
          "a query past the window reports nothing current");
   expect(!registry.forCallsign("EA1EYL", after_window).has_value(),
          "a lookup past the window finds nothing current");
-  expect(registry.near(14'030'000.0, after_window).empty(),
+  expect(registry.nearFrequency(14'030'000.0, after_window).empty(),
          "a frequency query past the window reports nothing current");
   expect(registry.size() == 2U,
          "a const query leaves the stored reports alone");
@@ -325,7 +325,7 @@ void test_both_sources_merge_into_one_match() {
              by_callsign->cluster && by_callsign->observations == 2U,
          "a lookup sees the same merged evidence");
 
-  const auto by_frequency = registry.near(14'030'000.0, reported);
+  const auto by_frequency = registry.nearFrequency(14'030'000.0, reported);
   expect(by_frequency.size() == 1U && by_frequency.front().reverse_beacon &&
              by_frequency.front().cluster,
          "a frequency query sees the same merged evidence");
@@ -340,7 +340,7 @@ void test_both_sources_merge_into_one_match() {
                                CwSpotSource::Cluster),
                        reported),
          "the two-band fixture is stored");
-  const auto on_twenty = split.near(14'030'000.0, reported);
+  const auto on_twenty = split.nearFrequency(14'030'000.0, reported);
   expect(on_twenty.size() == 1U && on_twenty.front().reverse_beacon &&
              !on_twenty.front().cluster && on_twenty.front().observations == 1U,
          "a frequency query counts only the reports near that frequency");
@@ -418,7 +418,7 @@ void test_frequency_tolerance_and_ordering() {
                       now),
          "the just-below fixture is stored");
 
-  const auto matches = registry.near(centre, now);
+  const auto matches = registry.nearFrequency(centre, now);
   expect(matches.size() == 2U,
          "the tolerance includes its own edges and excludes one hertz beyond");
   const auto names_only = [&matches](const std::string_view callsign) {
@@ -432,7 +432,7 @@ void test_frequency_tolerance_and_ordering() {
   expect(!names_only("DL1NKB") && !names_only("K1ABC"),
          "neither station past the edge is on frequency");
 
-  expect(registry.near(std::numeric_limits<double>::quiet_NaN(), now).empty(),
+  expect(registry.nearFrequency(std::numeric_limits<double>::quiet_NaN(), now).empty(),
          "a frequency that is not a number matches nothing");
 
   // Newest first, because the useful question is who is on frequency now.
@@ -447,7 +447,7 @@ void test_frequency_tolerance_and_ordering() {
                                  CwSpotSource::Cluster),
                          kBaseNs + 2ULL * kMinute),
          "the ordering fixture is stored");
-  const auto by_age = ordered.near(centre, kBaseNs + 2ULL * kMinute);
+  const auto by_age = ordered.nearFrequency(centre, kBaseNs + 2ULL * kMinute);
   expect(by_age.size() == 3U, "every station on frequency is reported");
   if (by_age.size() == 3U) {
     expect(by_age[0].callsign == "DL1NKB" && by_age[1].callsign == "IU0LFQ" &&
@@ -465,9 +465,9 @@ void test_frequency_tolerance_and_ordering() {
   expect(nonsense.add(spotFor("EA1EYL", centre, now, CwSpotSource::Cluster),
                       now),
          "the nonsensical-tolerance fixture is stored");
-  expect(nonsense.near(centre, now).size() == 1U,
+  expect(nonsense.nearFrequency(centre, now).size() == 1U,
          "a nonsensical tolerance still matches the exact frequency");
-  expect(nonsense.near(centre + 1.0, now).empty(),
+  expect(nonsense.nearFrequency(centre + 1.0, now).empty(),
          "a nonsensical tolerance does not match the whole band");
 }
 
@@ -551,7 +551,7 @@ void test_a_report_disturbs_nothing_it_was_not_given() {
          "a neighbouring station's sources are never borrowed");
 
   const std::size_t size_before_queries = registry.size();
-  static_cast<void>(registry.near(14'031'000.0, now + kSecond));
+  static_cast<void>(registry.nearFrequency(14'031'000.0, now + kSecond));
   static_cast<void>(registry.all(now + kSecond));
   static_cast<void>(registry.forCallsign("DL1NKB", now + kSecond));
   expect(registry.size() == size_before_queries,

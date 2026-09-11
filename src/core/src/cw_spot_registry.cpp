@@ -99,7 +99,7 @@ CwSpotRegistry::CwSpotRegistry(Limits limits) : limits_(limits) {
   if (!std::isfinite(limits_.match_tolerance_hz) ||
       limits_.match_tolerance_hz < 0.0) {
     // A tolerance that is not a real, non-negative number makes every
-    // comparison in near() meaningless. Falling back to exact frequency
+    // comparison in nearFrequency() meaningless. Falling back to exact frequency
     // agreement fails closed; the alternative would quietly match a whole
     // band and present unrelated stations as if they were on frequency.
     limits_.match_tolerance_hz = 0.0;
@@ -188,7 +188,7 @@ void CwSpotRegistry::expire(const std::uint64_t now_ns) {
   spots_.erase(stale, spots_.end());
 }
 
-std::vector<CwSpotMatch> CwSpotRegistry::near(
+std::vector<CwSpotMatch> CwSpotRegistry::nearFrequency(
     const double frequency_hz, const std::uint64_t now_ns) const {
   if (!std::isfinite(frequency_hz)) return {};
   return collectMatches(spots_, [&](const CwSpot& spot) {

@@ -21,7 +21,7 @@ using CwSpotBatch = std::vector<cwassistant::core::CwSpot>;
 // Nanoseconds since the Unix epoch.
 //
 // Every timestamp that reaches CwSpotRegistry -- the observation times parsed
-// out of a feed and the "now" passed to expire() and near() -- has to be read
+// out of a feed and the "now" passed to expire() and nearFrequency() -- has to be read
 // from one clock, or a spot's age is the difference between two unrelated
 // origins and the retention window means nothing. A steady clock cannot be
 // used: an observation time arrives from a remote station as a wall-clock

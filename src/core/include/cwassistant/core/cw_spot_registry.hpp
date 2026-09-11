@@ -80,7 +80,14 @@ class CwSpotRegistry {
   void expire(std::uint64_t now_ns);
 
   // Every station reported within the tolerance of a frequency, newest first.
-  [[nodiscard]] std::vector<CwSpotMatch> near(double frequency_hz,
+  //
+  // Named nearFrequency rather than near because `near` is a macro. Windows
+  // still defines it, empty, in windef.h for 16-bit compatibility, so once any
+  // translation unit reached this header after a Windows header the
+  // declaration became `(double frequency_hz, ...)` and would not compile.
+  // Nothing warned: it built everywhere else, and on Windows only once the
+  // telnet client pulled QTcpSocket -- and so winsock2.h -- in ahead of it.
+  [[nodiscard]] std::vector<CwSpotMatch> nearFrequency(double frequency_hz,
                                               std::uint64_t now_ns) const;
 
   // What is reported for one callsign, if anything is current.
