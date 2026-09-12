@@ -991,6 +991,114 @@ int main(int argc, char* argv[]) {
           QStringLiteral("#8d9aaa")) {
     return 19;
   }
+  // A measurement that moves below what the card can display must leave the
+  // row byte-identical, so the session list reports no change and the view
+  // does not rebuild a decoded card -- transcript text layout included -- for
+  // a signal-to-noise reading that wandered a thousandth of a decibel.
+  //
+  // This is the whole of the "jerky with several streams" fault. Every one of
+  // these fields moves on every update, a row compares unequal if any single
+  // field differs, so before this rounding the model reported all two dozen
+  // rows changed on all two dozen publications a second and the drawing
+  // thread never stopped rebuilding cards -- while the processor sat idle,
+  // which is why it never looked like a load problem. Measured on a running
+  // station: narrowband coherence, keying-level separation and explained
+  // variation each differed on 100% of consecutive samples.
+  //
+  // Base values are exact multiples of their rounding step and the drifts are
+  // a small fraction of one step, so a row that still differs means some
+  // field reached the model unrounded.
+  const auto quantisation_snapshot =
+      [](const double drift) -> cwassistant::core::CwChannelSnapshot {
+    const auto coarse = static_cast<float>(drift);       // 0.1 steps
+    const auto fine = static_cast<float>(drift / 10.0);  // 0.01 steps
+    return cwassistant::core::CwChannelSnapshot{
+        .id = 900,
+        .frequency_hz = 800.0 + drift,
+        .presentation_frequency_hz = 800.0 + drift,
+        .drift_hz_per_second = 1.0 + drift,
+        .filter_width_hz = 120.0 + 10.0 * drift,
+        .snr_db = 12.0F + coarse,
+        .wpm = 22.0 + drift,
+        .acoustic_wpm = 22.0 + drift,
+        .acoustic_cadence_confidence = 0.5F + fine,
+        .confidence = 0.5F + fine,
+        .key_down_probability = 0.5F + fine,
+        .verified_cw = true,
+        .verification_confidence = 0.5F + fine,
+        .verification_cadence_quality = 0.5F + fine,
+        .verification_timing_quality = 0.5F + fine,
+        .verification_character_confidence = 0.5F + fine,
+        .cadence_quality = 0.5F + fine,
+        .mean_character_confidence = 0.5F + fine,
+        .narrowband_coherence = 0.5F + fine,
+        .characters = {{.symbol = "A",
+                        .confidence = 0.5F + fine,
+                        .timing_quality = 0.5F + fine,
+                        .known = true}},
+        .text = "CQ",
+        .refined_text = "CQ ",
+        .acoustic_alternatives = {{.text = "CQ",
+                                   .provisional_elements = ".-",
+                                   .wpm = 22.0 + drift,
+                                   .acoustic_cost = 3.0 + drift,
+                                   .evidence_confidence = 0.5F + fine,
+                                   .first_observation_id = 1,
+                                   .last_observation_id = 2}},
+        .provisional_text = "C",
+        .pending_elements = ".-",
+        .transmissions = {{.sequence = 1,
+                           .text = "CQ",
+                           .sender_callsign = "IU0LFQ",
+                           .wpm = 22.0 + drift,
+                           .cadence_confidence = 0.5F + fine}},
+        .sender_cadences = {{.callsign = "IU0LFQ",
+                             .wpm = 22.0 + drift,
+                             .confidence = 0.5F + fine,
+                             .observed_turns = 2}},
+        .active_transmission_sequence = 1,
+        .current_sender_callsign = "IU0LFQ",
+        .current_sender_wpm = 22.0 + drift,
+    };
+  };
+  const auto quantised_row =
+      [&quantisation_snapshot](const double drift) -> QVariantMap {
+    const cwassistant::core::CwChannelSnapshot snapshot =
+        quantisation_snapshot(drift);
+    return cwassistant::desktop::decoderChannelModel(
+               std::span<const cwassistant::core::CwChannelSnapshot>{
+                   &snapshot, 1})
+        .front()
+        .toMap();
+  };
+  const QVariantMap settled_row = quantised_row(0.0);
+  if (quantised_row(0.004) != settled_row ||
+      quantised_row(-0.004) != settled_row) {
+    return 46;
+  }
+  // The rounding must not be so coarse that a change the operator would see
+  // is swallowed. Half a decibel, half a word per minute and five hundredths
+  // of confidence all still report.
+  if (quantised_row(0.5) == settled_row) return 47;
+  {
+    cwassistant::core::CwChannelSnapshot louder = quantisation_snapshot(0.0);
+    louder.snr_db = 12.5F;
+    const QVariantMap louder_row =
+        cwassistant::desktop::decoderChannelModel(
+            std::span<const cwassistant::core::CwChannelSnapshot>{&louder, 1})
+            .front()
+            .toMap();
+    if (louder_row == settled_row) return 48;
+    cwassistant::core::CwChannelSnapshot surer = quantisation_snapshot(0.0);
+    surer.confidence = 0.55F;
+    const QVariantMap surer_row =
+        cwassistant::desktop::decoderChannelModel(
+            std::span<const cwassistant::core::CwChannelSnapshot>{&surer, 1})
+            .front()
+            .toMap();
+    if (surer_row == settled_row) return 49;
+  }
+
   const QVariantMap previous_session{
       {QStringLiteral("id"), QVariant::fromValue<qulonglong>(7)},
       {QStringLiteral("color"), QStringLiteral("#4dd0e1")},

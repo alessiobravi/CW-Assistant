@@ -51,6 +51,28 @@ QString localDecoderDefaultStatus(const LocalDecoderPresentationState state) {
 
 }  // namespace
 
+namespace {
+
+// Rounds a continuously varying measurement to what an operator can read.
+//
+// The session list compares each row with the one it already holds and only
+// tells the view about rows that differ. Signal-to-noise, speed and the
+// confidences move a little on every single update, so every row differed
+// every time, every row was reported changed, and the view re-evaluated an
+// entire decoded card -- transcript text layout included -- for each of them.
+// With several signals decoding that is hundreds of full card rebuilds a
+// second on the one thread that draws, which is felt as the application
+// becoming jerky while the processor is plainly not busy.
+//
+// A tenth of a decibel or of a word per minute is already below what the card
+// displays, so rounding costs the operator nothing and lets a row that has not
+// meaningfully changed compare equal and stay quiet.
+[[nodiscard]] double readable(const double value, const double step = 0.1) {
+  return std::isfinite(value) ? std::round(value / step) * step : value;
+}
+
+}  // namespace
+
 QVariantList decoderChannelModel(
     const std::span<const cwassistant::core::CwChannelSnapshot> channels,
     const std::span<const LocalDecoderChannelPresentation> local_decoder) {
@@ -61,17 +83,19 @@ QVariantList decoderChannelModel(
     const bool expose_verified_content = channel.verified_cw;
     item.insert(QStringLiteral("id"),
                 QVariant::fromValue<qulonglong>(channel.id));
-    item.insert(QStringLiteral("frequencyHz"), channel.frequency_hz);
+    item.insert(QStringLiteral("frequencyHz"), readable(channel.frequency_hz));
     item.insert(QStringLiteral("presentationFrequencyHz"),
-                channel.presentation_frequency_hz);
+                readable(channel.presentation_frequency_hz));
     item.insert(QStringLiteral("driftHzPerSecond"),
-                channel.drift_hz_per_second);
-    item.insert(QStringLiteral("filterWidthHz"), channel.filter_width_hz);
-    item.insert(QStringLiteral("snrDb"), channel.snr_db);
-    item.insert(QStringLiteral("wpm"), channel.wpm);
-    item.insert(QStringLiteral("confidence"), channel.confidence);
+                readable(channel.drift_hz_per_second));
+    item.insert(QStringLiteral("filterWidthHz"),
+                readable(channel.filter_width_hz, 1.0));
+    item.insert(QStringLiteral("snrDb"), readable(channel.snr_db));
+    item.insert(QStringLiteral("wpm"), readable(channel.wpm));
+    item.insert(QStringLiteral("confidence"),
+                readable(channel.confidence, 0.01));
     item.insert(QStringLiteral("keyProbability"),
-                channel.key_down_probability);
+                readable(channel.key_down_probability, 0.01));
     item.insert(QStringLiteral("keyDown"), channel.key_down);
     item.insert(QStringLiteral("active"), channel.active);
     item.insert(QStringLiteral("verifiedCw"), channel.verified_cw);
@@ -83,18 +107,19 @@ QVariantList decoderChannelModel(
         cwassistant::core::cwVerificationReasonName(
             channel.verification_reason)));
     item.insert(QStringLiteral("verificationConfidence"),
-                channel.verification_confidence);
+                readable(channel.verification_confidence, 0.01));
     item.insert(QStringLiteral("verificationCadenceQuality"),
-                channel.verification_cadence_quality);
+                readable(channel.verification_cadence_quality, 0.01));
     item.insert(QStringLiteral("verificationTimingQuality"),
-                channel.verification_timing_quality);
+                readable(channel.verification_timing_quality, 0.01));
     item.insert(QStringLiteral("verificationCharacterConfidence"),
-                channel.verification_character_confidence);
-    item.insert(QStringLiteral("cadenceQuality"), channel.cadence_quality);
+                readable(channel.verification_character_confidence, 0.01));
+    item.insert(QStringLiteral("cadenceQuality"),
+                readable(channel.cadence_quality, 0.01));
     item.insert(QStringLiteral("meanCharacterConfidence"),
-                channel.mean_character_confidence);
+                readable(channel.mean_character_confidence, 0.01));
     item.insert(QStringLiteral("narrowbandCoherence"),
-                channel.narrowband_coherence);
+                readable(channel.narrowband_coherence, 0.01));
     item.insert(QStringLiteral("keyTransitions"),
                 QVariant::fromValue<qulonglong>(channel.key_transitions));
     QVariantList character_evidence;
@@ -105,9 +130,10 @@ QVariantList decoderChannelModel(
       QVariantMap evidence;
       evidence.insert(QStringLiteral("symbol"),
                       QString::fromStdString(character.symbol));
-      evidence.insert(QStringLiteral("confidence"), character.confidence);
+      evidence.insert(QStringLiteral("confidence"),
+                      readable(character.confidence, 0.01));
       evidence.insert(QStringLiteral("timingQuality"),
-                      character.timing_quality);
+                      readable(character.timing_quality, 0.01));
       evidence.insert(QStringLiteral("known"), character.known);
       character_evidence.push_back(evidence);
     }
@@ -130,11 +156,11 @@ QVariantList decoderChannelModel(
         candidate.insert(QStringLiteral("elements"),
                          QString::fromStdString(
                              alternative.provisional_elements));
-        candidate.insert(QStringLiteral("wpm"), alternative.wpm);
+        candidate.insert(QStringLiteral("wpm"), readable(alternative.wpm));
         candidate.insert(QStringLiteral("cost"),
-                         alternative.acoustic_cost);
+                         readable(alternative.acoustic_cost));
         candidate.insert(QStringLiteral("confidence"),
-                         alternative.evidence_confidence);
+                         readable(alternative.evidence_confidence, 0.01));
         candidate.insert(QStringLiteral("firstObservationId"),
                          QVariant::fromValue<qulonglong>(
                              alternative.first_observation_id));
@@ -167,9 +193,9 @@ QVariantList decoderChannelModel(
                     QString::fromStdString(transmission.text));
         turn.insert(QStringLiteral("sender"),
                     QString::fromStdString(transmission.sender_callsign));
-        turn.insert(QStringLiteral("wpm"), transmission.wpm);
+        turn.insert(QStringLiteral("wpm"), readable(transmission.wpm));
         turn.insert(QStringLiteral("cadenceConfidence"),
-                    transmission.cadence_confidence);
+                    readable(transmission.cadence_confidence, 0.01));
         transmissions.push_back(turn);
       }
       sender_cadences.reserve(static_cast<qsizetype>(
@@ -178,9 +204,9 @@ QVariantList decoderChannelModel(
         QVariantMap item_cadence;
         item_cadence.insert(QStringLiteral("callsign"),
                             QString::fromStdString(cadence.callsign));
-        item_cadence.insert(QStringLiteral("wpm"), cadence.wpm);
+        item_cadence.insert(QStringLiteral("wpm"), readable(cadence.wpm));
         item_cadence.insert(QStringLiteral("confidence"),
-                            cadence.confidence);
+                            readable(cadence.confidence, 0.01));
         item_cadence.insert(QStringLiteral("turns"), cadence.observed_turns);
         sender_cadences.push_back(item_cadence);
       }
@@ -195,7 +221,8 @@ QVariantList decoderChannelModel(
                     ? QString::fromStdString(channel.current_sender_callsign)
                     : QString{});
     item.insert(QStringLiteral("currentSenderWpm"),
-                expose_verified_content ? channel.current_sender_wpm : 0.0);
+                expose_verified_content ? readable(channel.current_sender_wpm)
+                                        : 0.0);
     item.insert(QStringLiteral("contextualText"),
                 expose_verified_content
                     ? QString::fromStdString(channel.contextual_text)

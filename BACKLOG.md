@@ -6,7 +6,41 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-12 (sixty-second entry) -- the application grew until it
+Last reviewed: 2026-09-12 (sixty-third entry) -- the jerkiness was measured on
+the owner's running station rather than guessed at, and it was change
+notification, not load.
+
+The remote diagnostics stream earned itself here. Connected to the station live
+while it carried two dozen tracks, the counters ruled out most of the search
+space in one window: no drain was ever capped, blocks arrived at a steady 31 a
+second, and the event loop never stalled once in 226 seconds. What it did show
+was the drawing thread blocked 22 ms at the median second against a 16.7 ms
+frame -- one or two frames lost a second, every second, which is exactly what
+"jerky while the processor is idle" feels like and exactly what a CPU meter
+cannot show.
+
+The cause was a fourth instance of the pattern below, one turn further on. The
+session list reports only rows that differ, but every measurement on a row is
+continuous, so no row was ever equal to itself: on the live station, narrowband
+coherence and the keying-level figures differed on 100% of consecutive samples
+and signal-to-noise on 98%. Every decoded card was therefore re-evaluated,
+transcript text layout included, two dozen times a second. Rounding each
+measurement to what the card can actually display fixes it, and the general
+lesson is worth more than the fix: a value that crosses to the drawing thread
+needs a rate, a bound, *and* a resolution. The first two were already rules
+here; the third is new. Publishing at a bounded rate does not help when every
+publication claims everything changed.
+
+Two earlier claims in this file were narrower than the evidence: the
+decoded-channel model was said to have been fixed by publishing "no faster than
+forty milliseconds", and the cost was attributed to deep-copying across the
+thread boundary. The rate cap was real and holds -- publishes measured 23 a
+second on the station -- but the copy was never the expensive part. Measured,
+building the whole model for 24 channels costs 0.071 ms, about 0.2% of one
+thread. The expense was always on the far side, in what the notification made
+the view redo.
+
+Previous review: 2026-09-12 (sixty-second entry) -- the application grew until it
 had to be killed, and the cause was a queue rather than a leak.
 
 The operator's evidence decided it: memory climbing from 244 MB to 668 MB while
@@ -24,8 +58,8 @@ in two days: publishing to the GUI thread at the rate work is produced rather
 than the rate a person can see. The decoded-channel model did it once per
 drained block on a five-millisecond timer, the diagnostics record did it on the
 same timer, and the spectrum did it per analyser frame with payloads two orders
-of magnitude larger. Anything crossing to that thread needs either a rate or a
-bound, decided when it is written.
+of magnitude larger. Anything crossing to that thread needs a rate or a
+bound and a resolution, all decided when it is written.
 
 IPv6 is not backlog work: it was already carried throughout the diagnostics
 service and is now proven at runtime rather than by reading the source -- a case
