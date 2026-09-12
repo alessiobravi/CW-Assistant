@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
@@ -8,6 +9,7 @@
 #include <iostream>
 #include <limits>
 #include <numbers>
+#include <random>
 #include <string>
 #include <type_traits>
 #include <vector>
@@ -3619,6 +3621,102 @@ void test_soft_decision_keying_evidence() {
          "levels' scatter and shift the decision away from the mark");
 }
 
+// Decoding must not get more expensive the longer a station has been left
+// running. An operator does not restart the application between overs, so a
+// per-block cost that grows with the transcript turns a session that started
+// responsive into one that has to be killed -- which is exactly what was
+// reported, and exactly what a processor meter fails to show, because the
+// growth is on one thread while the machine as a whole stays idle.
+//
+// This measures the shape of the cost rather than its size: the median block
+// of the last fifth of a run against the median block of the first fifth, on
+// the same machine, in the same process. A ratio cannot be made to fail by a
+// slow or a busy builder, which an absolute time bound would be.
+//
+// Against the reconstruction being redone from scratch on every block, the
+// median rises about sixteenfold across two minutes of decoding. With it
+// remembered, it is flat -- about 1.3. Four is far above the one and far
+// below the other.
+void test_decoding_cost_does_not_grow_with_session_length() {
+  using namespace cwassistant::core;
+  using Clock = std::chrono::steady_clock;
+  constexpr double sample_rate = 8'000.0;
+  constexpr std::size_t bin_count = 2'048;
+  constexpr double tone_hz = 700.0;
+  constexpr int blocks = 12'000;  // 10 ms each: two minutes of decoding.
+
+  CwChannelBank bank({.empty_track_retention_seconds = 6.0,
+                      .decoded_track_retention_seconds = 45.0,
+                      .detector_frame_interval_seconds = 0.0,
+                      .minimum_spectral_observations = 1,
+                      .minimum_verification_symbols = 0,
+                      .verification_enter_seconds = 0.0,
+                      .verification_exit_seconds = 0.0});
+  std::vector<float> spectrum(bin_count, -110.0F);
+  std::vector<double> costs_us;
+  costs_us.reserve(static_cast<std::size_t>(blocks));
+  std::uint64_t now = 0;
+  double phase = 0.0;
+  bool keyed = false;
+  int remaining = 0;
+  // A fixed sequence, so the measurement is the same on every machine and
+  // every run. The exact keying does not matter; that it keeps decoding for
+  // two minutes does.
+  std::mt19937 rng(12'345);
+  std::uniform_int_distribution<int> element(0, 2);
+
+  for (int step = 0; step < blocks; ++step) {
+    if (remaining <= 0) {
+      keyed = !keyed;
+      remaining = keyed && element(rng) == 0 ? 18 : 6;
+    }
+    --remaining;
+    std::fill(spectrum.begin(), spectrum.end(), -110.0F);
+    if (keyed) {
+      const auto bin = static_cast<std::size_t>(
+          tone_hz / (sample_rate * 0.5) * static_cast<double>(bin_count));
+      if (bin < bin_count) spectrum[bin] = -55.0F;
+    }
+    static_cast<void>(
+        bank.updateSpectrum(now, 0.0, sample_rate * 0.5, spectrum, false));
+    RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = sample_rate;
+    block.timestamp_ns = now;
+    block.sample_count = 80;
+    for (std::size_t index = 0; index < block.sample_count; ++index) {
+      block.samples[index] = {
+          keyed ? 0.40F * static_cast<float>(std::sin(phase)) : 0.0F, 0.0F};
+      phase += 2.0 * std::numbers::pi * tone_hz / sample_rate;
+    }
+    const auto started = Clock::now();
+    static_cast<void>(bank.processSamples(block));
+    costs_us.push_back(
+        std::chrono::duration<double, std::micro>(Clock::now() - started)
+            .count());
+    now += 10'000'000;
+  }
+
+  const auto median_of = [&costs_us](const std::size_t from,
+                                     const std::size_t to) {
+    std::vector<double> slice(costs_us.begin() +
+                                  static_cast<std::ptrdiff_t>(from),
+                              costs_us.begin() +
+                                  static_cast<std::ptrdiff_t>(to));
+    std::sort(slice.begin(), slice.end());
+    return slice[slice.size() / 2];
+  };
+  const std::size_t fifth = costs_us.size() / 5;
+  const double early = median_of(0, fifth);
+  const double late = median_of(costs_us.size() - fifth, costs_us.size());
+  // A machine fast enough to measure the early median as zero cannot produce
+  // a ratio at all; treat the finest measurable interval as the floor.
+  const double ratio = late / std::max(early, 1.0);
+  expect(ratio < 4.0,
+         "decoding a long session costs no more per block at the end than at "
+         "the start (median " + std::to_string(early) + " us -> " +
+         std::to_string(late) + " us, ratio " + std::to_string(ratio) + ")");
+}
+
 int main() {
   test_ring_buffer();
   test_scheduler();
@@ -3638,6 +3736,7 @@ int main() {
   test_cw_callsign_prefixes_survive_missing_files();
   test_cw_callsign_prefix_table();
   test_cw_context_rescorer();
+  test_decoding_cost_does_not_grow_with_session_length();
   test_presented_speed_requires_evidence();
   test_spectrum_settings();
   test_wav_replay_source();

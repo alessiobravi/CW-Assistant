@@ -6,7 +6,34 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-12 (sixty-third entry) -- the jerkiness was measured on
+Last reviewed: 2026-09-12 (sixty-fourth entry) -- the jerkiness was measured on
+the owner's running station rather than guessed at, and it had two causes, one
+on each side of the thread boundary.
+
+Profiling the decoder at the load the station was actually carrying found the
+larger one: 47% of all decoder time was spent reconstructing the word gaps of
+the active transmission, from the beginning, on every sample block, for every
+track, over a transcript that only grows. That is why the application got worse
+the longer it ran rather than settling at a cost -- and why no processor meter
+showed it, since the growth is on one thread while the machine stays idle.
+Remembering the reconstruction against its input halved the decoder's total
+cost at one track and removed the growth entirely.
+
+The measurement mattered more than the guess. Three theories were plausible
+before profiling -- the model copy crossing the thread boundary, the spectrum
+frames, the diagnostics record -- and all three were wrong. The harness that
+settled it drives CwChannelBank at a chosen track count and reports the
+distribution of per-block cost over the run; the tail and the trend are what
+identify this class of fault, never the mean.
+
+Not fixed, and named so it is not rediscovered: the worst blocks remain far
+more expensive than the median and that tail still grows with transmission
+length. It is `refineCwEventLattice` at a transmission boundary, which decodes
+the event lattice once per candidate speed -- up to nine passes. Real work at a
+real boundary rather than a repeat, so it wants an algorithmic answer, not a
+cache. Measured at two dozen tracks: median 2.0 ms, p99 35 ms, worst 276 ms.
+
+Previous review: 2026-09-12 (sixty-third entry) -- the jerkiness was measured on
 the owner's running station rather than guessed at, and it was change
 notification, not load.
 
@@ -1939,6 +1966,7 @@ translucent band rather than two signal-like lines.
 |---|---|---|---|
 | REM-001 | active | Implement remote roles and station-wide lease domain | Role/message contracts and bounded exclusive lease manager pass dependency-free expiry tests. Extend the lease to cover every coupled RX/TX device and shared route in one station profile, while multiple authenticated observers remain concurrent; persist lease policy, never active ownership. |
 | OBS-004 | active | Offer a live diagnostics stream for remote troubleshooting | Delivered: an emit-only line-delimited JSON stream of the capture's own records, once a second, on operator-chosen addresses selected from those the machine can bind; a Network settings tab; an indicator while listening; throughput counters describing whether the application is keeping up; a session log file behind `--log-file`/`CWA_LOG_FILE`; and a waterfall rendering switch so a station serving diagnostics need not draw one. The stream never reads from a client, because this process holds transmit and an input path here would be a second, weaker way to reach a radio; a peer that sends is disconnected. Remaining, and stated in the settings page rather than implied away: there is no per-client authentication, since authenticating a client means reading what it sends. The token gates which addresses may be bound, so a routable address cannot be offered without one, but anything that can reach a bound address receives the stream. Proper access control belongs to REM-003/REM-004 -- TLS 1.3 and per-client certificates -- as an observer subscription rather than a second remote surface with a weaker security model. Since delivered: per-client token authentication, read as one bounded line and compared in constant time, and a peer allow-list of addresses or CIDR subnets checked before a byte is exchanged. Remaining: the stream is unencrypted, so the token crosses in clear, and one shared secret cannot revoke a single reader. Those belong to REM-003/REM-004 with TLS 1.3 and per-client certificates. Until then the honest guidance is a trusted network or a tunnel, never a port forward. |
+| OBS-005 | todo | Carry receive audio to a remote observer over UDP | Requested by the repository owner: stream the station's audio alongside the diagnostics records so a remote operator can save it or listen to it. Authenticate on the existing diagnostics TCP connection, then start the audio on request over UDP -- the media plane separate from the control plane, which is how RTSP and SIP are built and is the right shape here. UDP is correct for this: losing a packet of audio is better than delaying the rest of it, and a retransmitted sample is worthless by the time it arrives. Three things this must settle before it is written, each a direct consequence of what has already been learned in this file. First, it breaks the diagnostics service's stated safety argument -- that no byte from a peer can ever select an action -- because starting a stream *is* a peer selecting an action. That is acceptable only if the request is a single bounded message drawn from a closed set of options that cannot reach the radio, the settings or the decoder, and only if the header stops claiming otherwise and says what is actually true. The claim in the source is a promise to the owner, not decoration. Second, UDP has no backpressure, which is precisely the fault that grew the application to 668 MB and had to be killed. A sender that emits at the rate audio is produced, to a receiver that may be gone, is the same mistake with the queue moved into the socket. Bound it at the sender by construction, drop rather than buffer, and count what was dropped. Third, audio leaving the station is a larger disclosure than telemetry: it carries every signal in the passband, not just what this application decoded. It needs the same explicit, visible consent as binding a routable address, an indicator for as long as it is sending, and it must never start merely because a peer asked. Encryption stays where it already is: unencrypted on a trusted network or a tunnel until REM-003 brings TLS 1.3 and per-client certificates, at which point this becomes a subscription on that transport rather than a fourth remote surface. |
 | UI-011 | todo | Hold an identified stream in the waterfall longer than an unidentified one | Requested by the repository owner: a stream that has decoded and whose callsign is verified should persist about twice as long, keeping its region active, while a poorly decoded or unverified stream keeps the standard time. Attempted as a multiplier on `decoded_track_retention_seconds` and reverted, because the retention value is load-bearing for more than expiry. Two things were learned and should shape the real attempt. First, verification decays while a station is not sending, so a rule keyed on the present state gives the longer hold to nobody: by the time it matters the track has already fallen into the unverified branch and its 0.75 s. Latching an "was identified" flag fixes that but is not sufficient. Second, making that flag take precedence changed when a track may be replaced, which broke the genuine-replacement and inherited-prefix behaviour that `core_tests` guards -- an identified predecessor that lives twice as long is no longer displaced by its successor, so identity inheritance silently stops working. So the design has to say what happens to replacement, not only to expiry: whether an identified track that is being displaced by a stronger signal on the same frequency should yield, and whether the longer hold belongs in expiry at all rather than in the display's own retained-observation path, which already keeps a faded marker after a track has gone. Acceptance: the longer hold is demonstrated by a test that fails without it, and the existing replacement and inheritance assertions still pass. |
 | REM-002 | todo | Define and generate versioned wire schema | Implement the envelopes, epochs, sequences, idempotency, limits and compatibility rules in the secure remote-operation specification; tests reject unknown major versions and preserve only explicitly compatible optional fields. |
 | REM-003 | todo | Implement mutually authenticated secure WebSocket station/client adapters | Require TLS 1.3, valid per-client certificates, station pinning and encrypted control/event/media outside loopback tests; size/rate/connection limits and malformed-frame tests pass. |

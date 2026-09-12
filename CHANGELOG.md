@@ -8,6 +8,32 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Decoding got steadily more expensive the longer the application was left
+  running, so a session that started responsive ended up having to be killed.
+  Reconstructing the word gaps in the active transmission -- trying every token
+  against the exchange vocabulary and testing it for being a plausible callsign
+  -- was redone from the beginning on every sample block, for every track, over
+  a transcript that only grows. Profiling a run at two dozen tracks put 47% of
+  all decoder time in that one call. The reconstruction is now remembered
+  against the text it was computed from and recomputed only when a character is
+  actually decoded, which is a few times a second rather than thirty-one. Not a
+  character of the result changes: the function is pure and the input is
+  compared exactly.
+
+  Measured on the same fixture before and after, decoding one track for two
+  minutes: total cost fell from 122 ms to 58 ms per second of audio, and the
+  median block, which had climbed sixteenfold across the run, is now flat. At
+  two dozen tracks the total fell by 40% and the fourfold rise in the median
+  over three minutes is gone. A test decodes for two minutes and compares the
+  median block of the last fifth of the run with the first; it fails at a ratio
+  of 10 against the old behaviour and passes at 1.3.
+
+  What remains, and is not fixed here: the worst blocks are still much more
+  expensive than the median, and that tail still grows. It is the timing
+  refinement at the end of a transmission, which decodes the event lattice once
+  per candidate speed. That is real work at a real boundary rather than a
+  repeat, so it needs an algorithmic answer rather than a cache.
+
 - Streams were labelled with callsigns whose country prefix does not exist. A
   single missed or added element turns a real prefix into an impossible one,
   and nothing downstream of the decoder could tell the difference. A dictionary

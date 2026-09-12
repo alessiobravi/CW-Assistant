@@ -1183,7 +1183,11 @@ CwDecoderUpdate CwMultiSpeedDecoder::snapshot(const bool changed) const {
     std::string active = transmission_refined_start_ < refined_text_.size()
         ? refined_text_.substr(transmission_refined_start_)
         : primary.substr(primary_start);
-    active = reconstructCwWordGaps(active);
+    if (active != word_gap_cache_input_) {
+      word_gap_cache_input_ = active;
+      word_gap_cache_output_ = reconstructCwWordGaps(active);
+    }
+    active = word_gap_cache_output_;
     if (!active.empty()) {
       if (!result.contextual_text.empty()) result.contextual_text += '\n';
       result.contextual_text += active;

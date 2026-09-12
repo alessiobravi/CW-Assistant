@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <tuple>
 #include <string_view>
 #include <vector>
 
@@ -346,6 +347,24 @@ class CwMultiSpeedDecoder {
   std::string refined_text_;
   std::vector<CwAcousticAlternative> acoustic_alternatives_;
   std::string contextual_lattice_text_;
+  // Word-gap reconstruction of the active transmission, remembered against
+  // the text it was computed from.
+  //
+  // The reconstruction is pure and it is not cheap: every token in the text is
+  // tried against the exchange vocabulary and tested for being a plausible
+  // callsign, so it costs time proportional to the transcript and allocates
+  // heavily while doing it. It was being redone from the beginning on every
+  // sample block, for every track, over a transcript that only grows -- which
+  // is why decoding got steadily more expensive the longer a station listened
+  // rather than settling at a cost. Profiling a run at two dozen tracks put
+  // 47% of all decoder time in this one call, and the median block cost rose
+  // fourfold over three minutes.
+  //
+  // Text changes when a character is decoded, a few times a second at most.
+  // Remembering the last input and its result collapses the repeats without
+  // changing a single character of the answer.
+  mutable std::string word_gap_cache_input_;
+  mutable std::string word_gap_cache_output_;
   static constexpr std::size_t kMaximumTransmissionTurns = 16;
   static constexpr std::size_t kMaximumSenderCadences = 8;
   std::vector<CwTransmissionTurn> transmissions_;
