@@ -12,6 +12,16 @@ namespace cwassistant::desktop {
 class WaterfallConditioner final {
  public:
   void reset() noexcept;
+  // Translates the per-bin baseline by the same number of bins the waterfall
+  // rows were slid when the receiver retuned.
+  //
+  // Resetting it instead threw away a calibration that takes a second or so to
+  // re-converge, and every retune therefore painted a horizontal band across
+  // the waterfall while it settled. An operator tuning across a band produced
+  // a row of them. The baseline is per-bin and a pure translation is exactly
+  // the transform that keeps each bin's history over the frequency it belongs
+  // to, which is the same argument that makes sliding the rows correct.
+  void shiftBins(qsizetype bins) noexcept;
   [[nodiscard]] QVector<float> process(const QVector<float>& bins,
                                        bool noise_suppression,
                                        double noise_margin_db,

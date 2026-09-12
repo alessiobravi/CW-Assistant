@@ -415,10 +415,12 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
           std::fill(row.begin(), row.begin() - shift_bins, empty);
         }
       }
-      // The conditioner's baseline is per-bin and cannot be slid meaningfully
-      // across a retune, so it is re-established. It converges in well under a
-      // second, which is invisible next to losing the whole history.
-      conditioner_.reset();
+      // The conditioner's baseline is per-bin, so it slides by exactly the
+      // bins the rows did. Resetting it instead discarded a calibration that
+      // takes about a second to re-converge, and every retune therefore
+      // painted a horizontal band across the waterfall while it settled --
+      // tuning across a band produced a row of them.
+      conditioner_.shiftBins(shift_bins);
     }
   }
   // Only a source change may move the view. Testing `!preserve_zoom` here

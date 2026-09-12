@@ -59,6 +59,23 @@ enum class OmniRigRxFrequencyTarget {
     bool online, bool receiving, std::uint32_t writable_parameters,
     std::uint32_t vfo) noexcept;
 
+// Decides whether OmniRig's active-VFO frequency may be read as the receive
+// frequency.
+//
+// OmniRig's `Freq` is whichever VFO the radio has selected, not the receive
+// VFO. On a rig that publishes FreqA and FreqB the two are told apart and this
+// never arises. Many rigs publish neither -- the FT-450D among them -- and the
+// receive frequency was then read from `Freq` unconditionally. With split on,
+// selecting the transmit VFO to set it made `Freq` report the transmit
+// frequency, and the receive frequency followed it: moving VFO B moved VFO A.
+//
+// `Freq` is trustworthy exactly when there is only one VFO in play. With split
+// enabled and no way to tell which VFO is selected, no reading is better than
+// a reading that is wrong precisely when the operator is working the other
+// VFO, so the last known receive frequency is held instead.
+[[nodiscard]] bool omni_rig_active_vfo_is_receive_frequency(
+    bool has_per_vfo_property, bool split_enabled) noexcept;
+
 // Accumulates operator steps against the most recently accepted request while
 // asynchronous provider readback is pending.
 [[nodiscard]] std::optional<std::uint64_t> step_rx_frequency(

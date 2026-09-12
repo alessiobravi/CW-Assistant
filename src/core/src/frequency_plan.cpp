@@ -191,6 +191,14 @@ std::optional<std::uint64_t> parse_frequency_value(
                            : std::optional<std::uint64_t>{frequency_hz};
 }
 
+bool omni_rig_active_vfo_is_receive_frequency(
+    const bool has_per_vfo_property, const bool split_enabled) noexcept {
+  // A rig that names its VFOs needs none of this.
+  if (has_per_vfo_property) return false;
+  // Simplex: there is one VFO, so the selected one is the receive one.
+  return !split_enabled;
+}
+
 OmniRigRxFrequencyTarget select_omnirig_rx_frequency_target(
     const bool online, const bool receiving,
     const std::uint32_t writable_parameters, const std::uint32_t vfo) noexcept {

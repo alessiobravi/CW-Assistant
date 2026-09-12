@@ -852,8 +852,15 @@ ApplicationWindow {
                         if (mouse.button === Qt.LeftButton
                                 && hasExactModifiers(mouse,
                                                      Qt.ControlModifier)) {
-                            if (!appSettings.radioPointedTxFrequencyAvailable)
+                            // Guarded, because enabling split on a radio that
+                            // does not offer it is a command that should not
+                            // be sent speculatively. Spoken rather than
+                            // silent, because a gesture that does nothing at
+                            // all reads as the feature being broken.
+                            if (!appSettings.radioPointedTxFrequencyAvailable) {
+                                appSettings.reportPointedTxUnavailable()
                                 return
+                            }
                             var txRfHz = replayController.displayFrequencyToRfHz(
                                 frequencyAtX(mouse.x))
                             if (txRfHz > 0)
@@ -868,15 +875,25 @@ ApplicationWindow {
                                 replayController.openDecoderSession(streamId)
                             return
                         }
-                        if (mouse.button !== Qt.RightButton
-                                || !hasExactModifiers(mouse,
-                                                      Qt.NoModifier))
+                        // Right-click moved the decode window AND opened a
+                        // manual session in one gesture, so an operator asking
+                        // for one always got the other. They are separate
+                        // intentions -- where to look, and what to decode --
+                        // and now take separate gestures.
+                        if (mouse.button !== Qt.RightButton) return
+                        if (hasExactModifiers(mouse, Qt.ControlModifier)) {
+                            replayController.openManualDecoderSession(
+                                frequencyAtX(mouse.x))
                             return
-                        var frequencyHz = frequencyAtX(mouse.x)
+                        }
+                        if (!hasExactModifiers(mouse, Qt.NoModifier)) return
+                        // Plain right-click points the received spectrum. On
+                        // an audio card there is no window to move, so the
+                        // gesture has nothing to do rather than falling back
+                        // to the manual session it used to also perform.
                         if (replayController.sourceMode === 2)
                             appSettings.sdrDecoderCenterFrequencyHz =
-                                Math.round(frequencyHz)
-                        replayController.openManualDecoderSession(frequencyHz)
+                                Math.round(frequencyAtX(mouse.x))
                     }
                 }
                 Rectangle {
@@ -937,9 +954,13 @@ ApplicationWindow {
                     Label {
                         id: pointerHelpText
                         anchors.centerIn: parent
+                        // Kept in step with the handlers above. Right-click
+                        // points the received spectrum; CTRL+RIGHT opens a
+                        // manual decode. They were one gesture and an operator
+                        // asking for either always got both.
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open   •   RIGHT: probe   •   SHIFT+DRAG: decoder span   •   CTRL+LEFT: TX"
-                              : "RIGHT: probe   •   SHIFT+DRAG: decoder span   •   WHEEL: zoom   •   CTRL+LEFT: TX"
+                              ? "LEFT: open   •   RIGHT: point RX   •   CTRL+RIGHT: manual decode   •   SHIFT+DRAG: decoder span   •   CTRL+LEFT: TX"
+                              : "RIGHT: point RX   •   CTRL+RIGHT: manual decode   •   SHIFT+DRAG: decoder span   •   WHEEL: zoom   •   CTRL+LEFT: TX"
                         color: "#d4dbe4"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold

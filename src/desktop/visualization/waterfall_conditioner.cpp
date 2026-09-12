@@ -10,6 +10,31 @@ namespace cwassistant::desktop {
 
 void WaterfallConditioner::reset() noexcept { baseline_db_.clear(); }
 
+void WaterfallConditioner::shiftBins(const qsizetype bins) noexcept {
+  const qsizetype count = baseline_db_.size();
+  if (bins == 0 || count == 0) return;
+  if (bins >= count || -bins >= count) {
+    // Nothing of the old band remains under the new one.
+    baseline_db_.clear();
+    return;
+  }
+  // Bins the receiver has newly exposed carry no history. They take the
+  // quietest baseline present rather than a copy of whatever sat at that edge,
+  // so newly arrived spectrum reads as unmeasured instead of as a duplicate of
+  // its neighbour.
+  const float quietest =
+      *std::min_element(baseline_db_.cbegin(), baseline_db_.cend());
+  if (bins > 0) {
+    std::move(baseline_db_.begin() + bins, baseline_db_.end(),
+              baseline_db_.begin());
+    std::fill(baseline_db_.end() - bins, baseline_db_.end(), quietest);
+  } else {
+    std::move_backward(baseline_db_.begin(), baseline_db_.end() + bins,
+                       baseline_db_.end());
+    std::fill(baseline_db_.begin(), baseline_db_.begin() - bins, quietest);
+  }
+}
+
 QVector<float> WaterfallConditioner::process(
     const QVector<float>& bins, const bool noise_suppression,
     const double noise_margin_db,

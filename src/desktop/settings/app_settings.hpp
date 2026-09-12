@@ -445,6 +445,13 @@ class AppSettings final : public QObject {
   [[nodiscard]] bool radioTxFrequencyWritable() const noexcept;
   [[nodiscard]] bool radioTxFrequencySyncAvailable() const noexcept;
   [[nodiscard]] bool radioPointedTxFrequencyAvailable() const noexcept;
+  // Says, in the status line, why pointing TX did nothing.
+  //
+  // The gesture is guarded because enabling split on a radio that does not
+  // offer it is a command that should not be sent speculatively. Guarded and
+  // silent, though, it reads as the feature being broken rather than as the
+  // radio not offering it, so the refusal is now spoken.
+  Q_INVOKABLE void reportPointedTxUnavailable();
   [[nodiscard]] bool radioRxModeWritable() const noexcept;
   [[nodiscard]] bool radioTxModeWritable() const noexcept;
   [[nodiscard]] bool radioSplitWritable() const noexcept;

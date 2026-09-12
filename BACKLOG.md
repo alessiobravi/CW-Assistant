@@ -6,7 +6,33 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-12 (fifty-ninth entry) -- two faults introduced by the
+Last reviewed: 2026-09-12 (sixtieth entry) -- moving the transmit VFO moved
+the receive frequency, and two spectrum gestures were one.
+
+OmniRig's `Freq` is the selected VFO, not the receive VFO. A rig publishing
+FreqA and FreqB is read per VFO and this never arises; a rig publishing neither
+-- the FT-450D among them -- had its receive frequency read from `Freq`
+unconditionally, so with split on, selecting the transmit VFO to set it dragged
+the receive frequency with it, and with that the RF axis, the spot band filter
+and the decoder's frequency mapping. The reading is now taken only where one
+VFO is in play, and the last known receive frequency is held otherwise: no
+reading beats one that is wrong exactly when the operator is working the other
+VFO. The decision is a pure core function so it is tested on every platform,
+because the COM code around it builds only on Windows.
+
+Right-click both pointed the received spectrum and opened a manual decode, so
+an operator asking for either always got both; CTRL+RIGHT now opens the manual
+decode. The waterfall banding was self-inflicted: the retune slide reset the
+conditioner's per-bin baseline, which takes about a second to re-converge, so
+every retune painted a band and tuning across a band produced a row of them.
+The baseline slides with the rows now.
+
+Direct SDR reception still identifies nothing, and it is NOT understood. A
+theory that the sample-timing guard was tripped by arrival jitter was checked
+and abandoned: SDR block timestamps are synthesised from a sample counter and
+are exact. Waiting on a debug capture rather than guessing a third time.
+
+Previous review: 2026-09-12 (fifty-ninth entry) -- two faults introduced by the
 previous two waves, both found by the owner.
 
 Making the decoder window follow the receiver fixed direct SDR reception on
@@ -1792,6 +1818,7 @@ translucent band rather than two signal-like lines.
 | LOG-002 | todo | Implement Log4OM 2 UDP ADIF sink | A test QSO is accepted by configurable Log4OM inbound ADIF service. |
 | LOG-003 | active | Maintain ADIF conformance readiness | ADIF 3.1.7 satellite/split fields, exact frequency calculation, full band mapping, and policy exist; validated ADI/ADX import/export, official pinned fixtures, independent parser, and release report remain. |
 | LOG-004 | active | Resolve station equipment by actual-RF band | Ordered ADIF-band rules and `MY_RIG`/`MY_ANTENNA` cross-band serialization are tested; profile rule editor, persistence, overlap diagnostics, and logger acceptance remain. |
+| CAT-004 | todo | Point the transmit frequency on radios with no writable TX VFO | Ctrl+left-click sets the transmit frequency through a provider property for the TX VFO, and is refused when the radio publishes none. Many rigs -- the FT-450D among them -- have no CAT command for the transmit VFO at all: the operator sets it by selecting VFO B, writing the frequency, and selecting VFO A again. Doing that from software is a stateful sequence over somebody's transceiver, and a failure partway leaves the rig receiving on the wrong VFO, so it must be designed rather than bolted on: an explicit capability describing the swap, a readback confirming each step, restoration of the original VFO on any failure, and a refusal to start the sequence at all while transmitting. Until then the gesture states that the radio does not offer the control instead of doing nothing silently. |
 | SAT-001 | todo | Add complete satellite/transverter operating profiles | A named profile stores independent signed RX/downlink and TX/uplink transverter offsets, radio dial versus actual-RF presentation, radio/control backend, antenna and converter-chain descriptions, and optional satellite defaults suitable for full-duplex operation such as QO-100. RX and TX bindings are independent: a profile can receive from one radio, SDR, audio device or audio channel while transmitting through another radio/control provider and, where applicable, another audio device/channel; it must not impose a shared-device or simplex assumption. The faceplate presents these as logical `VFO A / RX` and `VFO B / TX` endpoints even when A and B belong to two different physical devices, and names each bound device rather than implying both VFOs live in one rig. QSO logging resolves the profile at contact time and emits the applicable ADIF fields: exact `FREQ`/`FREQ_RX`, `BAND`/`BAND_RX`, `PROP_MODE=SAT`, `SAT_NAME`, `SAT_MODE`, and local-station `MY_RIG`/`MY_ANTENNA`; it never puts local equipment into contacted-station `RIG`. The editor validates frequency arithmetic, ADIF dependencies/enumerations, overlapping equipment rules, missing satellite identity, device/channel ownership, and unsafe or ambiguous RX/TX mappings before CAT, audio, TX, or logging use. Cross-link implementation with CAT-003, LOG-003, LOG-004, and the audio/SDR adapters rather than creating separate frequency or ADIF models. |
 | INT-001 | active | Add read-only DX-cluster spot service | Verified calls can be served with CQ-only filtering, authentication option, bounded clients, and loopback-safe defaults. The receive-only ingestion half is delivered through the spot provider and registry; serving spots outward remains. |
 | INT-003 | done | Ingest spots from a real feed | The HTTPS provider accepts a document shape (`callsign`/`frequencyHz`/`time`) that no public service emits, so it currently has no endpoint it can parse. Probed 2026-09-11: DXHeat (`https://dxheat.com/source/spots/`) sends `DXCall`/`Frequency`/`Spotter`/`Time`+`Date`; POTA (`https://api.pota.app/spot/activator`) sends `activator`/`spotTime`/`source`, including RBN-relayed CW spots carrying SNR and WPM; DXSummit answers over plain HTTP only, with no HTTPS host, so the provider refuses it; SOTA reports frequency in MHz at 0.1 resolution, far coarser than the marker tolerance. Needs a per-source adapter, and a source list held in `dictionaries/` rather than compiled in, with a custom entry and a reachability check whose result is cached rather than probed on every start. |

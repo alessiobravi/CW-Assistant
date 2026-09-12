@@ -2928,6 +2928,27 @@ void test_negative_transverter_offset_and_invalid_frequency() {
          "operator kHz entry rejects grouping, excessive precision, zero, and "
          "units");
 
+  using cwassistant::core::omni_rig_active_vfo_is_receive_frequency;
+  // OmniRig's `Freq` is the SELECTED VFO, not the receive VFO.
+  //
+  // A rig that publishes FreqA and FreqB never needs it. Rigs that publish
+  // neither -- the FT-450D among them -- had their receive frequency read from
+  // `Freq` unconditionally, so with split on, selecting the transmit VFO to
+  // set it dragged the receive frequency along: moving VFO B moved VFO A, and
+  // with it the RF axis, the spot band filter and the decoder's frequency
+  // mapping. The reading is trustworthy exactly when one VFO is in play.
+  expect(!omni_rig_active_vfo_is_receive_frequency(true, false) &&
+             !omni_rig_active_vfo_is_receive_frequency(true, true),
+         "a radio naming its VFOs is read per VFO and never from the selected "
+         "one");
+  expect(omni_rig_active_vfo_is_receive_frequency(false, false),
+         "in simplex the selected VFO is the receive VFO, so the active "
+         "frequency is the receive frequency");
+  expect(!omni_rig_active_vfo_is_receive_frequency(false, true),
+         "with split enabled and no way to tell which VFO is selected, no "
+         "reading beats one that is wrong exactly when the operator is "
+         "working the transmit VFO");
+
   using Target = OmniRigRxFrequencyTarget;
   expect(select_omnirig_rx_frequency_target(true, true, 0x04, 0x80) ==
                  Target::FrequencyA &&

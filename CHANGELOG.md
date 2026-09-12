@@ -8,6 +8,33 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Setting the transmit VFO on the radio moved the receive frequency. OmniRig's
+  active-VFO frequency is whichever VFO the radio has selected, not the receive
+  one, and on a rig that publishes no per-VFO property -- the FT-450D among
+  them -- the receive frequency was read from it regardless. With split on,
+  selecting VFO B to set it therefore dragged VFO A along, and with it the RF
+  axis, the spot band filter and the decoder's frequency mapping. That reading
+  is now trusted only where one VFO is in play; otherwise the last known
+  receive frequency is held, because no reading beats one that is wrong exactly
+  when the operator is working the other VFO.
+
+- Right-click on the spectrum did two things at once: it pointed the received
+  spectrum and opened a manual decode, so an operator asking for either always
+  got both. Pointing stays on right-click; a manual decode is Ctrl+right-click.
+
+- Retuning striped the waterfall. Sliding the rows to follow the receiver reset
+  the conditioner's per-bin noise baseline, which takes about a second to
+  re-converge, so every retune painted a horizontal band while it settled and
+  tuning across a band left a row of them. The baseline now slides with the
+  rows it belongs to.
+
+- Ctrl+left-click did nothing at all on a radio that does not offer transmit
+  frequency control, with no message anywhere, which reads as the feature being
+  broken rather than as the radio not offering it. It now says so. Pointing
+  transmit on rigs that have no writable transmit VFO needs a VFO-swap sequence
+  and is tracked separately; it is not attempted speculatively, because a
+  failure partway would leave the radio receiving on the wrong VFO.
+
 - Moving the RF spectrum no longer loses the tracks. Making the decoder window
   follow the receiver, so that direct SDR reception decodes on any band, meant
   the window was republished on every retune -- and the worker rebuilt the

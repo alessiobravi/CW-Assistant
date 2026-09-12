@@ -283,15 +283,22 @@ int main() {
       contains(manual, "onDoubleClicked:") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
+      // CTRL+RIGHT, not plain RIGHT. Pointing the received spectrum and
+      // opening a manual decode were one gesture, so an operator asking for
+      // either always got both; they are separate intentions and now take
+      // separate gestures.
       !contains(manual,
-                "replayController.openManualDecoderSession(frequencyHz)") ||
+                "if (hasExactModifiers(mouse, Qt.ControlModifier)) {") ||
+      !contains(manual, "replayController.openManualDecoderSession(") ||
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
       !contains(manual, "appSettings.showSpectrumGestureHints") ||
       !contains(manual, "id: pointerHintLifetime") ||
       !contains(manual, "interval: 10000") ||
       !contains(manual, "id: pointerHintCooldown") ||
       !contains(manual, "interval: 300000") ||
-      !contains(manual, "LEFT: open") || !contains(manual, "RIGHT: probe") ||
+      !contains(manual, "LEFT: open") ||
+      !contains(manual, "RIGHT: point RX") ||
+      !contains(manual, "CTRL+RIGHT: manual decode") ||
       !contains(manual, "SHIFT+DRAG: decoder span") ||
       !contains(manual, "CTRL+LEFT: TX") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||

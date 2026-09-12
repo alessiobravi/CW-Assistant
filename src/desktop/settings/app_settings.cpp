@@ -602,6 +602,17 @@ bool AppSettings::radioTxFrequencySyncAvailable() const noexcept {
   return controlledRxRfHz().has_value() &&
          cwassistant::core::radio_tx_frequency_sync_is_available(radio_state_);
 }
+void AppSettings::reportPointedTxUnavailable() {
+  setStatusMessage(
+      radio_state_.availability != cwassistant::core::RadioObservation::Known
+          ? QStringLiteral(
+                "No radio is reporting its state, so a TX frequency cannot be "
+                "pointed.")
+          : QStringLiteral(
+                "This radio does not offer split or TX-frequency control, so "
+                "TX cannot be pointed from the spectrum."));
+}
+
 bool AppSettings::radioPointedTxFrequencyAvailable() const noexcept {
   return cwassistant::core::radio_pointed_tx_frequency_is_available(
       radio_state_);
@@ -861,13 +872,30 @@ void AppSettings::refreshControlledFrequency() {
               split_on
                   ? (vfo ? omni_rig_frequency_property(*vfo, true) : nullptr)
                   : omni_rig_other_frequency_property(rx_property);
-          auto rx = rx_property ? frequency_property(rx_property)
-                                : frequency_property(L"Freq");
+          // `Freq` is the selected VFO, not the receive VFO. Reading it as
+          // RX regardless meant that on a rig publishing no per-VFO property
+          // -- the FT-450D among them -- selecting the transmit VFO to set it
+          // dragged the receive frequency along with it. It is trustworthy
+          // only when there is one VFO in play.
+          auto rx = rx_property
+                        ? frequency_property(rx_property)
+                        : (omni_rig_active_vfo_is_receive_frequency(
+                               rx_property != nullptr, split_on)
+                               ? frequency_property(L"Freq")
+                               : std::nullopt);
           auto tx =
               tx_property ? frequency_property(tx_property) : std::nullopt;
           if (rx) {
             frequency = rx;
             next_state.rx_frequency = {RadioObservation::Known, *rx};
+          } else if (radio_state_.rx_frequency.observation ==
+                     RadioObservation::Known) {
+            // No trustworthy reading this cycle. Hold what was last known
+            // rather than reporting the receive frequency as unknown, which
+            // would drop the RF axis, the spot band filter and the decoder's
+            // frequency mapping every time the operator touched the other
+            // VFO.
+            next_state.rx_frequency = radio_state_.rx_frequency;
           }
           if (tx) next_state.tx_frequency = {RadioObservation::Known, *tx};
           if (rx_property) {
