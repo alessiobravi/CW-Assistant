@@ -232,6 +232,7 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
 }
 
 void LiveAudioDspWorker::start() {
+  processing_complex_iq_ = false;
   analyzer_.reset();
   decoder_analyzer_.reset();
   sdr_decoder_channelizer_.reset();
@@ -251,6 +252,7 @@ void LiveAudioDspWorker::start() {
 }
 
 void LiveAudioDspWorker::stop() {
+  processing_complex_iq_ = false;
   timer_.stop();
   analyzer_.reset();
   decoder_analyzer_.reset();
@@ -792,6 +794,18 @@ void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
       bandwidth_hz == sdr_decoder_bandwidth_hz_) {
     return;
   }
+  // Record it either way; acting on it is another matter. These settings are
+  // republished whenever anything on the SDR page changes, and that happens
+  // while an audio card is the running source -- the decoder window then has
+  // no bearing on what is being decoded, and resetting the shared decoder for
+  // it destroyed a working audio decode for a receiver that was not running.
+  // That is why switching to SDR and back left audio decoding nothing until
+  // the application was restarted.
+  if (!processing_complex_iq_) {
+    sdr_decoder_center_frequency_hz_ = center_frequency_hz;
+    sdr_decoder_bandwidth_hz_ = bandwidth_hz;
+    return;
+  }
   const double output_rate_hz =
       std::clamp(bandwidth_hz * 2.5, 48'000.0, 192'000.0);
   if (!sdr_decoder_channelizer_.configure(
@@ -961,6 +975,8 @@ void LiveAudioDspWorker::drain() {
   int drained = 0;
   while (drained < 32 && pipe_->blocks.try_pop(block)) {
     ++drained;
+    processing_complex_iq_ =
+        block.stream.kind == cwassistant::core::StreamKind::ComplexIq;
     const std::size_t wanted_fft_size =
         block.stream.kind == cwassistant::core::StreamKind::ComplexIq ? 16'384U
                                                                       : 2'048U;

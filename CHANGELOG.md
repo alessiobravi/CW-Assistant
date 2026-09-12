@@ -8,6 +8,26 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Direct SDR reception decoded nothing, and switching back to an audio card
+  left that decoding nothing too until the application was restarted. The
+  decoder window is republished whenever anything on the SDR page changes, and
+  following the radio's VFO makes that happen continuously; each republication
+  tore down decoder state. No track ever survived long enough to be identified,
+  which is why reception appeared to start working if the receiver was simply
+  left alone -- once the settings stopped moving, the resets stopped with them.
+  Worse, that teardown ran even while an audio card was the source, so an SDR
+  setting nobody was using destroyed a working audio decode. The window is now
+  recorded whenever it changes but acted upon only while complex IQ is actually
+  arriving.
+
+  Found from operator debug captures rather than reasoned from the symptom.
+  Replaying the captured audio through a fresh decoder recovered the callsign
+  and the full transcript, and replaying the captured IQ through the real
+  receive path recovered the same station, which placed the fault in live state
+  rather than in the signal, the decoder or the window. Resetting the decoder
+  once every six hundred milliseconds in that replay reproduced the empty
+  display exactly.
+
 - The transmit frequency could not be set on a radio that publishes no VFO
   identity, even where the radio said plainly that the second VFO was writable.
   Every VFO role was derived from OmniRig's VFO parameter, so a profile that

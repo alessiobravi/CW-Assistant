@@ -169,6 +169,14 @@ class LiveAudioDspWorker final : public QObject {
   cwassistant::core::IqSubbandDecimator sdr_decoder_channelizer_;
   cwassistant::core::RealtimeSampleBlock sdr_decoder_pending_;
   std::uint64_t sdr_decoder_pending_sequence_{0};
+  // Whether the samples currently arriving are complex IQ.
+  //
+  // The decoder window is an SDR setting, but the settings that carry it are
+  // republished whenever anything in the SDR page changes -- including while
+  // the operator is receiving from an audio card. Touching the shared decoder
+  // from there tore down a perfectly good audio decode for a receiver that was
+  // not even running.
+  bool processing_complex_iq_{false};
   double sdr_decoder_center_frequency_hz_{14'050'000.0};
   double sdr_decoder_bandwidth_hz_{24'000.0};
   std::optional<double> pending_manual_frequency_hz_;
