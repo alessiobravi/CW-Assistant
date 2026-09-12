@@ -76,6 +76,26 @@ enum class OmniRigRxFrequencyTarget {
 [[nodiscard]] bool omni_rig_active_vfo_is_receive_frequency(
     bool has_per_vfo_property, bool split_enabled) noexcept;
 
+// Which frequency property carries a VFO's role when OmniRig publishes no VFO
+// identity for the radio.
+//
+// Everything about VFO roles was derived from OmniRig's `Vfo` parameter, and a
+// radio whose profile does not publish it was treated as having no transmit
+// VFO at all -- so pointing the transmit frequency was refused even where
+// `WriteableParams` said plainly that FreqB was writable. The FT-450D is such a
+// radio, and it has FA and FB in its CAT set.
+//
+// Split means the same thing on essentially every transceiver: A receives, B
+// transmits. Where the radio will not say which VFO is which, that convention
+// is the best available answer and is far better than refusing a control the
+// radio demonstrably has. It is claimed only when the parameter mask agrees the
+// property can be written, so a capability is never asserted that the radio has
+// not published, and only while split is enabled -- in simplex there is one VFO
+// and no role to assign.
+[[nodiscard]] OmniRigRxFrequencyTarget omni_rig_conventional_vfo_target(
+    bool vfo_published, bool split_enabled, bool transmit,
+    std::uint32_t writable_parameters) noexcept;
+
 // Accumulates operator steps against the most recently accepted request while
 // asynchronous provider readback is pending.
 [[nodiscard]] std::optional<std::uint64_t> step_rx_frequency(

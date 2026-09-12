@@ -865,20 +865,50 @@ void AppSettings::refreshControlledFrequency() {
           const bool split_on = split && *split == kOmniRigSplitOn;
           const wchar_t* rx_property =
               vfo ? omni_rig_frequency_property(*vfo, false) : nullptr;
+          // A radio that publishes no VFO identity was treated as having no
+          // transmit VFO at all, so pointing the transmit frequency was
+          // refused even where the parameter mask said FreqB was writable.
+          // With split on, A receives and B transmits on essentially every
+          // transceiver; that convention is claimed only where the mask agrees
+          // the property can be written.
+          const auto conventional = [&](const bool transmit) {
+            return omni_rig_conventional_vfo_target(
+                rx_property != nullptr, split_on, transmit,
+                writable ? static_cast<std::uint32_t>(*writable) : 0U);
+          };
+          const auto target_property =
+              [](const cwassistant::core::OmniRigRxFrequencyTarget target)
+              -> const wchar_t* {
+            return target == cwassistant::core::OmniRigRxFrequencyTarget::
+                                 FrequencyA
+                       ? L"FreqA"
+                   : target == cwassistant::core::OmniRigRxFrequencyTarget::
+                                   FrequencyB
+                       ? L"FreqB"
+                       : nullptr;
+          };
           // In simplex the effective transmitter is the RX VFO, but the
           // second faceplate row represents the standby VFO the operator will
           // use for split. Read that VFO independently instead of cloning RX.
           const wchar_t* tx_property =
               split_on
-                  ? (vfo ? omni_rig_frequency_property(*vfo, true) : nullptr)
+                  ? (vfo ? omni_rig_frequency_property(*vfo, true)
+                         : target_property(conventional(true)))
                   : omni_rig_other_frequency_property(rx_property);
           // `Freq` is the selected VFO, not the receive VFO. Reading it as
           // RX regardless meant that on a rig publishing no per-VFO property
           // -- the FT-450D among them -- selecting the transmit VFO to set it
           // dragged the receive frequency along with it. It is trustworthy
           // only when there is one VFO in play.
+          // Reading order: the VFO the radio named, then the VFO the split
+          // convention implies, then the selected VFO -- and that last only
+          // where one VFO is in play, because with split on it reports
+          // whichever VFO the operator has selected and following it made
+          // moving the transmit VFO move the receive frequency.
+          const wchar_t* conventional_rx = target_property(conventional(false));
           auto rx = rx_property
                         ? frequency_property(rx_property)
+                    : conventional_rx ? frequency_property(conventional_rx)
                         : (omni_rig_active_vfo_is_receive_frequency(
                                rx_property != nullptr, split_on)
                                ? frequency_property(L"Freq")
@@ -898,9 +928,12 @@ void AppSettings::refreshControlledFrequency() {
             next_state.rx_frequency = radio_state_.rx_frequency;
           }
           if (tx) next_state.tx_frequency = {RadioObservation::Known, *tx};
-          if (rx_property) {
-            next_state.rx_vfo = {RadioObservation::Known,
-                                 omni_rig_vfo_label(rx_property).toStdString()};
+          const wchar_t* rx_label_property =
+              rx_property ? rx_property : conventional_rx;
+          if (rx_label_property) {
+            next_state.rx_vfo = {
+                RadioObservation::Known,
+                omni_rig_vfo_label(rx_label_property).toStdString()};
           }
           if (tx_property) {
             next_state.tx_vfo = {RadioObservation::Known,

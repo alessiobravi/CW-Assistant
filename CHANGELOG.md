@@ -8,6 +8,18 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The transmit frequency could not be set on a radio that publishes no VFO
+  identity, even where the radio said plainly that the second VFO was writable.
+  Every VFO role was derived from OmniRig's VFO parameter, so a profile that
+  omits it left the application believing there was no transmit VFO at all and
+  Ctrl+left-click was refused. The FT-450D is such a radio, and it has the
+  commands for both VFOs in its CAT set, so a control it demonstrably has was
+  unreachable. With split enabled and no identity published, A now receives and
+  B transmits -- the convention every transceiver shares -- claimed only where
+  the parameter mask agrees the property can be written, so a capability is
+  never asserted the radio has not published. The same reading now gives the
+  receive frequency a named VFO to come from rather than the selected one.
+
 - Setting the transmit VFO on the radio moved the receive frequency. OmniRig's
   active-VFO frequency is whichever VFO the radio has selected, not the receive
   one, and on a rig that publishes no per-VFO property -- the FT-450D among

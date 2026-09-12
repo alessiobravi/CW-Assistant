@@ -2928,6 +2928,42 @@ void test_negative_transverter_offset_and_invalid_frequency() {
          "operator kHz entry rejects grouping, excessive precision, zero, and "
          "units");
 
+  using cwassistant::core::omni_rig_conventional_vfo_target;
+  // A radio that publishes no VFO identity still has VFOs.
+  //
+  // Every VFO role was derived from OmniRig's `Vfo` parameter, so a radio whose
+  // profile omits it was treated as having no transmit VFO at all and pointing
+  // the transmit frequency was refused -- even where the parameter mask said
+  // plainly that FreqB was writable. The FT-450D is such a radio and has FA and
+  // FB in its CAT set, so the control it demonstrably has was unreachable.
+  {
+    constexpr std::uint32_t kWritableBoth = 0x04U | 0x08U;
+    expect(omni_rig_conventional_vfo_target(false, true, true, kWritableBoth) ==
+                   OmniRigRxFrequencyTarget::FrequencyB &&
+               omni_rig_conventional_vfo_target(false, true, false,
+                                                kWritableBoth) ==
+                   OmniRigRxFrequencyTarget::FrequencyA,
+           "with split on and no VFO identity published, A receives and B "
+           "transmits -- the convention every transceiver shares");
+    expect(omni_rig_conventional_vfo_target(true, true, true, kWritableBoth) ==
+               OmniRigRxFrequencyTarget::None,
+           "a radio that names its VFOs is read from what it says, never from "
+           "a convention");
+    expect(omni_rig_conventional_vfo_target(false, false, true,
+                                            kWritableBoth) ==
+               OmniRigRxFrequencyTarget::None,
+           "simplex has one VFO and so no roles to assign");
+    // The guard that keeps this a reading of the radio rather than a guess
+    // about it: a capability is never claimed that the radio has not itself
+    // published as writable.
+    expect(omni_rig_conventional_vfo_target(false, true, true, 0x04U) ==
+                   OmniRigRxFrequencyTarget::None &&
+               omni_rig_conventional_vfo_target(false, true, false, 0x08U) ==
+                   OmniRigRxFrequencyTarget::None,
+           "the convention is claimed only where the parameter mask agrees the "
+           "property can be written");
+  }
+
   using cwassistant::core::omni_rig_active_vfo_is_receive_frequency;
   // OmniRig's `Freq` is the SELECTED VFO, not the receive VFO.
   //

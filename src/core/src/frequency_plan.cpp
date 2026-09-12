@@ -191,6 +191,26 @@ std::optional<std::uint64_t> parse_frequency_value(
                            : std::optional<std::uint64_t>{frequency_hz};
 }
 
+OmniRigRxFrequencyTarget omni_rig_conventional_vfo_target(
+    const bool vfo_published, const bool split_enabled, const bool transmit,
+    const std::uint32_t writable_parameters) noexcept {
+  // A radio that names its VFOs is read from what it says, never from a
+  // convention.
+  if (vfo_published) return OmniRigRxFrequencyTarget::None;
+  // Simplex has one VFO and therefore no roles to assign.
+  if (!split_enabled) return OmniRigRxFrequencyTarget::None;
+  // OmniRig's writable-parameter bits for the two VFO frequencies.
+  constexpr std::uint32_t kWritableFrequencyA = 0x04U;
+  constexpr std::uint32_t kWritableFrequencyB = 0x08U;
+  const std::uint32_t required =
+      transmit ? kWritableFrequencyB : kWritableFrequencyA;
+  if ((writable_parameters & required) == 0U) {
+    return OmniRigRxFrequencyTarget::None;
+  }
+  return transmit ? OmniRigRxFrequencyTarget::FrequencyB
+                  : OmniRigRxFrequencyTarget::FrequencyA;
+}
+
 bool omni_rig_active_vfo_is_receive_frequency(
     const bool has_per_vfo_property, const bool split_enabled) noexcept {
   // A rig that names its VFOs needs none of this.
