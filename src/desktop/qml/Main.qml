@@ -812,9 +812,18 @@ ApplicationWindow {
                         var firstHz = frequencyAtX(decoderSelectionStartX)
                         var lastHz = frequencyAtX(decoderSelectionCurrentX)
                         var draggedHz = Math.abs(lastHz - firstHz)
-                        var bandwidthHz = draggedHz >= 1000
-                                ? Math.round(Math.max(6000,
-                                      Math.min(96000, draggedHz)) / 1000) * 1000
+                        // The width is whatever was dragged, to the nearest
+                        // hundred hertz. It used to be floored at 6 kHz and
+                        // rounded to the nearest kilohertz, so a drag narrower
+                        // than six kilohertz set the width it already had and
+                        // the region appeared to move but never resize. Two
+                        // kilohertz is the real floor -- it is the narrowest
+                        // slice the decimator will accept -- and a drag below
+                        // the click threshold still means "put the window
+                        // here" and leaves the width alone.
+                        var bandwidthHz = draggedHz >= 250
+                                ? Math.round(Math.max(2000,
+                                      Math.min(96000, draggedHz)) / 100) * 100
                                 : appSettings.sdrDecoderBandwidthHz
                         var selectedCenterHz = Math.round(
                             draggedHz >= 1000

@@ -8,6 +8,26 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The application stopped responding while several signals were decoding, with
+  the processor largely idle. The decoded-channel model was published once per
+  drained block, and the drain timer runs every five milliseconds over as many
+  as thirty-two blocks; each publication deep-copies the whole model across a
+  thread boundary and the receiving thread rebuilds it again. A handful of
+  simultaneous signals therefore buried the one thread that draws while the
+  others had nothing to do, which is why the processor never looked busy. The
+  model is a snapshot, so the latest one says everything the intermediate ones
+  would have: it is now published after the drain rather than inside it, and no
+  faster than an operator can see. Verification diagnostics, published on the
+  same timer, are rate-limited too.
+
+- The decoder region could be moved by dragging but never resized. The width
+  was floored at six kilohertz and rounded to the nearest kilohertz, so any
+  drag narrower than six kilohertz set the width it already had. Two kilohertz
+  is the real floor -- the narrowest slice the decimator will accept -- and the
+  width is now whatever was dragged, to the nearest hundred hertz. A drag too
+  short to be a drag still means "put the window here" and leaves the width
+  alone.
+
 - Direct SDR reception decoded nothing, and switching back to an audio card
   left that decoding nothing too until the application was restarted. The
   decoder window is republished whenever anything on the SDR page changes, and

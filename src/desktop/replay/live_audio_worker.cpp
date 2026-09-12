@@ -233,6 +233,9 @@ LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
 
 void LiveAudioDspWorker::start() {
   processing_complex_iq_ = false;
+  decoder_model_dirty_ = false;
+  model_publish_clock_.invalidate();
+  diagnostics_publish_clock_.invalidate();
   analyzer_.reset();
   decoder_analyzer_.reset();
   sdr_decoder_channelizer_.reset();
@@ -253,6 +256,9 @@ void LiveAudioDspWorker::start() {
 
 void LiveAudioDspWorker::stop() {
   processing_complex_iq_ = false;
+  decoder_model_dirty_ = false;
+  model_publish_clock_.invalidate();
+  diagnostics_publish_clock_.invalidate();
   timer_.stop();
   analyzer_.reset();
   decoder_analyzer_.reset();
@@ -1210,11 +1216,24 @@ void LiveAudioDspWorker::drain() {
     }
     if (block.stream.kind != cwassistant::core::StreamKind::ComplexIq ||
         !decoder_snapshots.empty())
-      emit decoderProduced(decoderChannelModel(decoder_channels));
+      decoder_model_dirty_ = true;
     if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq)
       sdr_decoder_pending_ = std::move(decoder_carry);
   }
-  if (drained > 0) {
+  // Published after the loop, not inside it, and no faster than an operator
+  // can see. The model is a snapshot of the current channels, so the latest
+  // one says everything the intermediate ones would have.
+  if (decoder_model_dirty_ &&
+      (!model_publish_clock_.isValid() ||
+       model_publish_clock_.elapsed() >= kModelPublishIntervalMs)) {
+    model_publish_clock_.restart();
+    decoder_model_dirty_ = false;
+    emit decoderProduced(decoderChannelModel(decoder_.channels()));
+  }
+  if (drained > 0 &&
+      (!diagnostics_publish_clock_.isValid() ||
+       diagnostics_publish_clock_.elapsed() >= kDiagnosticsPublishIntervalMs)) {
+    diagnostics_publish_clock_.restart();
     emit diagnosticsProduced(
         verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   }

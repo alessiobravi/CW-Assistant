@@ -1574,7 +1574,7 @@ void AppSettings::setSdrDecoderCenterFrequencyHz(const qulonglong value) {
   }
 }
 void AppSettings::setSdrDecoderBandwidthHz(const int value) {
-  const int bounded = std::clamp(value, 6'000, 96'000);
+  const int bounded = std::clamp(value, 2'000, 96'000);
   if (assign_if_changed(sdr_decoder_bandwidth_hz_, bounded)) {
     emit sdrSettingsChanged();
     emit settingsChanged();
@@ -1585,7 +1585,7 @@ void AppSettings::setSdrDecoderWindow(const qulonglong center_frequency_hz,
                                       const int bandwidth_hz) {
   const auto bounded_center =
       std::clamp<qulonglong>(center_frequency_hz, 1ULL, 99'000'000'000ULL);
-  const int bounded_bandwidth = std::clamp(bandwidth_hz, 6'000, 96'000);
+  const int bounded_bandwidth = std::clamp(bandwidth_hz, 2'000, 96'000);
   const bool center_changed =
       assign_if_changed(sdr_decoder_center_frequency_hz_, bounded_center);
   const bool bandwidth_changed =
@@ -2625,7 +2625,7 @@ bool AppSettings::apply() {
   sdr_sample_rate_hz_ = std::clamp(sdr_sample_rate_hz_, 25'000, 64'000'000);
   sdr_bandwidth_hz_ = std::clamp(sdr_bandwidth_hz_, 0, 64'000'000);
   sdr_decoder_bandwidth_hz_ =
-      std::clamp(sdr_decoder_bandwidth_hz_, 6'000, 96'000);
+      std::clamp(sdr_decoder_bandwidth_hz_, 2'000, 96'000);
   sdr_decoder_center_frequency_hz_ = std::clamp<qulonglong>(
       sdr_decoder_center_frequency_hz_, 1ULL, 99'000'000'000ULL);
   sdr_radio_lo_offset_hz_ =
@@ -3040,7 +3040,7 @@ void AppSettings::load() {
       settings
           .value(storageKey(QStringLiteral("sdr/decoderBandwidthHz")), 24'000)
           .toInt(),
-      6'000, 96'000);
+      2'000, 96'000);
   sdr_follow_radio_vfo_ =
       settings.value(storageKey(QStringLiteral("sdr/followRadioVfo")), false)
           .toBool();

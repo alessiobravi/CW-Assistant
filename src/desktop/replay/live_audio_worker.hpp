@@ -2,6 +2,7 @@
 
 #include <QAudioFormat>
 #include <QByteArray>
+#include <QElapsedTimer>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -176,6 +177,19 @@ class LiveAudioDspWorker final : public QObject {
   // the operator is receiving from an audio card. Touching the shared decoder
   // from there tore down a perfectly good audio decode for a receiver that was
   // not even running.
+  // The decoded-channel model was published once per drained block, and the
+  // drain timer runs every five milliseconds over as many as thirty-two
+  // blocks. Each publication deep-copies the whole model across a thread
+  // boundary and the receiving thread rebuilds it again, so a handful of
+  // simultaneous signals buried the thread that draws -- the application
+  // stopped responding while the processor sat largely idle, because the work
+  // was all on one thread. The model is a snapshot: publishing the latest one
+  // at a rate an operator can actually see loses nothing.
+  static constexpr qint64 kModelPublishIntervalMs = 40;
+  static constexpr qint64 kDiagnosticsPublishIntervalMs = 500;
+  QElapsedTimer model_publish_clock_;
+  QElapsedTimer diagnostics_publish_clock_;
+  bool decoder_model_dirty_{false};
   bool processing_complex_iq_{false};
   double sdr_decoder_center_frequency_hz_{14'050'000.0};
   double sdr_decoder_bandwidth_hz_{24'000.0};

@@ -473,7 +473,12 @@ Pane {
                     ComboBox {
                         objectName: "sdrDecoderBandwidthCombo"
                         Layout.fillWidth: true
-                        model: [6000, 12000, 24000, 48000, 96000]
+                        // Presets for quick selection; the width itself is
+                        // continuous, so a value set by dragging the spectrum
+                        // matches no entry and currentIndex is -1. displayText
+                        // is bound to the live value rather than to the model,
+                        // so the real width still shows.
+                        model: [2000, 3000, 6000, 12000, 24000, 48000, 96000]
                         currentIndex: model.indexOf(appSettings.sdrDecoderBandwidthHz)
                         displayText: (appSettings.sdrDecoderBandwidthHz / 1000)
                                      + " kHz"
