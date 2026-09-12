@@ -17,6 +17,7 @@
 #include <QStandardPaths>
 #include "cwassistant/core/conversation_profile.hpp"
 #include "cwassistant/core/cw_morse_alphabet.hpp"
+#include "cwassistant/core/cw_callsign_prefixes.hpp"
 #include "cwassistant/core/cw_vocabulary.hpp"
 #include <array>
 #include <QFile>
@@ -79,9 +80,10 @@ namespace {
 // and guarantee the decoder is never left with no vocabulary at all. Returns
 // the number of exchange words available.
 std::size_t loadCwDictionaries(const QString& app_data_path) {
-  static constexpr std::array<const char*, 4> kFiles{
+  static constexpr std::array<const char*, 5> kFiles{
       "cw-abbreviations.txt", "cw-word-gap-prefixes.txt",
-      "morse-alphabet.txt", "cw-distinctive-tokens.txt"};
+      "morse-alphabet.txt", "cw-distinctive-tokens.txt",
+      "callsign-prefixes.txt"};
   const QDir directory(app_data_path + QStringLiteral("/dictionaries"));
   QDir().mkpath(directory.absolutePath());
 
@@ -139,6 +141,19 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
                          static_cast<std::size_t>(text.size()))));
     return probe.symbolFor(".-") == "A" && probe.symbolFor("-----") == "0";
   };
+  // A prefix table is usable when it covers the allocations an operator will
+  // certainly hear. A file that parsed but had lost most of its blocks would
+  // silently refuse real stations, which is the one failure this table must
+  // not have, so a truncated copy is rejected in favour of the built-in one.
+  const auto parses_to_prefixes = [](const QByteArray& text) {
+    cwassistant::core::CwCallsignPrefixTable probe;
+    static_cast<void>(probe.importText(
+        std::string_view(text.constData(),
+                         static_cast<std::size_t>(text.size()))));
+    return probe.isAllocatedPrefix("W1AW") && probe.isAllocatedPrefix("IU0LFQ") &&
+           probe.isAllocatedPrefix("G4ABC") && probe.isAllocatedPrefix("JA1XYZ") &&
+           !probe.isAllocatedPrefix("QK7SS");
+  };
 
   auto& vocabulary = cwassistant::core::cwSharedVocabulary();
   vocabulary.clear();
@@ -188,6 +203,16 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   static_cast<void>(morse.importText(
       std::string_view(alphabet.constData(),
                        static_cast<std::size_t>(alphabet.size()))));
+
+  // Loaded the same way, and for the same reason: the table decides which
+  // decoded tokens may name a station, so the copy the operator can see and
+  // edit is the one that has to be in force.
+  const QByteArray callsign_prefixes = read(kFiles[4], parses_to_prefixes);
+  auto& prefix_table = cwassistant::core::cwMutableSharedCallsignPrefixes();
+  prefix_table.clear();
+  static_cast<void>(prefix_table.importText(
+      std::string_view(callsign_prefixes.constData(),
+                       static_cast<std::size_t>(callsign_prefixes.size()))));
   return vocabulary.exchangeWordCount();
 }
 

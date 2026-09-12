@@ -5,12 +5,28 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include "cwassistant/core/callsign_policy.hpp"
+#include "cwassistant/core/cw_callsign_prefixes.hpp"
 
 namespace cwassistant::core {
 namespace {
+// Drops participants whose opening characters name no allocated country, by
+// the same reasoning as the stream label. A QSO list is read as a list of
+// stations, so an impossible prefix in it is as misleading there as it is on
+// the card's own heading.
+[[nodiscard]] std::vector<std::string> allocatedParticipants(
+    std::vector<std::string> participants) {
+  const auto& prefixes = cwSharedCallsignPrefixes();
+  std::erase_if(participants, [&prefixes](const std::string& participant) {
+    return !prefixes.isAllocatedPrefix(participant);
+  });
+  return participants;
+}
+
 // Removes runs of characters that are almost certainly fragments rather than
 // copy, leaving the copy around them intact.
 //
@@ -2556,6 +2572,22 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
       const auto own = CallsignPolicy::normalize(config_.own_callsign);
       if (own && *own == callsign) callsign.clear();
     }
+    // A callsign opens with a prefix the ITU has allocated to some
+    // administration. A decoded token whose opening characters fall in no
+    // allocation names a country that does not exist, which is far better
+    // evidence that the decode is wrong than that a rare station was heard --
+    // one missed element turns a real prefix into an unallocated one, and that
+    // is the shape of most of the wrong labels an operator sees. Refusing it
+    // leaves the stream unlabelled until the station identifies cleanly, the
+    // same honest answer as suppressing the operator's own callsign above.
+    //
+    // The table errs towards admitting: an empty or unreadable dictionary
+    // admits everything, because refusing every station on the band would be a
+    // far larger fault than the misdecodes this catches.
+    if (!callsign.empty() &&
+        !cwSharedCallsignPrefixes().isAllocatedPrefix(callsign)) {
+      callsign.clear();
+    }
     CwChannelSnapshot snapshot{
         .id = track.id,
         .color_index = track.color_index,
@@ -2604,7 +2636,8 @@ void CwChannelBank::rebuildSnapshots(const std::uint64_t timestamp_ns) {
         .contextual_text = track.update.contextual_text,
         .callsign = callsign,
         .qso_participants =
-            CallsignPolicy::qso_participants_in_text(track.update.text),
+            allocatedParticipants(
+                CallsignPolicy::qso_participants_in_text(track.update.text)),
     };
 
     auto retained = std::find_if(

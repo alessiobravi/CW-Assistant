@@ -2,6 +2,7 @@ add_library(cwa_core
   src/adif.cpp
   src/callsign_evidence.cpp
   src/callsign_policy.cpp
+  src/cw_callsign_prefixes.cpp
   src/cat4om_protocol.cpp
   src/channel_scheduler.cpp
   src/cw_acoustic_refinement.cpp
@@ -53,5 +54,14 @@ cwa_generate_builtin_dictionary(
   "${PROJECT_SOURCE_DIR}/dictionaries/morse-alphabet.txt"
   "${CMAKE_CURRENT_BINARY_DIR}/generated/cwassistant/core/cw_builtin_morse_alphabet.hpp"
   kCwBuiltinMorseAlphabet)
+# The allocated callsign prefixes are data for the same reason and carry the
+# same risk in reverse: a table that failed to load would answer "no such
+# country" for every callsign at once, refusing every station on the band
+# rather than the handful of misdecodes it exists to catch. The shipped file
+# stays the single source; this header is generated from it.
+cwa_generate_builtin_dictionary(
+  "${PROJECT_SOURCE_DIR}/dictionaries/callsign-prefixes.txt"
+  "${CMAKE_CURRENT_BINARY_DIR}/generated/cwassistant/core/cw_builtin_callsign_prefixes.hpp"
+  kCwBuiltinCallsignPrefixes)
 target_include_directories(cwa_core PUBLIC
   "${CMAKE_CURRENT_BINARY_DIR}/generated")

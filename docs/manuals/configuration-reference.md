@@ -903,6 +903,7 @@ seeded there from copies carried inside the application the first time it runs.
 | `cw-word-gap-prefixes.txt` | The subset that may precede a callsign with no gap. Each entry must also appear in the abbreviations file, or it is refused at load. |
 | `cw-distinctive-tokens.txt` | The small subset distinctive enough that one match is accepted as evidence of real CW. Deliberately much narrower than the abbreviation list, and each entry must also appear there. |
 | `morse-alphabet.txt` | The element pattern the decoder recognises and the symbol it produces. One entry per line: dots and dashes, whitespace, then the symbol. A symbol may be several characters, which is how prosigns such as `<SK>` are represented. |
+| `callsign-prefixes.txt` | The callsign prefix blocks the ITU has allocated, one per line as `START END Country`. A decoded token whose opening characters fall in no block cannot name a country, so it is refused as a stream label. The country names are there to be read by whoever edits the file and decide nothing. A gap is costly and a stale name is not: a prefix the file does not cover is refused, so when in doubt include the block. |
 
 ### Contest exchange profiles
 

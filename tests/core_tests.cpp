@@ -18,6 +18,7 @@
 #include "cwassistant/core/channel_scheduler.hpp"
 #include "cwassistant/core/cw_channel_bank.hpp"
 #include <sstream>
+#include "cwassistant/core/cw_callsign_prefixes.hpp"
 #include "cwassistant/core/cw_morse_alphabet.hpp"
 #include "cwassistant/core/cw_vocabulary.hpp"
 #include "cwassistant/core/cw_context_rescorer.hpp"
@@ -663,6 +664,89 @@ void test_cw_channel_bank() {
              "local character evidence confirms only after the ordinary "
              "sustained acoustic entry interval");
     }
+  }
+
+  {
+    // A label whose opening characters name no allocated country must never
+    // reach the operator. QK7SS keys exactly as cleanly as DK7SS -- the
+    // acoustic evidence is identical and the decode is confident -- but no
+    // administration holds a Q prefix, so it cannot be a station. This is the
+    // common shape of a wrong label: one missed or added element turns a real
+    // prefix into an impossible one, and nothing downstream of the decoder can
+    // tell the difference without knowing what prefixes exist.
+    //
+    // The transcript is untouched. Only the stream's name is refused, so an
+    // operator still reads what was copied and can see for themselves.
+    const auto label_for = [](const std::string_view call_elements_owner)
+        -> std::pair<std::string, std::string> {
+      CwChannelBank bank({.empty_track_retention_seconds = 0.5,
+                          .decoded_track_retention_seconds = 10.0,
+                          .detector_frame_interval_seconds = 0.0,
+                          .minimum_spectral_observations = 1,
+                          .minimum_verification_symbols = 0,
+                          .verification_enter_seconds = 0.0,
+                          .verification_exit_seconds = 0.0});
+      std::vector<float> bins(201, -110.0F);
+      std::uint64_t now = 0;
+      double phase = 0.0;
+      const auto step = [&](const bool keyed) {
+        bins.assign(bins.size(), -110.0F);
+        if (keyed) bins[60] = -55.0F;
+        static_cast<void>(bank.updateSpectrum(now, 0.0, 1'000.0, bins));
+        cwassistant::core::RealtimeSampleBlock block;
+        block.stream.sample_rate_hz = sample_rate;
+        block.timestamp_ns = now;
+        block.sample_count = 80;
+        for (std::size_t index = 0; index < block.sample_count; ++index) {
+          block.samples[index] = {
+              keyed ? 0.40F * static_cast<float>(std::sin(phase)) : 0.0F,
+              0.0F};
+          phase += 2.0 * std::numbers::pi * 300.0 / sample_rate;
+        }
+        static_cast<void>(bank.processSamples(block));
+        now += 10'000'000;
+      };
+      const auto gap = [&](const int steps) {
+        for (int index = 0; index < steps; ++index) step(false);
+      };
+      const auto character = [&](const std::string_view elements) {
+        for (std::size_t index = 0; index < elements.size(); ++index) {
+          for (int repeat = 0; repeat < (elements[index] == '.' ? 6 : 18);
+               ++repeat) {
+            step(true);
+          }
+          if (index + 1U < elements.size()) gap(6);
+        }
+        gap(18);
+      };
+      const auto word_gap = [&] { gap(24); };
+      character("-.-.");  // C
+      character("--.-");  // Q
+      word_gap();
+      character("-..");  // D
+      character(".");    // E
+      word_gap();
+      // The callsign under test, then a closing token so it is complete.
+      character(call_elements_owner == std::string_view{"D"} ? "-.."   // D
+                                                             : "--.-");  // Q
+      character("-.-");    // K
+      character("--...");  // 7
+      character("...");    // S
+      character("...");    // S
+      word_gap();
+      character(".");
+      const auto channels = bank.channels();
+      if (channels.empty()) return {std::string{}, std::string{}};
+      return {channels.front().callsign, channels.front().text};
+    };
+    const auto [allocated_label, allocated_text] = label_for("D");
+    const auto [impossible_label, impossible_text] = label_for("Q");
+    expect(allocated_label == "DK7SS",
+           "an allocated prefix still labels the stream");
+    expect(impossible_label.empty(),
+           "a callsign whose prefix names no country never labels a stream");
+    expect(impossible_text.find("QK7SS") != std::string::npos,
+           "refusing the label leaves the decoded transcript untouched");
   }
 
   {
@@ -2427,6 +2511,168 @@ void test_cw_morse_alphabet() {
          "a duplicate code does not overwrite the first symbol");
 }
 
+namespace {
+
+// Reads the prefix file the application ships, the way a host does.
+std::string readShippedCallsignPrefixes() {
+  std::ifstream input(std::string(CWA_DICTIONARY_DIR) + "/callsign-prefixes.txt",
+                      std::ios::binary);
+  std::ostringstream buffer;
+  buffer << input.rdbuf();
+  return buffer.str();
+}
+
+// Real callsigns, from the bands the operator works. Every one of them must be
+// admitted: this table's whole purpose is to refuse tokens, and a refusal
+// costs a real station every single time it is heard, where admitting a dead
+// prefix costs nothing because something else still has to agree.
+constexpr std::array<const char*, 34> kHeardCallsigns{
+    "W0ZA",   "K1ABC",  "G4XYZ",  "I2ABC",  "IU0LFQ", "DD7CW",  "9A1AA",
+    "3DA0AB", "2E0ABC", "VP8ABC", "T77XX",  "E77AA",  "T88AB",  "VU2NXG",
+    "RN9RF",  "RA6CA",  "JA1XYZ", "VK3ABC", "ZL2ABC", "PY2ABC", "LU1ABC",
+    "EA3ABC", "F5ABC",  "ON4ABC", "PA3ABC", "SM5ABC", "OH2ABC", "OK1ABC",
+    "S51ABC", "4X4ABC", "JY1",    "ZS6ABC", "VE3ABC", "KH6ABC"};
+
+}  // namespace
+
+void test_cw_callsign_prefix_table() {
+  cwassistant::core::CwCallsignPrefixTable shipped;
+  const auto imported = shipped.importText(readShippedCallsignPrefixes());
+  expect(imported.inserted_blocks == 308U && imported.ignored_lines == 0U &&
+             imported.duplicate_blocks == 0U && shipped.size() == 308U,
+         "the shipped prefix file parses to 308 blocks with no rejected and "
+         "no duplicated line");
+
+  for (const char* call : kHeardCallsigns) {
+    expect(shipped.isAllocatedPrefix(call),
+           std::string("the prefix table admits the real callsign ") + call +
+               ", which it would otherwise refuse every time the operator "
+               "hears that station");
+  }
+
+  // The fault this exists for. A prefix in no allocation names a country that
+  // is not there, which is far better evidence of a misdecode than anything
+  // the timing model can offer.
+  expect(!shipped.isAllocatedPrefix("QQ1ABC") &&
+             !shipped.isAllocatedPrefix("Q1ABC") &&
+             !shipped.isAllocatedPrefix("0A1ABC") &&
+             !shipped.isAllocatedPrefix("1B2ABC"),
+         "the prefix table refuses a callsign whose country does not exist");
+
+  // Longest first, so the most specific allocation applies. Trying the
+  // shortest prefix first still admits all four of these, so the refusal
+  // assertions above cannot catch it: it names the wrong country instead --
+  // Turkiye for San Marino and Palau, Monaco for Eswatini, Spain for Bosnia.
+  // That would be a country report an operator could not trust, and the
+  // moment anything downstream compares it against a spot it becomes wrong
+  // answers rather than merely useless ones.
+  expect(shipped.countryFor("T77XX") == "San Marino",
+         "T77XX reaches San Marino's T7 block rather than falling through to "
+         "Turkiye's TAA-TCZ");
+  expect(shipped.countryFor("3DA0AB") == "Eswatini",
+         "3DA0AB reaches Eswatini rather than Fiji or Monaco");
+  expect(shipped.countryFor("T88AB") == "Palau" &&
+             shipped.countryFor("E77AA") == "Bosnia and Herzegovina",
+         "a two-character allocation beats the one-character block it sits "
+         "inside");
+
+  // The padding, which is the half that would have quietly refused most of
+  // the United States. A digit sorts below every letter, so W0ZA taken as W0Z
+  // lies outside WAA-WZZ and a three-character comparison refuses it -- along
+  // with every G4, K1, I2, F5 and JY1 call on the band.
+  expect(shipped.countryFor("W0ZA") == "United States",
+         "W0ZA is admitted as the United States, so a prefix shorter than "
+         "three characters is padded rather than compared as it stands");
+  expect(shipped.countryFor("K1ABC") == "United States" &&
+             shipped.countryFor("G4XYZ") == "United Kingdom" &&
+             shipped.countryFor("I2ABC") == "Italy" &&
+             shipped.countryFor("JY1") == "Jordan",
+         "a callsign whose second character is a digit is admitted");
+
+  // Real callsigns arrive decorated. A portable element the table did not
+  // understand would refuse exactly the DX an operator most wants to work.
+  expect(shipped.countryFor("IU0LFQ/P") == "Italy" &&
+             shipped.countryFor("IU0LFQ/QRP") == "Italy",
+         "a portable suffix does not hide the callsign in front of it");
+  expect(shipped.countryFor("DL/W1AW") == "Germany" &&
+             shipped.countryFor("9A/IU0LFQ") == "Croatia",
+         "a portable prefix names where the station is operating from, so the "
+         "element before the slash wins when it is itself allocated");
+  expect(shipped.countryFor("VE7CC-1") == "Canada",
+         "a DX cluster node suffix is stripped before matching");
+  expect(shipped.isAllocatedPrefix("W1AW/KH6") &&
+             shipped.isAllocatedPrefix("DL/W1AW/P"),
+         "a callsign carrying both a portable prefix and a suffix is still "
+         "admitted");
+  expect(shipped.isAllocatedPrefix("/P"),
+         "a token whose leading element is not a prefix falls back to the "
+         "element after the slash rather than being refused outright");
+
+  // A file an operator edits is a file an operator can mistype. One bad line
+  // must cost that line only: the alternative is a single typo refusing every
+  // station on the band.
+  cwassistant::core::CwCallsignPrefixTable parsed;
+  const auto partial = parsed.importText(
+      "# comment\n\nBAA BZZ China\nAB CD Two-character bounds\n"
+      "NZZ NAA Backwards bounds\nZAA ZZZ\nBAA BZZ Duplicate start\nXAA\n");
+  expect(partial.inserted_blocks == 2U && partial.ignored_lines == 3U &&
+             partial.duplicate_blocks == 1U,
+         "a malformed block line is skipped without taking the rest of the "
+         "file with it");
+  expect(parsed.countryFor("BY1ABC") == "China",
+         "the blocks around a malformed line still load");
+  expect(parsed.isAllocatedPrefix("ZS6ABC") &&
+             parsed.countryFor("ZS6ABC").empty(),
+         "a block that names no country still admits the stations it covers, "
+         "because the names decide nothing and dropping the block would not");
+
+  // The safe direction when there is no table at all. Answering no here would
+  // refuse every station at once, which is a far larger fault than the
+  // invented prefixes this table exists to catch.
+  cwassistant::core::CwCallsignPrefixTable unloaded;
+  expect(unloaded.isAllocatedPrefix("QQ1ABC") &&
+             unloaded.countryFor("QQ1ABC").empty(),
+         "a table nothing was imported into admits every callsign rather than "
+         "refusing the whole band");
+}
+
+void test_cw_callsign_prefixes_survive_missing_files() {
+  // Same failure class as the Morse alphabet, with the damage inverted: a
+  // packaged build that cannot read the file would answer "no such country"
+  // for every callsign, so the compiled-in copy is what keeps a missing file
+  // from silently refusing every station heard.
+  auto& table = cwassistant::core::cwMutableSharedCallsignPrefixes();
+  table.clear();
+  const char* previous = std::getenv("CWA_DICTIONARY_DIR");
+  const std::string saved = previous == nullptr ? std::string{} : previous;
+  setDictionaryDirectoryEnvironment(nullptr);
+
+  const auto& recovered = cwassistant::core::cwSharedCallsignPrefixes();
+  expect(recovered.size() >= 308U,
+         "the prefix table recovers with no dictionary directory at all");
+  expect(recovered.isAllocatedPrefix("IU0LFQ") &&
+             !recovered.isAllocatedPrefix("QQ1ABC"),
+         "the recovered table still separates a real prefix from an invented "
+         "one");
+  expect(cwassistant::core::cwCallsignPrefixesLoadedFromBuiltin(),
+         "the recovery is reported as coming from the compiled-in copy");
+
+  // The other half of that report. The shipped file and the compiled-in copy
+  // are generated from one source and hold identical blocks, so nothing about
+  // the contents can tell them apart afterwards and the flag has to be
+  // recorded at import time.
+  table.clear();
+  static_cast<void>(table.importText(readShippedCallsignPrefixes()));
+  expect(table.size() == 308U,
+         "the shipped prefix file loads through a host-style import");
+  expect(!cwassistant::core::cwCallsignPrefixesLoadedFromBuiltin(),
+         "a table a caller loaded from file is not reported as built-in");
+
+  if (!saved.empty()) setDictionaryDirectoryEnvironment(saved.c_str());
+  table.clear();
+  static_cast<void>(cwassistant::core::cwSharedCallsignPrefixes());
+}
+
 void test_cw_context_rescorer() {
   expect(loadShippedDictionaries(),
          "the shipped CW dictionaries load without a rejected line");
@@ -3389,6 +3635,8 @@ int main() {
   test_callsign_policy_prosign_glue();
   test_cw_morse_alphabet_survives_missing_files();
   test_cw_morse_alphabet();
+  test_cw_callsign_prefixes_survive_missing_files();
+  test_cw_callsign_prefix_table();
   test_cw_context_rescorer();
   test_presented_speed_requires_evidence();
   test_spectrum_settings();

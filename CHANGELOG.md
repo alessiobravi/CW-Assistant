@@ -8,6 +8,52 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Streams were labelled with callsigns whose country prefix does not exist. A
+  single missed or added element turns a real prefix into an impossible one,
+  and nothing downstream of the decoder could tell the difference. A dictionary
+  of the ITU's allocated prefix blocks -- `dictionaries/callsign-prefixes.txt`,
+  seeded into the operator's dictionary directory on first run and editable
+  like the others -- now decides whether a token could name a country at all. A
+  label whose prefix falls in no block is refused, leaving the stream unnamed
+  until the station identifies cleanly, which is the same honest answer already
+  given when a caller sends only the operator's own callsign. The transcript is
+  untouched: only the name is withheld, so the operator still reads what was
+  copied. Participants listed for a QSO are held to the same rule. The table
+  errs towards admitting -- a missing or unreadable file admits every callsign,
+  because refusing every station on the band would be far worse than the
+  misdecodes this catches.
+
+- Streams were labelled with callsigns whose country prefix does not exist. A
+  single missed or added element turns a real prefix into an impossible one,
+  and nothing downstream of the decoder could tell the difference. A dictionary
+  of the ITU's allocated prefix blocks -- `dictionaries/callsign-prefixes.txt`,
+  seeded into the operator's dictionary directory on first run and editable
+  like the others -- now decides whether a token could name a country at all. A
+  label whose prefix falls in no block is refused, leaving the stream unnamed
+  until the station identifies cleanly, which is the same honest answer already
+  given when a caller sends only the operator's own callsign. The transcript is
+  untouched: only the name is withheld, so the operator still reads what was
+  copied. Participants listed for a QSO are held to the same rule. The table
+  errs towards admitting -- a missing or unreadable file admits every callsign,
+  because refusing every station on the band would be far worse than the
+  misdecodes this catches.
+
+- The application became jerky when several signals were decoding at once,
+  while the processor was plainly not busy -- which is why it never looked like
+  a load problem. The session list compares each row with the one it holds and
+  reports only rows that differ, but signal-to-noise, speed, drift, coherence
+  and every confidence are continuously varying measurements, so every row
+  differed on every update and every decoded card was re-evaluated -- transcript
+  text layout included -- on the one thread that draws. Measured on a running
+  station carrying two dozen tracks: narrowband coherence and the keying-level
+  figures differed on 100% of consecutive samples, signal-to-noise on 98%, and
+  the drawing thread was blocked 22 ms at the median second against a 16.7 ms
+  frame, losing one or two frames a second without ever stalling outright.
+  Measurements are now rounded to what the card can actually display -- a tenth
+  of a decibel or of a word per minute, a hundredth of a confidence -- so a row
+  that has not meaningfully changed compares equal and stays quiet. Nothing an
+  operator can read is lost: half a decibel still reports.
+
 - Open decoder sessions past the bottom of the panel could not be reached. The
   list scrolls and always could, but nothing said so: with no scrollbar an
   operator saw the cards that fit and no sign the rest existed. Reordering is

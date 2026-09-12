@@ -896,6 +896,21 @@ separate, shorter list held in code rather than in any file, precisely because
 what may go on the air is a safety boundary; adding a prosign here therefore
 lets you read it and never adds it to what can be sent.
 
+`callsign-prefixes.txt` decides which decoded tokens are allowed to name a
+station. Every amateur callsign opens with a prefix some administration was
+allocated, so a token whose opening characters belong to no country is far more
+likely to be a decode that lost an element than a rare station: one missed dot
+turns a real prefix into an impossible one. A label that fails this check is
+withheld and the stream stays unnamed until the station identifies cleanly. The
+transcript is never touched -- you still read exactly what was copied, and can
+judge it yourself.
+
+Edit it if you see a real station refused. The file errs towards admitting and
+should stay that way: if it is missing, empty or unreadable, every callsign is
+admitted, because refusing every station on the band would be a far worse fault
+than the misdecodes this catches. Removing blocks is the one edit that can do
+harm.
+
 These lists only ever choose between readings that carry exactly the same
 characters, so adding a token can move a word boundary and can never change a
 decoded letter. Adding something that is not real CW therefore costs you
