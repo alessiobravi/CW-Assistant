@@ -2278,6 +2278,9 @@ void ReplayController::setSourceMode(const int value) {
   publishDxClusterBandFilter();
   rebuildDxSpotModel();
   emit sourceReset();
+  // The axis mapping differs between a direct IQ source, which already carries
+  // absolute RF, and an audio card, which needs a dial to map against.
+  emit radioFrequencyChanged();
   emit stateChanged();
 }
 

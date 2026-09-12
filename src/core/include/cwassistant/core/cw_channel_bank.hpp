@@ -356,6 +356,22 @@ class CwChannelBank {
     return keying_model_;
   }
   void reset() noexcept;
+
+  // The sample stream jumped, but the stations did not.
+  //
+  // Re-centring the SDR decoder window, which happens on every receiver
+  // retune, changes the slice of spectrum being decoded. That is a real
+  // discontinuity in the audio -- filters and timing have to start again --
+  // but it says nothing about the signals themselves: a track's frequency is
+  // absolute RF, and a station on 14.025 MHz is still on 14.025 MHz after the
+  // receiver moves. reset() was called here and destroyed every track,
+  // transcript and identity on each retune, which is exactly what an operator
+  // sees as "I move the RF spectrum and I lose the tracks".
+  //
+  // This resets the signal path and leaves the tracks standing. Those the new
+  // window no longer covers are parked by the ordinary out-of-band rule and
+  // return when the receiver does.
+  void noteInputDiscontinuity() noexcept;
   // Re-centers every current track by a known audio-domain frequency shift
   // (for example, the shift implied by an operator retuning the linked
   // radio's RX VFO) and resynchronizes each track's narrowband mixer/filter
@@ -595,6 +611,11 @@ class CwChannelBank {
   // a designated initialiser would silently reset this.
   CwOperatorRole operator_role_{CwOperatorRole::Monitor};
   void resetFilter(Track& track) noexcept;
+  // Parks every track the analysed band no longer covers and revives every
+  // one it has come back to. One rule, used by both a VFO move and a retune of
+  // the IQ decoder window, so the two cannot disagree about what "out of band"
+  // means.
+  void parkTracksOutsideBand(std::uint64_t timestamp_ns) noexcept;
   void updateVerification(Track& track, std::uint64_t timestamp_ns);
   void recoverRejectedDecoder(Track& track);
   void assignOrRefreshColor(Track& track, std::uint64_t timestamp_ns) noexcept;

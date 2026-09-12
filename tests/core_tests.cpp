@@ -1201,6 +1201,83 @@ void test_cw_channel_bank() {
            "instead of a new card appearing for it");
   }
 
+  // The same must hold when the analysed band itself moves, which is what a
+  // receiver retune looks like on direct IQ: the decoder window is re-centred
+  // on the new capture, so the slice being decoded changes while the stations
+  // in it keep their absolute frequencies. This is the operator's report "if I
+  // move the RF spectrum I still lose the tracks". No shiftTrackedFrequencies
+  // call is involved here at all -- only new spectrum bounds.
+  {
+    CwChannelBank band_bank;
+    std::vector<float> band_bins(1'001, -110.0F);
+    double band_phase = 0.0;
+    std::vector<bool> band_keying;
+    const auto append_band_units = [&band_keying](const bool keyed,
+                                                  const int units) {
+      band_keying.insert(band_keying.end(), units * 10, keyed);
+    };
+    const auto append_band_letter =
+        [&append_band_units](const std::string_view elements) {
+          for (std::size_t index = 0; index < elements.size(); ++index) {
+            append_band_units(true, elements[index] == '.' ? 1 : 3);
+            append_band_units(false, index + 1 == elements.size() ? 3 : 1);
+          }
+        };
+    append_band_letter("...");
+    append_band_letter("---");
+    append_band_letter("...");
+    append_band_units(false, 4);
+    const int band_steps = static_cast<int>(band_keying.size()) * 5;
+    std::uint64_t band_ns = 0;
+    // Acquire at 500 Hz inside a 0-1000 Hz analysed window. The absolute
+    // numbers are the audio scale rather than RF because the bank correlates
+    // the spectral peak with the tone actually present in the samples; what is
+    // under test is the window moving, which is the same code path either way.
+    for (int step = 0; step < band_steps; ++step) {
+      const bool keyed =
+          band_keying[static_cast<std::size_t>(step) % band_keying.size()];
+      band_bins.assign(band_bins.size(), -110.0F);
+      if (keyed) band_bins[500] = -68.0F;
+      band_ns = static_cast<std::uint64_t>(step) * 10'000'000;
+      static_cast<void>(
+          band_bank.updateSpectrum(band_ns, 0.0, 1'000.0, band_bins));
+      cwassistant::core::RealtimeSampleBlock block;
+      block.stream.sample_rate_hz = sample_rate;
+      block.timestamp_ns = band_ns;
+      block.sample_count = 80;
+      for (std::size_t index = 0; index < block.sample_count; ++index) {
+        block.samples[index] = {
+            keyed ? 0.25F * static_cast<float>(std::sin(band_phase)) : 0.0F,
+            0.0F};
+        band_phase += 2.0 * std::numbers::pi * 500.0 / sample_rate;
+      }
+      static_cast<void>(band_bank.processSamples(block));
+    }
+    expect(band_bank.channels().size() == 1,
+           "the retune scenario creates exactly one track before the window "
+           "moves, so the identity check below is not vacuous");
+    const auto retuned_id = band_bank.channels().front().id;
+
+    // Retune: the analysed window moves entirely away from the station.
+    for (int step = 1; step <= 4'500; ++step) {
+      band_bins.assign(band_bins.size(), -110.0F);
+      const std::uint64_t timestamp =
+          band_ns + static_cast<std::uint64_t>(step) * 10'000'000;
+      static_cast<void>(band_bank.updateSpectrum(timestamp, 40'000.0,
+                                                 41'000.0, band_bins));
+    }
+
+    // Back again. The station is where it always was.
+    const std::uint64_t return_ns = band_ns + 4'600ULL * 10'000'000ULL;
+    static_cast<void>(
+        band_bank.updateSpectrum(return_ns, 0.0, 1'000.0, band_bins));
+    expect(band_bank.channels().size() == 1 &&
+               band_bank.channels().front().id == retuned_id,
+           "moving the analysed band away from a station and back returns the "
+           "SAME track: a receiver retune does not move the station, so its "
+           "identity, transcript and audio monitor must survive it");
+  }
+
   slow_bank.configure({.empty_track_retention_seconds = 2.0,
                        .decoded_track_retention_seconds = 2.0});
   for (int silence_step = 0; silence_step < 250; ++silence_step) {

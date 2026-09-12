@@ -6,7 +6,28 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-12 (fifty-eighth entry) -- UI-008 closes, and a cluster
+Last reviewed: 2026-09-12 (fifty-ninth entry) -- two faults introduced by the
+previous two waves, both found by the owner.
+
+Making the decoder window follow the receiver fixed direct SDR reception on
+every band and broke retuning: the window is republished on each retune, and
+the worker called reset() on the channel bank whenever it changed, so every
+track, transcript and identity died each time the radio moved. The samples jump
+at a retune; the stations do not. The bank now has noteInputDiscontinuity(),
+which restarts the signal path and leaves the tracks standing, and the
+out-of-band parking rule written for a VFO move is shared with it rather than
+duplicated, so the two cannot disagree about what out of band means.
+
+The RF axis re-evaluated on the wrong signal. Everything it reads is set in
+setRadioFrequencyContext, which emits radioFrequencyChanged, while the property
+notified on stateChanged. On an audio card the spectrum's own bounds do not
+move with the dial, so a 40 m to 20 m change left the ruler printing 7 MHz.
+
+Both now have tests that fail on the old behaviour. The retune test drives only
+spectrum bounds -- no shift call at all -- because that is what a receiver
+retune actually presents to the bank.
+
+Previous review: 2026-09-12 (fifty-eighth entry) -- UI-008 closes, and a cluster
 login may carry an SSID.
 
 Both were built in parallel lanes, and both lanes corrected the brief they were

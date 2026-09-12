@@ -8,6 +8,24 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Moving the RF spectrum no longer loses the tracks. Making the decoder window
+  follow the receiver, so that direct SDR reception decodes on any band, meant
+  the window was republished on every retune -- and the worker rebuilt the
+  whole decoder whenever it changed, destroying every track, transcript and
+  identity each time the operator moved the radio. The samples jump at a
+  retune; the stations do not. A track's frequency is absolute RF, so the
+  signal path is restarted and the tracks are left standing, with those the new
+  window no longer covers parked on the same rule a VFO move uses and revived
+  when the receiver comes back to them. A republication asking for the window
+  already in force now does nothing at all.
+
+- Changing band left the frequency ruler showing the old band. The axis
+  re-evaluated only on a source change, while everything it reads -- whether a
+  radio is readable, its receive frequency, the sideband and the reference tone
+  -- arrives on a different signal. On an audio card the spectrum's own bounds
+  do not move with the dial, so nothing in the binding had changed and 40 m
+  labels survived a switch to 20 m.
+
 - A cluster login carrying an SSID would have connected and then never sent
   its callsign. The login was written to the socket through the shared
   callsign policy, which refuses a hyphen, so the composed name resolved to

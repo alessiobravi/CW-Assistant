@@ -150,7 +150,16 @@ class ReplayController final : public QObject {
   // Direct IQ always can. An audio card can only once a radio is reporting its
   // dial, because the audio passband alone says nothing about where the
   // receiver is pointed.
-  Q_PROPERTY(bool axisShowsRf READ axisShowsRf NOTIFY stateChanged)
+  // NOTIFY radioFrequencyChanged, not stateChanged. Everything the axis
+  // mapping reads -- whether a radio is readable, its receive frequency, the
+  // sideband and the reference tone -- is set in setRadioFrequencyContext,
+  // which emits that signal and not the other. Bound to stateChanged, the
+  // labels did not re-evaluate when the operator changed band: switching from
+  // 40 m to 20 m left the ruler still printing 7 MHz, because on an audio card
+  // the spectrum's own bounds do not move with the dial and nothing else in
+  // the binding had changed. A source change is covered by the frame bounds
+  // moving, which the binding also reads.
+  Q_PROPERTY(bool axisShowsRf READ axisShowsRf NOTIFY radioFrequencyChanged)
   Q_PROPERTY(bool radioFrequencyAvailable READ radioFrequencyAvailable
                  NOTIFY radioFrequencyChanged)
   Q_PROPERTY(qulonglong radioRxFrequencyHz READ radioRxFrequencyHz

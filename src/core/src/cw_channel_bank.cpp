@@ -334,6 +334,55 @@ void CwChannelBank::sanitizeConfig() noexcept {
       std::clamp(config_.decoder_recovery_seconds, 0.5, 15.0);
 }
 
+void CwChannelBank::parkTracksOutsideBand(
+    const std::uint64_t timestamp_ns) noexcept {
+  const bool bounds_known =
+      spectrum_range_initialized_ &&
+      last_spectrum_upper_frequency_hz_ > last_spectrum_lower_frequency_hz_;
+  if (!bounds_known) return;
+  for (Track& track : tracks_) {
+    const bool outside =
+        track.frequency_hz <= 0.0 ||
+        track.frequency_hz < last_spectrum_lower_frequency_hz_ ||
+        track.frequency_hz > last_spectrum_upper_frequency_hz_;
+    if (outside) {
+      if (!track.parked) {
+        track.parked = true;
+        track.parked_since_ns = timestamp_ns;
+      }
+      continue;
+    }
+    if (!track.parked) continue;
+    // Back inside the analysed band. Give it a fresh lease rather than leaving
+    // it holding a detection timestamp from before the excursion, which would
+    // expire it on the next sweep before it could re-acquire.
+    track.parked = false;
+    track.parked_since_ns = 0;
+    track.last_detected_ns = timestamp_ns;
+    track.last_candidate_match_ns = timestamp_ns;
+  }
+}
+
+void CwChannelBank::noteInputDiscontinuity() noexcept {
+  // Everything downstream of the antenna starts again: the filters hold state
+  // from samples that no longer connect to the ones arriving, and the decoder
+  // must not read the seam as a keying edge.
+  for (Track& track : tracks_) {
+    resetFilter(track);
+    track.update = track.decoder.suspendInput(expected_sample_timestamp_ns_);
+    track.decoder_input_suspended = true;
+  }
+  monitor_audio_.clear();
+  monitor_oscillator_ = {1.0F, 0.0F};
+  stream_initialized_ = false;
+  sample_timing_initialized_ = false;
+  expected_sample_timestamp_ns_ = 0;
+  // The spectrum bounds are deliberately left alone. The next frame carries
+  // the new window's bounds and the out-of-band rule there decides which
+  // tracks are now outside it, which is the same decision made for a VFO move
+  // and must not be made twice in two ways.
+}
+
 void CwChannelBank::reset() noexcept {
   tracks_.clear();
   snapshots_.clear();
@@ -416,10 +465,23 @@ const std::vector<CwChannelSnapshot>& CwChannelBank::updateSpectrum(
   // measured in seconds rather than in frames. Display-side averaging and the
   // configured display frame rate therefore cannot change which candidates are
   // discovered, how prominent they appear, or how quickly they persist.
+  const bool bounds_moved =
+      spectrum_range_initialized_ &&
+      (lower_frequency_hz != last_spectrum_lower_frequency_hz_ ||
+       upper_frequency_hz != last_spectrum_upper_frequency_hz_);
   last_spectrum_lower_frequency_hz_ = lower_frequency_hz;
   last_spectrum_upper_frequency_hz_ = upper_frequency_hz;
   last_spectrum_timestamp_ns_ = timestamp_ns;
   spectrum_range_initialized_ = true;
+
+  // The analysed band moved under the tracks. On direct IQ this is what a
+  // receiver retune looks like: the decoder window is re-centred on the new
+  // capture, so the slice being decoded changes while the stations in it keep
+  // their absolute frequencies. A track the new window no longer covers is
+  // parked rather than left to expire, on exactly the rule a VFO move uses,
+  // because in both cases the operator moved the receiver and the station's
+  // position is still known.
+  if (bounds_moved) parkTracksOutsideBand(timestamp_ns);
 
   // Detection runs on its own fixed cadence and consumes exactly one spectrum
   // frame per tick. Frames supplied faster than that are ignored entirely
@@ -1790,34 +1852,9 @@ void CwChannelBank::shiftTrackedFrequencies(
   // ordinary retention timeout -- which is what used to happen, deliberately
   // -- destroyed the identity, the transcript and the audio monitor of the
   // very station being tuned around, and it returned as a new, unrecognised
-  // track. Park it instead, and unpark it when the band comes back to it.
-  //
-  // The bounds are the spectrum last seen rather than a fixed range, because
-  // the processed band differs between an audio card and an IQ slice.
-  const bool bounds_known =
-      spectrum_range_initialized_ &&
-      last_spectrum_upper_frequency_hz_ > last_spectrum_lower_frequency_hz_;
-  for (Track& track : tracks_) {
-    const bool outside =
-        track.frequency_hz <= 0.0 ||
-        (bounds_known && (track.frequency_hz < last_spectrum_lower_frequency_hz_ ||
-                          track.frequency_hz > last_spectrum_upper_frequency_hz_));
-    if (outside) {
-      if (!track.parked) {
-        track.parked = true;
-        track.parked_since_ns = expected_sample_timestamp_ns_;
-      }
-      continue;
-    }
-    if (!track.parked) continue;
-    // Back inside the passband. Give it a fresh lease rather than leaving it
-    // holding a detection timestamp from before the excursion, which would
-    // expire it on the next sweep before it had a chance to re-acquire.
-    track.parked = false;
-    track.parked_since_ns = 0;
-    track.last_detected_ns = expected_sample_timestamp_ns_;
-    track.last_candidate_match_ns = expected_sample_timestamp_ns_;
-  }
+  // track. The same rule serves a retune of the IQ decoder window, so the two
+  // cannot disagree about what "out of band" means.
+  parkTracksOutsideBand(expected_sample_timestamp_ns_);
   // A track parked below zero has no meaningful position to return to, so it
   // is the one case still dropped outright.
   std::erase_if(tracks_,

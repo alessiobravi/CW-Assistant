@@ -784,6 +784,14 @@ void LiveAudioDspWorker::setMonitor(const int mode,
 
 void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
                                              const double bandwidth_hz) {
+  // The window is republished on every receiver retune so the decoder follows
+  // the radio. Most of those republications ask for what is already in force,
+  // and tearing the signal path down for a value that did not change would
+  // interrupt decoding for nothing.
+  if (center_frequency_hz == sdr_decoder_center_frequency_hz_ &&
+      bandwidth_hz == sdr_decoder_bandwidth_hz_) {
+    return;
+  }
   const double output_rate_hz =
       std::clamp(bandwidth_hz * 2.5, 48'000.0, 192'000.0);
   if (!sdr_decoder_channelizer_.configure(
@@ -796,7 +804,13 @@ void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
   decoder_analyzer_.reset();
-  decoder_.reset();
+  // Not reset(). The samples jumped; the stations did not. A track's frequency
+  // is absolute RF, so a station stays where it was when the receiver moves,
+  // and wiping the bank here destroyed every track, transcript and identity on
+  // each retune -- what an operator sees as losing the tracks whenever the RF
+  // spectrum is moved. Tracks the new window no longer covers are parked by
+  // the bank's own out-of-band rule and come back with the receiver.
+  decoder_.noteInputDiscontinuity();
   character_frontends_.reset();
 }
 
