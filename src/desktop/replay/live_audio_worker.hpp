@@ -103,10 +103,14 @@ class LiveAudioDspWorker final : public QObject {
   // operator saw memory climb from 244 MB to 668 MB and then had to kill the
   // application. 424 MB is a little over three minutes of exactly this.
   //
-  // Two, because a display frame nobody drew is worth nothing: there is no
-  // history to preserve in a frame that was superseded before it reached the
-  // screen. Dropping it is the correct answer, not a compromise.
-  static constexpr int kMaximumSpectrumFramesInFlight = 2;
+  // Four. A display frame nobody drew is worth nothing -- there is no history
+  // to preserve in one superseded before it reached the screen -- so dropping
+  // is the correct answer rather than a compromise, and any small bound ends
+  // the unbounded growth equally well. Two proved tighter than the producer's
+  // own burstiness: the analyser can emit several frames from one drain, so
+  // frames were refused during ordinary operation and not only under load,
+  // which cost the waterfall continuity for no gain. Four is 256 kB at worst.
+  static constexpr int kMaximumSpectrumFramesInFlight = 4;
   static constexpr int kGuiHeartbeatIntervalMs = 100;
   static constexpr double kGuiStallLatenessMs = 250.0;
 
@@ -358,6 +362,7 @@ class LiveAudioDspWorker final : public QObject {
   // decrement and a bounds test.
   std::atomic<int> spectrum_frames_in_flight_{0};
   std::uint64_t dropped_spectrum_frames_{0};
+  std::uint64_t dropped_since_delivered_{0};
   bool processing_complex_iq_{false};
   // The window the operator has asked for. Recorded unconditionally, whatever
   // is currently running: these settings are republished whenever anything on

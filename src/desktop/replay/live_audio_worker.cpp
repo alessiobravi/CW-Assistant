@@ -1041,9 +1041,15 @@ bool LiveAudioDspWorker::publishSpectrumFrame(SpectrumFrame&& frame) {
   if (spectrum_frames_in_flight_.load(std::memory_order_acquire) >=
       kMaximumSpectrumFramesInFlight) {
     ++dropped_spectrum_frames_;
+    ++dropped_since_delivered_;
     return false;
   }
   spectrum_frames_in_flight_.fetch_add(1, std::memory_order_acq_rel);
+  // Carried with the frame so the display can tell a break in reception from
+  // its own inability to keep up. Without it the waterfall padded every
+  // dropped interval with a blank row and filled with black stripes.
+  frame.dropped_before = dropped_since_delivered_;
+  dropped_since_delivered_ = 0;
   emit frameProduced(frame);
   return true;
 }

@@ -480,7 +480,18 @@ void SpectrumWaterfallItem::acceptFrame(const SpectrumFrame& frame) {
   } else if (frame.timestamp_ns >= last_row_timestamp_ns_ + row_interval) {
     const std::uint64_t elapsed_intervals =
         (frame.timestamp_ns - last_row_timestamp_ns_) / row_interval;
-    const std::uint64_t missing_intervals = elapsed_intervals - 1;
+    // A blank row says "nothing was received for this interval", which is
+    // worth showing: a break in reception should read as a break, and padding
+    // keeps the time axis honest against a real input stall.
+    //
+    // It must not say "the display could not keep up". Frames are refused to
+    // bound memory, and painting those intervals black filled the waterfall
+    // with stripes and made a continuous band of signal look interrupted --
+    // reporting a fault in reception that did not happen. When the frame says
+    // frames were dropped before it, the receiver was fine and the row clock
+    // simply resynchronises.
+    const std::uint64_t missing_intervals =
+        frame.dropped_before > 0 ? 0 : elapsed_intervals - 1;
     const std::uint64_t retained_missing = std::min<std::uint64_t>(
         missing_intervals,
         static_cast<std::uint64_t>(waterfallRowCapacity() - 1));

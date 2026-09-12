@@ -8,6 +8,20 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- The waterfall filled with black stripes and stopped reading as continuous.
+  Bounding the frames handed to the display meant some are refused, and the
+  waterfall fills any interval it received nothing for with a blank row -- so
+  that a real break in reception reads as a break and the time axis stays
+  honest. It had no way to tell "nothing arrived" from "what arrived could not
+  be drawn", and painted a continuous band of signal as interrupted, reporting
+  a fault in reception that had not happened. A frame now carries how many were
+  refused before it: those intervals resynchronise the row clock without
+  drawing a gap, while a genuine input stall is still padded as before. The
+  in-flight bound is four rather than two, because the analyser can emit
+  several frames from one drain and two refused frames during ordinary
+  operation cost continuity for no gain -- any small bound ends the unbounded
+  growth equally well.
+
 - Memory grew without bound until the application had to be killed. Spectrum
   frames were handed to the thread that draws with no backpressure whatever. A
   wide IQ transform is 8193 bins and each frame carries two float vectors of

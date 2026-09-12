@@ -495,8 +495,59 @@ int testPreferredSpanOpensTheConfiguredWidth() {
   return 0;
 }
 
+// A frame refused for backpressure must not be drawn as a break in reception.
+//
+// The waterfall pads intervals it received nothing for with blank rows, so that
+// a real input stall reads as a gap and the time axis stays honest. Once frames
+// began being dropped to bound memory, that padding had no way to tell "nothing
+// arrived" from "we could not draw what arrived", and the display filled with
+// black stripes -- reporting a fault in reception that had not happened, across
+// a continuous band of signal.
+int testDroppedFramesDoNotPadTheWaterfall() {
+  constexpr double kLowerHz = 14'000'000.0;
+  constexpr double kUpperHz = 14'048'000.0;
+  cwassistant::desktop::SpectrumWaterfallItem item;
+  item.setWaterfallRate(20);
+
+  cwassistant::desktop::SpectrumFrame frame;
+  frame.bins_dbfs = QVector<float>(512, -90.0F);
+  frame.instantaneous_bins_dbfs = frame.bins_dbfs;
+  frame.lower_frequency_hz = kLowerHz;
+  frame.upper_frequency_hz = kUpperHz;
+  frame.sequence = 1;
+  frame.timestamp_ns = 0;
+  item.acceptFrame(frame);
+  const int after_first = item.waterfallRowCount();
+
+  // A whole second later at twenty rows a second: nineteen intervals with no
+  // frame. Reported as dropped, so the receiver was fine.
+  frame.sequence = 2;
+  frame.timestamp_ns = 1'000'000'000ULL;
+  frame.dropped_before = 19;
+  item.acceptFrame(frame);
+  const int after_dropped = item.waterfallRowCount();
+  if (after_dropped != after_first + 1) {
+    // Padding a display-side drop is what produced the stripes.
+    return 90;
+  }
+
+  // The same gap without that report is a genuine break in reception and must
+  // still be padded, or a real input stall would be drawn as continuous signal
+  // and the time axis would lie.
+  frame.sequence = 3;
+  frame.timestamp_ns = 2'000'000'000ULL;
+  frame.dropped_before = 0;
+  item.acceptFrame(frame);
+  if (item.waterfallRowCount() <= after_dropped + 1) return 91;
+  return 0;
+}
+
 int main(int argc, char* argv[]) {
   QGuiApplication application(argc, argv);
+  if (const int dropped_pad_failure = testDroppedFramesDoNotPadTheWaterfall();
+      dropped_pad_failure != 0) {
+    return dropped_pad_failure;
+  }
   if (const int preferred_span_failure =
           testPreferredSpanOpensTheConfiguredWidth();
       preferred_span_failure != 0) {
