@@ -1,6 +1,7 @@
 #include <QCoreApplication>
 #include <QDebug>
 #include <QFile>
+#include <QJsonObject>
 #include <QMetaObject>
 #include <QTemporaryDir>
 #include <QThread>
@@ -9,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <memory>
 #include <numbers>
@@ -17,8 +19,224 @@
 
 #include "replay/live_audio_worker.hpp"
 
+namespace {
+
+// Codes from 20 up, so a failure in this phase is never confused with one in
+// the audio phase below.
+constexpr int kNoDiagnosticsRecord = 20;
+constexpr int kDecoderWindowNotInForce = 21;
+constexpr int kGuiBlockMissing = 22;
+constexpr int kGuiLatenessNotReported = 23;
+constexpr int kGuiPeakNotWindowScoped = 24;
+
+// Two properties of the live DSP worker that only a complex-IQ session can
+// show, driven entirely through the block pipe so no receiver is required:
+//
+//  1. A decoder window published BEFORE the first IQ block -- which is what
+//     the controller does at SDR start -- is in force by the time IQ is
+//     processed. It regressed into a window that was remembered but never
+//     configured: the channelizer kept its defaults and refused every block,
+//     so the overview spectrum painted normally while nothing decoded, until
+//     the operator dragged the window and changed the requested values. The
+//     assertion is that spectrum frames reach the detector at all, which can
+//     only happen once the channelizer admits a block.
+//
+//  2. The GUI-thread lateness block is reported, and is scoped to one record
+//     window: a peak is a maximum, not a difference of totals, so a peak that
+//     is never cleared would mark every later record as stalled.
+// Spectrum frames must be dropped, not queued, when the display is behind.
+//
+// Frames were emitted with no backpressure at all. A wide IQ transform is 8193
+// bins and each frame carries two float vectors of them, so one queued frame is
+// about 64 kB and thirty a second is two megabytes a second. An operator
+// watched memory climb from 244 MB to 668 MB -- a little over three minutes of
+// exactly that -- and then had to kill the application, because the growing
+// backlog made the thread that draws fall further behind, which grew the
+// backlog. A display frame nobody drew is worth nothing, so refusing it costs
+// only the backlog it would have added.
+int runSpectrumBackpressureChecks() {
+  auto pipe = std::make_shared<cwassistant::desktop::LiveAudioPipe>();
+  QThread dsp_thread;
+  auto* worker = new cwassistant::desktop::LiveAudioDspWorker(pipe);
+  worker->moveToThread(&dsp_thread);
+  QObject::connect(&dsp_thread, &QThread::finished, worker,
+                   &QObject::deleteLater);
+
+  // Deliberately never acknowledged, which is what a stalled display is.
+  int delivered = 0;
+  QObject::connect(
+      worker, &cwassistant::desktop::LiveAudioDspWorker::frameProduced,
+      &dsp_thread, [&delivered](const cwassistant::desktop::SpectrumFrame&) {
+        ++delivered;
+      },
+      Qt::DirectConnection);
+
+  dsp_thread.start();
+  QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
+
+  // Far more audio than the bound, delivered in one go.
+  constexpr int kBlocks = 400;
+  for (int index = 0; index < kBlocks; ++index) {
+    cwassistant::core::RealtimeSampleBlock block;
+    block.stream.sample_rate_hz = 48'000.0;
+    block.stream.kind = cwassistant::core::StreamKind::Audio;
+    block.timestamp_ns =
+        static_cast<std::uint64_t>(index) * 4'000'000ULL;
+    block.sample_count = 192;
+    for (std::size_t sample = 0; sample < block.sample_count; ++sample) {
+      block.samples[sample] = {0.2F, 0.0F};
+    }
+    static_cast<void>(pipe->blocks.try_push(block));
+    QMetaObject::invokeMethod(worker, "drain", Qt::BlockingQueuedConnection);
+  }
+
+  QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
+  dsp_thread.quit();
+  dsp_thread.wait();
+
+  // The bound is what matters: an unacknowledged display can never accumulate
+  // more than a couple of frames, however long reception runs. Without it this
+  // count rises with the block count and the queue with it.
+  if (delivered >
+      cwassistant::desktop::LiveAudioDspWorker::kMaximumSpectrumFramesInFlight) {
+    std::fprintf(stderr,
+                 "spectrum frames were not bounded: %d delivered to a display "
+                 "that acknowledged none\n",
+                 delivered);
+    return 20;
+  }
+  return 0;
+}
+
+int runComplexIqDiagnosticsChecks() {
+  auto pipe = std::make_shared<cwassistant::desktop::LiveAudioPipe>();
+  QThread dsp_thread;
+  auto* worker = new cwassistant::desktop::LiveAudioDspWorker(pipe);
+  worker->moveToThread(&dsp_thread);
+  QObject::connect(&dsp_thread, &QThread::finished, worker,
+                   &QObject::deleteLater);
+
+  QJsonObject record;
+  // Direct, so the record is captured on the worker's own thread. Every emit
+  // below happens inside a BlockingQueuedConnection invocation, so this thread
+  // is parked for the duration of the write and resumes with it visible.
+  QObject::connect(
+      worker,
+      &cwassistant::desktop::LiveAudioDspWorker::diagnosticsRecordProduced,
+      worker, [&record](const QJsonObject& published) { record = published; },
+      Qt::DirectConnection);
+
+  constexpr double iq_sample_rate_hz = 192'000.0;
+  constexpr double iq_center_frequency_hz = 14'050'000.0;
+  constexpr double decoder_bandwidth_hz = 24'000.0;
+  constexpr std::size_t iq_block_samples = 2'048;
+  // Enough decimated samples for the decoder branch's own 8192-point analyzer
+  // to produce frames; a handful of blocks would assert nothing either way.
+  constexpr std::size_t iq_block_count = 128;
+  std::vector<cwassistant::core::RealtimeSampleBlock> iq_blocks(iq_block_count);
+  double phase = 0.0;
+  for (std::size_t index = 0; index < iq_blocks.size(); ++index) {
+    auto& block = iq_blocks[index];
+    block.stream.kind = cwassistant::core::StreamKind::ComplexIq;
+    block.stream.sample_rate_hz = iq_sample_rate_hz;
+    block.stream.center_frequency_hz = iq_center_frequency_hz;
+    block.stream.channel_count = 1;
+    block.sequence = index;
+    block.timestamp_ns = static_cast<std::uint64_t>(
+        static_cast<long double>(index * iq_block_samples) * 1'000'000'000.0L /
+        iq_sample_rate_hz);
+    block.sample_count = iq_block_samples;
+    for (std::size_t sample = 0; sample < block.sample_count; ++sample) {
+      block.samples[sample] = {0.5F * static_cast<float>(std::cos(phase)),
+                               0.5F * static_cast<float>(std::sin(phase))};
+      // A carrier 1 kHz above the receiver's centre, so it sits inside the
+      // requested window rather than on its edge.
+      phase += 2.0 * std::numbers::pi * 1'000.0 / iq_sample_rate_hz;
+    }
+  }
+
+  dsp_thread.start();
+  const int result = [&]() -> int {
+    QMetaObject::invokeMethod(worker, "start", Qt::BlockingQueuedConnection);
+    // Published with nothing in the pipe, exactly as the controller publishes
+    // it when the operator starts the receiver.
+    QMetaObject::invokeMethod(worker, "setSdrDecoderWindow",
+                              Qt::BlockingQueuedConnection,
+                              Q_ARG(double, iq_center_frequency_hz),
+                              Q_ARG(double, decoder_bandwidth_hz));
+    for (std::size_t index = 0; index < iq_blocks.size();) {
+      std::size_t pushed = 0;
+      while (index < iq_blocks.size() && pushed < 8 &&
+             pipe->blocks.try_push(iq_blocks[index])) {
+        ++index;
+        ++pushed;
+      }
+      QMetaObject::invokeMethod(worker, "drain", Qt::BlockingQueuedConnection);
+    }
+    QMetaObject::invokeMethod(worker, "publishLiveDiagnosticsRecord",
+                              Qt::BlockingQueuedConnection);
+    if (record.isEmpty()) return kNoDiagnosticsRecord;
+    if (record.value(QStringLiteral("detector"))
+            .toObject()
+            .value(QStringLiteral("spectrumFramesToDetector"))
+            .toDouble() <= 0.0) {
+      qCritical().noquote() << "decoder window never took effect: detector="
+                            << record.value(QStringLiteral("detector"));
+      return kDecoderWindowNotInForce;
+    }
+
+    QMetaObject::invokeMethod(worker, "acceptGuiHeartbeat",
+                              Qt::BlockingQueuedConnection,
+                              Q_ARG(double, 400.0));
+    QMetaObject::invokeMethod(worker, "publishLiveDiagnosticsRecord",
+                              Qt::BlockingQueuedConnection);
+    const QJsonObject gui = record.value(QStringLiteral("gui")).toObject();
+    if (!gui.contains(QStringLiteral("latenessMs")) ||
+        !gui.contains(QStringLiteral("peakLatenessMs")) ||
+        !gui.contains(QStringLiteral("stallCount")) ||
+        !gui.contains(QStringLiteral("sinceLastHeartbeatMs"))) {
+      return kGuiBlockMissing;
+    }
+    // 400 ms is past the visible-stall bar, so it is both the lateness and a
+    // counted stall.
+    if (gui.value(QStringLiteral("latenessMs")).toDouble() != 400.0 ||
+        gui.value(QStringLiteral("peakLatenessMs")).toDouble() != 400.0 ||
+        gui.value(QStringLiteral("stallCount")).toInt() != 1) {
+      qCritical().noquote() << "GUI lateness not reported:" << gui;
+      return kGuiLatenessNotReported;
+    }
+    // A second record with no heartbeat in between. The peak and the stall
+    // count belong to the window that has just closed; the last measured
+    // lateness is the latest reading and stays until a new one arrives.
+    QMetaObject::invokeMethod(worker, "publishLiveDiagnosticsRecord",
+                              Qt::BlockingQueuedConnection);
+    const QJsonObject next_gui = record.value(QStringLiteral("gui")).toObject();
+    if (next_gui.value(QStringLiteral("peakLatenessMs")).toDouble() != 0.0 ||
+        next_gui.value(QStringLiteral("stallCount")).toInt() != 0 ||
+        next_gui.value(QStringLiteral("latenessMs")).toDouble() != 400.0) {
+      qCritical().noquote() << "GUI peak is not window-scoped:" << next_gui;
+      return kGuiPeakNotWindowScoped;
+    }
+    return 0;
+  }();
+  QMetaObject::invokeMethod(worker, "stop", Qt::BlockingQueuedConnection);
+  dsp_thread.quit();
+  dsp_thread.wait();
+  return result;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
   QCoreApplication application(argc, argv);
+  if (const int complex_iq_result = runComplexIqDiagnosticsChecks();
+      complex_iq_result != 0) {
+    return complex_iq_result;
+  }
+  if (const int backpressure_result = runSpectrumBackpressureChecks();
+      backpressure_result != 0) {
+    return backpressure_result;
+  }
   auto pipe = std::make_shared<cwassistant::desktop::LiveAudioPipe>();
   QThread dsp_thread;
   auto* worker = new cwassistant::desktop::LiveAudioDspWorker(pipe);
@@ -219,6 +437,14 @@ int main(int argc, char* argv[]) {
   QMetaObject::invokeMethod(worker, "startDebugCapture",
                             Qt::BlockingQueuedConnection,
                             Q_ARG(QString, capture_root.path()));
+  // A decoder-window publication arriving while an AUDIO card is the source
+  // must not touch the decoder: these settings are republished whenever
+  // anything on the SDR page changes, and acting on one here once destroyed a
+  // working audio decode for a receiver that was not even running. The audio
+  // assertions below have to keep passing with this in flight.
+  QMetaObject::invokeMethod(worker, "setSdrDecoderWindow",
+                            Qt::BlockingQueuedConnection,
+                            Q_ARG(double, 7'016'450.0), Q_ARG(double, 12'000.0));
 
   std::size_t next_block = pre_capture_blocks;
   QTimer feeder;
@@ -296,6 +522,14 @@ int main(int argc, char* argv[]) {
       !first_line.contains("\"existingTracksAtStart\":1") ||
       !first_line.contains("\"existingPublishedChannelsAtStart\":0")) {
     return 9;  // Capture-start decoder lineage is not explicit.
+  }
+  if (!first_line.contains("\"gui\"") ||
+      !first_line.contains("\"peakLatenessMs\"") ||
+      !first_line.contains("\"stallCount\"")) {
+    // The capture file carries the GUI-thread lateness too, and reads its own
+    // window: a saturated GUI thread is as much a part of a recorded
+    // reproduction as it is of a watched stream.
+    return 12;
   }
   if (!first_line.contains("\"presentation\"") ||
       !first_line.contains("\"offlineCallsignDatabaseState\":\"ready\"") ||

@@ -821,6 +821,64 @@ acoustic support win: reverse-beacon reports carry a measured error rate
 approaching two per cent per receiver, and a confidently wrong callsign is worse
 than none.
 
+## Network
+
+A live diagnostics stream, so a station can be watched while it runs instead of
+being described afterwards. Off by default.
+
+| Setting | Meaning |
+| --- | --- |
+| Enable | Master switch. Off by default. |
+| Addresses | The addresses this machine can bind, one checkbox each, with the interface named and loopback marked. Loopback is reachable only from this computer. |
+| Port | Default 17300, chosen clear of the ports amateur software already claims -- Hamlib's `rigctld` on 4532 and `rotctld` on 4533, cluster nodes on 7300, 7373, 8000 and 23, reverse-beacon telnet on 7000 and 7001. Privileged ports below 1024 are refused. |
+| Allowed peers | Addresses or subnets that may connect -- `192.168.1.50`, `192.168.1.0/24`, `2001:db8::/32` -- or `any`. Empty permits loopback only. A rule that cannot be parsed permits nothing, so a typo cannot widen access. |
+| Access token | Required before any address other than loopback may be bound. **Generate** produces one. |
+
+Connect with anything that reads a socket -- `nc`, `telnet`, a script -- and one
+JSON object arrives per line, once a second: the same record the debug capture
+writes, including the throughput counters.
+
+**The stream only emits.** This application holds transmit, so a diagnostics
+channel that accepted input would be a second and weaker way to reach a radio.
+Bytes sent to it are discarded and never parsed, and a peer that keeps sending
+is disconnected, because it has mistaken the port for something that answers.
+
+Two controls decide who may read it.
+
+**Allowed peers** is the stronger and the cheaper. Give addresses or subnets --
+`192.168.1.50`, `192.168.1.0/24`, `2001:db8::/32` -- or the single entry `any`
+for no restriction. A peer's address is known from the socket before a byte is
+exchanged, so one that is not permitted is closed without a greeting and never
+learns what is behind the port. Left empty it permits loopback only, which is
+the safe reading of "not yet decided". A rule that cannot be parsed permits
+nothing, so a typo can never widen access.
+
+**The access token** is then read from the client as a single bounded line
+before anything is sent to it, and compared in constant time. A client that
+presents the wrong token, or none, receives no record at all.
+
+What neither gives you: the token is one shared secret, so it cannot tell one
+reader from another or shut out a single one -- changing it cuts off everybody
+at once. And the stream is **not encrypted**, so the token and everything it
+protects cross the network in clear.
+
+So bind it to a network you trust. If you need it from elsewhere, tunnel it --
+over SSH, or the remote-desktop session you are already using -- rather than
+forwarding a port to the computer that controls your radio. Authentication
+worth the name belongs with the planned remote-operation work, where TLS and
+per-client certificates and revocation of one reader are designed for rather
+than added afterwards.
+
+At most four readers connect at once, and one that cannot keep up is
+disconnected rather than buffered without limit: losing an observer is a
+smaller failure than growing this application until the station stops.
+
+**Waterfall rendering**, on the Display tab, exists for the same purpose. A
+station left running as a diagnostics server does not need to draw a waterfall,
+and switching it off detaches the display from the frame source rather than
+merely hiding it, so no row is conditioned, appended or retained and the
+history already held is released.
+
 ## CW vocabulary files
 
 Read at startup from `dictionaries/` in the application data directory, and

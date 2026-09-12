@@ -785,6 +785,16 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
   dx_spot_expiry_timer_.setInterval(5'000);
   connect(&dx_spot_expiry_timer_, &QTimer::timeout, this,
           [this] { rebuildDxSpotModel(); });
+  // The GUI thread's own heartbeat. Precise rather than coarse: Qt allows a
+  // coarse timer up to five percent of slack, which at this interval is
+  // several milliseconds of deliberate drift that would be reported as
+  // lateness the event loop never actually suffered.
+  gui_heartbeat_timer_.setSingleShot(false);
+  gui_heartbeat_timer_.setTimerType(Qt::PreciseTimer);
+  gui_heartbeat_timer_.setInterval(
+      LiveAudioDspWorker::kGuiHeartbeatIntervalMs);
+  connect(&gui_heartbeat_timer_, &QTimer::timeout, this,
+          &ReplayController::publishGuiHeartbeat);
   qRegisterMetaType<CwCharacterFeatureWindowPtr>();
   qRegisterMetaType<CwCharacterHypothesisPtr>();
   auto* character_worker = new LocalCharacterInferenceWorker;
@@ -997,6 +1007,12 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           &LiveAudioDspWorker::stopDebugCapture);
   connect(this, &ReplayController::livePresentationDiagnosticsRequested,
           dsp_worker, &LiveAudioDspWorker::setPresentationDiagnostics);
+  // Queued, like every other setting sent to this worker. A heartbeat that
+  // cannot be delivered is not a lost measurement: the delay shows up as
+  // lateness on the following fire, and as a growing gap in the record until
+  // one arrives.
+  connect(this, &ReplayController::liveGuiHeartbeatRequested, dsp_worker,
+          &LiveAudioDspWorker::acceptGuiHeartbeat);
   connect(dsp_worker, &LiveAudioDspWorker::debugCaptureStateChanged, this,
           [this](const bool active, const QString& path,
                  const double elapsed_seconds, const QString& note) {
@@ -1112,8 +1128,15 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
             }
             emit stateChanged();
           });
+  // Acknowledged as it is taken, so the worker can tell whether the display is
+  // keeping up. Without this the in-flight count only ever rises and the bound
+  // would stop the spectrum dead after two frames; with it, frames are dropped
+  // only while the thread that draws is actually behind.
   connect(dsp_worker, &LiveAudioDspWorker::frameProduced, this,
-          &ReplayController::frameReady);
+          [this, dsp_worker](const SpectrumFrame& frame) {
+            emit frameReady(frame);
+            dsp_worker->noteSpectrumFrameConsumed();
+          });
   connect(dsp_worker, &LiveAudioDspWorker::decoderProduced, this,
           &ReplayController::acceptDecoderChannels);
   connect(dsp_worker, &LiveAudioDspWorker::manualDecoderSelected, this,
@@ -1125,10 +1148,43 @@ ReplayController::ReplayController(QObject* parent) : QObject(parent) {
           });
   connect(dsp_worker, &LiveAudioDspWorker::monitorAudioProduced, this,
           &ReplayController::writeMonitorAudio);
+  // Signal to signal, and deliberately DIRECT, unlike every other relay here.
+  //
+  // An automatic connection would be queued, because the worker lives on
+  // `audio_dsp_thread_`, and the record would be rebuilt on this thread before
+  // the application forwarded it. That routes the diagnostics stream through
+  // the GUI thread -- so a GUI thread blocked long enough to be worth
+  // reporting would also stop the stream that is supposed to report it,
+  // exactly when a remote reader most needs a record. Direct means this
+  // controller's signal is emitted on the worker's thread and the record never
+  // has to touch the GUI thread at all; the receiver decides where it runs
+  // (a separate change moves the diagnostics server off this thread, which is
+  // the other half of keeping the path clear of it).
+  //
+  // Safe as a pure relay: the slot side is another signal, the payload is a
+  // QJsonObject passed by const reference and copied on write, and nothing on
+  // this path reads or mutates controller state.
+  connect(dsp_worker, &LiveAudioDspWorker::diagnosticsRecordProduced, this,
+          &ReplayController::diagnosticsRecordProduced, Qt::DirectConnection);
   audio_capture_thread_.setObjectName(QStringLiteral("Live receiver capture"));
   audio_dsp_thread_.setObjectName(QStringLiteral("Live audio DSP"));
   audio_capture_thread_.start();
   audio_dsp_thread_.start();
+  // Started last, once the worker it reports to exists and is connected.
+  gui_heartbeat_clock_.start();
+  gui_heartbeat_timer_.start();
+}
+
+void ReplayController::publishGuiHeartbeat() {
+  // Elapsed since the previous delivery, less the interval that was asked
+  // for. On an event loop with room to breathe this is a fraction of a
+  // millisecond; it is the time the loop spent unable to reach this timer,
+  // which is the same time it spent unable to repaint.
+  const qint64 elapsed_ms = gui_heartbeat_clock_.restart();
+  const double lateness_ms = static_cast<double>(elapsed_ms) -
+                             static_cast<double>(
+                                 LiveAudioDspWorker::kGuiHeartbeatIntervalMs);
+  emit liveGuiHeartbeatRequested(lateness_ms > 0.0 ? lateness_ms : 0.0);
 }
 
 ReplayController::~ReplayController() {

@@ -51,6 +51,23 @@ class AppSettings final : public QObject {
       QStringList receiverInputTypeNames READ receiverInputTypeNames CONSTANT)
   Q_PROPERTY(int receiverInputTypeIndex READ receiverInputTypeIndex WRITE
                  setReceiverInputTypeIndex NOTIFY receiverInputTypeChanged)
+  // Which receiver source the operator was last working with: 0 sound-card
+  // audio, 1 recorded file, 2 SDR. The same numbering ReplayController's
+  // sourceMode uses, because this value is what is handed back to it.
+  //
+  // Persisted, so a restart comes back where the operator left off instead of
+  // landing in audio mode with a perfectly good receiver already saved.
+  // Deliberately separate from receiverInputTypeIndex above: that one says
+  // which input the settings page is configuring, has no file entry, and is
+  // forced back to audio whenever a saved SDR cannot be selected -- which is
+  // exactly the moment this value still has to remember what was wanted.
+  //
+  // It records intent only. Nothing here decides what the application starts:
+  // whether a saved receiver came back is answered by sdrSelectionRestored,
+  // and the fallback that follows from a missing one belongs to the
+  // application.
+  Q_PROPERTY(int preferredSourceMode READ preferredSourceMode WRITE
+                 setPreferredSourceMode NOTIFY settingsChanged)
   Q_PROPERTY(bool sdrBackendAvailable READ sdrBackendAvailable NOTIFY
                  sdrSettingsChanged)
   Q_PROPERTY(QString sdrBackendVersion READ sdrBackendVersion NOTIFY
@@ -370,6 +387,57 @@ class AppSettings final : public QObject {
   // entry carries name, host, port, source and note.
   Q_PROPERTY(QVariantList dxClusterServers READ dxClusterServers NOTIFY
                  dxClusterServersChanged)
+  // A line-delimited JSON stream of station diagnostics, offered on the
+  // network addresses the operator chooses so a station can be watched while
+  // it runs. Off unless asked for. See diagnostics/diagnostics_server.hpp for
+  // the contract; the stream is emit-only and never accepts input, which is
+  // the whole reason a process that holds transmit may offer it at all.
+  //
+  // What binding it to a routable address publishes is the station's
+  // internals -- frequencies, decoded callsigns, device identifiers,
+  // transcripts -- to anything that can reach that address. That is a
+  // deliberate act, so the enable below refuses any non-loopback address
+  // until a token worth having is set.
+  Q_PROPERTY(bool diagnosticsServerEnabled READ diagnosticsServerEnabled WRITE
+                 setDiagnosticsServerEnabled NOTIFY settingsChanged)
+  // Unprivileged ports only. Binding a privileged port would need this
+  // process to be started with privileges it has no other reason to hold, and
+  // a diagnostics stream is not a reason to acquire them.
+  Q_PROPERTY(int diagnosticsServerPort READ diagnosticsServerPort WRITE
+                 setDiagnosticsServerPort NOTIFY settingsChanged)
+  // The shared secret a client must present. Required for every address that
+  // is not loopback, and generateDiagnosticsToken() below exists so that an
+  // operator is not invited to type one themselves.
+  Q_PROPERTY(QString diagnosticsServerToken READ diagnosticsServerToken WRITE
+                 setDiagnosticsServerToken NOTIFY settingsChanged)
+  // Exactly the addresses to bind, chosen from
+  // diagnosticsServerAvailableAddresses rather than guessed at: only the
+  // operator knows which of their networks is the one they meant. An empty
+  // list binds nothing and needs no token; the listening indicator, not a
+  // refusal here, is what tells the operator that a service they switched on
+  // came up on no address.
+  Q_PROPERTY(QStringList diagnosticsServerAddresses READ
+                 diagnosticsServerAddresses WRITE setDiagnosticsServerAddresses
+                     NOTIFY settingsChanged)
+  // What this machine could bind, as maps carrying `address`,
+  // `interfaceName`, `loopback` and `description`.
+  //
+  // Empty until refreshNetworkAddresses() is called, and it stays as it was
+  // read until it is called again. Enumerating interfaces is a system call,
+  // and a QML binding reading this property would make one on every repaint,
+  // so the interface asks for the list when it opens the page rather than
+  // having it recomputed underneath a view.
+  Q_PROPERTY(QVariantList diagnosticsServerAvailableAddresses READ
+                 diagnosticsServerAvailableAddresses NOTIFY
+                     diagnosticsNetworkAddressesChanged)
+  // Whether the waterfall is produced at all. This is a resource setting, not
+  // a display preference: with it off no waterfall row is computed, no history
+  // is retained and no texture is uploaded, which is what makes a station left
+  // running as a diagnostics server cheap enough to leave running. Switching
+  // it off to tidy the window is not what it is for -- the spectrum display
+  // mode already does that without giving up the history.
+  Q_PROPERTY(bool waterfallRenderingEnabled READ waterfallRenderingEnabled
+                 WRITE setWaterfallRenderingEnabled NOTIFY settingsChanged)
   Q_PROPERTY(
       QString statusMessage READ statusMessage NOTIFY statusMessageChanged)
 
@@ -394,6 +462,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] const QString& audioOutputId() const noexcept;
   [[nodiscard]] QStringList receiverInputTypeNames() const;
   [[nodiscard]] int receiverInputTypeIndex() const noexcept;
+  [[nodiscard]] int preferredSourceMode() const noexcept;
   [[nodiscard]] bool sdrBackendAvailable() const noexcept;
   [[nodiscard]] const QString& sdrBackendVersion() const noexcept;
   [[nodiscard]] const QStringList& sdrModuleNames() const noexcept;
@@ -548,10 +617,18 @@ class AppSettings final : public QObject {
   [[nodiscard]] int dxClusterLoginSsid() const noexcept;
   [[nodiscard]] QString dxClusterLoginCallsign() const;
   [[nodiscard]] const QVariantList& dxClusterServers() const noexcept;
+  [[nodiscard]] bool diagnosticsServerEnabled() const noexcept;
+  [[nodiscard]] int diagnosticsServerPort() const noexcept;
+  [[nodiscard]] const QString& diagnosticsServerToken() const noexcept;
+  [[nodiscard]] const QStringList& diagnosticsServerAddresses() const noexcept;
+  [[nodiscard]] const QVariantList& diagnosticsServerAvailableAddresses()
+      const noexcept;
+  [[nodiscard]] bool waterfallRenderingEnabled() const noexcept;
   [[nodiscard]] const QString& statusMessage() const noexcept;
 
   void setFrequencyBackendIndex(int value);
   void setReceiverInputTypeIndex(int value);
+  void setPreferredSourceMode(int value);
   void setSdrCenterFrequencyHz(qulonglong value);
   void setSdrSampleRateHz(int value);
   void setSdrBandwidthHz(int value);
@@ -639,6 +716,11 @@ class AppSettings final : public QObject {
   void setDxClusterCustomHost(const QString& value);
   void setDxClusterCustomPort(int value);
   void setDxClusterLoginSsid(int value);
+  void setDiagnosticsServerEnabled(bool value);
+  void setDiagnosticsServerPort(int value);
+  void setDiagnosticsServerToken(const QString& value);
+  void setDiagnosticsServerAddresses(const QStringList& value);
+  void setWaterfallRenderingEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
   Q_INVOKABLE void resetToReferenceDefaults();
@@ -652,6 +734,19 @@ class AppSettings final : public QObject {
   // The interface shows a waiting state on it, which is only meaningful
   // because the scan no longer runs on the thread that draws.
   [[nodiscard]] bool sdrDiscoveryRunning() const noexcept;
+  // Asks for one enumeration at startup, so a saved receiver is selectable
+  // without the operator opening the settings page first. Called by the
+  // application once the interface exists; the constructor and load() still
+  // probe no hardware.
+  //
+  // Does nothing at all unless this profile actually saved a receiver, so a
+  // station that only ever used sound-card audio pays nothing for it.
+  //
+  // When there was something to look for, it answers exactly once with
+  // sdrSelectionRestored(found, savedDeviceName): after the enumeration has
+  // been applied, or -- in a build carrying no SDR backend to enumerate with
+  // -- as soon as the event loop runs, never inside this call.
+  Q_INVOKABLE void restoreSdrSelectionAtStartup();
   Q_INVOKABLE void setSdrDecoderWindow(qulonglong center_frequency_hz,
                                        int bandwidth_hz);
   Q_INVOKABLE bool requestSdrRxFrequencyHz(qulonglong frequency_hz);
@@ -691,6 +786,15 @@ class AppSettings final : public QObject {
   Q_INVOKABLE bool cycleControlledRxMode();
   Q_INVOKABLE bool toggleControlledTxMode();
   Q_INVOKABLE bool setControlledSplit(bool enabled);
+  // Re-reads the machine's network interfaces into
+  // diagnosticsServerAvailableAddresses. Called when the diagnostics page is
+  // opened or its refresh is pressed, never from a property read.
+  Q_INVOKABLE void refreshNetworkAddresses();
+  // A fresh token from the system entropy source, long enough to satisfy
+  // DiagnosticsServer::isAcceptableToken. Returned rather than stored, so the
+  // operator sees what they are about to save. It exists because a field that
+  // merely demands a token gets `password` typed into it.
+  Q_INVOKABLE QString generateDiagnosticsToken();
 
  signals:
   void settingsChanged();
@@ -700,6 +804,17 @@ class AppSettings final : public QObject {
   void receiverInputTypeChanged();
   void sdrSettingsChanged();
   void sdrDiscoveryRunningChanged();
+  // Whether the receiver saved in this profile came back. `found` is true
+  // when the saved variant id, or the same physical receiver under another
+  // operating mode, is present in the enumeration that
+  // restoreSdrSelectionAtStartup() asked for; `savedDeviceName` is the
+  // persisted sdr/deviceName, so a warning can name the receiver the operator
+  // recognises rather than an opaque driver id. Emitted once per requested
+  // restore, and only for a requested one.
+  //
+  // This reports; it does not act. Choosing another source because the
+  // receiver is missing is the application's decision, not this object's.
+  void sdrSelectionRestored(bool found, const QString& savedDeviceName);
   void statusMessageChanged();
   void setupCompleteChanged();
   void profileChanged();
@@ -717,6 +832,7 @@ class AppSettings final : public QObject {
   void localCallsignDatabaseConfigurationCommitted(
       bool enabled, const QString& database_path);
   void dxClusterServersChanged();
+  void diagnosticsNetworkAddressesChanged();
 
  private:
   void load();
@@ -726,6 +842,10 @@ class AppSettings final : public QObject {
   [[nodiscard]] static QString normalizeProfileKey(const QString& name);
   void refreshProfiles();
   void resetInMemorySettings();
+  // True when the chosen addresses reach past this machine and the token is
+  // not one worth having. The single place the enable guard is decided, so the
+  // setters, apply() and load() cannot come to disagree about what is allowed.
+  [[nodiscard]] bool diagnosticsServerExposureUnguarded() const;
   void refreshSelectedSdrCapabilities();
   void rebuildSdrDeviceModes(const QString& preferred_variant_id = {},
                              const QString& preferred_mode_id = {});
@@ -733,6 +853,10 @@ class AppSettings final : public QObject {
   // scan can run on a pooled thread while this stays on the thread that owns
   // the state it writes.
   void applySdrDiscoveryReport(const SdrDiscoveryReport& report);
+  // Delivers the one answer a requested startup restore is owed, naming the
+  // receiver in the status line when it did not come back. Does nothing
+  // unless a restore is outstanding, so every completion path may call it.
+  void answerSdrStartupRestore(bool found);
   void refreshControlledFrequency();
   void reconcilePendingRxFrequency();
   void rememberPendingRxFrequency(std::uint64_t frequency_hz);
@@ -769,6 +893,7 @@ class AppSettings final : public QObject {
   QString audio_output_id_;
   QString audio_output_name_;
   int receiver_input_type_index_{0};
+  int preferred_source_mode_{0};
   bool sdr_backend_available_{false};
   QString sdr_backend_version_;
   QStringList sdr_module_names_;
@@ -791,6 +916,15 @@ class AppSettings final : public QObject {
   QString sdr_device_mode_id_;
   QString sdr_device_id_;
   QString sdr_device_name_;
+  // Written only by restoreSdrSelectionAtStartup(), read only by the
+  // enumeration it asks for. The persisted name and a label for it are kept
+  // here because applying a discovery report overwrites sdr_device_name_ with
+  // whatever was found, and a warning about a receiver that did not come back
+  // still has to be able to name it.
+  bool sdr_startup_restore_pending_{false};
+  bool sdr_startup_restore_found_{false};
+  QString sdr_startup_restore_device_name_;
+  QString sdr_startup_restore_device_label_;
   QString sdr_diagnostic_{
       QStringLiteral("SDR discovery has not run. Open the SDR settings page or "
                      "press Refresh devices; live audio remains available.")};
@@ -935,6 +1069,30 @@ class AppSettings final : public QObject {
   // Read from data rather than compiled in, so a node that has moved can be
   // corrected without a new build. Loaded once; the file is not per profile.
   QVariantList dx_cluster_servers_;
+  // Off unless asked for. Nothing is bound, and no station internal is
+  // readable from anywhere, until the operator turns this on having read what
+  // it publishes.
+  bool diagnostics_server_enabled_{false};
+  // DiagnosticsServer::kDefaultPort. Repeated as a literal so this header need
+  // not include the server; a static_assert in the translation unit fails if
+  // the two ever disagree.
+  //
+  // Clear of the neighbourhoods a station already occupies: rigctld is 4532
+  // and rotctld 4533, and this application can itself be a rigctld client;
+  // cluster nodes sit on 23, 7300, 7373 and 8000, and reverse-beacon telnet
+  // on 7000 and 7001. Registered range deliberately, not ephemeral: a
+  // listener above 49152 can collide with the ports the operating system
+  // hands this same process for its own outgoing connections.
+  int diagnostics_server_port_{17'300};
+  QString diagnostics_server_token_;
+  // Loopback by default: the only default that is immediately useful and
+  // still unreachable from another machine.
+  QStringList diagnostics_server_addresses_{QStringLiteral("127.0.0.1")};
+  // Machine data rather than profile data, like the cluster server list above:
+  // read on demand and left alone when a profile is switched underneath it.
+  QVariantList diagnostics_server_available_addresses_;
+  // On by default, because the waterfall is why most operators opened this.
+  bool waterfall_rendering_enabled_{true};
   QString status_message_;
   void* omnirig_automation_{nullptr};
   bool com_initialized_{false};

@@ -8,6 +8,35 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Memory grew without bound until the application had to be killed. Spectrum
+  frames were handed to the thread that draws with no backpressure whatever. A
+  wide IQ transform is 8193 bins and each frame carries two float vectors of
+  them, so one queued frame is about 64 kB and thirty a second is two megabytes
+  a second; when that thread fell even slightly behind, the queue grew, and the
+  growth made it fall further behind. An operator watched memory climb from
+  244 MB to 668 MB -- a little over three minutes of precisely that -- and then
+  had to kill the application. At most two frames are now in flight and the
+  rest are dropped, because a display frame nobody drew is worth nothing: there
+  is no history to preserve in a frame that was superseded before it reached
+  the screen. Every emission goes through one bounded publisher so a new
+  emission site cannot reintroduce the fault.
+
+- Starting SDR reception decoded nothing until the operator nudged the decoder
+  window. The window is published before the first IQ block arrives, and the
+  guard that stops an audio source being disturbed by SDR settings recorded the
+  request without applying it -- after which every republication asked for the
+  same values and was skipped as unchanged. Requested and applied are now
+  distinct, and a pending window is applied on the first block of complex IQ.
+
+- Restarting lost the receiver. The chosen source was not persisted at all, so
+  every start landed in sound-card audio; and the saved SDR device, which was
+  persisted, could not be used because the Start control is gated on an index
+  into the discovered device list while discovery only ran if the operator
+  opened the SDR settings page. A saved receiver was present and unusable at
+  the same time. The source is persisted, discovery runs at startup when there
+  is a receiver to restore, and a receiver that has gone falls back to audio
+  with the missing one named.
+
 - The application stopped responding while several signals were decoding, with
   the processor largely idle. The decoded-channel model was published once per
   drained block, and the drain timer runs every five milliseconds over as many
@@ -489,6 +518,68 @@ All notable changes to CW Buddy are recorded here. The format follows
   the cost returns from 0.71 to 1.06 times real time.
 
 ### Added
+
+- The diagnostics stream authenticates each reader and can refuse peers
+  outright. **Allowed peers** takes addresses or subnets -- `192.168.1.50`,
+  `192.168.1.0/24`, `2001:db8::/32` -- or `any`; a peer's address is known from
+  the socket before a byte is exchanged, so one that is not permitted is closed
+  without a greeting and never learns what is behind the port. Left empty it
+  permits loopback only, and a rule that cannot be parsed permits nothing, so a
+  typo can never widen access. The access token is then read as one bounded
+  line and compared in constant time; a client presenting the wrong token, or
+  none, receives no record at all. IPv6 is carried throughout -- discovery lists
+  both families, either can be bound, scope identifiers and bracketed literals
+  are accepted, and an IPv4 client arriving on a dual-stack socket still matches
+  an IPv4 rule.
+
+- Diagnostics report how late the thread that draws is running. A hundred-
+  millisecond heartbeat measures its own lateness, so a blocked interface
+  becomes a number rather than an impression: `latenessMs`, `peakLatenessMs`,
+  `stallCount`, and `sinceLastHeartbeatMs`, which grows while that thread
+  cannot answer at all and so makes a stall readable while it is happening
+  rather than only afterwards.
+
+- A station can be watched while it runs. Settings gains a **Network** tab
+  offering the addresses this machine can bind, one checkbox each, with the
+  interface named and loopback marked; the chosen addresses carry a
+  line-delimited JSON stream of the same records the debug capture writes,
+  once a second, for as long as the service is enabled. An indicator sits
+  beside the transmit state for as long as it is listening, because a service
+  an operator has forgotten is running is the one that will surprise them.
+
+  **The stream only emits, and that is the whole safety argument.** This
+  process holds transmit, so a diagnostics channel that accepted input would
+  be a second and weaker way to reach a radio. Bytes arriving from a client
+  are discarded and never parsed; a peer that keeps sending is disconnected,
+  because it has mistaken the port for something that answers.
+
+  That decision has an honest cost, stated in the settings page rather than
+  buried: per-client authentication would require reading what a client sends,
+  so there is none. The access token gates which addresses may be bound -- a
+  routable address cannot be offered without one -- but anything that can reach
+  a bound address receives the stream. Real authentication belongs with the
+  planned remote-operation work, where TLS and per-client certificates are
+  designed for rather than bolted on. The service is off by default, bound to
+  loopback until told otherwise, and holds at most four observers, dropping one
+  that cannot keep up rather than growing this process until the station stops.
+
+- The waterfall can be switched off to save the resources a station running as
+  a diagnostics server does not need for it. Turning it off detaches the
+  display from the frame source rather than merely hiding it, so no row is
+  conditioned, appended or retained and the history already held is released.
+
+- Diagnostics record whether the application is keeping up, not only what the
+  decoder found. Model publications per second, blocks drained per second,
+  drains that hit their own block cap -- the honest sign that samples are
+  arriving faster than they are consumed -- and average and peak drain
+  durations. These exist because an operator reporting that the application had
+  stopped responding left no number anywhere to look at, and the cause was
+  invisible in diagnostics that described only the decoding.
+
+- Diagnostic output can be written to a file for a whole session with
+  `--log-file <path>` or by setting `CWA_LOG_FILE`. Every line is flushed as it
+  is written, because a log that loses its last buffer is silent about the one
+  moment worth reading. Off unless asked for.
 
 - The cluster login can carry a connection SSID, 0 to 99. An operator running
   more than one connection from one station is told apart on a node by it, so

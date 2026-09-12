@@ -226,14 +226,33 @@ void LiveAudioCaptureWorker::handleStateChanged() {
 
 LiveAudioDspWorker::LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
                                        QObject* parent)
-    : QObject(parent), pipe_(std::move(pipe)), timer_(this) {
+    : QObject(parent),
+      pipe_(std::move(pipe)),
+      timer_(this),
+      live_diagnostics_timer_(this) {
   timer_.setInterval(5);
   connect(&timer_, &QTimer::timeout, this, &LiveAudioDspWorker::drain);
+  // Its own timer rather than a check inside drain(): a stalled input is the
+  // single most useful thing this stream can report, and a record produced
+  // only when a block arrived would go silent exactly when it matters.
+  live_diagnostics_timer_.setInterval(kLiveDiagnosticsIntervalMs);
+  connect(&live_diagnostics_timer_, &QTimer::timeout, this,
+          &LiveAudioDspWorker::publishLiveDiagnosticsRecord);
 }
 
 void LiveAudioDspWorker::start() {
   processing_complex_iq_ = false;
   decoder_model_dirty_ = false;
+  drain_calls_ = 0;
+  drain_capped_ = 0;
+  blocks_drained_ = 0;
+  model_publishes_ = 0;
+  drain_micros_total_ = 0;
+  gui_lateness_ms_ = 0.0;
+  gui_stalls_ = 0;
+  gui_heartbeat_ns_ = 0;
+  capture_diagnostics_window_ = {};
+  live_diagnostics_window_ = {};
   model_publish_clock_.invalidate();
   diagnostics_publish_clock_.invalidate();
   analyzer_.reset();
@@ -241,6 +260,15 @@ void LiveAudioDspWorker::start() {
   sdr_decoder_channelizer_.reset();
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
+  // The channelizer has just been reset along with the analyzer, the pending
+  // buffer and the decoder, so whatever window was in force is no longer
+  // standing on any of the state it was applied with. Clearing the applied
+  // record is what guarantees the next session's first complex block puts the
+  // whole path into force together, rather than inheriting a half-torn-down
+  // one on the strength of a stale record.
+  sdr_decoder_window_applied_ = false;
+  applied_sdr_decoder_center_frequency_hz_ = 0.0;
+  applied_sdr_decoder_bandwidth_hz_ = 0.0;
   pending_manual_frequency_hz_.reset();
   decoder_.reset();
   character_frontends_.reset();
@@ -251,20 +279,43 @@ void LiveAudioDspWorker::start() {
   cwassistant::core::RealtimeSampleBlock stale;
   while (pipe_->blocks.try_pop(stale)) {
   }
+  live_clock_.start();
+  live_diagnostics_timer_.start();
   timer_.start();
 }
 
 void LiveAudioDspWorker::stop() {
   processing_complex_iq_ = false;
   decoder_model_dirty_ = false;
+  drain_calls_ = 0;
+  drain_capped_ = 0;
+  blocks_drained_ = 0;
+  model_publishes_ = 0;
+  drain_micros_total_ = 0;
+  gui_lateness_ms_ = 0.0;
+  gui_stalls_ = 0;
+  gui_heartbeat_ns_ = 0;
+  capture_diagnostics_window_ = {};
+  live_diagnostics_window_ = {};
   model_publish_clock_.invalidate();
   diagnostics_publish_clock_.invalidate();
+  live_diagnostics_timer_.stop();
+  live_clock_.invalidate();
   timer_.stop();
   analyzer_.reset();
   decoder_analyzer_.reset();
   sdr_decoder_channelizer_.reset();
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
+  // The channelizer has just been reset along with the analyzer, the pending
+  // buffer and the decoder, so whatever window was in force is no longer
+  // standing on any of the state it was applied with. Clearing the applied
+  // record is what guarantees the next session's first complex block puts the
+  // whole path into force together, rather than inheriting a half-torn-down
+  // one on the strength of a stale record.
+  sdr_decoder_window_applied_ = false;
+  applied_sdr_decoder_center_frequency_hz_ = 0.0;
+  applied_sdr_decoder_bandwidth_hz_ = 0.0;
   pending_manual_frequency_hz_.reset();
   decoder_.reset();
   character_frontends_.reset();
@@ -353,6 +404,26 @@ void LiveAudioDspWorker::setPresentationDiagnostics(
   presentation_diagnostics_ = diagnostics;
 }
 
+void LiveAudioDspWorker::acceptGuiHeartbeat(const double lateness_ms) {
+  const double lateness = std::max(0.0, lateness_ms);
+  gui_lateness_ms_ = lateness;
+  // The arrival time, on this worker's clock, so the record can report how
+  // long it has been since the GUI thread last checked in. A heartbeat is
+  // queued from the GUI thread, so a blocked GUI thread cannot deliver one --
+  // which makes the growing gap a live indicator rather than a stale one.
+  gui_heartbeat_ns_ =
+      live_clock_.isValid() ? static_cast<std::uint64_t>(live_clock_.nsecsElapsed())
+                            : 0;
+  if (lateness >= kGuiStallLatenessMs) ++gui_stalls_;
+  // Both windows, exactly as a slow drain is recorded in both: whichever
+  // reader publishes next must see this peak, and neither may consume it on
+  // the other's behalf.
+  capture_diagnostics_window_.gui_peak_lateness_ms = std::max(
+      capture_diagnostics_window_.gui_peak_lateness_ms, lateness);
+  live_diagnostics_window_.gui_peak_lateness_ms =
+      std::max(live_diagnostics_window_.gui_peak_lateness_ms, lateness);
+}
+
 void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
   // A SigMF recording is two files, so an operator told only "capture
   // stopped" cannot tell what was produced or whether it is worth keeping.
@@ -382,21 +453,53 @@ void LiveAudioDspWorker::finishDebugCapture(const QString& note) {
   capture_active_ = false;
   capture_writer_pending_ = false;
   capture_have_start_ = false;
+  // Cleared only after the elapsed time above has been read. The same record
+  // now goes out on the live stream between captures, and a stream record
+  // still reporting the track counts a finished capture inherited would read
+  // as a capture that is still running.
+  capture_existing_track_count_ = 0;
+  capture_existing_published_count_ = 0;
   emit debugCaptureStateChanged(false, capture_base_path_, elapsed_seconds,
                                 detail);
 }
 
 void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
+  // The capture file reads its own measurement window, so the rates it
+  // records are the same whether or not anyone is watching the live stream.
+  capture_diagnostics_log_
+      << QJsonDocument(
+             buildDiagnosticsRecord(
+                 capture_diagnostics_window_, capture_last_snapshot_ns_,
+                 static_cast<double>(capture_last_snapshot_ns_ -
+                                     capture_start_ns_) /
+                     1'000'000'000.0))
+             .toJson(QJsonDocument::Compact)
+             .toStdString()
+      << '\n';
+}
+
+void LiveAudioDspWorker::publishLiveDiagnosticsRecord() {
+  // The timer is only running while live reception is, but a stop() that
+  // arrives between a timeout and its delivery would leave the clock invalid.
+  if (!live_clock_.isValid()) return;
+  const auto now_ns = static_cast<std::uint64_t>(live_clock_.nsecsElapsed());
+  emit diagnosticsRecordProduced(buildDiagnosticsRecord(
+      live_diagnostics_window_, now_ns,
+      static_cast<double>(now_ns) / 1'000'000'000.0));
+}
+
+QJsonObject LiveAudioDspWorker::buildDiagnosticsRecord(
+    DiagnosticsWindow& window, const std::uint64_t now_ns,
+    const double elapsed_seconds) {
   QJsonObject root;
-  root.insert(
-      QStringLiteral("elapsedSeconds"),
-      static_cast<double>(capture_last_snapshot_ns_ - capture_start_ns_) /
-          1'000'000'000.0);
+  root.insert(QStringLiteral("elapsedSeconds"), elapsed_seconds);
 
   // A diagnostic capture deliberately does not reset the live decoder: doing
   // so would interrupt open sessions merely because the operator requested a
   // recording. Make that provenance explicit so inherited tracks/callsigns in
   // the first JSON snapshot are not mistaken for evidence found in audio.wav.
+  // Between captures these are zero, which is how a stream reader tells a
+  // record that accompanies a recording from one that does not.
   QJsonObject capture_context;
   capture_context.insert(QStringLiteral("startedWithExistingDecoderState"),
                          capture_existing_track_count_ != 0U);
@@ -424,6 +527,103 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
   // spectrum frame reached the detector at all, and whether the Morse
   // alphabet in force came from a file or from the copy inside the
   // application. Without them the only way to narrow it is to guess.
+  // Whether the application is keeping up, as opposed to what it found.
+  //
+  // Rates are measured between this reader's own successive records rather
+  // than over the whole session, so a stall shows as a change instead of
+  // being averaged away. The two that matter most:
+  // modelPublishesPerSecond, which reached the hundreds when the
+  // model was published once per drained block and buried the thread that
+  // draws; and drainsCappedPerSecond, which is non-zero only when blocks were
+  // still waiting after a drain gave up.
+  const double window_seconds =
+      window.opened_ns != 0 && now_ns > window.opened_ns
+          ? static_cast<double>(now_ns - window.opened_ns) / 1'000'000'000.0
+          : 0.0;
+  const auto per_second = [window_seconds](const std::uint64_t delta) {
+    return window_seconds > 0.0 ? static_cast<double>(delta) / window_seconds : 0.0;
+  };
+  QJsonObject throughput;
+  throughput.insert(QStringLiteral("windowSeconds"), window_seconds);
+  throughput.insert(QStringLiteral("drainsPerSecond"),
+                    per_second(drain_calls_ - window.drain_calls));
+  throughput.insert(QStringLiteral("blocksPerSecond"),
+                    per_second(blocks_drained_ - window.blocks));
+  throughput.insert(QStringLiteral("modelPublishesPerSecond"),
+                    per_second(model_publishes_ - window.publishes));
+  throughput.insert(QStringLiteral("drainsCappedPerSecond"),
+                    per_second(drain_capped_ - window.capped));
+  throughput.insert(
+      QStringLiteral("averageDrainMicroseconds"),
+      drain_calls_ > window.drain_calls
+          ? static_cast<double>(drain_micros_total_ - window.micros) /
+                static_cast<double>(drain_calls_ - window.drain_calls)
+          : 0.0);
+  throughput.insert(QStringLiteral("peakDrainMicroseconds"),
+                    static_cast<double>(window.peak_micros));
+  root.insert(QStringLiteral("throughput"), throughput);
+
+  // Whether the thread that DRAWS is keeping up, which nothing above measures.
+  //
+  // Everything in `throughput` describes this worker. The fault this stream
+  // was built for is the opposite one: an application that fatigues and a
+  // spectrum that turns snappy while the processor is mostly idle, which is a
+  // saturated GUI thread and leaves every decoder counter looking perfect. So
+  // the GUI thread runs a fixed-interval heartbeat and reports how late each
+  // fire was -- elapsed time since the previous fire, minus the interval it
+  // asked for. That remainder is precisely how long the thread could not get
+  // back to its event loop, which is how long it could not repaint either.
+  //
+  // Lateness rather than a frame rate, because lateness survives the stall it
+  // is measuring. If the GUI thread blocks for three seconds, it delivers no
+  // heartbeat for three seconds and the first one afterwards reports three
+  // seconds of lateness: the gap in the numbers and the spike that ends it are
+  // the same event seen twice. A frame-rate counter would merely have stopped,
+  // which is indistinguishable from an idle screen with nothing to draw.
+  //
+  // `sinceLastHeartbeatMs` is the half of that picture that is readable while
+  // the stall is still in progress -- it grows on this worker's clock for as
+  // long as the GUI thread stays blocked, and it is deliberately not folded
+  // into the peak, which reports only lateness the GUI thread actually
+  // measured and reported. A value near the interval is a healthy thread; a
+  // value in the seconds means the window is stuck right now.
+  QJsonObject gui;
+  gui.insert(QStringLiteral("heartbeatIntervalMs"),
+             static_cast<double>(kGuiHeartbeatIntervalMs));
+  gui.insert(QStringLiteral("latenessMs"), gui_lateness_ms_);
+  gui.insert(QStringLiteral("peakLatenessMs"), window.gui_peak_lateness_ms);
+  gui.insert(QStringLiteral("stallCount"),
+             static_cast<qint64>(gui_stalls_ - window.gui_stalls));
+  gui.insert(QStringLiteral("stallThresholdMs"), kGuiStallLatenessMs);
+  gui.insert(QStringLiteral("sinceLastHeartbeatMs"),
+             live_clock_.isValid()
+                 ? static_cast<double>(
+                       static_cast<std::uint64_t>(live_clock_.nsecsElapsed()) -
+                       gui_heartbeat_ns_) /
+                       1'000'000.0
+                 : 0.0);
+  root.insert(QStringLiteral("gui"), gui);
+
+  // Re-open this reader's window, and only this reader's. The other reader's
+  // baselines are untouched, so its next record still measures from the last
+  // time it was read rather than from whenever this one happened to run.
+  window.opened_ns = now_ns;
+  window.drain_calls = drain_calls_;
+  window.blocks = blocks_drained_;
+  window.publishes = model_publishes_;
+  window.capped = drain_capped_;
+  window.micros = drain_micros_total_;
+  window.gui_stalls = gui_stalls_;
+  // Peak is per window, so one slow drain does not mark every later record
+  // as slow.
+  window.peak_micros = 0;
+  // Same rule for the GUI peak: a maximum that is never cleared reports one
+  // early hitch forever, and a stream reader watching a recovered application
+  // would see it flagged as stalled for the rest of the session. Cleared here,
+  // in the reader's own window, so clearing it for the live stream cannot
+  // change what diagnostics.jsonl records for a capture nobody is watching.
+  window.gui_peak_lateness_ms = 0.0;
+
   const auto analyzer_config = analyzer_.config();
   QJsonObject detector;
   detector.insert(QStringLiteral("fftSize"),
@@ -687,10 +887,7 @@ void LiveAudioDspWorker::writeDebugCaptureSnapshot() {
     tracks.push_back(item);
   }
   root.insert(QStringLiteral("tracks"), tracks);
-
-  capture_diagnostics_log_
-      << QJsonDocument(root).toJson(QJsonDocument::Compact).toStdString()
-      << '\n';
+  return root;
 }
 
 void LiveAudioDspWorker::configure(
@@ -790,37 +987,29 @@ void LiveAudioDspWorker::setMonitor(const int mode,
   decoder_.setMonitorTracks(selected_mode, ids, reference_tone_hz);
 }
 
-void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
-                                             const double bandwidth_hz) {
-  // The window is republished on every receiver retune so the decoder follows
-  // the radio. Most of those republications ask for what is already in force,
-  // and tearing the signal path down for a value that did not change would
-  // interrupt decoding for nothing.
-  if (center_frequency_hz == sdr_decoder_center_frequency_hz_ &&
-      bandwidth_hz == sdr_decoder_bandwidth_hz_) {
-    return;
-  }
-  // Record it either way; acting on it is another matter. These settings are
-  // republished whenever anything on the SDR page changes, and that happens
-  // while an audio card is the running source -- the decoder window then has
-  // no bearing on what is being decoded, and resetting the shared decoder for
-  // it destroyed a working audio decode for a receiver that was not running.
-  // That is why switching to SDR and back left audio decoding nothing until
-  // the application was restarted.
-  if (!processing_complex_iq_) {
-    sdr_decoder_center_frequency_hz_ = center_frequency_hz;
-    sdr_decoder_bandwidth_hz_ = bandwidth_hz;
-    return;
-  }
+bool LiveAudioDspWorker::sdrDecoderWindowNeedsApply() const noexcept {
+  return !sdr_decoder_window_applied_ ||
+         applied_sdr_decoder_center_frequency_hz_ !=
+             sdr_decoder_center_frequency_hz_ ||
+         applied_sdr_decoder_bandwidth_hz_ != sdr_decoder_bandwidth_hz_;
+}
+
+void LiveAudioDspWorker::applySdrDecoderWindow() {
   const double output_rate_hz =
-      std::clamp(bandwidth_hz * 2.5, 48'000.0, 192'000.0);
+      std::clamp(sdr_decoder_bandwidth_hz_ * 2.5, 48'000.0, 192'000.0);
   if (!sdr_decoder_channelizer_.configure(
-          {.center_frequency_hz = center_frequency_hz,
-           .bandwidth_hz = bandwidth_hz,
-           .maximum_output_sample_rate_hz = output_rate_hz}))
+          {.center_frequency_hz = sdr_decoder_center_frequency_hz_,
+           .bandwidth_hz = sdr_decoder_bandwidth_hz_,
+           .maximum_output_sample_rate_hz = output_rate_hz})) {
+    // Left unapplied on purpose. A window the channelizer will not accept is
+    // not in force, and recording it as applied would be the same mistake this
+    // separation exists to prevent -- the next request, or the next block,
+    // must be free to try again.
     return;
-  sdr_decoder_center_frequency_hz_ = center_frequency_hz;
-  sdr_decoder_bandwidth_hz_ = bandwidth_hz;
+  }
+  sdr_decoder_window_applied_ = true;
+  applied_sdr_decoder_center_frequency_hz_ = sdr_decoder_center_frequency_hz_;
+  applied_sdr_decoder_bandwidth_hz_ = sdr_decoder_bandwidth_hz_;
   sdr_decoder_pending_ = {};
   sdr_decoder_pending_sequence_ = 0;
   decoder_analyzer_.reset();
@@ -832,6 +1021,65 @@ void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
   // the bank's own out-of-band rule and come back with the receiver.
   decoder_.noteInputDiscontinuity();
   character_frontends_.reset();
+}
+
+void LiveAudioDspWorker::noteSpectrumFrameConsumed() noexcept {
+  const int previous =
+      spectrum_frames_in_flight_.fetch_sub(1, std::memory_order_acq_rel);
+  // Never let it go negative. A frame consumed after a stop, or a stop that
+  // cleared the count while a frame was still queued, would otherwise leave a
+  // permanent credit that defeats the bound for the rest of the session.
+  if (previous <= 0) {
+    spectrum_frames_in_flight_.store(0, std::memory_order_release);
+  }
+}
+
+bool LiveAudioDspWorker::publishSpectrumFrame(SpectrumFrame&& frame) {
+  // Latest-wins. The display cannot show a frame that was superseded before it
+  // was drawn, so a frame refused here costs nothing but the backlog it would
+  // have added -- and that backlog is what took the application down.
+  if (spectrum_frames_in_flight_.load(std::memory_order_acquire) >=
+      kMaximumSpectrumFramesInFlight) {
+    ++dropped_spectrum_frames_;
+    return false;
+  }
+  spectrum_frames_in_flight_.fetch_add(1, std::memory_order_acq_rel);
+  emit frameProduced(frame);
+  return true;
+}
+
+void LiveAudioDspWorker::setSdrDecoderWindow(const double center_frequency_hz,
+                                             const double bandwidth_hz) {
+  // Always recorded, and never an early return on the requested values. These
+  // settings are republished whenever anything on the SDR page changes, and
+  // that happens while an audio card is the running source, so what is stored
+  // here is a request and nothing more.
+  //
+  // The previous version returned early when the request matched what was
+  // stored, which made the stored pair mean both "asked for" and "in force".
+  // At SDR start the window is published before the first IQ block arrives:
+  // the request was stored with nothing applied, every later republication
+  // asked for the same values and returned early, and the channelizer kept its
+  // defaults and refused every block. The overview spectrum paints before the
+  // channelizer is consulted, so the operator saw a live waterfall with the
+  // decoder window drawn on it and nothing decoding -- until a click moved the
+  // window, which changed the values and finally got past the early return.
+  sdr_decoder_center_frequency_hz_ = center_frequency_hz;
+  sdr_decoder_bandwidth_hz_ = bandwidth_hz;
+  // Acting on it is another matter, and both conditions are load-bearing.
+  //
+  // Not while an audio card is the source: the decoder window then has no
+  // bearing on what is being decoded, and resetting the shared decoder for it
+  // destroyed a working audio decode for a receiver that was not even running
+  // -- which is why switching to SDR and back left audio decoding nothing
+  // until the application was restarted. `drain()` applies it instead, on the
+  // first complex block, which is the moment it starts to mean something.
+  //
+  // Not when it is already applied: most republications ask for exactly what
+  // is in force, and tearing the signal path down for an unchanged value would
+  // interrupt a perfectly good decode for nothing.
+  if (!processing_complex_iq_ || !sdrDecoderWindowNeedsApply()) return;
+  applySdrDecoderWindow();
 }
 
 void LiveAudioDspWorker::acceptCharacterRefinement(
@@ -977,6 +1225,9 @@ void LiveAudioDspWorker::captureBlock(
 }
 
 void LiveAudioDspWorker::drain() {
+  QElapsedTimer drain_clock;
+  drain_clock.start();
+  ++drain_calls_;
   cwassistant::core::RealtimeSampleBlock block;
   int drained = 0;
   while (drained < 32 && pipe_->blocks.try_pop(block)) {
@@ -998,6 +1249,14 @@ void LiveAudioDspWorker::drain() {
     const cwassistant::core::RealtimeSampleBlock* processing_block = &block;
     std::vector<cwassistant::core::SpectrumSnapshot> decoder_snapshots;
     if (block.stream.kind == cwassistant::core::StreamKind::ComplexIq) {
+      // The arrival of a complex block is what makes a requested decoder
+      // window applicable, so this is where a window requested before there
+      // was any IQ to apply it to takes effect. Without it the first window of
+      // a session -- published by the controller at SDR start, before the
+      // receiver has delivered anything -- would stay a request forever, the
+      // channelizer would keep its defaults, and process() below would refuse
+      // every block while the overview spectrum painted normally.
+      if (sdrDecoderWindowNeedsApply()) applySdrDecoderWindow();
       const auto status =
           sdr_decoder_channelizer_.process(block, decoder_block);
       if (status != cwassistant::core::IqBlockStatus::Accepted &&
@@ -1015,14 +1274,14 @@ void LiveAudioDspWorker::drain() {
           std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
                     snapshot.instantaneous_bins_dbfs.cend(),
                     instantaneous_bins.begin());
-          emit frameProduced(SpectrumFrame{
+          static_cast<void>(publishSpectrumFrame(SpectrumFrame{
               .bins_dbfs = std::move(bins),
               .sequence = snapshot.sequence,
               .timestamp_ns = snapshot.timestamp_ns,
               .lower_frequency_hz = snapshot.lower_frequency_hz,
               .upper_frequency_hz = snapshot.upper_frequency_hz,
               .instantaneous_bins_dbfs = std::move(instantaneous_bins),
-          });
+          }));
         }
         continue;
       }
@@ -1080,14 +1339,14 @@ void LiveAudioDspWorker::drain() {
           std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
                     snapshot.instantaneous_bins_dbfs.cend(),
                     instantaneous_bins.begin());
-          emit frameProduced(SpectrumFrame{
+          static_cast<void>(publishSpectrumFrame(SpectrumFrame{
               .bins_dbfs = std::move(bins),
               .sequence = snapshot.sequence,
               .timestamp_ns = snapshot.timestamp_ns,
               .lower_frequency_hz = snapshot.lower_frequency_hz,
               .upper_frequency_hz = snapshot.upper_frequency_hz,
               .instantaneous_bins_dbfs = std::move(instantaneous_bins),
-          });
+          }));
         }
         continue;
       }
@@ -1146,7 +1405,10 @@ void LiveAudioDspWorker::drain() {
         emit manualDecoderSelected(static_cast<qulonglong>(channel_id));
       }
     }
-    const auto& decoder_channels = decoder_.processSamples(*processing_block);
+    // Called for its effect on the bank, not for its return: the model is
+    // published from the bank's own channels after the loop now, so binding
+    // the result here only earned an unused-variable warning.
+    static_cast<void>(decoder_.processSamples(*processing_block));
     const auto& raw_monitor_audio = decoder_.monitorAudio();
     if (!raw_monitor_audio.empty() &&
         processing_block->stream.kind ==
@@ -1205,14 +1467,14 @@ void LiveAudioDspWorker::drain() {
       std::copy(snapshot.instantaneous_bins_dbfs.cbegin(),
                 snapshot.instantaneous_bins_dbfs.cend(),
                 instantaneous_bins.begin());
-      emit frameProduced(SpectrumFrame{
+      static_cast<void>(publishSpectrumFrame(SpectrumFrame{
           .bins_dbfs = std::move(bins),
           .sequence = snapshot.sequence,
           .timestamp_ns = snapshot.timestamp_ns,
           .lower_frequency_hz = snapshot.lower_frequency_hz,
           .upper_frequency_hz = snapshot.upper_frequency_hz,
           .instantaneous_bins_dbfs = std::move(instantaneous_bins),
-      });
+      }));
     }
     if (block.stream.kind != cwassistant::core::StreamKind::ComplexIq ||
         !decoder_snapshots.empty())
@@ -1228,6 +1490,7 @@ void LiveAudioDspWorker::drain() {
        model_publish_clock_.elapsed() >= kModelPublishIntervalMs)) {
     model_publish_clock_.restart();
     decoder_model_dirty_ = false;
+    ++model_publishes_;
     emit decoderProduced(decoderChannelModel(decoder_.channels()));
   }
   if (drained > 0 &&
@@ -1237,6 +1500,22 @@ void LiveAudioDspWorker::drain() {
     emit diagnosticsProduced(
         verificationDiagnosticsModel(decoder_.verificationDiagnostics()));
   }
+  blocks_drained_ += static_cast<std::uint64_t>(drained);
+  // Hitting the cap means blocks were still waiting when the drain gave up,
+  // which is the one honest sign that samples are arriving faster than they
+  // are being consumed.
+  if (drained >= 32) ++drain_capped_;
+  const auto elapsed_us =
+      static_cast<std::uint64_t>(std::max<qint64>(0, drain_clock.nsecsElapsed() / 1'000));
+  drain_micros_total_ += elapsed_us;
+  // Each reader keeps its own maximum. A peak is not a difference of totals,
+  // so it cannot be recovered from a shared counter once the other reader has
+  // cleared it -- and a capture whose worst drain had been consumed by a
+  // stream record would under-report exactly the number it exists to show.
+  capture_diagnostics_window_.peak_micros =
+      std::max(capture_diagnostics_window_.peak_micros, elapsed_us);
+  live_diagnostics_window_.peak_micros =
+      std::max(live_diagnostics_window_.peak_micros, elapsed_us);
 }
 
 }  // namespace cwassistant::desktop

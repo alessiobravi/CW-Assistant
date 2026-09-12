@@ -1,4 +1,10 @@
+#include <QDateTime>
+#include <QMutex>
+#include <QTextStream>
 #include <QGuiApplication>
+#include <QJsonObject>
+
+#include <cstring>
 #include <QCoreApplication>
 #include <QIcon>
 #include <QCommandLineParser>
@@ -28,6 +34,7 @@
 #include "replay/replay_controller.hpp"
 #include "sdr/sdr_receiver.hpp"
 #include "sdr/sdr_runtime_environment.hpp"
+#include "diagnostics/diagnostics_server.hpp"
 #include "settings/app_settings.hpp"
 #include "settings/product_migration.hpp"
 #include "transmit/transmit_controller.hpp"
@@ -184,9 +191,54 @@ std::size_t loadCwDictionaries(const QString& app_data_path) {
   return vocabulary.exchangeWordCount();
 }
 
+// Writes Qt's own diagnostic output to a file for the life of the session.
+//
+// Nothing was recorded outside a debug capture, so an operator seeing the
+// application misbehave had nothing to send but a description, and a fault
+// that did not reproduce here could not be narrowed at all. Opt-in, because a
+// log nobody asked for is a file that grows on somebody's machine forever:
+// pass --log-file <path>, or set CWA_LOG_FILE.
+QFile* g_log_file = nullptr;
+QMutex g_log_mutex;
+
+void writeLogMessage(const QtMsgType type, const QMessageLogContext& context,
+                     const QString& message) {
+  static const char* const kLevels[] = {"debug", "warning", "critical",
+                                        "fatal", "info"};
+  const QMutexLocker locker(&g_log_mutex);
+  if (g_log_file == nullptr) return;
+  QTextStream stream(g_log_file);
+  stream << QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs) << ' '
+         << kLevels[static_cast<int>(type) < 5 ? static_cast<int>(type) : 0]
+         << ' ' << (context.category != nullptr ? context.category : "default")
+         << ": " << message << '\n';
+  // Flushed every line on purpose. A log that loses its last buffer is silent
+  // about exactly the moment worth reading: the one before a crash or a hang.
+  stream.flush();
+}
+
+[[nodiscard]] QString requested_log_file_path(const int argc, char** argv) {
+  for (int index = 1; index < argc; ++index) {
+    if (std::strcmp(argv[index], "--log-file") == 0 && index + 1 < argc)
+      return QString::fromLocal8Bit(argv[index + 1]);
+  }
+  return qEnvironmentVariable("CWA_LOG_FILE");
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  if (const QString log_path = requested_log_file_path(argc, argv);
+      !log_path.isEmpty()) {
+    auto* file = new QFile(log_path);
+    if (file->open(QIODevice::WriteOnly | QIODevice::Append |
+                   QIODevice::Text)) {
+      g_log_file = file;
+      qInstallMessageHandler(writeLogMessage);
+    } else {
+      delete file;
+    }
+  }
   if (sdr_backend_smoke_requested(argc, argv)) {
     QCoreApplication application(argc, argv);
     cwassistant::desktop::configureBundledSoapyRuntime(
@@ -393,6 +445,42 @@ int main(int argc, char* argv[]) {
   apply_decoded_signal_timeout();
   apply_weak_signal_decoding();
   apply_dx_cluster();
+
+  // Come back where the operator left off.
+  //
+  // The receiver source was not persisted at all, so every restart landed in
+  // sound-card audio; and the saved SDR device, which was persisted, could not
+  // be used because the Start control is gated on an index into the discovered
+  // device list and discovery only ran when the operator opened the SDR
+  // settings tab. A saved receiver was therefore present and unusable at the
+  // same time, which is what "I am not able to start SDR RX after a restart"
+  // was.
+  replay_controller.setSourceMode(settings.preferredSourceMode());
+  QObject::connect(&replay_controller,
+                   &cwassistant::desktop::ReplayController::stateChanged,
+                   &settings, [&settings, &replay_controller] {
+                     settings.setPreferredSourceMode(
+                         replay_controller.sourceMode());
+                   });
+  // The fallback. Settings reports whether the saved receiver came back; what
+  // to do about it is the application's decision, and a settings object that
+  // silently changed the operator's source would be the wrong place for it.
+  QObject::connect(
+      &settings, &cwassistant::desktop::AppSettings::sdrSelectionRestored,
+      &replay_controller,
+      [&replay_controller](const bool found, const QString& saved_name) {
+        if (found || replay_controller.sourceMode() != 2) return;
+        // Sound-card audio and file replay are both still available, so
+        // sitting in a source that cannot start would strand the operator in
+        // the one mode that does nothing. The status line already names the
+        // receiver that is missing.
+        static_cast<void>(saved_name);
+        replay_controller.setSourceMode(0);
+      });
+  // Discovery runs off the drawing thread and returns immediately when no
+  // receiver was ever saved, so a station that has never used an SDR pays
+  // nothing for this.
+  settings.restoreSdrSelectionAtStartup();
   apply_local_character_decoder();
   apply_callsign_database_correction();
   apply_keying_model();
@@ -537,6 +625,51 @@ int main(int argc, char* argv[]) {
       &settings,
       &cwassistant::desktop::AppSettings::localDecoderConfigurationCommitted,
       &replay_controller, apply_local_character_decoder);
+  // The live diagnostics stream. Owned here rather than by the controller,
+  // which relays records without knowing where they go: the controller has no
+  // business holding network addresses, and the server has none decoding.
+  cwassistant::desktop::DiagnosticsServer diagnostics_server;
+  // configure() rebinds unconditionally on purpose, so that re-applying the
+  // same settings is how an operator retries after fixing the network under
+  // it. That makes it the wrong thing to call on every settingsChanged, which
+  // fires for anything an operator edits anywhere: each unrelated change would
+  // drop every connected observer and rebuild the sockets. Only a change to
+  // what the service is actually bound to reaches it.
+  QStringList applied_diagnostics_addresses;
+  int applied_diagnostics_port = -1;
+  QString applied_diagnostics_token;
+  const auto apply_diagnostics_server =
+      [&settings, &diagnostics_server, &applied_diagnostics_addresses,
+       &applied_diagnostics_port, &applied_diagnostics_token] {
+        const QStringList addresses = settings.diagnosticsServerAddresses();
+        const int port = settings.diagnosticsServerPort();
+        const QString token = settings.diagnosticsServerToken();
+        if (addresses != applied_diagnostics_addresses ||
+            port != applied_diagnostics_port ||
+            token != applied_diagnostics_token) {
+          applied_diagnostics_addresses = addresses;
+          applied_diagnostics_port = port;
+          applied_diagnostics_token = token;
+          diagnostics_server.configure(
+              addresses, static_cast<std::uint16_t>(port), token);
+        }
+        diagnostics_server.setEnabled(settings.diagnosticsServerEnabled());
+      };
+  QObject::connect(&settings,
+                   &cwassistant::desktop::AppSettings::settingsChanged,
+                   &diagnostics_server, apply_diagnostics_server);
+  // One record in, one record out. Nothing on this path can reach the radio,
+  // and nothing arriving on the socket reaches this path at all -- the stream
+  // never reads from a client.
+  QObject::connect(
+      &replay_controller,
+      &cwassistant::desktop::ReplayController::diagnosticsRecordProduced,
+      &diagnostics_server,
+      [&diagnostics_server](const QJsonObject& record) {
+        diagnostics_server.publish(record);
+      });
+  apply_diagnostics_server();
+
   qmlRegisterType<cwassistant::desktop::SpectrumWaterfallItem>(
       "CWBuddy", 1, 0, "SpectrumWaterfall");
   QQmlApplicationEngine engine;
@@ -550,6 +683,8 @@ int main(int argc, char* argv[]) {
       QStringLiteral("callsignDatabaseUpdater"), &callsign_database_updater);
   engine.rootContext()->setContextProperty(QStringLiteral("transmitController"),
                                            &transmit_controller);
+  engine.rootContext()->setContextProperty(QStringLiteral("diagnosticsServer"),
+                                           &diagnostics_server);
   if (!parser.isSet(smoke_test_option) && update_checker.autoCheckEnabled()) {
     // A short delay so the background check never competes with startup
     // rendering/audio work; never runs during the smoke test, which must

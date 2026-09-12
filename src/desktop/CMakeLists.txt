@@ -54,6 +54,8 @@ qt_add_executable(cw-buddy-desktop
   dxcluster/dx_cluster_servers.hpp
   dxcluster/dx_cluster_client.cpp
   dxcluster/dx_cluster_client.hpp
+  diagnostics/diagnostics_server.cpp
+  diagnostics/diagnostics_server.hpp
   radio/hamlib_rigctld_client.cpp
   radio/hamlib_rigctld_client.hpp
   transmit/transmit_controller.cpp
@@ -322,6 +324,8 @@ if(CWA_BUILD_TESTS)
     dxcluster/dx_cluster_servers.hpp
     dxcluster/dx_cluster_client.cpp
     dxcluster/dx_cluster_client.hpp
+    diagnostics/diagnostics_server.cpp
+    diagnostics/diagnostics_server.hpp
     replay/replay_controller.cpp
     replay/replay_controller.hpp
     replay/live_audio_worker.cpp
@@ -405,6 +409,19 @@ if(CWA_BUILD_TESTS)
     CWA_DX_CLUSTER_SERVERS_TXT_PATH="${PROJECT_SOURCE_DIR}/dictionaries/dx-cluster-servers.txt")
   add_test(NAME cwa_dx_cluster_servers_test COMMAND cwa_dx_cluster_servers_test)
   set_tests_properties(cwa_dx_cluster_servers_test PROPERTIES TIMEOUT 15)
+
+  qt_add_executable(cwa_diagnostics_server_test
+    ${PROJECT_SOURCE_DIR}/tests/desktop/diagnostics_server_test.cpp
+    diagnostics/diagnostics_server.cpp
+    diagnostics/diagnostics_server.hpp)
+  # Binds only loopback and an unassignable TEST-NET-3 address, so running the
+  # suite never puts an interface of the build machine on a socket.
+  target_link_libraries(cwa_diagnostics_server_test PRIVATE
+    Qt6::Core Qt6::Network)
+  target_include_directories(cwa_diagnostics_server_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR})
+  add_test(NAME cwa_diagnostics_server_test COMMAND cwa_diagnostics_server_test)
+  set_tests_properties(cwa_diagnostics_server_test PROPERTIES TIMEOUT 60)
 
   qt_add_executable(cwa_update_checker_test
     ${PROJECT_SOURCE_DIR}/tests/desktop/update_checker_test.cpp

@@ -437,6 +437,39 @@ times the decoder was restarted, and whether the Morse alphabet came from your
 file or the application's own copy. If you report that nothing is decoding,
 that capture usually answers why without further questions.
 
+Each snapshot also records whether the application is keeping up, which is a
+different question from what it found. `modelPublishesPerSecond` counts how
+often the decoded-channel model is handed to the part of the program that
+draws; `drainsCappedPerSecond` is non-zero only when samples were still waiting
+after a drain gave up, which is the honest sign that they are arriving faster
+than they are consumed; and the drain durations say how long the signal work
+itself is taking. These exist because an application that had stopped
+responding while several signals decoded left no number anywhere to look at,
+and the cause was invisible in diagnostics that described only the decoding.
+
+### Watching a session as it runs
+
+The snapshots are appended to `diagnostics.jsonl` about once a second while a
+capture records, so the file can be followed live rather than read afterwards.
+On Windows:
+
+```powershell
+Get-Content "$env:APPDATA\CW Buddy\diagnostics\cwa-debug-capture-*\diagnostics.jsonl" -Wait -Tail 1
+```
+
+For anything outside a capture, start the application with `--log-file <path>`,
+or set `CWA_LOG_FILE`, and its diagnostic output is appended there for the life
+of the session. Every line is flushed as it is written, because a log that
+loses its last buffer is silent about the one moment worth reading. It is
+off unless asked for: a log nobody requested is a file that grows on your
+machine forever.
+
+One caution when reading a stall in the operating system's task manager: a
+total that looks modest can still mean one thread is saturated while the rest
+idle, which is what an unresponsive window usually is. A per-thread view --
+Process Explorer on Windows shows one -- distinguishes the two immediately, and
+a task manager cannot.
+
 ### Recording receiver IQ for later analysis
 
 The **Debug capture** button records a direct SDR source as interoperable IQ.

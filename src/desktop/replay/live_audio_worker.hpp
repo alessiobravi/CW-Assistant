@@ -3,6 +3,7 @@
 #include <QAudioFormat>
 #include <QByteArray>
 #include <QElapsedTimer>
+#include <QJsonObject>
 #include <QObject>
 #include <QString>
 #include <QTimer>
@@ -83,6 +84,32 @@ class LiveAudioDspWorker final : public QObject {
   explicit LiveAudioDspWorker(std::shared_ptr<LiveAudioPipe> pipe,
                               QObject* parent = nullptr);
 
+  // The heartbeat contract, kept here because the record has to state it: a
+  // lateness figure means nothing without the interval it was measured against,
+  // and a stall count means nothing without the bar it counted over. The
+  // controller owns the timer and reads both from here, so the numbers in the
+  // record can never describe a cadence the GUI thread is not actually using.
+  //
+  // 100 ms is short enough that an operator-visible hitch cannot hide between
+  // two fires, and 250 ms of lateness is about where a dropped repaint stops
+  // looking like jitter and starts looking like the window is stuck.
+  // How many spectrum frames may be in flight to the display at once.
+  //
+  // Frames were emitted with no backpressure whatever. A wide IQ transform is
+  // 8193 bins, and each frame carries two float vectors of them, so one queued
+  // frame is about 64 kB and thirty a second is two megabytes a second. If the
+  // thread that draws falls even slightly behind, that queue grows without
+  // bound -- and the growth makes it fall further behind, which is why an
+  // operator saw memory climb from 244 MB to 668 MB and then had to kill the
+  // application. 424 MB is a little over three minutes of exactly this.
+  //
+  // Two, because a display frame nobody drew is worth nothing: there is no
+  // history to preserve in a frame that was superseded before it reached the
+  // screen. Dropping it is the correct answer, not a compromise.
+  static constexpr int kMaximumSpectrumFramesInFlight = 2;
+  static constexpr int kGuiHeartbeatIntervalMs = 100;
+  static constexpr double kGuiStallLatenessMs = 250.0;
+
  public slots:
   void start();
   void stop();
@@ -105,6 +132,9 @@ class LiveAudioDspWorker final : public QObject {
   void setMonitor(int mode, const QVariantList& channel_ids,
                   double reference_tone_hz);
   void setSdrDecoderWindow(double center_frequency_hz, double bandwidth_hz);
+  // Called by the thread that draws, once it has taken a frame off the queue,
+  // so this worker knows whether the display is keeping up.
+  void noteSpectrumFrameConsumed() noexcept;
   void acceptCharacterRefinement(qulonglong channel_id,
                                  const QString& stable_text,
                                  qulonglong evidence_timestamp_ns);
@@ -128,6 +158,28 @@ class LiveAudioDspWorker final : public QObject {
                             const QString& antenna, bool automatic_gain,
                             double gain_db);
   void setPresentationDiagnostics(const QVariantMap& diagnostics);
+  // One tick of the GUI thread's heartbeat, carrying how late that tick was:
+  // the elapsed time since the previous tick minus the interval that was
+  // requested. Measured on the GUI thread, because only a timer running there
+  // can observe that thread being blocked; reported here, because this worker
+  // is what builds the record.
+  //
+  // Every counter this worker keeps measures this worker. A saturated GUI
+  // thread -- the fault this stream exists to diagnose, reported as an
+  // application that fatigues and a spectrum that turns snappy while the
+  // processor sits idle -- leaves all of them healthy, because the decoder
+  // genuinely is. Lateness is the one number that moves when the thread that
+  // draws cannot get back to its event loop.
+  //
+  // Lateness rather than a frame rate: a frame rate needs a renderer to
+  // cooperate and tells you only that frames stopped, while lateness is
+  // measured by the blocked thread itself and its magnitude *is* the length of
+  // the block. If the GUI thread seizes for three seconds, no heartbeat can be
+  // delivered during it and the first one afterwards reports three seconds of
+  // lateness -- the silence and the spike together are the diagnosis, and
+  // sinceLastHeartbeatMs in the record makes the silence itself visible while
+  // it is still happening.
+  void acceptGuiHeartbeat(double lateness_ms);
   // Operator-started, bounded diagnostic capture (OBS-003): records the raw
   // audio feeding the decoder plus periodic per-track private diagnostic
   // snapshots to help debug why a visible signal is not decoding. Never
@@ -147,16 +199,89 @@ class LiveAudioDspWorker final : public QObject {
       cwassistant::desktop::CwCharacterFeatureWindowPtr window);
   void monitorAudioProduced(const QByteArray& float_mono_audio,
                             double sample_rate_hz);
+  // The same diagnostics record the debug capture writes to disk, offered as
+  // it is produced so a running station can be watched instead of recorded,
+  // stopped and sent. Emitted on its own slow timer for the whole time live
+  // reception is running, whether or not a capture is recording.
+  void diagnosticsRecordProduced(const QJsonObject& record);
 
  private slots:
   void drain();
+  void publishLiveDiagnosticsRecord();
 
  private:
+  // The one place a spectrum frame reaches the display, so the in-flight bound
+  // cannot be bypassed by a new emit site. Not a slot: it takes an rvalue, and
+  // it is this class's own discipline rather than anything a caller invokes.
+  // Returns false when the frame was dropped because the display has not kept
+  // up.
+  [[nodiscard]] bool publishSpectrumFrame(SpectrumFrame&& frame);
   void captureBlock(const cwassistant::core::RealtimeSampleBlock& block);
   [[nodiscard]] bool openIqCapture(
       const cwassistant::core::RealtimeSampleBlock& block);
+  // One throughput measurement window: the counter values at the moment the
+  // rates were last read, and the slowest drain seen since.
+  //
+  // Two of these exist -- one for the debug capture file, one for the live
+  // stream -- because a rate is only meaningful against the moment it was
+  // last read. A live snapshot that advanced the capture's baseline would
+  // leave the rates in diagnostics.jsonl measured over a window nobody chose,
+  // so a capture's numbers would change depending on whether anyone happened
+  // to be watching the stream. A diagnostic that reads differently because it
+  // is being observed is worse than no diagnostic.
+  //
+  // The peak needs its own copy per window rather than a shared counter: a
+  // maximum is not a difference of totals, so once one reader clears it the
+  // other cannot recover it.
+  //
+  // `opened_ns` is in whichever clock its reader uses -- the sample clock for
+  // the capture (block timestamps), this worker's monotonic clock for the
+  // stream. The two are never compared with each other.
+  struct DiagnosticsWindow {
+    std::uint64_t opened_ns{0};
+    std::uint64_t drain_calls{0};
+    std::uint64_t blocks{0};
+    std::uint64_t publishes{0};
+    std::uint64_t capped{0};
+    std::uint64_t micros{0};
+    std::uint64_t peak_micros{0};
+    // The GUI heartbeat's numbers are scoped exactly like the drain's, and for
+    // the same reason: the stall count is a baseline to subtract, while the
+    // peak is a maximum and therefore needs its own copy per window. Sharing
+    // one peak would let whichever reader ran first clear the worst lateness
+    // before the other ever saw it.
+    std::uint64_t gui_stalls{0};
+    double gui_peak_lateness_ms{0.0};
+  };
+
+  // Builds the diagnostics record, and nothing else: the capture path writes
+  // what this returns to diagnostics.jsonl and the live timer publishes it.
+  // `window` is the caller's own measurement window, read and then re-opened
+  // at `now_ns`; `elapsed_seconds` is what the record means by elapsed --
+  // time since the capture began for a capture snapshot, time since live
+  // reception started for a stream record, because a stream record stamped
+  // with a finished capture's elapsed time would be a lie.
+  [[nodiscard]] QJsonObject buildDiagnosticsRecord(DiagnosticsWindow& window,
+                                                   std::uint64_t now_ns,
+                                                   double elapsed_seconds);
   void writeDebugCaptureSnapshot();
   void finishDebugCapture(const QString& note);
+  // Puts the requested decoder window into force: configures the channelizer
+  // and restarts everything downstream of it that the old slice had state in.
+  //
+  // Split out from setSdrDecoderWindow because a request and an applied
+  // configuration are not the same thing, and conflating them is what left a
+  // freshly started SDR drawing its decoder window over a spectrum that
+  // decoded nothing. The window is published before the first IQ block
+  // arrives, so at that moment there is no complex stream to configure for;
+  // the request has to be remembered and then applied by the block that makes
+  // it meaningful. Only `drain()` and `setSdrDecoderWindow` call this, and only
+  // while complex IQ is arriving.
+  void applySdrDecoderWindow();
+  // Whether the requested window still differs from what the channelizer was
+  // last configured with. False once applied, so an unchanged republication
+  // cannot tear down a working decode.
+  [[nodiscard]] bool sdrDecoderWindowNeedsApply() const noexcept;
 
   std::shared_ptr<LiveAudioPipe> pipe_;
   QTimer timer_;
@@ -185,14 +310,70 @@ class LiveAudioDspWorker final : public QObject {
   // stopped responding while the processor sat largely idle, because the work
   // was all on one thread. The model is a snapshot: publishing the latest one
   // at a rate an operator can actually see loses nothing.
+  // Throughput counters, published with every capture snapshot.
+  //
+  // The existing diagnostics describe what the decoder FOUND. They say nothing
+  // about whether the application is keeping up, so an operator reporting that
+  // it had stopped responding while several signals decoded left no number to
+  // look at -- and the cause, the decoded-channel model being published once
+  // per drained block on a five-millisecond timer, was invisible in them. A
+  // drain that repeatedly hits its own block cap is the signal that samples
+  // are arriving faster than they are being consumed.
+  std::uint64_t drain_calls_{0};
+  std::uint64_t drain_capped_{0};
+  std::uint64_t blocks_drained_{0};
+  std::uint64_t model_publishes_{0};
+  std::uint64_t drain_micros_total_{0};
+  // The GUI thread's lateness, as last reported by its heartbeat, plus the
+  // running total of heartbeats that exceeded kGuiStallLatenessMs. Cumulative
+  // like the drain counters, so each reader subtracts its own baseline.
+  //
+  // `gui_heartbeat_ns_` is on this worker's monotonic clock (`live_clock_`) and
+  // is when the last heartbeat *arrived here*, not when it was measured. Zero
+  // means none has arrived since live reception started, which is why the
+  // record reports the gap against that clock: with no heartbeat ever seen the
+  // gap is the whole session, which is what a GUI thread blocked from the
+  // outset would actually look like.
+  double gui_lateness_ms_{0.0};
+  std::uint64_t gui_stalls_{0};
+  std::uint64_t gui_heartbeat_ns_{0};
+  DiagnosticsWindow capture_diagnostics_window_;
+  DiagnosticsWindow live_diagnostics_window_;
   static constexpr qint64 kModelPublishIntervalMs = 40;
   static constexpr qint64 kDiagnosticsPublishIntervalMs = 500;
+  // Once a second, because the diagnostics record is for a human reading a
+  // stream. Deliberately not driven from drain(): that timer runs every five
+  // milliseconds, and publishing a deep-copied model on it is precisely the
+  // fault that buried the thread that draws.
+  static constexpr int kLiveDiagnosticsIntervalMs = 1'000;
+  QTimer live_diagnostics_timer_;
+  // Stamps the live records, and measures their window. Runs for exactly as
+  // long as live reception does, so an idle worker publishes nothing.
+  QElapsedTimer live_clock_;
   QElapsedTimer model_publish_clock_;
   QElapsedTimer diagnostics_publish_clock_;
   bool decoder_model_dirty_{false};
+  // Written by this worker's thread and by the thread that draws, so it is
+  // atomic rather than guarded: the only operations are an increment, a
+  // decrement and a bounds test.
+  std::atomic<int> spectrum_frames_in_flight_{0};
+  std::uint64_t dropped_spectrum_frames_{0};
   bool processing_complex_iq_{false};
+  // The window the operator has asked for. Recorded unconditionally, whatever
+  // is currently running: these settings are republished whenever anything on
+  // the SDR page changes, including while an audio card is the source.
   double sdr_decoder_center_frequency_hz_{14'050'000.0};
   double sdr_decoder_bandwidth_hz_{24'000.0};
+  // The window the channelizer is actually configured with, which is a
+  // different fact. It is only ever written by applySdrDecoderWindow(), and
+  // `sdr_decoder_window_applied_` starts false because at that point the
+  // channelizer holds its own defaults and not these values -- comparing
+  // against the requested pair alone would claim a window was in force that
+  // the channelizer had never been told about, which is exactly how a started
+  // SDR ended up refusing every block.
+  bool sdr_decoder_window_applied_{false};
+  double applied_sdr_decoder_center_frequency_hz_{0.0};
+  double applied_sdr_decoder_bandwidth_hz_{0.0};
   std::optional<double> pending_manual_frequency_hz_;
   cwassistant::core::CwChannelBank decoder_;
   LocalCharacterFrontendBank character_frontends_;

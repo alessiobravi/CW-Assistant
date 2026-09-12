@@ -4,6 +4,8 @@
 #include <QObject>
 #include <cstdint>
 #include <QByteArray>
+#include <QElapsedTimer>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QThread>
@@ -411,10 +413,19 @@ class ReplayController final : public QObject {
                                       const QString& antenna,
                                       bool automatic_gain, double gain_db);
   void debugCaptureChanged();
+  // Relayed straight out of the live DSP worker. The controller is a wire
+  // here and nothing more: it does not own the diagnostics service, does not
+  // know what addresses it is bound to, and does not know whether anything is
+  // listening. The application decides where these records go.
+  void diagnosticsRecordProduced(const QJsonObject& record);
   void radioFrequencyChanged();
   void liveDebugCaptureStartRequested(const QString& directory_path);
   void liveDebugCaptureStopRequested();
   void livePresentationDiagnosticsRequested(const QVariantMap& diagnostics);
+  // One tick of this thread's heartbeat and how late it was, on its way to the
+  // DSP worker that builds the diagnostics record. See
+  // `gui_heartbeat_timer_` for why the measurement has to be taken here.
+  void liveGuiHeartbeatRequested(double lateness_ms);
   void localCharacterDecoderConfigureRequested(bool enabled,
                                                const QString& model_path,
                                                const QString& metadata_path);
@@ -477,6 +488,9 @@ class ReplayController final : public QObject {
   // every path that can change what the cluster is doing reports it the same
   // way.
   void publishDxSpotsStatus();
+  // Measures how late this thread's own heartbeat was and reports it to the
+  // DSP worker. Called from `gui_heartbeat_timer_` only.
+  void publishGuiHeartbeat();
 
   QThread worker_thread_;
   QObject* worker_{nullptr};
@@ -562,6 +576,24 @@ class ReplayController final : public QObject {
   std::unique_ptr<QAudioSink> monitor_audio_sink_;
   QIODevice* monitor_audio_device_{nullptr};
   int monitor_audio_sample_rate_{0};
+  // This controller lives on the GUI thread, so a timer it owns is delivered
+  // by the GUI thread's event loop -- and a timer that cannot be delivered on
+  // time is the only direct evidence that loop is blocked. Every other counter
+  // in the diagnostics record is taken on the DSP worker's thread and stays
+  // healthy while the window refuses to repaint, so without this the stream
+  // says nothing about the fault it exists to diagnose.
+  //
+  // Runs for the controller's whole life rather than only during live
+  // reception: a GUI thread already saturated when the operator presses start
+  // is exactly the case worth catching, and the heartbeat must already be
+  // running to catch it. The worker discards these values until it starts, and
+  // ten fires a second cost nothing next to what they measure.
+  //
+  // `gui_heartbeat_clock_` is restarted on every fire, so it always holds the
+  // interval between the last two deliveries; the requested interval
+  // subtracted from that is the lateness.
+  QTimer gui_heartbeat_timer_;
+  QElapsedTimer gui_heartbeat_clock_;
   cwassistant::core::CwSpotRegistry dx_spot_registry_;
   QTimer dx_spot_expiry_timer_;
   QVariantList dx_spots_;

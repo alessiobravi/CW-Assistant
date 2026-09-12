@@ -208,6 +208,63 @@ ApplicationWindow {
                     font.weight: Font.Bold
                 }
             }
+            // Diagnostics service state, immediately right of the cluster
+            // chip and deliberately built from the same parts — same height,
+            // radius, plate colour and 11 px bold label — so the two read as
+            // siblings rather than as two different kinds of thing. Amber: the
+            // teal beside it means cluster spots are arriving, and on this bar
+            // "#ff6b6b" means the transmitter is keyed, so neither is
+            // available to a diagnostics stream.
+            Rectangle {
+                id: diagnosticsChip
+                objectName: "diagnosticsStatusChip"
+                readonly property bool serviceListening: diagnosticsServer.listening
+                readonly property int readers: diagnosticsServer.clientCount
+                // Defended with || "" so the chip still renders its own
+                // wording before the service has published a status line.
+                readonly property string serviceStatus:
+                    diagnosticsServer.statusMessage || ""
+                // A service the operator has forgotten is running is the one
+                // that will surprise them, so this stays on the bar for as
+                // long as the service is up — and while it is coming up or
+                // failing to, because an enabled service that never bound is
+                // exactly as worth seeing.
+                visible: diagnosticsChip.serviceListening
+                         || appSettings.diagnosticsServerEnabled
+                // Reserve the widest state so the transmit chip beside it does
+                // not slide sideways as readers attach and detach.
+                implicitWidth: Math.max(diagnosticsLabel.implicitWidth,
+                                        diagnosticsWidest.width) + 24
+                implicitHeight: 30
+                radius: 15
+                color: "#202833"
+                ToolTip.visible: diagnosticsHover.hovered
+                ToolTip.delay: 400
+                ToolTip.text: diagnosticsChip.serviceStatus.length > 0
+                              ? diagnosticsChip.serviceStatus
+                              : (diagnosticsChip.serviceListening
+                                 ? "Diagnostics are being streamed. The stream is emit-only and carries station state in clear text."
+                                 : "The diagnostics service is switched on in Settings > Network but is not listening.")
+                HoverHandler { id: diagnosticsHover }
+                TextMetrics {
+                    id: diagnosticsWidest
+                    font: diagnosticsLabel.font
+                    text: "DIAG STARTING"
+                }
+                Label {
+                    id: diagnosticsLabel
+                    anchors.centerIn: parent
+                    text: !diagnosticsChip.serviceListening ? "DIAG STARTING"
+                          : diagnosticsChip.readers > 0
+                            ? "DIAG LIVE " + diagnosticsChip.readers
+                            : "DIAG LIVE"
+                    // Amber while it is up, dimmed amber while it is not, so
+                    // "on the air with diagnostics" is never read as TX.
+                    color: diagnosticsChip.serviceListening ? "#f3bd55" : "#9c7a3a"
+                    font.pixelSize: 11
+                    font.weight: Font.Bold
+                }
+            }
             Rectangle {
                 implicitWidth: safeLabel.implicitWidth + 24
                 implicitHeight: 30
@@ -432,7 +489,18 @@ ApplicationWindow {
                     objectName: "spectrumDisplay"
                     anchors.fill: parent
                     anchors.margins: 10
-                    source: replayController
+                    // Rendering off is a resource decision, so the feed is cut
+                    // rather than the item hidden. Every waterfall row is
+                    // composed inside the item's frame handler, which is
+                    // connected only while a source is set: with no source
+                    // nothing is conditioned, no row is appended or retained,
+                    // no repaint is scheduled, and the history already held is
+                    // released. Hiding alone would leave all of that running
+                    // behind an invisible item. A station left up as a
+                    // diagnostics server does not need to draw a waterfall.
+                    source: appSettings.waterfallRenderingEnabled
+                            ? replayController : null
+                    visible: appSettings.waterfallRenderingEnabled
                     targetFps: appSettings.targetFps
                     waterfallRate: appSettings.waterfallRate
                     waterfallTimeSpanSeconds: appSettings.waterfallTimeSpanSeconds
@@ -452,6 +520,19 @@ ApplicationWindow {
                                      ? appSettings.sdrSampleRateHz : 0
                 }
 
+                Label {
+                    objectName: "waterfallRenderingOffNotice"
+                    visible: !appSettings.waterfallRenderingEnabled
+                    anchors.centerIn: parent
+                    width: parent.width - 80
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    color: "#718092"
+                    font.pixelSize: 13
+                    z: 12
+                    text: "Spectrum and waterfall rendering is off.\n"
+                          + "Reception and decoding continue. Settings > Display > Waterfall rendering."
+                }
                 Rectangle {
                     id: sdrDecoderWindowOverlay
                     objectName: "sdrDecoderWindowOverlay"
@@ -580,6 +661,7 @@ ApplicationWindow {
                     topPadding: 1
                     bottomPadding: 1
                     text: spectrumDisplay.effectiveUpperBoundDb.toFixed(0) + " dBFS"
+                    visible: spectrumDisplay.visible
                     color: "#c6d4e2"
                     font.pixelSize: 12
                     z: 4
@@ -595,6 +677,7 @@ ApplicationWindow {
                     topPadding: 1
                     bottomPadding: 1
                     text: spectrumDisplay.effectiveLowerBoundDb.toFixed(0) + " dBFS"
+                    visible: spectrumDisplay.visible
                     color: "#c6d4e2"
                     font.pixelSize: 12
                     z: 4
@@ -720,7 +803,12 @@ ApplicationWindow {
                     width: spectrumDisplay.width
                     height: spectrumDisplay.height
                     z: 6
+                    // With the display detached there is no frequency axis,
+                    // so a gesture on the panel would point at zero hertz.
+                    // The click path already refuses that; switching the hit
+                    // area off with the rendering spares the drag path too.
                     enabled: replayController.activeSource
+                             && appSettings.waterfallRenderingEnabled
                     hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                      | Qt.MiddleButton

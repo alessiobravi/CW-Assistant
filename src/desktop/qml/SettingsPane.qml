@@ -76,6 +76,7 @@ Pane {
             TabButton { text: "Decoder" }
             TabButton { text: "Radio" }
             TabButton { text: "Cluster" }
+            TabButton { text: "Network" }
             TabButton { text: "Keying" }
             TabButton { text: "Display" }
             TabButton { text: "Station" }
@@ -1382,6 +1383,209 @@ Pane {
                 }
             }
 
+            // Network tab. Its position in this StackLayout is the position
+            // of "Network" in the TabBar above: fifth page, fifth button.
+            ScrollView {
+                contentWidth: availableWidth
+                GridLayout {
+                    width: parent.width
+                    columns: 2
+                    columnSpacing: 18
+                    rowSpacing: 12
+                    anchors.margins: 22
+                    Label {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Offer this station's diagnostics as a stream of JSON records, one record per line, so a station can be watched while it runs from another machine. The stream is emit-only: bytes sent to it are discarded, no connected reader can reach a setting, a control or the transmitter, and a reader that tries to talk to it is disconnected."
+                    }
+                    Label { text: "Diagnostics stream" }
+                    CheckBox {
+                        objectName: "diagnosticsEnabledCheck"
+                        text: "Publish diagnostics on the selected addresses"
+                        checked: appSettings.diagnosticsServerEnabled
+                        onToggled: appSettings.diagnosticsServerEnabled = checked
+                        ToolTip.visible: hovered
+                        ToolTip.text: "Off unless asked for. Nothing is published until at least one address below is ticked."
+                    }
+                    Label { text: "Addresses" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 6
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#91a0b1"
+                                text: appSettings.diagnosticsServerAvailableAddresses.length > 0
+                                      ? "Tick every address the stream should be offered on. A loopback address keeps it on this machine; any other address puts it on that network."
+                                      : "No addresses were found on this machine's interfaces. Refresh once the network is up."
+                            }
+                            Button {
+                                objectName: "diagnosticsRefreshAddressesButton"
+                                text: "Refresh"
+                                onClicked: appSettings.refreshNetworkAddresses()
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Re-read the addresses of this machine's network interfaces. An address that has gone away stays ticked but cannot be bound."
+                            }
+                        }
+                        // The machine's own addresses, offered rather than
+                        // guessed at: only the operator knows which of their
+                        // networks is the one they meant.
+                        ColumnLayout {
+                            objectName: "diagnosticsAddressList"
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Repeater {
+                                model: appSettings.diagnosticsServerAvailableAddresses
+                                delegate: RowLayout {
+                                    id: diagnosticsAddressRow
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    CheckBox {
+                                        objectName: "diagnosticsAddressCheck_"
+                                                    + diagnosticsAddressRow.modelData.address
+                                        text: diagnosticsAddressRow.modelData.address
+                                        checked: appSettings.diagnosticsServerAddresses.indexOf(
+                                                     diagnosticsAddressRow.modelData.address) >= 0
+                                        // QStringList arrives as a copy, so the
+                                        // chosen list is edited and assigned
+                                        // back whole rather than pushed into.
+                                        onToggled: {
+                                            var chosen = appSettings.diagnosticsServerAddresses.slice()
+                                            var at = chosen.indexOf(diagnosticsAddressRow.modelData.address)
+                                            if (checked && at < 0)
+                                                chosen.push(diagnosticsAddressRow.modelData.address)
+                                            else if (!checked && at >= 0)
+                                                chosen.splice(at, 1)
+                                            appSettings.diagnosticsServerAddresses = chosen
+                                        }
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: diagnosticsAddressRow.modelData.description
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        color: "#91a0b1"
+                                        text: diagnosticsAddressRow.modelData.interfaceName
+                                              + (diagnosticsAddressRow.modelData.loopback
+                                                 ? " — loopback, reachable only from this machine"
+                                                 : " — reachable from that network")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Label { text: "Port" }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        TextField {
+                            id: diagnosticsPortField
+                            objectName: "diagnosticsPortField"
+                            Layout.preferredWidth: 120
+                            text: String(appSettings.diagnosticsServerPort)
+                            inputMethodHints: Qt.ImhDigitsOnly | Qt.ImhNoPredictiveText
+                            validator: IntValidator { bottom: 1; top: 65535 }
+                            onEditingFinished: {
+                                if (acceptableInput)
+                                    appSettings.diagnosticsServerPort = parseInt(text, 10)
+                                else
+                                    text = String(appSettings.diagnosticsServerPort)
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "The same port is used on every ticked address. 17300 is the default, chosen clear of the ports amateur software already claims — rigctld on 4532, cluster nodes on 7300, 7373 and 8000."
+                        }
+                    }
+                    Label { text: "Access token" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            TextField {
+                                id: diagnosticsTokenField
+                                objectName: "diagnosticsTokenField"
+                                Layout.fillWidth: true
+                                text: appSettings.diagnosticsServerToken
+                                placeholderText: "Required before a non-loopback address can be bound"
+                                inputMethodHints: Qt.ImhNoPredictiveText
+                                                  | Qt.ImhSensitiveData
+                                onEditingFinished: appSettings.diagnosticsServerToken = text
+                            }
+                            Button {
+                                objectName: "diagnosticsGenerateTokenButton"
+                                text: "Generate"
+                                onClicked: {
+                                    var token = appSettings.generateDiagnosticsToken()
+                                    if (token && token.length > 0)
+                                        appSettings.diagnosticsServerToken = token
+                                    diagnosticsTokenField.text = appSettings.diagnosticsServerToken
+                                }
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Replace the token with a fresh random one. Readers holding the old token are cut off when the service restarts."
+                            }
+                        }
+                        Label {
+                            objectName: "diagnosticsTokenHintLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: appSettings.diagnosticsServerToken.length > 0
+                                   ? "#91a0b1" : "#f3bd55"
+                            text: appSettings.diagnosticsServerToken.length > 0
+                                  ? "A reader must present this token before any record is streamed to it."
+                                  : "Generate a token. A loopback address can be bound without one, but no other address can, and a token short enough to guess is a token that was never asked for."
+                        }
+                    }
+                    Label { text: "Service state" }
+                    Label {
+                        objectName: "diagnosticsServiceStateLabel"
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: diagnosticsServer.listening ? "#43c6ac" : "#91a0b1"
+                        text: (diagnosticsServer.statusMessage || "").length > 0
+                              ? diagnosticsServer.statusMessage
+                              : (appSettings.diagnosticsServerEnabled
+                                 ? "Starting." : "Not running.")
+                    }
+
+                    Rectangle {
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: "#2b3541"
+                    }
+                    // Stated once, plainly, in body text: this is what the
+                    // operator is choosing, and it is not a decoration around
+                    // the controls that choose it.
+                    Label {
+                        objectName: "diagnosticsExposureLabel"
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "Binding this to anything but a loopback address makes the station readable from that network. The frequencies it is tuned to, the callsigns it decodes, the identifiers of the audio and SDR devices it is using, and the decoded transcript all travel in the stream, unencrypted, to anything that can reach the address and holds the token."
+                    }
+                    Label {
+                        objectName: "diagnosticsTokenLimitLabel"
+                        Layout.columnSpan: 2
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        color: "#91a0b1"
+                        text: "A client must present this token, as one line, before it is sent anything at all; one that presents the wrong token or none receives no record. It is still a single shared secret, so it cannot tell one reader from another or shut out just one — changing it cuts off everybody at once. The stream is not encrypted, so the token and everything it protects cross the network in clear. Use the allowed-peers list above as the first gate and pick a network you would be willing to let read the station."
+                    }
+                }
+            }
+
             ScrollView {
                 contentWidth: availableWidth
                 GridLayout {
@@ -1496,6 +1700,26 @@ Pane {
                     columnSpacing: 18
                     rowSpacing: 12
                     anchors.margins: 22
+                    Label { text: "Waterfall rendering" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+                        CheckBox {
+                            objectName: "waterfallRenderingCheck"
+                            text: "Draw the spectrum and waterfall"
+                            checked: appSettings.waterfallRenderingEnabled
+                            onToggled: appSettings.waterfallRenderingEnabled = checked
+                            ToolTip.visible: hovered
+                            ToolTip.text: "Turn off to stop composing, retaining and painting waterfall rows. Reception, decoding, logging and the diagnostics stream are unaffected."
+                        }
+                        Label {
+                            objectName: "waterfallRenderingNoteLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "A resource control rather than a cosmetic one. With it off the display is detached from the frame feed, so no waterfall row is conditioned, stored or painted and the retained history is released; a station left running as a diagnostics server does not need to draw a waterfall. Every other control on this tab applies again once rendering is back on, and the history restarts from empty."
+                        }
+                    }
                     Label { text: "Spectrum view" }
                     ComboBox {
                         model: ["Audio spectrum", "CW symbols"]

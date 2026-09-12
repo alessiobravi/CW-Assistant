@@ -4,8 +4,10 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
+#include <QHostAddress>
 #include <QMediaDevices>
 #include <QMetaObject>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QSerialPortInfo>
 #include <QSettings>
@@ -27,6 +29,7 @@
 // clang-format on
 #endif
 
+#include "../diagnostics/diagnostics_server.hpp"
 #include "../dxcluster/dx_cluster_servers.hpp"
 #include "../radio/cat4om_client.hpp"
 #include "../radio/hamlib_rigctld_client.hpp"
@@ -41,6 +44,16 @@ namespace {
 
 constexpr auto kSchemaVersion = 1;
 
+// Whether this build carries the SoapySDR reception backend at all. Runtime
+// availability is what discovery answers; this is the cheaper question asked
+// first, so a build that could never receive from an SDR does not start an
+// enumeration whose only possible finding is that same absence.
+#if defined(CWA_HAVE_SOAPY_SDR)
+constexpr bool kSdrBackendCompiledIn = CWA_HAVE_SOAPY_SDR != 0;
+#else
+constexpr bool kSdrBackendCompiledIn = false;
+#endif
+
 // A hostname is at most 253 characters, and nothing longer can resolve. The
 // bound exists so a settings file cannot hand the socket layer an unbounded
 // string, not to judge whether the name is reachable.
@@ -50,6 +63,77 @@ constexpr int kMaximumDxClusterHostLength = 253;
 // has the entry it named -- the first offered server, never the custom entry,
 // because a custom entry with no host contacts nobody and would look broken.
 constexpr int kDxClusterCustomServerIndex = -1;
+
+// The diagnostics service's own default, named once here so the settings layer
+// and the server cannot drift apart on it.
+constexpr int kDefaultDiagnosticsServerPort =
+    static_cast<int>(DiagnosticsServer::kDefaultPort);
+static_assert(kDefaultDiagnosticsServerPort == 17300,
+              "AppSettings carries this value as an inline member default in "
+              "app_settings.hpp; update the header to match.");
+
+// Privileged ports are refused rather than quietly accepted. Binding one needs
+// this process to have been started with privileges it has no other reason to
+// hold, and a diagnostics stream is not a reason to acquire them.
+constexpr int kMinimumDiagnosticsServerPort = 1024;
+
+// Generous enough for anything an operator or a password manager will produce,
+// bounded so that a settings file cannot hand the token comparison an
+// unbounded string.
+constexpr int kMaximumDiagnosticsTokenLength = 128;
+
+// An IPv6 literal with a scope identifier is the longest address that can
+// legitimately appear here. Both bounds exist so a settings file cannot grow
+// the bind list without limit, not to judge whether an address is reachable:
+// the server reports an address it cannot bind and brings the others up
+// regardless, because a typo in one interface should not take the service
+// down.
+constexpr int kMaximumDiagnosticsAddressLength = 128;
+constexpr int kMaximumDiagnosticsAddresses = 16;
+
+// Deliberately not the whole alphabet. 0/O and 1/l/I are one transcription
+// error apart, and this token gets read off one screen and typed into another.
+constexpr char kDiagnosticsTokenAlphabet[] =
+    "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+constexpr int kGeneratedDiagnosticsTokenLength = 24;
+static_assert(kGeneratedDiagnosticsTokenLength >=
+                  DiagnosticsServer::kMinimumTokenLength,
+              "A generated token must satisfy the server's own minimum length.");
+
+// The first chosen address that something other than this machine could reach,
+// or an empty string when every chosen address is loopback. Returned rather
+// than a bare bool so the refusal can name the address that made a token
+// necessary.
+//
+// An address that does not parse counts as reachable. A typed address whose
+// form is not understood here is not evidence that it is harmless, and the
+// safe reading of an unknown is the one that asks for a token.
+QString first_routable_diagnostics_address(const QStringList& addresses) {
+  for (const QString& text : addresses) {
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) continue;
+    QHostAddress address;
+    if (!address.setAddress(trimmed)) return trimmed;
+    if (!address.isLoopback()) return trimmed;
+  }
+  return {};
+}
+
+QStringList sanitize_diagnostics_addresses(const QStringList& addresses) {
+  QStringList sanitized;
+  for (const QString& text : addresses) {
+    const QString trimmed =
+        text.trimmed().left(kMaximumDiagnosticsAddressLength);
+    if (trimmed.isEmpty()) continue;
+    // Binding the same address twice would cost a second listening socket and
+    // report the second as unbindable, which reads as a fault rather than as a
+    // duplicate.
+    if (sanitized.contains(trimmed, Qt::CaseInsensitive)) continue;
+    sanitized.append(trimmed);
+    if (sanitized.size() >= kMaximumDiagnosticsAddresses) break;
+  }
+  return sanitized;
+}
 
 QString acceptancePlatformToken() {
 #ifdef Q_OS_WIN
@@ -410,6 +494,9 @@ QStringList AppSettings::receiverInputTypeNames() const {
 }
 int AppSettings::receiverInputTypeIndex() const noexcept {
   return receiver_input_type_index_;
+}
+int AppSettings::preferredSourceMode() const noexcept {
+  return preferred_source_mode_;
 }
 bool AppSettings::sdrBackendAvailable() const noexcept {
   return sdr_backend_available_;
@@ -1495,6 +1582,25 @@ QString AppSettings::dxClusterLoginCallsign() const {
 const QVariantList& AppSettings::dxClusterServers() const noexcept {
   return dx_cluster_servers_;
 }
+bool AppSettings::diagnosticsServerEnabled() const noexcept {
+  return diagnostics_server_enabled_;
+}
+int AppSettings::diagnosticsServerPort() const noexcept {
+  return diagnostics_server_port_;
+}
+const QString& AppSettings::diagnosticsServerToken() const noexcept {
+  return diagnostics_server_token_;
+}
+const QStringList& AppSettings::diagnosticsServerAddresses() const noexcept {
+  return diagnostics_server_addresses_;
+}
+const QVariantList& AppSettings::diagnosticsServerAvailableAddresses()
+    const noexcept {
+  return diagnostics_server_available_addresses_;
+}
+bool AppSettings::waterfallRenderingEnabled() const noexcept {
+  return waterfall_rendering_enabled_;
+}
 const QString& AppSettings::statusMessage() const noexcept {
   return status_message_;
 }
@@ -1537,6 +1643,19 @@ void AppSettings::setReceiverInputTypeIndex(const int value) {
     emit receiverInputTypeChanged();
     emit settingsChanged();
   }
+}
+void AppSettings::setPreferredSourceMode(const int value) {
+  const int requested = std::clamp(value, 0, 2);
+  if (!assign_if_changed(preferred_source_mode_, requested)) return;
+  // Written through here rather than waiting for apply(). The operator changes
+  // source from the main window, which never presses Apply, so a value only
+  // committed by apply() would be lost by exactly the restart it exists to
+  // survive. One key is written, so an unapplied edit elsewhere in the
+  // settings page is left untouched.
+  QSettings settings;
+  settings.setValue(storageKey(QStringLiteral("source/preferredMode")),
+                    preferred_source_mode_);
+  emit settingsChanged();
 }
 void AppSettings::setSdrCenterFrequencyHz(const qulonglong value) {
   const qulonglong previous = sdr_center_frequency_hz_;
@@ -1838,6 +1957,7 @@ CWA_SETTER(setCwGuideCenterHz, cw_guide_center_hz_, double)
 CWA_SETTER(setCwGuideWidthHz, cw_guide_width_hz_, double)
 CWA_SETTER(setAveragingFrames, averaging_frames_, int)
 CWA_SETTER(setShowGrid, show_grid_, bool)
+CWA_SETTER(setWaterfallRenderingEnabled, waterfall_rendering_enabled_, bool)
 CWA_SETTER(setShowSpectrumGestureHints, show_spectrum_gesture_hints_, bool)
 CWA_SETTER(setDecodedSignalTimeoutSeconds, decoded_signal_timeout_seconds_, int)
 CWA_SETTER(setDecodeWeakSignals, decode_weak_signals_, bool)
@@ -1923,6 +2043,106 @@ void AppSettings::setDxClusterLoginSsid(const int value) {
   }
 }
 
+
+bool AppSettings::diagnosticsServerExposureUnguarded() const {
+  if (DiagnosticsServer::isAcceptableToken(diagnostics_server_token_)) {
+    return false;
+  }
+  return !first_routable_diagnostics_address(diagnostics_server_addresses_)
+              .isEmpty();
+}
+
+void AppSettings::setDiagnosticsServerEnabled(const bool value) {
+  // Binding the station's internals to an address other machines can reach is
+  // a deliberate act, and an unguarded one is refused here rather than
+  // discovered later as a frequency, a decoded callsign or a transcript read
+  // by whoever reached the port first. Loopback needs no token, because
+  // nothing off this machine can reach it; every other address does. The
+  // message names the address that made the token necessary, because a
+  // refusal that does not say which of several chosen addresses caused it
+  // reads as the switch being broken.
+  if (value && diagnosticsServerExposureUnguarded()) {
+    setStatusMessage(
+        QStringLiteral(
+            "Set a diagnostics token of at least %1 characters first. %2 can "
+            "be reached from other machines, and this stream publishes "
+            "frequencies, decoded callsigns, device identifiers and "
+            "transcripts. Generate a token, or bind only to loopback.")
+            .arg(DiagnosticsServer::kMinimumTokenLength)
+            .arg(first_routable_diagnostics_address(
+                diagnostics_server_addresses_)));
+    emit settingsChanged();
+    return;
+  }
+  if (assign_if_changed(diagnostics_server_enabled_, value)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDiagnosticsServerPort(const int value) {
+  const int clamped =
+      std::clamp(value, kMinimumDiagnosticsServerPort, 65'535);
+  if (assign_if_changed(diagnostics_server_port_, clamped)) {
+    emit settingsChanged();
+  }
+}
+
+void AppSettings::setDiagnosticsServerToken(const QString& value) {
+  const QString trimmed = value.trimmed().left(kMaximumDiagnosticsTokenLength);
+  if (!assign_if_changed(diagnostics_server_token_, trimmed)) return;
+  // The guard cannot be walked around by enabling the stream with a token and
+  // then removing it: a token that no longer guards what is already being
+  // published takes the service down with it.
+  if (diagnostics_server_enabled_ && diagnosticsServerExposureUnguarded()) {
+    diagnostics_server_enabled_ = false;
+    setStatusMessage(QStringLiteral(
+        "Diagnostics streaming switched off: the token no longer guards an "
+        "address that other machines can reach."));
+  }
+  emit settingsChanged();
+}
+
+void AppSettings::setDiagnosticsServerAddresses(const QStringList& value) {
+  if (!assign_if_changed(diagnostics_server_addresses_,
+                         sanitize_diagnostics_addresses(value))) {
+    return;
+  }
+  // The same guard from the other direction. Adding a routable address to a
+  // service that had been running on loopback is the moment the token starts
+  // to matter, and it must not be the moment the requirement is skipped.
+  if (diagnostics_server_enabled_ && diagnosticsServerExposureUnguarded()) {
+    diagnostics_server_enabled_ = false;
+    setStatusMessage(
+        QStringLiteral("Diagnostics streaming switched off: %1 can be reached "
+                       "from other machines and no token is set.")
+            .arg(first_routable_diagnostics_address(
+                diagnostics_server_addresses_)));
+  }
+  emit settingsChanged();
+}
+
+void AppSettings::refreshNetworkAddresses() {
+  QVariantList discovered = DiagnosticsServer::discoverLocalAddresses();
+  if (discovered == diagnostics_server_available_addresses_) return;
+  diagnostics_server_available_addresses_ = std::move(discovered);
+  emit diagnosticsNetworkAddressesChanged();
+}
+
+QString AppSettings::generateDiagnosticsToken() {
+  // The system source rather than the default engine: this value stands
+  // between the station's internals and the network, so it must not come from
+  // a generator whose sequence could be reproduced.
+  constexpr int alphabet_size =
+      static_cast<int>(sizeof(kDiagnosticsTokenAlphabet)) - 1;
+  auto* generator = QRandomGenerator::system();
+  QString token;
+  token.reserve(kGeneratedDiagnosticsTokenLength);
+  for (int index = 0; index < kGeneratedDiagnosticsTokenLength; ++index) {
+    token.append(QLatin1Char(
+        kDiagnosticsTokenAlphabet[generator->bounded(alphabet_size)]));
+  }
+  return token;
+}
 
 void AppSettings::setLocalCallsignDatabaseEnabled(const bool value) {
   if (!assign_if_changed(local_callsign_database_enabled_, value)) return;
@@ -2219,6 +2439,11 @@ void AppSettings::refreshSdrDevices() {
           emit sdrDiscoveryRunningChanged();
           emit sdrSettingsChanged();
           emit settingsChanged();
+          // After the report has been applied and the waiting state cleared,
+          // so anything acting on the answer reads settled properties rather
+          // than a scan that still claims to be running. Does nothing unless a
+          // startup restore asked for this enumeration.
+          answerSdrStartupRestore(sdr_startup_restore_found_);
         },
         Qt::QueuedConnection);
   });
@@ -2226,6 +2451,52 @@ void AppSettings::refreshSdrDevices() {
 
 bool AppSettings::sdrDiscoveryRunning() const noexcept {
   return sdr_discovery_running_;
+}
+
+void AppSettings::restoreSdrSelectionAtStartup() {
+  // Nothing was ever selected in this profile: there is nothing to bring back,
+  // no reason to enumerate, and nothing to warn about either, because a
+  // receiver that was never chosen cannot have gone missing. A station that
+  // only uses sound-card audio pays nothing here.
+  if (sdr_device_id_.isEmpty()) return;
+  // A request already outstanding will be answered by the enumeration that is
+  // running for it. Asking again would only scan twice for one answer.
+  if (sdr_startup_restore_pending_) return;
+
+  sdr_startup_restore_pending_ = true;
+  sdr_startup_restore_found_ = false;
+  // Captured before any report can be applied: applying one overwrites both
+  // the saved name and the saved id with whatever was found, and the answer
+  // has to name what was saved. The label falls back to the variant id so an
+  // unnamed saved receiver is still named by something the operator can act
+  // on; the signal itself carries the persisted name exactly as stored.
+  sdr_startup_restore_device_name_ = sdr_device_name_;
+  sdr_startup_restore_device_label_ =
+      sdr_device_name_.isEmpty() ? sdr_device_id_ : sdr_device_name_;
+
+  // With a backend to enumerate with, the answer follows the report; the scan
+  // still runs off the thread that draws. Without one, no enumeration could
+  // bring the receiver back, so the honest answer is already known and is
+  // queued rather than emitted inline -- every caller is then answered the
+  // same way, on the event loop, after this call has returned.
+  if (kSdrBackendCompiledIn || sdr_backend_available_) refreshSdrDevices();
+  else
+    QMetaObject::invokeMethod(
+        this, [this] { answerSdrStartupRestore(false); },
+        Qt::QueuedConnection);
+}
+
+void AppSettings::answerSdrStartupRestore(const bool found) {
+  if (!sdr_startup_restore_pending_) return;
+  sdr_startup_restore_pending_ = false;
+  if (!found) {
+    setStatusMessage(
+        QStringLiteral("Saved SDR receiver \"%1\" was not found. Reception "
+                       "remains stopped; sound-card audio and file replay "
+                       "remain available.")
+            .arg(sdr_startup_restore_device_label_));
+  }
+  emit sdrSelectionRestored(found, sdr_startup_restore_device_name_);
 }
 
 void AppSettings::applySdrDiscoveryReport(const SdrDiscoveryReport& report) {
@@ -2346,6 +2617,12 @@ void AppSettings::applySdrDiscoveryReport(const SdrDiscoveryReport& report) {
     receiver_input_type_index_ = 0;
   }
   if (sdrDeviceIndex() >= 0) refreshSelectedSdrCapabilities();
+  // Recorded here, where the matching above has just decided it, and left for
+  // the enumeration that asked for it to report. The physical receiver being
+  // present is what counts: rebuildSdrDeviceModes may have settled on another
+  // operating mode of it, and that is still the receiver the operator saved.
+  if (sdr_startup_restore_pending_)
+    sdr_startup_restore_found_ = sdrDeviceIndex() >= 0;
   emit sdrSettingsChanged();
   if (reset_receiver_source) emit receiverInputTypeChanged();
 }
@@ -2620,6 +2897,11 @@ bool AppSettings::apply() {
   receiver_input_type_index_ = std::clamp(receiver_input_type_index_, 0, 1);
   if (!sdr_backend_available_ || sdrDeviceIndex() < 0)
     receiver_input_type_index_ = 0;
+  // Clamped, but never forced: an SDR preference outlives a receiver that is
+  // absent right now, because discovery may not have run yet and the operator
+  // has not changed their mind. What the application starts is decided from
+  // the restore answer, not from this value alone.
+  preferred_source_mode_ = std::clamp(preferred_source_mode_, 0, 2);
   sdr_center_frequency_hz_ =
       std::clamp<qulonglong>(sdr_center_frequency_hz_, 1ULL, 99'000'000'000ULL);
   sdr_sample_rate_hz_ = std::clamp(sdr_sample_rate_hz_, 25'000, 64'000'000);
@@ -2702,6 +2984,20 @@ bool AppSettings::apply() {
   // nothing to log in as, so the saved state is off rather than a connection
   // that would be attempted and refused on every start.
   if (own_callsign_.isEmpty()) dx_cluster_enabled_ = false;
+  diagnostics_server_port_ =
+      std::clamp(diagnostics_server_port_, kMinimumDiagnosticsServerPort,
+                 65'535);
+  diagnostics_server_token_ =
+      diagnostics_server_token_.trimmed().left(kMaximumDiagnosticsTokenLength);
+  diagnostics_server_addresses_ =
+      sanitize_diagnostics_addresses(diagnostics_server_addresses_);
+  // The saved state may not describe an exposure the enable itself would have
+  // refused. A settings file edited by hand, or a token cleared by a route
+  // that did not run the guard, must not come back on the next start as a
+  // station published to a routable address with nothing in front of it.
+  if (diagnostics_server_enabled_ && diagnosticsServerExposureUnguarded()) {
+    diagnostics_server_enabled_ = false;
+  }
   if (upper_bound_db_ - lower_bound_db_ < 10.0) {
     upper_bound_db_ = lower_bound_db_ + 10.0;
   }
@@ -2743,6 +3039,8 @@ bool AppSettings::apply() {
                     audio_input_radio_linked_);
   settings.setValue(storageKey(QStringLiteral("receiver/inputType")),
                     receiver_input_type_index_);
+  settings.setValue(storageKey(QStringLiteral("source/preferredMode")),
+                    preferred_source_mode_);
   settings.setValue(storageKey(QStringLiteral("sdr/physicalDeviceId")),
                     sdr_physical_device_id_);
   settings.setValue(storageKey(QStringLiteral("sdr/deviceMode")),
@@ -2882,6 +3180,9 @@ bool AppSettings::apply() {
                     averaging_frames_);
   settings.setValue(storageKey(QStringLiteral("display/showGrid")), show_grid_);
   settings.setValue(
+      storageKey(QStringLiteral("display/waterfallRenderingEnabled")),
+      waterfall_rendering_enabled_);
+  settings.setValue(
       storageKey(QStringLiteral("display/showSpectrumGestureHints")),
       show_spectrum_gesture_hints_);
   settings.setValue(
@@ -2937,6 +3238,14 @@ bool AppSettings::apply() {
                     dx_cluster_custom_port_);
   settings.setValue(storageKey(QStringLiteral("dxcluster/loginSsid")),
                     dx_cluster_login_ssid_);
+  settings.setValue(storageKey(QStringLiteral("diagnostics/serverEnabled")),
+                    diagnostics_server_enabled_);
+  settings.setValue(storageKey(QStringLiteral("diagnostics/serverPort")),
+                    diagnostics_server_port_);
+  settings.setValue(storageKey(QStringLiteral("diagnostics/serverToken")),
+                    diagnostics_server_token_);
+  settings.setValue(storageKey(QStringLiteral("diagnostics/serverAddresses")),
+                    diagnostics_server_addresses_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -3006,6 +3315,10 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("receiver/inputType")), 0)
           .toInt(),
       0, 1);
+  preferred_source_mode_ = std::clamp(
+      settings.value(storageKey(QStringLiteral("source/preferredMode")), 0)
+          .toInt(),
+      0, 2);
   sdr_physical_device_id_ =
       settings.value(storageKey(QStringLiteral("sdr/physicalDeviceId")))
           .toString();
@@ -3317,6 +3630,12 @@ void AppSettings::load() {
   show_grid_ =
       settings.value(storageKey(QStringLiteral("display/showGrid")), true)
           .toBool();
+  waterfall_rendering_enabled_ =
+      settings
+          .value(
+              storageKey(QStringLiteral("display/waterfallRenderingEnabled")),
+              true)
+          .toBool();
   show_spectrum_gesture_hints_ =
       settings
           .value(storageKey(QStringLiteral("display/showSpectrumGestureHints")),
@@ -3434,6 +3753,31 @@ void AppSettings::load() {
       settings.value(storageKey(QStringLiteral("dxcluster/enabled")), false)
           .toBool() &&
       !own_callsign_.isEmpty();
+  diagnostics_server_port_ = std::clamp(
+      settings
+          .value(storageKey(QStringLiteral("diagnostics/serverPort")),
+                 kDefaultDiagnosticsServerPort)
+          .toInt(),
+      kMinimumDiagnosticsServerPort, 65'535);
+  diagnostics_server_token_ =
+      settings.value(storageKey(QStringLiteral("diagnostics/serverToken")))
+          .toString()
+          .trimmed()
+          .left(kMaximumDiagnosticsTokenLength);
+  diagnostics_server_addresses_ = sanitize_diagnostics_addresses(
+      settings
+          .value(storageKey(QStringLiteral("diagnostics/serverAddresses")),
+                 QStringList{QStringLiteral("127.0.0.1")})
+          .toStringList());
+  // Read after the addresses and the token, because those are what decide
+  // whether a stored "on" is a state this build would have allowed to be set
+  // in the first place. An edited settings file cannot enable an exposure the
+  // switch itself refuses.
+  diagnostics_server_enabled_ =
+      settings
+          .value(storageKey(QStringLiteral("diagnostics/serverEnabled")), false)
+          .toBool() &&
+      !diagnosticsServerExposureUnguarded();
   local_callsign_database_status_ =
       !local_callsign_database_enabled_
           ? QStringLiteral("Disabled. No local callsign list is in use.")
@@ -3600,6 +3944,11 @@ void AppSettings::resetInMemorySettings() {
   audio_upper_frequency_hz_ = 3'000.0;
   audio_input_radio_linked_ = false;
   receiver_input_type_index_ = 0;
+  preferred_source_mode_ = 0;
+  sdr_startup_restore_pending_ = false;
+  sdr_startup_restore_found_ = false;
+  sdr_startup_restore_device_name_.clear();
+  sdr_startup_restore_device_label_.clear();
   sdr_physical_device_id_.clear();
   sdr_device_mode_id_.clear();
   sdr_device_id_.clear();
@@ -3693,6 +4042,15 @@ void AppSettings::resetInMemorySettings() {
   dx_cluster_custom_host_.clear();
   dx_cluster_custom_port_ = 7'300;
   dx_cluster_login_ssid_ = 0;
+  diagnostics_server_enabled_ = false;
+  diagnostics_server_port_ = kDefaultDiagnosticsServerPort;
+  diagnostics_server_token_.clear();
+  // The discovered address list, unlike the chosen one, is left alone: it
+  // describes this machine's interfaces rather than this profile's choices,
+  // and re-enumerating them is a system call that resetting a profile has no
+  // reason to make.
+  diagnostics_server_addresses_ = QStringList{QStringLiteral("127.0.0.1")};
+  waterfall_rendering_enabled_ = true;
   applyReferenceDefaults(0);
 }
 

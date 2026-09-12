@@ -6,7 +6,51 @@ This is the canonical prioritized backlog. Status values are `todo`, `active`,
 `blocked`, and `done`. Every source, test, build, or automation change must
 review this file and update affected items or the “Last reviewed” note.
 
-Last reviewed: 2026-09-12 (sixtieth entry) -- moving the transmit VFO moved
+Last reviewed: 2026-09-12 (sixty-second entry) -- the application grew until it
+had to be killed, and the cause was a queue rather than a leak.
+
+The operator's evidence decided it: memory climbing from 244 MB to 668 MB while
+the interface died. Spectrum frames were handed to the thread that draws with no
+backpressure, and a wide IQ transform makes one frame about 64 kB, so thirty a
+second is two megabytes a second whenever that thread is behind -- and 424 MB is
+a little over three minutes of it. The growth was self-reinforcing, which is why
+it ended in a forced kill rather than merely feeling slow. At most two frames
+are in flight now and the rest are dropped, through a single bounded publisher
+so that a new emission site cannot reintroduce it. The test fails with exit 20
+against the unbounded behaviour.
+
+Worth recording as a pattern, because this is the third fault of the same shape
+in two days: publishing to the GUI thread at the rate work is produced rather
+than the rate a person can see. The decoded-channel model did it once per
+drained block on a five-millisecond timer, the diagnostics record did it on the
+same timer, and the spectrum did it per analyser frame with payloads two orders
+of magnitude larger. Anything crossing to that thread needs either a rate or a
+bound, decided when it is written.
+
+IPv6 is not backlog work: it was already carried throughout the diagnostics
+service and is now proven at runtime rather than by reading the source -- a case
+binds `::1`, streams a record over it, and a mutation that refuses IPv6 binding
+makes it fail. Recorded in the changelog instead, on the owner's instruction.
+
+Previous review: 2026-09-12 (sixty-first entry) -- a station can be watched while
+it runs, and the application stopped burying the thread that draws.
+
+The freeze came from publishing the decoded-channel model once per drained
+block on a five-millisecond timer: each publication deep-copies the model across
+a thread boundary and the receiver rebuilds it, so a handful of signals
+saturated one thread while the processor looked idle. Published after the drain
+and no faster than forty milliseconds now. The diagnostics said nothing about
+it, which is why they now carry throughput counters: what the decoder found and
+whether the application is keeping up are different questions.
+
+The live stream was built in four lanes against a contract header fixed first.
+The lane implementing it declined an instruction and was right to: the brief
+asked for a `challenge` field in the greeting while also forbidding any
+implication of access control that does not exist, and a field named for an
+exchange that cannot happen is exactly that implication. It reports
+`authenticated: false` and says why, to the peer as well as the operator.
+
+Previous review: 2026-09-12 (sixtieth entry) -- moving the transmit VFO moved
 the receive frequency, and two spectrum gestures were one.
 
 OmniRig's `Freq` is the selected VFO, not the receive VFO. A rig publishing
@@ -1860,6 +1904,7 @@ translucent band rather than two signal-like lines.
 | ID | Status | Item | Acceptance |
 |---|---|---|---|
 | REM-001 | active | Implement remote roles and station-wide lease domain | Role/message contracts and bounded exclusive lease manager pass dependency-free expiry tests. Extend the lease to cover every coupled RX/TX device and shared route in one station profile, while multiple authenticated observers remain concurrent; persist lease policy, never active ownership. |
+| OBS-004 | active | Offer a live diagnostics stream for remote troubleshooting | Delivered: an emit-only line-delimited JSON stream of the capture's own records, once a second, on operator-chosen addresses selected from those the machine can bind; a Network settings tab; an indicator while listening; throughput counters describing whether the application is keeping up; a session log file behind `--log-file`/`CWA_LOG_FILE`; and a waterfall rendering switch so a station serving diagnostics need not draw one. The stream never reads from a client, because this process holds transmit and an input path here would be a second, weaker way to reach a radio; a peer that sends is disconnected. Remaining, and stated in the settings page rather than implied away: there is no per-client authentication, since authenticating a client means reading what it sends. The token gates which addresses may be bound, so a routable address cannot be offered without one, but anything that can reach a bound address receives the stream. Proper access control belongs to REM-003/REM-004 -- TLS 1.3 and per-client certificates -- as an observer subscription rather than a second remote surface with a weaker security model. Since delivered: per-client token authentication, read as one bounded line and compared in constant time, and a peer allow-list of addresses or CIDR subnets checked before a byte is exchanged. Remaining: the stream is unencrypted, so the token crosses in clear, and one shared secret cannot revoke a single reader. Those belong to REM-003/REM-004 with TLS 1.3 and per-client certificates. Until then the honest guidance is a trusted network or a tunnel, never a port forward. |
 | REM-002 | todo | Define and generate versioned wire schema | Implement the envelopes, epochs, sequences, idempotency, limits and compatibility rules in the secure remote-operation specification; tests reject unknown major versions and preserve only explicitly compatible optional fields. |
 | REM-003 | todo | Implement mutually authenticated secure WebSocket station/client adapters | Require TLS 1.3, valid per-client certificates, station pinning and encrypted control/event/media outside loopback tests; size/rate/connection limits and malformed-frame tests pass. |
 | REM-004 | todo | Implement local pairing, roles, revocation, and key storage | Physical/local approval, unique client certificates, observer/operator/admin permissions, station pin rotation, immediate revocation and OS-backed credential lifecycle pass integration tests on every OS. |
