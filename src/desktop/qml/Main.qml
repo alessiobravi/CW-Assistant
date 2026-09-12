@@ -810,9 +810,16 @@ ApplicationWindow {
                     enabled: replayController.activeSource
                              && appSettings.waterfallRenderingEnabled
                     hoverEnabled: true
+                    // Middle is here because middle-drag pans. It was
+                    // handled in onPressed but never accepted, so the handler
+                    // could not run and panning did nothing at all.
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                                      | Qt.MiddleButton
                     property real panLastX: 0
+                    // Whether the pointer actually travelled while the wheel
+                    // button was down, which is what separates a pan from a
+                    // click on it.
+                    property bool panMoved: false
                     property bool decoderSelectionActive: false
                     property bool suppressSelectionClick: false
                     property real decoderSelectionStartX: 0
@@ -863,11 +870,18 @@ ApplicationWindow {
                     cursorShape: hoveredStreamId !== 0
                                  ? Qt.PointingHandCursor : Qt.CrossCursor
                     onPressed: function(mouse) {
-                        if (mouse.button === Qt.MiddleButton)
+                        if (mouse.button === Qt.MiddleButton) {
                             panLastX = mouse.x
-                        if (mouse.button === Qt.LeftButton
+                            panMoved = false
+                        }
+                        // Ctrl+Right, with the rest of the RX-decoder
+                        // family: plain right points the window, Ctrl+Right
+                        // sizes it. A click without a drag keeps the width,
+                        // which is the same distinction the sizing already
+                        // makes.
+                        if (mouse.button === Qt.RightButton
                                 && hasExactModifiers(mouse,
-                                                     Qt.ShiftModifier)
+                                                     Qt.ControlModifier)
                                 && replayController.sourceMode === 2) {
                             decoderSelectionStartX = mouse.x
                             decoderSelectionCurrentX = mouse.x
@@ -877,7 +891,7 @@ ApplicationWindow {
                     }
                     onPositionChanged: function(mouse) {
                         if (decoderSelectionActive
-                                && (mouse.buttons & Qt.LeftButton)) {
+                                && (mouse.buttons & Qt.RightButton)) {
                             decoderSelectionCurrentX = Math.max(
                                 0, Math.min(width, mouse.x))
                             return
@@ -885,6 +899,10 @@ ApplicationWindow {
                         if ((mouse.buttons & Qt.MiddleButton) === 0
                                 || width <= 0) return
                         var deltaPixels = mouse.x - panLastX
+                        // A few pixels of slip while pressing the wheel is not
+                        // a drag. Without this a middle click would almost
+                        // always be read as a one-pixel pan and never centre.
+                        if (Math.abs(deltaPixels) > 2) panMoved = true
                         panLastX = mouse.x
                         spectrumDisplay.panBy(
                             -deltaPixels / width
@@ -892,8 +910,25 @@ ApplicationWindow {
                                - spectrumDisplay.lowerFrequencyHz))
                     }
                     onReleased: function(mouse) {
+                        // The wheel button, clicked rather than dragged,
+                        // retunes the receiver so the clicked frequency
+                        // becomes the centre of the acquired spectrum. Direct
+                        // IQ only: an audio card has no centre to move, its
+                        // passband is whatever the receiver feeding it is
+                        // tuned to.
+                        if (mouse.button === Qt.MiddleButton) {
+                            if (panMoved || replayController.sourceMode !== 2
+                                    || !replayController.activeSource
+                                    || width <= 0) {
+                                return
+                            }
+                            var centreHz = Math.round(frequencyAtX(mouse.x))
+                            if (centreHz > 0)
+                                appSettings.sdrCenterFrequencyHz = centreHz
+                            return
+                        }
                         if (!decoderSelectionActive
-                                || mouse.button !== Qt.LeftButton)
+                                || mouse.button !== Qt.RightButton)
                             return
                         decoderSelectionCurrentX = Math.max(
                             0, Math.min(width, mouse.x))
@@ -916,10 +951,15 @@ ApplicationWindow {
                         var selectedCenterHz = Math.round(
                             draggedHz >= 1000
                                 ? (firstHz + lastHz) / 2 : lastHz)
+                        // The window, and only the window. This also opened a
+                        // manual decode at the centre of whatever was dragged,
+                        // so choosing where to listen silently created a
+                        // stream the operator had not asked for -- at a
+                        // frequency that is merely the middle of a selection,
+                        // which is rarely where a signal is. Deciding what to
+                        // decode is CTRL+RIGHT on the signal itself.
                         appSettings.setSdrDecoderWindow(selectedCenterHz,
                                                         bandwidthHz)
-                        replayController.openManualDecoderSession(
-                            selectedCenterHz)
                         decoderSelectionActive = false
                         suppressSelectionClick = true
                         mouse.accepted = true
@@ -964,6 +1004,15 @@ ApplicationWindow {
                                 appSettings.setControlledTxFrequencyHz(txRfHz)
                             return
                         }
+                        // Alt+Left opens a decode where the operator points,
+                        // for a signal the detector has not picked up. Left
+                        // alone opens one it has.
+                        if (mouse.button === Qt.LeftButton
+                                && hasExactModifiers(mouse, Qt.AltModifier)) {
+                            replayController.openManualDecoderSession(
+                                frequencyAtX(mouse.x))
+                            return
+                        }
                         if (mouse.button === Qt.LeftButton
                                 && hasExactModifiers(mouse,
                                                      Qt.NoModifier)) {
@@ -978,11 +1027,12 @@ ApplicationWindow {
                         // intentions -- where to look, and what to decode --
                         // and now take separate gestures.
                         if (mouse.button !== Qt.RightButton) return
-                        if (hasExactModifiers(mouse, Qt.ControlModifier)) {
-                            replayController.openManualDecoderSession(
-                                frequencyAtX(mouse.x))
+                        // Ctrl+Right belongs to the region drag, which press
+                        // and release already handled. Acting again here would
+                        // give one gesture two outcomes, which is the thing
+                        // this mapping exists to stop.
+                        if (hasExactModifiers(mouse, Qt.ControlModifier))
                             return
-                        }
                         if (!hasExactModifiers(mouse, Qt.NoModifier)) return
                         // Plain right-click points the received spectrum. On
                         // an audio card there is no window to move, so the
@@ -1056,8 +1106,8 @@ ApplicationWindow {
                         // manual decode. They were one gesture and an operator
                         // asking for either always got both.
                         text: manualSliceHitArea.hoveredStreamId !== 0
-                              ? "LEFT: open   •   RIGHT: point RX   •   CTRL+RIGHT: manual decode   •   SHIFT+DRAG: decoder span   •   CTRL+LEFT: TX"
-                              : "RIGHT: point RX   •   CTRL+RIGHT: manual decode   •   SHIFT+DRAG: decoder span   •   WHEEL: zoom   •   CTRL+LEFT: TX"
+                              ? "LEFT: open   •   RIGHT: point RX   •   CTRL+RIGHT: decode region   •   ALT+LEFT: manual decode   •   CTRL+LEFT: TX   •   WHEEL BTN: centre"
+                              : "RIGHT: point RX   •   CTRL+RIGHT: decode region   •   ALT+LEFT: manual decode   •   WHEEL BTN: centre   •   WHEEL: zoom"
                         color: "#d4dbe4"
                         font.pixelSize: 11
                         font.weight: Font.DemiBold
@@ -3358,6 +3408,25 @@ ApplicationWindow {
                     Layout.fillHeight: true
                     clip: true
                     spacing: 8
+                    // A list taller than the space it is given scrolls, but
+                    // without a bar there is nothing to say so: an operator
+                    // with more open sessions than fit saw the ones that fit
+                    // and no sign the rest existed. The bar is the affordance
+                    // as much as the control.
+                    ScrollBar.vertical: ScrollBar {
+                        objectName: "decoderChannelScrollBar"
+                        policy: decoderChannelList.contentHeight
+                                > decoderChannelList.height
+                                ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+                    }
+                    // Reordering stays a drag on the card's own grip, which is
+                    // a DragHandler scoped to it, so flicking the list body is
+                    // unaffected and the wheel still scrolls.
+                    boundsBehavior: Flickable.StopAtBounds
+                    // Keeping the card the operator is reading in view matters
+                    // more than keeping the top of the list in view: sessions
+                    // arrive and are reordered underneath them.
+                    highlightFollowsCurrentItem: false
                     model: replayController.decoderSessionModel
                     delegate: Rectangle {
                         id: sessionCard

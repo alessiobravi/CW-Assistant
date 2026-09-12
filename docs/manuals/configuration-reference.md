@@ -169,14 +169,25 @@ Numeric visualization controls are labeled sliders with live value readouts.
 The receiver workspace arranges them over multiple responsive rows, and the
 Settings page uses the same controls for precise profile editing.
 
-Hovering the spectrum or waterfall displays the pointer contract: left-click
-opens a detected stream, right-click creates a neutral manual probe, and
-capability-gated Ctrl+left-click requests the pointed exact RF on VFO B/TX
-through the configured provider, enabling split when needed. Provider readback
-remains authoritative and the gesture never arms or starts transmission.
-In a direct-SDR view, Shift+left-drag previews and applies a 6–96 kHz decoder
-window directly on the plot; a short Shift+click recentres the existing width.
-The selection changes only the bounded receive/DSP region and never tunes TX.
+Hovering the spectrum or waterfall displays the pointer contract. The gestures,
+in full:
+
+| Gesture | Action |
+| --- | --- |
+| Left click | Open the decoder card for an already detected stream. |
+| Alt + left click | Open a manual decode at that frequency, for a signal detection has not picked up. |
+| Ctrl + left click | Request the pointed exact RF on VFO B/TX through the configured provider, enabling split when needed. Capability-gated; it never arms or starts transmission, and provider readback remains authoritative. |
+| Right click | Point the receive decode region at that frequency (direct SDR only). |
+| Ctrl + right click or drag | Define the decode region: a drag sets centre and width, a click moves the centre and keeps the width. Direct SDR only. |
+| Wheel button click | Retune the receiver so that frequency becomes the centre of the acquired spectrum. Direct SDR only. |
+| Wheel button drag | Pan the visible view. |
+| Wheel | Zoom about the pointer. |
+| **Full span** button | Return to the complete acquired passband. |
+
+Each gesture does one thing. Choosing where to listen does not also create a
+stream, and no gesture tunes the transmitter except the one that says so. The
+decode region is bounded to 2–96 kHz, sized to the nearest 100 Hz, and changes
+only the receive and decoding region.
 Zoom reset uses the explicit **Full span** button so a double-click cannot also
 trigger normal stream selection.
 Action buttons in the receiver, settings, setup, and profile views also expose

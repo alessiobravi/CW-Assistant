@@ -263,10 +263,10 @@ int main() {
                 "hasExactModifiers(mouse,\n                            "
                 "                         "
                 "Qt.ControlModifier)") ||
-      !contains(manual,
-                "hasExactModifiers(mouse,\n                            "
-                "                         "
-                "Qt.ShiftModifier)") ||
+      // Alt, not Shift. The region drag moved to Ctrl+Right to sit with the
+      // rest of the receive-decoder family, and Alt+Left took over opening a
+      // decode where the operator points.
+      !contains(manual, "hasExactModifiers(mouse, Qt.AltModifier)") ||
       !contains(manual,
                 "hasExactModifiers(mouse,\n                            "
                 "                         "
@@ -283,12 +283,14 @@ int main() {
       contains(manual, "onDoubleClicked:") ||
       !contains(manual, "spectrumDisplay.lowerFrequencyHz") ||
       contains(manual, "appSettings.cwGuideCenterHz = frequencyHz") ||
-      // CTRL+RIGHT, not plain RIGHT. Pointing the received spectrum and
-      // opening a manual decode were one gesture, so an operator asking for
-      // either always got both; they are separate intentions and now take
-      // separate gestures.
+      // Pointing the received spectrum and opening a manual decode were one
+      // gesture, so an operator asking for either always got both. They are
+      // separate intentions on separate gestures now, and Ctrl+Right returns
+      // from the click handler because press and release own the region drag
+      // -- acting here too would give one gesture two outcomes again.
       !contains(manual,
-                "if (hasExactModifiers(mouse, Qt.ControlModifier)) {") ||
+                "if (hasExactModifiers(mouse, Qt.ControlModifier))\n"
+                "                            return") ||
       !contains(manual, "replayController.openManualDecoderSession(") ||
       !contains(manual, "objectName: \"spectrumPointerHelp\"") ||
       !contains(manual, "appSettings.showSpectrumGestureHints") ||
@@ -298,8 +300,26 @@ int main() {
       !contains(manual, "interval: 300000") ||
       !contains(manual, "LEFT: open") ||
       !contains(manual, "RIGHT: point RX") ||
-      !contains(manual, "CTRL+RIGHT: manual decode") ||
-      !contains(manual, "SHIFT+DRAG: decoder span") ||
+      !contains(manual, "CTRL+RIGHT: decode region") ||
+      !contains(manual, "ALT+LEFT: manual decode") ||
+      // The wheel button was handled but never accepted, so panning could not
+      // work; clicking it retunes a direct IQ receiver to centre on the
+      // pointer.
+      !contains(manual, "Qt.MiddleButton") ||
+      !contains(manual, "appSettings.sdrCenterFrequencyHz = centreHz") ||
+      // "decode region", not "decoder span": the gesture defines where to
+      // listen and nothing else. It also opened a manual decode at the centre
+      // of the selection, so choosing a region silently created a stream the
+      // operator had not asked for, at a frequency that is merely the middle
+      // of a drag.
+      !contains(manual, "WHEEL BTN: centre") ||
+      // The release handler sets the window and stops. Deciding what to decode
+      // is a separate gesture on the signal itself.
+      contains(manual,
+               "appSettings.setSdrDecoderWindow(selectedCenterHz,\n"
+               "                                                        "
+               "bandwidthHz)\n                        replayController"
+               ".openManualDecoderSession(") ||
       !contains(manual, "CTRL+LEFT: TX") ||
       !contains(tune_down, "objectName: \"tuneRxDownButton\"") ||
       !contains(tune_down, "appSettings.radioFrequencyWritable") ||

@@ -534,6 +534,92 @@ bool DiagnosticsServer::peerIsAllowed(const QHostAddress& peer,
   return false;
 }
 
+QString DiagnosticsServer::segmentForPrefix(const QHostAddress& address,
+                                           const int prefix_length) {
+  switch (address.protocol()) {
+    case QAbstractSocket::IPv4Protocol: {
+      // A prefix of zero is every address in the family and a prefix longer
+      // than the family has bits is not a network at all. Neither is treated
+      // as a hint to be rounded into something usable: this text becomes a
+      // rule that decides who may read the station, and the only safe answer
+      // to an unusable prefix is no answer.
+      if (prefix_length < 1 || prefix_length > 32) return {};
+      const quint32 host = address.toIPv4Address();
+      // Written as a shift of the complement rather than as `0xFFFFFFFF <<
+      // (32 - prefix)`, because that shift is undefined when the prefix is 32
+      // and this is exactly the single-host case an operator uses to name one
+      // computer.
+      const quint32 mask =
+          prefix_length == 32
+              ? 0xFFFFFFFFu
+              : ~((quint32{1} << (32 - prefix_length)) - quint32{1});
+      return QStringLiteral("%1/%2")
+          .arg(QHostAddress(host & mask).toString())
+          .arg(prefix_length);
+    }
+    case QAbstractSocket::IPv6Protocol: {
+      if (prefix_length < 1 || prefix_length > 128) return {};
+      // Rebuilt from the sixteen bytes rather than from the text, which also
+      // drops any scope id: `fe80::1%en0` is one machine's name for a link,
+      // and `fe80::%en0/64` is not a rule another reader of the settings page
+      // could act on.
+      Q_IPV6ADDR bytes = address.toIPv6Address();
+      for (int index = 0; index < 16; ++index) {
+        const int first_bit = index * 8;
+        if (first_bit + 8 <= prefix_length) continue;
+        if (first_bit >= prefix_length) {
+          bytes[index] = 0;
+          continue;
+        }
+        const int kept = prefix_length - first_bit;
+        bytes[index] = static_cast<quint8>(bytes[index] &
+                                           static_cast<quint8>(0xFF << (8 - kept)));
+      }
+      return QStringLiteral("%1/%2")
+          .arg(QHostAddress(bytes).toString())
+          .arg(prefix_length);
+    }
+    default:
+      // A null address, or one of neither family. There is no network to
+      // name.
+      return {};
+  }
+}
+
+QString DiagnosticsServer::localSegmentForAddress(const QString& address) {
+  // The same spellings the bind field accepts, because this is asked about an
+  // address the operator picked there: a bracketed `[::1]` pasted back out of
+  // the status line, and a link-local address carrying the interface it
+  // belongs to.
+  const std::optional<QHostAddress> wanted = parsedBindAddress(address);
+  if (!wanted) return {};
+  const QList<QNetworkInterface> interfaces =
+      QNetworkInterface::allInterfaces();
+  for (const QNetworkInterface& interface : interfaces) {
+    // An interface that is down describes a network nothing can currently
+    // reach this machine over, so its subnet is not one to offer adding.
+    if (!interface.flags().testFlag(QNetworkInterface::IsUp)) continue;
+    for (const QNetworkAddressEntry& entry : interface.addressEntries()) {
+      // Compared as addresses and not as text, so that a full-length IPv6
+      // spelling finds the entry Qt reports in the short form. The scope id
+      // takes no part in the comparison, which is what lets `fe80::1%en0`
+      // match the entry for `fe80::1`.
+      if (!entry.ip().isEqual(*wanted, QHostAddress::ConvertV4MappedToIPv4)) {
+        continue;
+      }
+      // Whatever this interface reports, including a prefix `segmentForPrefix`
+      // will refuse. Not searched past: the address was found, and a second
+      // entry elsewhere is not a better answer for it.
+      return segmentForPrefix(entry.ip(), entry.prefixLength());
+    }
+  }
+  // No interface holds this address. `0.0.0.0` and `::` land here as well, and
+  // that is the intended answer for them: binding every interface names no one
+  // network, and inventing a set of them would add rules the operator never
+  // read.
+  return {};
+}
+
 void DiagnosticsServer::setEnabled(const bool enabled) {
   if (enabled_ == enabled) return;
   enabled_ = enabled;

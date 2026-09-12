@@ -638,9 +638,12 @@ int main(int argc, char* argv[]) {
   QStringList applied_diagnostics_addresses;
   int applied_diagnostics_port = -1;
   QString applied_diagnostics_token;
+  QStringList applied_diagnostics_peers;
+  bool applied_diagnostics_peers_valid = false;
   const auto apply_diagnostics_server =
       [&settings, &diagnostics_server, &applied_diagnostics_addresses,
-       &applied_diagnostics_port, &applied_diagnostics_token] {
+       &applied_diagnostics_port, &applied_diagnostics_token,
+       &applied_diagnostics_peers, &applied_diagnostics_peers_valid] {
         const QStringList addresses = settings.diagnosticsServerAddresses();
         const int port = settings.diagnosticsServerPort();
         const QString token = settings.diagnosticsServerToken();
@@ -652,6 +655,17 @@ int main(int argc, char* argv[]) {
           applied_diagnostics_token = token;
           diagnostics_server.configure(
               addresses, static_cast<std::uint16_t>(port), token);
+        }
+        // Applied separately from the binding, because tightening or widening
+        // who may read does not need the sockets rebuilt and should not drop
+        // the readers a still-permitted operator is watching with. The server
+        // drops only those the new list no longer covers.
+        const QStringList peers = settings.diagnosticsAllowedPeers();
+        if (!applied_diagnostics_peers_valid ||
+            peers != applied_diagnostics_peers) {
+          applied_diagnostics_peers = peers;
+          applied_diagnostics_peers_valid = true;
+          diagnostics_server.setAllowedPeers(peers);
         }
         diagnostics_server.setEnabled(settings.diagnosticsServerEnabled());
       };

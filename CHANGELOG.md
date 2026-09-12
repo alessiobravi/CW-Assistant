@@ -8,6 +8,15 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Fixed
 
+- Open decoder sessions past the bottom of the panel could not be reached. The
+  list scrolls and always could, but nothing said so: with no scrollbar an
+  operator saw the cards that fit and no sign the rest existed. Reordering is
+  unchanged -- it is a drag on the card's own grip, so flicking the list is
+  unaffected.
+
+- The wheel button did nothing. Panning was written for it but the hit area
+  never accepted that button, so the handler could not run.
+
 - The waterfall filled with black stripes and stopped reading as continuous.
   Bounding the frames handed to the display meant some are refused, and the
   waterfall fills any interval it received nothing for with a blank row -- so
@@ -509,6 +518,18 @@ All notable changes to CW Buddy are recorded here. The format follows
   across for display only; detection is unaffected.
 
 ### Changed
+
+- The spectrum gestures are regrouped so that each does one thing and related
+  intentions share a modifier. Defining the decode region moves from
+  Shift+left-drag to **Ctrl+right**, joining plain right-click, which points
+  it: both belong to deciding where to listen. Opening a manual decode moves
+  to **Alt+left-click**, beside plain left-click, which opens a stream
+  detection already found: both belong to deciding what to read. Ctrl+left
+  still requests the transmit frequency, and clicking the **wheel button** now
+  retunes a direct IQ receiver so that frequency becomes the centre of the
+  acquired spectrum. The region drag no longer also opens a decode at the
+  centre of the selection -- choosing where to listen was silently creating a
+  stream nobody asked for, at a frequency that is merely the middle of a drag.
 
 - Spots on the separator now sit in a bar of their own and carry their source
   as colour rather than as a symbol. The callsigns are a fifth larger, and a

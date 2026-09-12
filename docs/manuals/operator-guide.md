@@ -92,9 +92,10 @@ not create a second frequency marker or infer a sender from frequency alone.
    waterfall frames now come from that device.
 5. Select **Stop live RX** before changing cables or audio routing.
 
-Hover over the spectrum or waterfall to see its brief pointer legend: left-click
+Hover over the spectrum or waterfall to see its brief pointer legend. Left-click
 opens the decoder card for an already detected stream without changing audio
-monitoring, while right-click starts a neutral manual probe at that audio
+monitoring; Alt+left-click opens a manual decode where you point, for a signal
+detection has not found; right-click points the decode region at that
 frequency. When the linked provider supports TX-frequency and split writes,
 Ctrl+left-click requests the pointed RF on VFO B/TX and enables split if
 needed. The TX guide moves only after provider readback confirms the change;
@@ -221,11 +222,13 @@ device.
 6. Place the pointer over the SDR spectrum or waterfall and use the wheel to
    zoom around it. Middle-button drag pans the visible view. Select **Full
    span** to return to the complete acquired passband. Right-click
-   moves the decoder window to that RF and starts a normal manual probe; a
-   qualified probe promotes through the same verification path as an
-   automatically found stream. Shift+left-drag draws and applies the decoder
-   span directly; a short Shift+click recentres the current span. The selected
-   width is rounded to 1 kHz and bounded to 6–96 kHz.
+   points the decode region at that RF. Ctrl+right-drag draws and applies the
+   region directly, and a Ctrl+right-click without dragging moves its centre
+   and keeps the width; the width is rounded to 100 Hz and bounded to
+   2–96 kHz. Alt+left-click starts a manual decode, which promotes through the
+   same verification path as an automatically found stream. Clicking the wheel
+   button retunes the receiver so that frequency becomes the centre of the
+   acquired spectrum.
 7. Global **RX** monitoring is intentionally unavailable for IQ: raw I/Q samples
    are not loudspeaker audio. Open a decoder card and enable its speaker to hear
    that carrier through the narrow, carrier-following CW filter. Several card

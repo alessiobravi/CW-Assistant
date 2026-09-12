@@ -419,6 +419,22 @@ class AppSettings final : public QObject {
   Q_PROPERTY(QStringList diagnosticsServerAddresses READ
                  diagnosticsServerAddresses WRITE setDiagnosticsServerAddresses
                      NOTIFY settingsChanged)
+  // Which computers may connect at all: one entry per line, each a host
+  // (`192.168.1.50`), a CIDR network (`192.168.1.0/24`, `2001:db8::/32`) or
+  // the single word `any`. Handed to DiagnosticsServer::setAllowedPeers, which
+  // owns the rule; nothing is decided here.
+  //
+  // Empty by default, and an empty list is meaningful rather than missing: it
+  // permits loopback only. That is why enabling the service with an empty list
+  // is not an error. An operator who binds a routable address and leaves this
+  // empty gets a port that admits nobody, which is the safe outcome and is
+  // what the settings page and the service state line say.
+  //
+  // An entry that cannot be read permits nothing, so a typo narrows access
+  // rather than widening it, and the list editor marks such a row rather than
+  // leaving the operator to discover it as a service that refuses everyone.
+  Q_PROPERTY(QStringList diagnosticsAllowedPeers READ diagnosticsAllowedPeers
+                 WRITE setDiagnosticsAllowedPeers NOTIFY settingsChanged)
   // What this machine could bind, as maps carrying `address`,
   // `interfaceName`, `loopback` and `description`.
   //
@@ -621,6 +637,7 @@ class AppSettings final : public QObject {
   [[nodiscard]] int diagnosticsServerPort() const noexcept;
   [[nodiscard]] const QString& diagnosticsServerToken() const noexcept;
   [[nodiscard]] const QStringList& diagnosticsServerAddresses() const noexcept;
+  [[nodiscard]] const QStringList& diagnosticsAllowedPeers() const noexcept;
   [[nodiscard]] const QVariantList& diagnosticsServerAvailableAddresses()
       const noexcept;
   [[nodiscard]] bool waterfallRenderingEnabled() const noexcept;
@@ -720,6 +737,7 @@ class AppSettings final : public QObject {
   void setDiagnosticsServerPort(int value);
   void setDiagnosticsServerToken(const QString& value);
   void setDiagnosticsServerAddresses(const QStringList& value);
+  void setDiagnosticsAllowedPeers(const QStringList& value);
   void setWaterfallRenderingEnabled(bool value);
 
   Q_INVOKABLE void selectReferenceRig(int index);
@@ -790,6 +808,17 @@ class AppSettings final : public QObject {
   // diagnosticsServerAvailableAddresses. Called when the diagnostics page is
   // opened or its refresh is pressed, never from a property read.
   Q_INVOKABLE void refreshNetworkAddresses();
+  // The network one of this machine's addresses sits on, as a CIDR rule --
+  // `192.168.1.42` on a /24 answers `192.168.1.0/24` -- or an empty string
+  // when this machine cannot say. Forwards to
+  // DiagnosticsServer::localSegmentForAddress, which owns the answer.
+  //
+  // Offered so the allowed-peer editor can put the operator's own segment into
+  // the list as a line they can then read, edit or delete. It returns the text
+  // rather than adding anything: a rule deciding who may read the station has
+  // to be one the operator can see, so nothing is written here.
+  [[nodiscard]] Q_INVOKABLE QString localNetworkForAddress(
+      const QString& address) const;
   // A fresh token from the system entropy source, long enough to satisfy
   // DiagnosticsServer::isAcceptableToken. Returned rather than stored, so the
   // operator sees what they are about to save. It exists because a field that
@@ -1088,6 +1117,11 @@ class AppSettings final : public QObject {
   // Loopback by default: the only default that is immediately useful and
   // still unreachable from another machine.
   QStringList diagnostics_server_addresses_{QStringLiteral("127.0.0.1")};
+  // Empty by default, which the server reads as loopback only. Deliberately
+  // not seeded with the machine's own segment: a rule admitting a whole
+  // network must be one the operator wrote and can see in the list, never one
+  // that appeared behind them.
+  QStringList diagnostics_allowed_peers_;
   // Machine data rather than profile data, like the cluster server list above:
   // read on demand and left alone when a profile is switched underneath it.
   QVariantList diagnostics_server_available_addresses_;

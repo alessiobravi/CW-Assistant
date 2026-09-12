@@ -1480,6 +1480,327 @@ Pane {
                             }
                         }
                     }
+                    // Who may connect at all, as a list the operator can read
+                    // line by line rather than as one comma-separated field.
+                    // The rule is the strongest of the two gates and the
+                    // cheapest -- a peer's address is known before a byte is
+                    // exchanged -- so it is worth being able to see exactly
+                    // what it says.
+                    Label { text: "Allowed computers" }
+                    ColumnLayout {
+                        id: diagnosticsPeerEditor
+                        Layout.fillWidth: true
+                        spacing: 6
+
+                        // The rows exactly as the operator is editing them.
+                        // Held here rather than read straight from the setting
+                        // because a row has to be allowed to be blank -- that
+                        // is what "+ Add" produces -- and the setting drops a
+                        // blank entry the moment it is written.
+                        property var rows: []
+                        // What the setting said when these rows were last
+                        // seeded or committed. Compared on every settings
+                        // change, so a list altered elsewhere -- a profile
+                        // switch, a reset -- re-seeds the editor while the
+                        // editor's own writes leave a blank row that is still
+                        // being typed into alone.
+                        property var storedRows: []
+                        // True for exactly as long as commit() is writing.
+                        // Without it the write's own settingsChanged would
+                        // re-seed the rows from inside the commit that caused
+                        // it, throwing away the blank row the operator is
+                        // typing into and rebuilding every row twice.
+                        property bool committing: false
+
+                        function storedPeers() {
+                            return appSettings.diagnosticsAllowedPeers.slice()
+                        }
+                        function sameRows(left, right) {
+                            if (left.length !== right.length)
+                                return false
+                            for (var i = 0; i < left.length; ++i) {
+                                if (("" + left[i]) !== ("" + right[i]))
+                                    return false
+                            }
+                            return true
+                        }
+                        function reseed() {
+                            diagnosticsPeerEditor.storedRows = diagnosticsPeerEditor.storedPeers()
+                            diagnosticsPeerEditor.rows = diagnosticsPeerEditor.storedRows.slice()
+                        }
+                        // Writes the filled-in rows to the setting, then shows
+                        // exactly what the setting kept, with the blank rows
+                        // put back. An entry the setting dropped -- a
+                        // duplicate, or one past the limit -- must not stay on
+                        // screen looking as though it were in force.
+                        //
+                        // QStringList arrives in QML as a copy, so the whole
+                        // list is assigned back rather than pushed into, the
+                        // way the address checkboxes above do it.
+                        function commit() {
+                            var kept = []
+                            var blanks = 0
+                            for (var i = 0; i < diagnosticsPeerEditor.rows.length; ++i) {
+                                var entry = ("" + diagnosticsPeerEditor.rows[i]).trim()
+                                if (entry.length > 0)
+                                    kept.push(entry)
+                                else
+                                    ++blanks
+                            }
+                            diagnosticsPeerEditor.committing = true
+                            appSettings.diagnosticsAllowedPeers = kept
+                            diagnosticsPeerEditor.committing = false
+                            var shown = diagnosticsPeerEditor.storedPeers()
+                            for (var blank = 0; blank < blanks; ++blank)
+                                shown.push("")
+                            diagnosticsPeerEditor.storedRows = diagnosticsPeerEditor.storedPeers()
+                            if (!diagnosticsPeerEditor.sameRows(shown, diagnosticsPeerEditor.rows))
+                                diagnosticsPeerEditor.rows = shown
+                        }
+                        function setRow(index, value) {
+                            var next = diagnosticsPeerEditor.rows.slice()
+                            next[index] = value
+                            diagnosticsPeerEditor.rows = next
+                            diagnosticsPeerEditor.commit()
+                        }
+                        function removeRow(index) {
+                            var next = diagnosticsPeerEditor.rows.slice()
+                            next.splice(index, 1)
+                            diagnosticsPeerEditor.rows = next
+                            diagnosticsPeerEditor.commit()
+                        }
+                        // Not committed: an empty row is not a rule, and the
+                        // setting would drop it before the operator had typed
+                        // anything into it.
+                        function appendBlankRow() {
+                            var next = diagnosticsPeerEditor.rows.slice()
+                            next.push("")
+                            diagnosticsPeerEditor.rows = next
+                        }
+                        function appendRow(value) {
+                            var next = diagnosticsPeerEditor.rows.slice()
+                            next.push(value)
+                            diagnosticsPeerEditor.rows = next
+                            diagnosticsPeerEditor.commit()
+                        }
+                        function hasRow(value) {
+                            var wanted = ("" + value).trim().toLowerCase()
+                            for (var i = 0; i < diagnosticsPeerEditor.rows.length; ++i) {
+                                if (("" + diagnosticsPeerEditor.rows[i]).trim().toLowerCase() === wanted)
+                                    return true
+                            }
+                            return false
+                        }
+
+                        // A hint, never the rule. DiagnosticsServer decides
+                        // what an entry permits, and one it cannot read
+                        // permits nothing -- so a typo narrows access rather
+                        // than widening it. What it must not do is narrow it
+                        // silently: an operator staring at a service that
+                        // refuses everyone should have been told which line is
+                        // the reason.
+                        function ipv4LooksWellFormed(text, allowAbbreviated) {
+                            var parts = text.split(".")
+                            if (parts.length > 4)
+                                return false
+                            if (parts.length < 4 && !allowAbbreviated)
+                                return false
+                            for (var i = 0; i < parts.length; ++i) {
+                                if (!/^[0-9]{1,3}$/.test(parts[i]))
+                                    return false
+                                if (parseInt(parts[i], 10) > 255)
+                                    return false
+                            }
+                            return true
+                        }
+                        function ipv6LooksWellFormed(text) {
+                            if (text.indexOf(":::") >= 0)
+                                return false
+                            if (text.split("::").length > 2)
+                                return false
+                            var groups = text.split(":")
+                            if (groups.length < 3 && text.indexOf("::") < 0)
+                                return false
+                            for (var i = 0; i < groups.length; ++i) {
+                                if (groups[i].length === 0)
+                                    continue
+                                if (groups[i].indexOf(".") >= 0) {
+                                    // The trailing IPv4 form, which can only
+                                    // be the last group.
+                                    if (i !== groups.length - 1)
+                                        return false
+                                    if (!diagnosticsPeerEditor.ipv4LooksWellFormed(groups[i], false))
+                                        return false
+                                    continue
+                                }
+                                if (!/^[0-9A-Fa-f]{1,4}$/.test(groups[i]))
+                                    return false
+                            }
+                            return true
+                        }
+                        function peerEntryIsReadable(text) {
+                            var entry = ("" + text).trim()
+                            // A row nobody has filled in yet is not a rule and
+                            // is not marked as a broken one.
+                            if (entry.length === 0)
+                                return true
+                            if (entry.toLowerCase() === "any")
+                                return true
+                            var slash = entry.indexOf("/")
+                            var host = slash < 0 ? entry : entry.substring(0, slash)
+                            if (host.length === 0)
+                                return false
+                            if (slash >= 0) {
+                                var prefixText = entry.substring(slash + 1)
+                                if (!/^[0-9]{1,3}$/.test(prefixText))
+                                    return false
+                                if (parseInt(prefixText, 10) > (host.indexOf(":") >= 0 ? 128 : 32))
+                                    return false
+                            }
+                            if (host.indexOf(":") >= 0)
+                                return diagnosticsPeerEditor.ipv6LooksWellFormed(host)
+                            // The abbreviated IPv4 forms -- 10/8, 192.168/16 --
+                            // are read only when a prefix is present, which is
+                            // the same distinction the server makes.
+                            return diagnosticsPeerEditor.ipv4LooksWellFormed(host, slash >= 0)
+                        }
+
+                        // Whether a ticked address is one only this machine can
+                        // reach. The machine's own answer is preferred; the
+                        // literal test is the fallback for an address that was
+                        // ticked and has since gone away.
+                        function addressIsLoopback(address) {
+                            var known = appSettings.diagnosticsServerAvailableAddresses
+                            for (var i = 0; i < known.length; ++i) {
+                                if (known[i].address === address)
+                                    return known[i].loopback === true
+                            }
+                            return address === "::1" || address.indexOf("127.") === 0
+                        }
+                        // The segment behind the first ticked address that
+                        // reaches past this machine, or empty when there is
+                        // none to offer. Nothing is added from it without the
+                        // operator pressing the button, and what is added is a
+                        // line in the list like any other.
+                        readonly property string localNetworkCandidate: {
+                            var chosen = appSettings.diagnosticsServerAddresses
+                            for (var i = 0; i < chosen.length; ++i) {
+                                if (diagnosticsPeerEditor.addressIsLoopback(chosen[i]))
+                                    continue
+                                var segment = appSettings.localNetworkForAddress(chosen[i])
+                                if (segment && segment.length > 0)
+                                    return segment
+                            }
+                            return ""
+                        }
+
+                        Component.onCompleted: diagnosticsPeerEditor.reseed()
+                        Connections {
+                            target: appSettings
+                            function onSettingsChanged() {
+                                // The editor's own write is finished by
+                                // commit() itself. This is here for a list
+                                // changed from somewhere else -- a profile
+                                // switch, a reset -- which must be shown.
+                                if (diagnosticsPeerEditor.committing)
+                                    return
+                                var stored = diagnosticsPeerEditor.storedPeers()
+                                if (!diagnosticsPeerEditor.sameRows(
+                                        stored, diagnosticsPeerEditor.storedRows))
+                                    diagnosticsPeerEditor.reseed()
+                            }
+                        }
+
+                        Label {
+                            objectName: "diagnosticsAllowedPeersHintLabel"
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            color: "#91a0b1"
+                            text: "This list is the computers allowed to connect — one per line, each a host such as 192.168.1.50, a network such as 192.168.1.0/24, or the word any — and an empty list means only this computer."
+                        }
+                        ColumnLayout {
+                            objectName: "diagnosticsAllowedPeersList"
+                            Layout.fillWidth: true
+                            spacing: 4
+                            Repeater {
+                                model: diagnosticsPeerEditor.rows
+                                delegate: RowLayout {
+                                    id: diagnosticsPeerRow
+                                    required property int index
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    spacing: 8
+                                    readonly property bool entryIsReadable:
+                                        diagnosticsPeerEditor.peerEntryIsReadable(
+                                            diagnosticsPeerField.text)
+                                    TextField {
+                                        id: diagnosticsPeerField
+                                        objectName: "diagnosticsPeerField"
+                                        Layout.fillWidth: true
+                                        text: "" + diagnosticsPeerRow.modelData
+                                        placeholderText: "192.168.1.0/24, 192.168.1.50, or any"
+                                        inputMethodHints: Qt.ImhNoPredictiveText
+                                        // The style's own text colour while the
+                                        // line is readable, so only a line that
+                                        // permits nobody is tinted.
+                                        color: diagnosticsPeerRow.entryIsReadable
+                                               ? diagnosticsPeerField.palette.text
+                                               : "#f3bd55"
+                                        onEditingFinished: diagnosticsPeerEditor.setRow(
+                                                               diagnosticsPeerRow.index, text)
+                                    }
+                                    Label {
+                                        objectName: "diagnosticsPeerValidityLabel"
+                                        Layout.preferredWidth: 230
+                                        wrapMode: Text.WordWrap
+                                        color: "#f3bd55"
+                                        visible: !diagnosticsPeerRow.entryIsReadable
+                                        text: "Not a host, a network or the word any. This line permits nobody."
+                                    }
+                                    Button {
+                                        objectName: "diagnosticsRemovePeerButton"
+                                        text: "Remove"
+                                        onClicked: diagnosticsPeerEditor.removeRow(
+                                                       diagnosticsPeerRow.index)
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: "Delete this line. With no lines left, only this computer may connect."
+                                    }
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Button {
+                                objectName: "diagnosticsAddPeerButton"
+                                text: "+ Add"
+                                onClicked: diagnosticsPeerEditor.appendBlankRow()
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Add an empty line to type a host or a network into."
+                            }
+                            Button {
+                                objectName: "diagnosticsAddLocalNetworkButton"
+                                text: "Add this network"
+                                enabled: diagnosticsPeerEditor.localNetworkCandidate.length > 0
+                                         && !diagnosticsPeerEditor.hasRow(
+                                                diagnosticsPeerEditor.localNetworkCandidate)
+                                onClicked: diagnosticsPeerEditor.appendRow(
+                                               diagnosticsPeerEditor.localNetworkCandidate)
+                                ToolTip.visible: hovered
+                                ToolTip.text: "Put the network of the first ticked address into the list above, as an ordinary line."
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: "#91a0b1"
+                                text: diagnosticsPeerEditor.localNetworkCandidate.length === 0
+                                      ? "Add this network needs an address ticked above that is not loopback; it then offers the network that address sits on."
+                                      : (diagnosticsPeerEditor.hasRow(diagnosticsPeerEditor.localNetworkCandidate)
+                                         ? diagnosticsPeerEditor.localNetworkCandidate + " is already in the list."
+                                         : "Adds " + diagnosticsPeerEditor.localNetworkCandidate + " as a line you can read, edit or delete.")
+                            }
+                        }
+                    }
                     Label { text: "Port" }
                     RowLayout {
                         Layout.fillWidth: true

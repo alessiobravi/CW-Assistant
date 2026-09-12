@@ -91,6 +91,14 @@ constexpr int kMaximumDiagnosticsTokenLength = 128;
 constexpr int kMaximumDiagnosticsAddressLength = 128;
 constexpr int kMaximumDiagnosticsAddresses = 16;
 
+// An allowed-peer entry is an address with a prefix after it, so it needs the
+// address bound above plus room for `/128`. The same count as the bind list,
+// because both are lists an operator types by hand and neither has any reason
+// to grow without limit from a settings file.
+constexpr int kMaximumDiagnosticsPeerLength =
+    kMaximumDiagnosticsAddressLength + 4;
+constexpr int kMaximumDiagnosticsPeers = kMaximumDiagnosticsAddresses;
+
 // Deliberately not the whole alphabet. 0/O and 1/l/I are one transcription
 // error apart, and this token gets read off one screen and typed into another.
 constexpr char kDiagnosticsTokenAlphabet[] =
@@ -131,6 +139,30 @@ QStringList sanitize_diagnostics_addresses(const QStringList& addresses) {
     if (sanitized.contains(trimmed, Qt::CaseInsensitive)) continue;
     sanitized.append(trimmed);
     if (sanitized.size() >= kMaximumDiagnosticsAddresses) break;
+  }
+  return sanitized;
+}
+
+// The same shaping for the allowed-peer list, and deliberately no judgement of
+// what an entry means. Blank rows are dropped because the editor creates one
+// the moment "+ Add" is pressed and an uncommitted row is not a rule;
+// duplicates are dropped because a second copy of a rule permits nothing the
+// first did not.
+//
+// Nothing here decides whether an entry is a readable rule. That belongs to
+// DiagnosticsServer::peerIsAllowed, where an unreadable entry admits nobody --
+// so an entry kept here that turns out to be a typo narrows access rather than
+// widening it, and keeping it is what stops the list going empty and falling
+// back to the loopback default the operator did not ask for. The editor marks
+// such a row so it is not discovered as a service that refuses everyone.
+QStringList sanitize_diagnostics_peers(const QStringList& patterns) {
+  QStringList sanitized;
+  for (const QString& text : patterns) {
+    const QString trimmed = text.trimmed().left(kMaximumDiagnosticsPeerLength);
+    if (trimmed.isEmpty()) continue;
+    if (sanitized.contains(trimmed, Qt::CaseInsensitive)) continue;
+    sanitized.append(trimmed);
+    if (sanitized.size() >= kMaximumDiagnosticsPeers) break;
   }
   return sanitized;
 }
@@ -1594,6 +1626,9 @@ const QString& AppSettings::diagnosticsServerToken() const noexcept {
 const QStringList& AppSettings::diagnosticsServerAddresses() const noexcept {
   return diagnostics_server_addresses_;
 }
+const QStringList& AppSettings::diagnosticsAllowedPeers() const noexcept {
+  return diagnostics_allowed_peers_;
+}
 const QVariantList& AppSettings::diagnosticsServerAvailableAddresses()
     const noexcept {
   return diagnostics_server_available_addresses_;
@@ -2119,6 +2154,23 @@ void AppSettings::setDiagnosticsServerAddresses(const QStringList& value) {
                 diagnostics_server_addresses_)));
   }
   emit settingsChanged();
+}
+
+void AppSettings::setDiagnosticsAllowedPeers(const QStringList& value) {
+  if (!assign_if_changed(diagnostics_allowed_peers_,
+                         sanitize_diagnostics_peers(value))) {
+    return;
+  }
+  // No guard follows, and that is deliberate. An empty list is not a missing
+  // list: it permits loopback only, so emptying it can only ever narrow what
+  // the service admits, and narrowing is never a reason to refuse or to switch
+  // anything off. The one exposure worth guarding -- a routable address with
+  // no token -- is decided by the token and the addresses, above.
+  emit settingsChanged();
+}
+
+QString AppSettings::localNetworkForAddress(const QString& address) const {
+  return DiagnosticsServer::localSegmentForAddress(address);
 }
 
 void AppSettings::refreshNetworkAddresses() {
@@ -2991,6 +3043,8 @@ bool AppSettings::apply() {
       diagnostics_server_token_.trimmed().left(kMaximumDiagnosticsTokenLength);
   diagnostics_server_addresses_ =
       sanitize_diagnostics_addresses(diagnostics_server_addresses_);
+  diagnostics_allowed_peers_ =
+      sanitize_diagnostics_peers(diagnostics_allowed_peers_);
   // The saved state may not describe an exposure the enable itself would have
   // refused. A settings file edited by hand, or a token cleared by a route
   // that did not run the guard, must not come back on the next start as a
@@ -3246,6 +3300,8 @@ bool AppSettings::apply() {
                     diagnostics_server_token_);
   settings.setValue(storageKey(QStringLiteral("diagnostics/serverAddresses")),
                     diagnostics_server_addresses_);
+  settings.setValue(storageKey(QStringLiteral("diagnostics/allowedPeers")),
+                    diagnostics_allowed_peers_);
   settings.sync();
   if (settings.status() != QSettings::NoError) {
     setStatusMessage(QStringLiteral("Settings could not be written."));
@@ -3769,6 +3825,12 @@ void AppSettings::load() {
           .value(storageKey(QStringLiteral("diagnostics/serverAddresses")),
                  QStringList{QStringLiteral("127.0.0.1")})
           .toStringList());
+  // No default: an absent key means the operator has never said who may
+  // connect, and an empty list is exactly how the server is told that -- it
+  // then admits loopback and nothing else.
+  diagnostics_allowed_peers_ = sanitize_diagnostics_peers(
+      settings.value(storageKey(QStringLiteral("diagnostics/allowedPeers")))
+          .toStringList());
   // Read after the addresses and the token, because those are what decide
   // whether a stored "on" is a state this build would have allowed to be set
   // in the first place. An edited settings file cannot enable an exposure the
@@ -4050,6 +4112,9 @@ void AppSettings::resetInMemorySettings() {
   // and re-enumerating them is a system call that resetting a profile has no
   // reason to make.
   diagnostics_server_addresses_ = QStringList{QStringLiteral("127.0.0.1")};
+  // Back to loopback only. A reset that kept a network on the allowed list
+  // would leave a profile permitting readers its operator never named.
+  diagnostics_allowed_peers_.clear();
   waterfall_rendering_enabled_ = true;
   applyReferenceDefaults(0);
 }

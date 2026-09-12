@@ -16,11 +16,22 @@
 // pure function cannot -- that a disallowed peer is closed at accept with
 // nothing written to it, and that narrowing the list drops whoever it no
 // longer covers.
+//
+// The last three cases cover the segment helper the settings page offers
+// beside that list. It only ever produces text for the operator to add as a
+// visible line, so what matters is that the network it names is the one the
+// address is really on and that an unusable prefix produces nothing at all: a
+// widened guess would be added from a button, in good faith, by somebody who
+// believed it described their own network.
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QHostAddress>
 #include <QJsonObject>
+#include <QList>
+#include <QNetworkAddressEntry>
+#include <QNetworkInterface>
+#include <QString>
 #include <QStringList>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -657,6 +668,204 @@ bool bindsAndStreamsOverIpv6() {
   return same;
 }
 
+// The segment helper, written once so the cases below read as the question
+// they ask: which network does this address sit on at this prefix length.
+[[nodiscard]] QString segment(const QString& address, const int prefix_length) {
+  return DiagnosticsServer::segmentForPrefix(QHostAddress(address),
+                                             prefix_length);
+}
+
+// The network an address belongs to, which is the line the settings page will
+// offer to add to the allowed-peer list. The masking is the whole of it: a
+// rule that kept the host bits would admit one computer where the operator
+// asked for their network, and one that cleared too many would admit the
+// networks either side of it. Both failures are silent -- the list looks
+// configured either way.
+bool aSegmentIsTheNetworkAnAddressSitsOn() {
+  if (segment(QStringLiteral("192.168.1.42"), 24) !=
+      QStringLiteral("192.168.1.0/24")) {
+    return false;
+  }
+  if (segment(QStringLiteral("192.168.1.42"), 16) !=
+      QStringLiteral("192.168.0.0/16")) {
+    return false;
+  }
+  if (segment(QStringLiteral("10.1.2.3"), 8) != QStringLiteral("10.0.0.0/8")) {
+    return false;
+  }
+  // The whole of IPv4 above the halfway mark, which pins that the mask is
+  // built from the prefix rather than from the byte the prefix falls in.
+  if (segment(QStringLiteral("192.168.1.42"), 1) !=
+      QStringLiteral("128.0.0.0/1")) {
+    return false;
+  }
+  // One computer. A /32 is the shift that would be undefined if the mask were
+  // written the obvious way, and it is exactly the rule an operator writes to
+  // name a single host.
+  if (segment(QStringLiteral("203.0.113.7"), 32) !=
+      QStringLiteral("203.0.113.7/32")) {
+    return false;
+  }
+  // The same shape in IPv6, on byte boundaries and off them. `/33` keeps one
+  // bit of the fifth byte, so a mask applied a byte at a time rather than a
+  // bit at a time answers `2001:db8::/33` here and admits nothing the operator
+  // meant.
+  if (segment(QStringLiteral("2001:db8:dead:beef::9"), 32) !=
+      QStringLiteral("2001:db8::/32")) {
+    return false;
+  }
+  if (segment(QStringLiteral("2001:db8:dead:beef::9"), 64) !=
+      QStringLiteral("2001:db8:dead:beef::/64")) {
+    return false;
+  }
+  if (segment(QStringLiteral("2001:db8:dead:beef::9"), 33) !=
+      QStringLiteral("2001:db8:8000::/33")) {
+    return false;
+  }
+  if (segment(QStringLiteral("2001:db8::1"), 128) !=
+      QStringLiteral("2001:db8::1/128")) {
+    return false;
+  }
+  // A link-local address is only meaningful with the interface it belongs to,
+  // but the interface is this machine's name for the link. A rule carrying it
+  // is not one another reader of the settings page could act on, so the scope
+  // does not survive into the segment.
+  QHostAddress scoped(QStringLiteral("fe80::1"));
+  scoped.setScopeId(QStringLiteral("en0"));
+  if (DiagnosticsServer::segmentForPrefix(scoped, 64) !=
+      QStringLiteral("fe80::/64")) {
+    return false;
+  }
+
+  // And the rule it produces does what adding it to the list would mean: the
+  // network it was derived from may watch, and the one next door may not. A
+  // segment that no peer rule could match would be a button that adds a line
+  // admitting nobody.
+  const QString lan = segment(QStringLiteral("192.168.1.42"), 24);
+  return admits(QStringLiteral("192.168.1.42"), {lan}) &&
+         admits(QStringLiteral("192.168.1.1"), {lan}) &&
+         !admits(QStringLiteral("192.168.2.42"), {lan}) &&
+         !admits(QStringLiteral("10.0.0.1"), {lan});
+}
+
+// A prefix that cannot be used answers with nothing, never with a guess. This
+// is the direction the mistake has to fall: a prefix rounded down to something
+// usable would hand the operator a rule for a network they were never on, and
+// they would add it from a button believing it described their own.
+bool anUnusableSegmentPrefixYieldsNothing() {
+  // Zero is every address in the family. An "add this network" button that
+  // offered `0.0.0.0/0` would offer to admit the internet.
+  if (!segment(QStringLiteral("192.168.1.42"), 0).isEmpty()) return false;
+  // How an interface says it does not know.
+  if (!segment(QStringLiteral("192.168.1.42"), -1).isEmpty()) return false;
+  // Longer than the family has bits.
+  if (!segment(QStringLiteral("192.168.1.42"), 33).isEmpty()) return false;
+  if (!segment(QStringLiteral("192.168.1.42"), 128).isEmpty()) return false;
+  if (!segment(QStringLiteral("2001:db8::1"), 0).isEmpty()) return false;
+  if (!segment(QStringLiteral("2001:db8::1"), -1).isEmpty()) return false;
+  if (!segment(QStringLiteral("2001:db8::1"), 129).isEmpty()) return false;
+  // No address at all, which is what an unparsed string leaves behind.
+  return DiagnosticsServer::segmentForPrefix(QHostAddress{}, 24).isEmpty();
+}
+
+// The lookup half, against whatever this machine happens to have. Nothing here
+// names an address of the build machine and nothing is bound: the answers are
+// checked against the interface entry they came from, so this pins that the
+// entry holding the address is the one consulted rather than pinning a
+// network that only one runner has.
+bool theLocalSegmentComesFromThisMachinesInterfaces() {
+  // TEST-NET-3, unassignable, so no interface can hold it. An address this
+  // machine does not have has no segment, and must not borrow one from an
+  // interface that is merely nearby.
+  if (!DiagnosticsServer::localSegmentForAddress(
+           QStringLiteral("203.0.113.7"))
+           .isEmpty()) {
+    return false;
+  }
+  if (!DiagnosticsServer::localSegmentForAddress(
+           QStringLiteral("not an address"))
+           .isEmpty()) {
+    return false;
+  }
+  if (!DiagnosticsServer::localSegmentForAddress(QString{}).isEmpty()) {
+    return false;
+  }
+  // The wildcards. Binding every interface names no one network, so there is
+  // nothing honest to offer; the operator has to say which networks they
+  // meant. Inventing a set of them here would put rules in the list that
+  // nobody read.
+  if (!DiagnosticsServer::localSegmentForAddress(QStringLiteral("0.0.0.0"))
+           .isEmpty()) {
+    return false;
+  }
+  if (!DiagnosticsServer::localSegmentForAddress(QStringLiteral("::"))
+           .isEmpty()) {
+    return false;
+  }
+
+  // Collected first, because an address held by two interfaces at two prefix
+  // lengths has no single right answer and asking about it would fail on the
+  // machine that has one rather than on a fault in this code.
+  QList<QHostAddress> addresses;
+  QList<int> prefixes;
+  const QList<QNetworkInterface> interfaces =
+      QNetworkInterface::allInterfaces();
+  for (const QNetworkInterface& interface : interfaces) {
+    if (!interface.flags().testFlag(QNetworkInterface::IsUp)) continue;
+    for (const QNetworkAddressEntry& entry : interface.addressEntries()) {
+      addresses.append(entry.ip());
+      prefixes.append(entry.prefixLength());
+    }
+  }
+
+  int checked = 0;
+  for (qsizetype index = 0; index < addresses.size(); ++index) {
+    int holders = 0;
+    for (const QHostAddress& other : addresses) {
+      if (other.isEqual(addresses.at(index),
+                        QHostAddress::ConvertV4MappedToIPv4)) {
+        ++holders;
+      }
+    }
+    if (holders != 1) continue;
+    const QString expected = DiagnosticsServer::segmentForPrefix(
+        addresses.at(index), prefixes.at(index));
+    if (expected.isEmpty()) continue;
+    // The address as this machine reports it, which is the text the settings
+    // page will have. A lookup that answered from the first entry it saw would
+    // hand loopback's prefix to a routable address, and a lookup that ignored
+    // the entry's prefix could not produce this at all.
+    if (DiagnosticsServer::localSegmentForAddress(
+            addresses.at(index).toString()) != expected) {
+      return false;
+    }
+    ++checked;
+  }
+  if (checked == 0) {
+    std::printf(
+        "diagnostics server: this machine reports no usable interface "
+        "prefix, local segment lookup case skipped\n");
+  }
+
+  // Loopback answers with its own segment rather than with nothing: it is the
+  // truthful answer, and it is a useful line to add, because an explicit list
+  // is exact and a list holding only the loopback segment says "this computer
+  // alone may watch" in a form the operator can see. Whatever it is, it may
+  // not reach past this machine. Allowed to be empty for a runner that reports
+  // no prefix for its own loopback, which would say nothing about this code.
+  const QString loopback =
+      DiagnosticsServer::localSegmentForAddress(QStringLiteral("127.0.0.1"));
+  if (loopback.isEmpty()) {
+    std::printf(
+        "diagnostics server: no prefix reported for IPv4 loopback, that "
+        "part of the local segment case skipped\n");
+    return true;
+  }
+  if (!admits(QStringLiteral("127.0.0.1"), {loopback})) return false;
+  return !admits(QStringLiteral("192.168.1.50"), {loopback}) &&
+         !admits(QStringLiteral("203.0.113.7"), {loopback});
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -683,6 +892,9 @@ int main(int argc, char* argv[]) {
   if (!refusesADisallowedPeerWithoutAGreeting()) return 29;
   if (!tighteningTheListDropsAnAttachedPeer()) return 30;
   if (!bindsAndStreamsOverIpv6()) return 31;
+  if (!aSegmentIsTheNetworkAnAddressSitsOn()) return 32;
+  if (!anUnusableSegmentPrefixYieldsNothing()) return 33;
+  if (!theLocalSegmentComesFromThisMachinesInterfaces()) return 34;
   std::printf("diagnostics server: all checks passed\n");
   return 0;
 }

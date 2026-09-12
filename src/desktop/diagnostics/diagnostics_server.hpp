@@ -109,6 +109,41 @@ class DiagnosticsServer final : public QObject {
   [[nodiscard]] static bool peerIsAllowed(const QHostAddress& peer,
                                           const QStringList& patterns);
 
+  // The network one address of this machine sits on, as a CIDR rule --
+  // `192.168.1.42` on a /24 answers `192.168.1.0/24` -- or an empty string
+  // when this machine cannot say.
+  //
+  // Offered so the settings page can put an "add this network" button beside
+  // the allowed-peer list: the operator gets the convenience of their own
+  // segment without the rule becoming invisible. The result is a line in the
+  // list like any other, which they can read, edit or delete. Nothing here
+  // changes what `peerIsAllowed` permits, and no rule is ever added behind the
+  // operator's back -- a rule that decides who may read the station must be
+  // one they can see.
+  //
+  // Empty rather than a guess, in three cases. The text is not an address;
+  // this machine has no interface holding that address, which is also the
+  // answer for `0.0.0.0` and `::` -- binding every interface names no single
+  // network, so there is nothing honest to offer and the operator must say
+  // which networks they meant; or the interface reports a prefix length that
+  // cannot be used. A guessed prefix would widen access to a network the
+  // operator never had, and offering nothing is a button that does not appear
+  // rather than a rule that admits strangers.
+  //
+  // Loopback answers with its real segment, `127.0.0.0/8` or `::1/128`, rather
+  // than with nothing. It is the truthful answer, and it is a useful line to
+  // be able to add: an explicit list is exact, so an operator who writes only
+  // their loopback segment has said "this computer alone may watch" in a form
+  // they can see in the list.
+  [[nodiscard]] static QString localSegmentForAddress(const QString& address);
+  // The pure half of the above: the network `address` belongs to at this
+  // prefix length, with the host bits cleared, or empty when the prefix cannot
+  // be used -- zero or negative, or longer than the family allows. Separated
+  // from the interface lookup so the masking can be tested without a machine
+  // that happens to have the right network on it.
+  [[nodiscard]] static QString segmentForPrefix(const QHostAddress& address,
+                                                int prefix_length);
+
   void setEnabled(bool enabled);
   [[nodiscard]] bool enabled() const noexcept;
 
