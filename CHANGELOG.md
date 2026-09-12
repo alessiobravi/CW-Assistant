@@ -496,6 +496,19 @@ All notable changes to CW Buddy are recorded here. The format follows
 
 ### Changed
 
+- Spots on the separator now sit in a bar of their own and carry their source
+  as colour rather than as a symbol. The callsigns are a fifth larger, and a
+  square before the call for reverse-beacon evidence and a circle after it for
+  cluster evidence are gone: they asked an operator to remember which shape
+  meant which, cost width beside every callsign, and read as punctuation rather
+  than information. A two-pixel stripe under the call carries it instead --
+  blue for a receiver's report, tan for a person's -- and when the two sources
+  agree the stripe is half of each, so agreement is legible without a second
+  mark and takes no extra room. Both hues stay in the chrome family, clear of
+  the decoded-stream identities, the decode window and the transmit slice, so a
+  report cannot be mistaken for something this receiver copied. The bar is
+  drawn only when there is something to put in it.
+
 - The two spot subsystems are one. Spots arrived either from a polling web
   feed or from a telnet cluster, each with its own settings, and the operator
   had to understand a transport distinction that was never theirs to make. The

@@ -1343,6 +1343,21 @@ ApplicationWindow {
                     // rather than anything in the 24 decoded-stream identity
                     // colours, the teal decode window or the pink TX slice.
                     readonly property color spotColor: "#9fb3c8"
+                    // Source is carried by colour, not by a glyph beside the
+                    // call. A square and a circle asked the operator to
+                    // remember which shape meant which, cost width next to
+                    // every callsign, and read as punctuation rather than as
+                    // information. Both hues stay in the chrome family --
+                    // outside the 24 decoded-stream identities, the teal
+                    // decode window and the pink TX slice -- so a spot can
+                    // never be mistaken for something this receiver copied.
+                    //
+                    // A reverse-beacon report is a receiver's measurement and
+                    // a cluster spot is a person's claim; when both agree the
+                    // plate carries the two colours together, which is more
+                    // legible than two marks and takes no extra room.
+                    readonly property color spotRbnColor: "#8fd0ff"
+                    readonly property color spotClusterColor: "#d2b48c"
                     // A spot is fresh for two minutes and fully faded after
                     // half an hour, so age reads off the overlay itself
                     // without opening a tooltip.
@@ -1536,6 +1551,38 @@ ApplicationWindow {
                         return nearest
                     }
 
+                    // The band the callsigns sit in.
+                    //
+                    // They used to hang loose over the top of the waterfall,
+                    // which made them compete with the texture behind them and
+                    // left nothing to tell an operator that the row belongs to
+                    // reports rather than to this receiver. A quiet bar gives
+                    // them a home, and it is drawn only when there is
+                    // something to put in it.
+                    Rectangle {
+                        objectName: "dxSpotBar"
+                        visible: dxSpotOverlay.placedSpots.length > 0
+                        x: 0
+                        y: dxSpotOverlay.separatorY + 2
+                        width: dxSpotOverlay.width
+                        // Deep enough for the enlarged callsign plates and the
+                        // source stripe beneath them.
+                        height: 26
+                        color: "#b00b1420"
+                        Rectangle {
+                            anchors.top: parent.top
+                            width: parent.width
+                            height: 1
+                            color: "#2b3947"
+                        }
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: 1
+                            color: "#2b3947"
+                        }
+                    }
+
                     Repeater {
                         model: dxSpotOverlay.placedSpots
                         delegate: Item {
@@ -1597,16 +1644,13 @@ ApplicationWindow {
                                 // stay centred on the callsign's own height
                                 // and the plate keeps a constant 5 px inset
                                 // whichever of them is present.
-                                readonly property real markSize: 7
-                                readonly property real markStride: markSize + 4
-                                readonly property real leadingMarkWidth:
-                                    modelData.reverseBeacon ? markStride : 0
-                                readonly property real trailingMarkWidth:
-                                    modelData.cluster ? markStride : 0
-                                width: 10 + leadingMarkWidth
-                                       + dxSpotCallLabel.implicitWidth
-                                       + trailingMarkWidth
-                                height: dxSpotCallLabel.implicitHeight + 4
+                                // The source stripe under the call. Two
+                                // sources agreeing split it, so agreement is
+                                // visible without a second mark.
+                                readonly property real stripeHeight: 2
+                                width: 10 + dxSpotCallLabel.implicitWidth
+                                height: dxSpotCallLabel.implicitHeight + 6
+                                       + stripeHeight
                                 radius: 3
                                 color: "#c8080f16"
                                 border.color: dxSpotMarker.pointerHovered
@@ -1614,44 +1658,47 @@ ApplicationWindow {
                                               : "transparent"
                                 border.width: 1
                                 opacity: dxSpotMarker.ageOpacity
-                                Rectangle {
-                                    // Square before the call: reverse-beacon
-                                    // evidence.
-                                    objectName: "dxSpotReverseBeaconMark"
-                                    visible: modelData.reverseBeacon
-                                    x: 5
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: dxSpotLabelPlate.markSize
-                                    height: dxSpotLabelPlate.markSize
-                                    color: "transparent"
-                                    border.color: dxSpotOverlay.spotColor
-                                    border.width: 1
-                                }
                                 Label {
                                     id: dxSpotCallLabel
-                                    x: 5 + dxSpotLabelPlate.leadingMarkWidth
-                                    anchors.verticalCenter: parent.verticalCenter
+                                    x: 5
+                                    y: 3
+                                    // A fifth larger than before, on the
+                                    // owner's reading of it at the previous
+                                    // size.
                                     text: modelData.callsign
                                     color: dxSpotOverlay.spotColor
-                                    font.pixelSize: 11
+                                    font.pixelSize: 13
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 0.4
                                 }
-                                Rectangle {
-                                    // Circle after the call: cluster evidence.
-                                    // Both marks appear when the two
-                                    // independent sources agree.
-                                    objectName: "dxSpotClusterMark"
-                                    visible: modelData.cluster
-                                    x: dxSpotCallLabel.x
-                                       + dxSpotCallLabel.implicitWidth + 4
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    width: dxSpotLabelPlate.markSize
-                                    height: dxSpotLabelPlate.markSize
-                                    radius: dxSpotLabelPlate.markSize / 2
-                                    color: "transparent"
-                                    border.color: dxSpotOverlay.spotColor
-                                    border.width: 1
+                                Row {
+                                    objectName: "dxSpotSourceStripe"
+                                    x: 5
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 2
+                                    width: dxSpotCallLabel.implicitWidth
+                                    height: dxSpotLabelPlate.stripeHeight
+                                    // Half each when the two sources agree,
+                                    // the whole width when only one reported.
+                                    readonly property int sources:
+                                        (modelData.reverseBeacon ? 1 : 0)
+                                        + (modelData.cluster ? 1 : 0)
+                                    Rectangle {
+                                        objectName: "dxSpotReverseBeaconStripe"
+                                        visible: modelData.reverseBeacon
+                                        width: parent.sources > 1
+                                               ? parent.width / 2 : parent.width
+                                        height: parent.height
+                                        color: dxSpotOverlay.spotRbnColor
+                                    }
+                                    Rectangle {
+                                        objectName: "dxSpotClusterStripe"
+                                        visible: modelData.cluster
+                                        width: parent.sources > 1
+                                               ? parent.width / 2 : parent.width
+                                        height: parent.height
+                                        color: dxSpotOverlay.spotClusterColor
+                                    }
                                 }
                             }
                         }

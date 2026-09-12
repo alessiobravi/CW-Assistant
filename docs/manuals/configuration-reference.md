@@ -807,11 +807,13 @@ modes this application cannot use.
 A line that does not parse is skipped rather than taking the rest of the file
 with it, so one bad edit cannot leave you with no servers at all.
 
-A square before a callsign marks reverse-beacon evidence and a circle after it
-marks cluster evidence; both appear when the two independent sources agree.
-Markers are drawn in a neutral colour that is never one of the identities given
-to decoded streams, and they sit beneath them, so a report is never mistaken
-for something this receiver copied.
+Spots sit in a bar of their own on the separator, drawn only when there is
+something to put in it. A two-pixel stripe under each callsign says where the
+report came from: blue for a reverse-beacon receiver's own measurement, tan for
+a person's cluster spot, and half of each when the two independent sources
+agree. Both hues sit in the chrome family, never one of the identities given to
+decoded streams and never the decode window or the transmit slice, so a report
+is not mistaken for something this receiver copied.
 
 **A spot is corroboration and never authority.** It can reduce how much of its
 own evidence a decoded callsign needs before being offered, and it can show that
